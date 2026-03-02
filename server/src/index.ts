@@ -1,0 +1,31 @@
+import express from "express";
+import cors from "cors";
+import { accountRoutes } from "./routes/accounts.js";
+import { categoryRoutes } from "./routes/categories.js";
+import { expenseRoutes } from "./routes/expenses.js";
+import { budgetRoutes } from "./routes/budgets.js";
+import { dashboardRoutes } from "./routes/dashboard.js";
+import { recurrenceRoutes } from "./routes/recurrence.js";
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+app.use(cors());
+app.use(express.json());
+
+// Routes
+app.use("/api/accounts", accountRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/expenses", expenseRoutes);
+app.use("/api/budgets", budgetRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/recurrence-rules", recurrenceRoutes);
+
+// Health check
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
