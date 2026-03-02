@@ -23,6 +23,7 @@ const SOURCE_LABELS: Record<IncomeSource, string> = {
 const INCOME_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "INVESTMENT"];
 
 type SortField = "date" | "source" | "account" | "amount";
+type SortState = { field: SortField; order: "asc" | "desc" } | null;
 
 // ── Currency input ──
 function CurrencyInput({ name, defaultValue, required }: { name: string; defaultValue?: string; required?: boolean }) {
@@ -63,7 +64,7 @@ function EditableCell({ value, onSave, type = "text", className = "" }: { value:
         onChange={(e) => setEditValue(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") { setEditValue(value); setEditing(false); } }}
-        className="w-full min-w-[60px] rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
+        className="w-full rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
       />
     );
   }
@@ -83,7 +84,7 @@ function EditableSelectCell({ value, label, options, onSave }: { value: string; 
 
   if (editing) {
     return (
-      <select ref={ref} value={value} onChange={(e) => { onSave(e.target.value); setEditing(false); }} onBlur={() => setEditing(false)} className="w-full min-w-[80px] rounded border border-primary px-1 py-0.5 text-sm focus:outline-none">
+      <select ref={ref} value={value} onChange={(e) => { onSave(e.target.value); setEditing(false); }} onBlur={() => setEditing(false)} className="w-full rounded border border-primary px-1 py-0.5 text-sm focus:outline-none">
         {options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
       </select>
     );
@@ -94,14 +95,60 @@ function EditableSelectCell({ value, label, options, onSave }: { value: string; 
   );
 }
 
+// ── Inline amount cell ──
+function EditableAmountCell({ value, onSave, positive }: { value: string; onSave: (v: string) => void; positive?: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [cents, setCents] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
+
+  const startEdit = () => {
+    setCents(Math.round(parseFloat(value) * 100));
+    setEditing(true);
+  };
+
+  const commit = () => {
+    setEditing(false);
+    const newValue = (cents / 100).toFixed(2);
+    if (newValue !== parseFloat(value).toFixed(2)) onSave(newValue);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace") { e.preventDefault(); setCents((prev) => Math.floor(prev / 10)); }
+    else if (/^\d$/.test(e.key)) { e.preventDefault(); setCents((prev) => prev * 10 + parseInt(e.key)); }
+    else if (e.key === "Enter") { e.preventDefault(); commit(); }
+    else if (e.key === "Escape") { setEditing(false); }
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        value={"$" + (cents / 100).toFixed(2)}
+        onKeyDown={handleKeyDown}
+        onChange={() => {}}
+        onBlur={commit}
+        className="w-full rounded border border-primary px-1 py-0.5 text-right text-sm font-semibold focus:outline-none"
+      />
+    );
+  }
+
+  return (
+    <span onClick={startEdit} className="cursor-pointer border-b border-dotted border-transparent hover:border-gray-400">
+      {positive ? "+" : "-"}{formatCurrency(value)}
+    </span>
+  );
+}
+
 // ═══════════════ MAIN COMPONENT ═══════════════
 
 export function IncomePage() {
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Income | null>(null);
-  const [sortBy, setSortBy] = useState<SortField>("date");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [sort, setSort] = useState<SortState>({ field: "date", order: "desc" });
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterAccountId, setFilterAccountId] = useState("");
   const [filterSource, setFilterSource] = useState("");
@@ -110,14 +157,18 @@ export function IncomePage() {
   const [filterEndDate, setFilterEndDate] = useState("");
 
   const queryParams = useMemo(() => {
-    const params: Record<string, string> = { page: page.toString(), limit: "20", sortBy, sortOrder };
+    const params: Record<string, string> = { page: page.toString(), limit: "20" };
+    if (sort) {
+      params.sortBy = sort.field;
+      params.sortOrder = sort.order;
+    }
     if (filterAccountId) params.accountId = filterAccountId;
     if (filterSource) params.source = filterSource;
     if (filterTagId) params.tagId = filterTagId;
     if (filterStartDate) params.startDate = filterStartDate;
     if (filterEndDate) params.endDate = filterEndDate;
     return params;
-  }, [page, sortBy, sortOrder, filterAccountId, filterSource, filterTagId, filterStartDate, filterEndDate]);
+  }, [page, sort, filterAccountId, filterSource, filterTagId, filterStartDate, filterEndDate]);
 
   const { data: incomeData, refetch } = useApi(() => getIncome(queryParams), [queryParams]);
   const { data: accounts } = useApi(() => getAccounts(), []);
@@ -151,8 +202,14 @@ export function IncomePage() {
   }, [refetch]);
 
   const toggleSort = (field: SortField) => {
-    if (sortBy === field) { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); }
-    else { setSortBy(field); setSortOrder(field === "date" || field === "amount" ? "desc" : "asc"); }
+    setSort((prev) => {
+      if (!prev || prev.field !== field) {
+        return { field, order: field === "date" || field === "amount" ? "desc" : "asc" };
+      }
+      if (prev.order === "desc") return { field, order: "asc" };
+      if (prev.order === "asc") return null;
+      return { field, order: "desc" };
+    });
     setPage(1);
   };
 
@@ -161,8 +218,8 @@ export function IncomePage() {
   };
 
   const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortBy !== field) return <ArrowUpDown className="ml-1 inline h-3 w-3 opacity-40" />;
-    return sortOrder === "asc" ? <ArrowUp className="ml-1 inline h-3 w-3" /> : <ArrowDown className="ml-1 inline h-3 w-3" />;
+    if (!sort || sort.field !== field) return <ArrowUpDown className="ml-1 inline h-3 w-3 opacity-40" />;
+    return sort.order === "asc" ? <ArrowUp className="ml-1 inline h-3 w-3" /> : <ArrowDown className="ml-1 inline h-3 w-3" />;
   };
 
   const incomes = incomeData?.data ?? [];
@@ -226,24 +283,24 @@ export function IncomePage() {
         {incomes.length > 0 ? (
           <>
             <div className="hidden md:block">
-              <table className="w-full text-sm">
+              <table className="w-full table-fixed text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
-                    <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("source")}>Source <SortIcon field="source" /></th>
-                    <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
+                    <th className="w-[100px] cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
+                    <th className="w-[130px] cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("source")}>Source <SortIcon field="source" /></th>
+                    <th className="w-[150px] cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
                     <th className="pb-3 font-medium">Tags</th>
-                    <th className="cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
-                    <th className="pb-3 text-right font-medium">Actions</th>
+                    <th className="w-[100px] cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
+                    <th className="w-[40px] pb-3"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {incomes.map((income) => (
                     <tr key={income.id} className="hover:bg-muted/50">
-                      <td className="py-3">
+                      <td className="w-[100px] py-3">
                         <EditableCell value={income.date} type="date" onSave={(v) => handleInlineUpdate(income.id, "date", v)} />
                       </td>
-                      <td className="py-3">
+                      <td className="w-[130px] py-3">
                         <EditableSelectCell
                           value={income.source}
                           label={SOURCE_LABELS[income.source]}
@@ -251,7 +308,7 @@ export function IncomePage() {
                           onSave={(v) => handleInlineUpdate(income.id, "source", v)}
                         />
                       </td>
-                      <td className="py-3">
+                      <td className="w-[150px] py-3">
                         <EditableSelectCell
                           value={income.accountId}
                           label={income.account.name}
@@ -268,8 +325,14 @@ export function IncomePage() {
                           ))}
                         </div>
                       </td>
-                      <td className="py-3 text-right font-semibold text-green-600">+{formatCurrency(income.amount)}</td>
-                      <td className="py-3 text-right">
+                      <td className="w-[100px] py-3 text-right font-semibold text-green-600">
+                        <EditableAmountCell
+                          value={income.amount}
+                          positive
+                          onSave={(v) => handleInlineUpdate(income.id, "amount", v)}
+                        />
+                      </td>
+                      <td className="w-[40px] py-3 text-right">
                         <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1 hover:bg-accent">
                           <Pencil className="h-4 w-4 text-muted-foreground" />
                         </button>

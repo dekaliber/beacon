@@ -30,6 +30,7 @@ const FREQUENCY_LABELS: Record<string, string> = {
 };
 
 type SortField = "date" | "description" | "vendor" | "category" | "account" | "amount";
+type SortState = { field: SortField; order: "asc" | "desc" } | null;
 
 // ── Currency input helper ──
 function CurrencyInput({ name, defaultValue, required }: { name: string; defaultValue?: string; required?: boolean }) {
@@ -302,7 +303,7 @@ function EditableCell({
         onChange={(e) => setEditValue(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") { setEditValue(value); setEditing(false); } }}
-        className="w-full min-w-[60px] rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
+        className="w-full rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
       />
     );
   }
@@ -338,7 +339,7 @@ function EditableSelectCell({
         value={value}
         onChange={(e) => { onSave(e.target.value); setEditing(false); }}
         onBlur={() => setEditing(false)}
-        className="w-full min-w-[80px] rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
+        className="w-full rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
       >
         {options.map((o) => (
           <option key={o.id} value={o.id}>{o.name}</option>
@@ -416,7 +417,7 @@ function EditableVendorCell({
             else if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx((i) => Math.min(i + 1, filtered.length - 1)); }
             else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx((i) => Math.max(i - 1, 0)); }
           }}
-          className="w-full min-w-[80px] rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
+          className="w-full rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
         />
         {filtered.length > 0 && (
           <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-36 overflow-auto rounded-md border border-border bg-background shadow-lg">
@@ -446,14 +447,178 @@ function EditableVendorCell({
   );
 }
 
+// ── Inline category typeahead cell ──
+function EditableCategoryCell({
+  value, label, categories, isUncategorized, onSave,
+}: {
+  value: string | null;
+  label: string;
+  categories: Category[];
+  isUncategorized: boolean;
+  onSave: (newValue: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [search, setSearch] = useState("");
+  const [focusIdx, setFocusIdx] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const parentCats = categories.filter((c) => !c.parentId);
+  const childCats = categories.filter((c) => c.parentId);
+
+  const flatOptions = useMemo(() => {
+    const opts: { id: string; label: string; parentLabel?: string }[] = [];
+    for (const parent of parentCats) {
+      const children = childCats.filter((c) => c.parentId === parent.id);
+      if (children.length === 0) {
+        opts.push({ id: parent.id, label: parent.name });
+      } else {
+        for (const child of children) {
+          opts.push({ id: child.id, label: child.name, parentLabel: parent.name });
+        }
+      }
+    }
+    return opts;
+  }, [categories]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return flatOptions;
+    const terms = search.toLowerCase().split(/\s+/);
+    return flatOptions.filter((o) => {
+      const text = (o.parentLabel ? o.parentLabel + " " : "") + o.label;
+      const words = text.toLowerCase().split(/\s+/);
+      return terms.every((t) => words.some((w) => w.startsWith(t)));
+    });
+  }, [search, flatOptions]);
+
+  useEffect(() => { setFocusIdx(0); }, [filtered]);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      const handler = (e: MouseEvent) => {
+        if (ref.current && !ref.current.contains(e.target as Node)) {
+          setEditing(false);
+          setSearch("");
+        }
+      };
+      document.addEventListener("mousedown", handler);
+      return () => document.removeEventListener("mousedown", handler);
+    }
+  }, [editing]);
+
+  const selectItem = (id: string) => {
+    setEditing(false);
+    setSearch("");
+    if (id !== value) onSave(id);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx((i) => Math.min(i + 1, filtered.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx((i) => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter" && filtered[focusIdx]) { e.preventDefault(); selectItem(filtered[focusIdx].id); }
+    else if (e.key === "Escape") { setEditing(false); setSearch(""); }
+  };
+
+  if (editing) {
+    return (
+      <div ref={ref} className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Type to filter..."
+          className="w-full rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
+        />
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 min-w-[220px] rounded-md border border-border bg-background shadow-lg">
+          <div className="max-h-48 overflow-auto">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-muted-foreground">No matches</p>
+            ) : (
+              filtered.map((o, i) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  onMouseDown={() => selectItem(o.id)}
+                >
+                  {o.parentLabel && <span className="text-muted-foreground">{o.parentLabel} &gt; </span>}
+                  {o.label}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <span
+      onClick={() => { setSearch(""); setEditing(true); }}
+      className={`cursor-pointer border-b border-dotted border-transparent hover:border-gray-400 ${isUncategorized ? "text-red-500 font-medium" : ""}`}
+    >
+      {isUncategorized ? "[Uncategorized]" : label}
+    </span>
+  );
+}
+
+// ── Inline amount cell ──
+function EditableAmountCell({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [cents, setCents] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
+
+  const startEdit = () => {
+    setCents(Math.round(parseFloat(value) * 100));
+    setEditing(true);
+  };
+
+  const commit = () => {
+    setEditing(false);
+    const newValue = (cents / 100).toFixed(2);
+    if (newValue !== parseFloat(value).toFixed(2)) onSave(newValue);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace") { e.preventDefault(); setCents((prev) => Math.floor(prev / 10)); }
+    else if (/^\d$/.test(e.key)) { e.preventDefault(); setCents((prev) => prev * 10 + parseInt(e.key)); }
+    else if (e.key === "Enter") { e.preventDefault(); commit(); }
+    else if (e.key === "Escape") { setEditing(false); }
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        value={"$" + (cents / 100).toFixed(2)}
+        onKeyDown={handleKeyDown}
+        onChange={() => {}}
+        onBlur={commit}
+        className="w-full rounded border border-primary px-1 py-0.5 text-right text-sm font-semibold focus:outline-none"
+      />
+    );
+  }
+
+  return (
+    <span onClick={startEdit} className="cursor-pointer border-b border-dotted border-transparent hover:border-gray-400">
+      -{formatCurrency(value)}
+    </span>
+  );
+}
+
 // ═══════════════ MAIN COMPONENT ═══════════════
 
 export function Expenses() {
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
-  const [sortBy, setSortBy] = useState<SortField>("date");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [sort, setSort] = useState<SortState>({ field: "date", order: "desc" });
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterAccountId, setFilterAccountId] = useState("");
   const [filterCategoryId, setFilterCategoryId] = useState("");
@@ -467,9 +632,11 @@ export function Expenses() {
     const params: Record<string, string> = {
       page: page.toString(),
       limit: "20",
-      sortBy,
-      sortOrder,
     };
+    if (sort) {
+      params.sortBy = sort.field;
+      params.sortOrder = sort.order;
+    }
     if (showUncategorized) {
       params.categoryId = "uncategorized";
     } else if (filterCategoryId) {
@@ -480,7 +647,7 @@ export function Expenses() {
     if (filterStartDate) params.startDate = filterStartDate;
     if (filterEndDate) params.endDate = filterEndDate;
     return params;
-  }, [page, sortBy, sortOrder, filterAccountId, filterCategoryId, filterTagId, filterStartDate, filterEndDate, showUncategorized]);
+  }, [page, sort, filterAccountId, filterCategoryId, filterTagId, filterStartDate, filterEndDate, showUncategorized]);
 
   const { data: expenseData, refetch } = useApi(() => getExpenses(queryParams), [queryParams]);
   const { data: categories } = useApi(() => getFlatCategories(), []);
@@ -532,12 +699,14 @@ export function Expenses() {
   };
 
   const toggleSort = (field: SortField) => {
-    if (sortBy === field) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    } else {
-      setSortBy(field);
-      setSortOrder(field === "date" || field === "amount" ? "desc" : "asc");
-    }
+    setSort((prev) => {
+      if (!prev || prev.field !== field) {
+        return { field, order: field === "date" || field === "amount" ? "desc" : "asc" };
+      }
+      if (prev.order === "desc") return { field, order: "asc" };
+      if (prev.order === "asc") return null; // 3rd click resets to unsorted
+      return { field, order: "desc" };
+    });
     setPage(1);
   };
 
@@ -560,8 +729,8 @@ export function Expenses() {
   };
 
   const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortBy !== field) return <ArrowUpDown className="ml-1 inline h-3 w-3 opacity-40" />;
-    return sortOrder === "asc"
+    if (!sort || sort.field !== field) return <ArrowUpDown className="ml-1 inline h-3 w-3 opacity-40" />;
+    return sort.order === "asc"
       ? <ArrowUp className="ml-1 inline h-3 w-3" />
       : <ArrowDown className="ml-1 inline h-3 w-3" />;
   };
@@ -696,16 +865,16 @@ export function Expenses() {
         {expenses.length > 0 ? (
           <>
             <div className="hidden md:block">
-              <table className="w-full text-sm">
+              <table className="w-full table-fixed text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
+                    <th className="w-[100px] cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
                     <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("description")}>Description <SortIcon field="description" /></th>
-                    <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("vendor")}>Vendor <SortIcon field="vendor" /></th>
-                    <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("category")}>Category <SortIcon field="category" /></th>
-                    <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
-                    <th className="cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
-                    <th className="pb-3 text-right font-medium">Actions</th>
+                    <th className="w-[130px] cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("vendor")}>Vendor <SortIcon field="vendor" /></th>
+                    <th className="w-[150px] cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("category")}>Category <SortIcon field="category" /></th>
+                    <th className="w-[130px] cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
+                    <th className="w-[100px] cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
+                    <th className="w-[40px] pb-3"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -840,7 +1009,7 @@ function ExpenseRow({
 
   return (
     <tr className={rowBg}>
-      <td className="py-3">
+      <td className="w-[100px] py-3">
         <EditableCell
           value={expense.date}
           type="date"
@@ -876,26 +1045,23 @@ function ExpenseRow({
           )}
         </div>
       </td>
-      <td className="py-3">
+      <td className="w-[130px] py-3">
         <EditableVendorCell
           value={expense.vendor}
           vendors={vendors}
           onSave={(v) => onInlineUpdate(expense.id, "vendor", v)}
         />
       </td>
-      <td className="py-3">
-        {isUncategorized ? (
-          <span className="text-red-500 font-medium">[Uncategorized]</span>
-        ) : (
-          <EditableSelectCell
-            value={expense.categoryId!}
-            label={expense.category?.name ?? ""}
-            options={categories.filter((c) => c.parentId || !categories.some((cc) => cc.parentId === c.id)).map((c) => ({ id: c.id, name: c.parentId ? `${categories.find((p) => p.id === c.parentId)?.name ?? ""} > ${c.name}` : c.name }))}
-            onSave={(v) => onInlineUpdate(expense.id, "categoryId", v)}
-          />
-        )}
+      <td className="w-[150px] py-3">
+        <EditableCategoryCell
+          value={expense.categoryId}
+          label={expense.category?.name ?? ""}
+          categories={categories}
+          isUncategorized={isUncategorized}
+          onSave={(v) => onInlineUpdate(expense.id, "categoryId", v)}
+        />
       </td>
-      <td className="py-3">
+      <td className="w-[130px] py-3">
         <EditableSelectCell
           value={expense.accountId}
           label={expense.account.name}
@@ -903,8 +1069,13 @@ function ExpenseRow({
           onSave={(v) => onInlineUpdate(expense.id, "accountId", v)}
         />
       </td>
-      <td className="py-3 text-right font-semibold text-destructive">-{formatCurrency(expense.amount)}</td>
-      <td className="py-3 text-right">
+      <td className="w-[100px] py-3 text-right font-semibold text-destructive">
+        <EditableAmountCell
+          value={expense.amount}
+          onSave={(v) => onInlineUpdate(expense.id, "amount", v)}
+        />
+      </td>
+      <td className="w-[40px] py-3 text-right">
         <button onClick={() => onEdit(expense)} className="rounded p-1 hover:bg-accent">
           <Pencil className="h-4 w-4 text-muted-foreground" />
         </button>
@@ -933,7 +1104,7 @@ function GroupRows({
   if (collapsed) {
     return (
       <tr className="bg-muted/30 hover:bg-muted/50">
-        <td className="py-3">{formatDate(firstExpense.date)}</td>
+        <td className="w-[100px] py-3">{formatDate(firstExpense.date)}</td>
         <td className="py-3">
           <button onClick={onToggle} className="flex items-center gap-1.5 font-medium text-primary">
             <ChevronRight className="h-3.5 w-3.5" />
@@ -941,11 +1112,11 @@ function GroupRows({
             <span className="text-xs font-normal text-muted-foreground">({expenses.length} items)</span>
           </button>
         </td>
-        <td className="py-3 text-muted-foreground">{firstExpense.vendor}</td>
-        <td className="py-3">{firstExpense.category?.name ?? <span className="text-red-500">[Uncategorized]</span>}</td>
-        <td className="py-3">{firstExpense.account.name}</td>
-        <td className="py-3 text-right font-semibold text-destructive">-{formatCurrency(totalAmount)}</td>
-        <td className="py-3 text-right">
+        <td className="w-[130px] py-3 text-muted-foreground">{firstExpense.vendor}</td>
+        <td className="w-[150px] py-3">{firstExpense.category?.name ?? <span className="text-red-500">[Uncategorized]</span>}</td>
+        <td className="w-[130px] py-3">{firstExpense.account.name}</td>
+        <td className="w-[100px] py-3 text-right font-semibold text-destructive">-{formatCurrency(totalAmount)}</td>
+        <td className="w-[40px] py-3 text-right">
           <button onClick={() => onEdit(firstExpense)} className="rounded p-1 hover:bg-accent"><Pencil className="h-4 w-4 text-muted-foreground" /></button>
         </td>
       </tr>
