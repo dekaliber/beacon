@@ -7,6 +7,7 @@ export const recurrenceRoutes = Router();
 
 const recurrenceSchema = z.object({
   description: z.string().min(1),
+  vendor: z.string().optional().default(""),
   amount: z.number().positive(),
   frequency: z.enum(["DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY", "QUARTERLY", "YEARLY"]),
   interval: z.number().int().positive().default(1),
@@ -93,6 +94,7 @@ recurrenceRoutes.post("/process", async (_req, res) => {
       data: {
         amount: rule.amount,
         description: rule.description,
+        vendor: rule.vendor,
         date: rule.nextOccurrence,
         categoryId: rule.categoryId,
         accountId: rule.accountId,

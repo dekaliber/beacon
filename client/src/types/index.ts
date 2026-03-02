@@ -56,6 +56,7 @@ export interface Expense {
   id: string;
   amount: string;
   description: string;
+  vendor: string;
   date: string;
   notes: string | null;
   categoryId: string;

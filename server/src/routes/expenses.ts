@@ -9,6 +9,7 @@ const EXPENSE_ALLOWED_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "CREDIT_CARD", "CA
 const expenseSchema = z.object({
   amount: z.number().positive(),
   description: z.string().min(1),
+  vendor: z.string().min(1),
   date: z.string().transform((s) => new Date(s)),
   notes: z.string().optional(),
   categoryId: z.string(),
@@ -31,11 +32,30 @@ expenseRoutes.get("/", async (req, res) => {
   if (req.query.accountId) where.accountId = req.query.accountId;
   if (req.query.isReimbursementExpected === "true") where.isReimbursementExpected = true;
   if (req.query.tagId) where.tags = { some: { tagId: req.query.tagId } };
+  if (req.query.vendor) where.vendor = { contains: req.query.vendor as string, mode: "insensitive" };
+  if (req.query.search) {
+    where.OR = [
+      { description: { contains: req.query.search as string, mode: "insensitive" } },
+      { vendor: { contains: req.query.search as string, mode: "insensitive" } },
+    ];
+  }
   if (req.query.startDate || req.query.endDate) {
     where.date = {
       ...(req.query.startDate ? { gte: new Date(req.query.startDate as string) } : {}),
       ...(req.query.endDate ? { lte: new Date(req.query.endDate as string) } : {}),
     };
+  }
+
+  // Sorting
+  const sortBy = (req.query.sortBy as string) || "date";
+  const sortOrder = (req.query.sortOrder as string) === "asc" ? "asc" : "desc";
+  const orderBy: Record<string, unknown> = {};
+  if (sortBy === "category") {
+    orderBy.category = { name: sortOrder };
+  } else if (sortBy === "account") {
+    orderBy.account = { name: sortOrder };
+  } else {
+    orderBy[sortBy] = sortOrder;
   }
 
   const [expenses, total] = await Promise.all([
@@ -47,7 +67,7 @@ expenseRoutes.get("/", async (req, res) => {
         tags: { include: { tag: true } },
         transactionGroup: true,
       },
-      orderBy: { date: "desc" },
+      orderBy,
       skip,
       take: limit,
     }),

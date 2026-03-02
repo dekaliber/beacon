@@ -8,7 +8,6 @@ import {
   Tags,
   Tag,
   Repeat,
-  Link2,
   AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,7 +21,6 @@ const navItems = [
   { to: "/categories", icon: Tags, label: "Categories" },
   { to: "/tags", icon: Tag, label: "Tags" },
   { to: "/recurring", icon: Repeat, label: "Recurring" },
-  { to: "/transaction-groups", icon: Link2, label: "Groups" },
   { to: "/reimbursements", icon: AlertCircle, label: "Reimbursements" },
 ];
 

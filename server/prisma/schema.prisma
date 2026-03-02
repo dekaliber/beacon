@@ -70,6 +70,7 @@ model Expense {
   id          String   @id @default(cuid())
   amount      Decimal  @db.Decimal(12, 2)
   description String
+  vendor      String   @default("")
   date        DateTime
   notes       String?
   categoryId  String
@@ -167,6 +168,7 @@ model TransactionGroup {
 model RecurrenceRule {
   id            String    @id @default(cuid())
   description   String
+  vendor        String    @default("")
   amount        Decimal   @db.Decimal(12, 2)
   frequency     Frequency
   interval      Int       @default(1)

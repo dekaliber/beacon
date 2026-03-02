@@ -25,6 +25,7 @@ incomeRoutes.get("/", async (req, res) => {
   const where: Record<string, unknown> = {};
   if (req.query.accountId) where.accountId = req.query.accountId;
   if (req.query.source) where.source = req.query.source;
+  if (req.query.tagId) where.tags = { some: { tagId: req.query.tagId } };
   if (req.query.startDate || req.query.endDate) {
     where.date = {
       ...(req.query.startDate ? { gte: new Date(req.query.startDate as string) } : {}),
@@ -32,11 +33,21 @@ incomeRoutes.get("/", async (req, res) => {
     };
   }
 
+  // Sorting
+  const sortBy = (req.query.sortBy as string) || "date";
+  const sortOrder = (req.query.sortOrder as string) === "asc" ? "asc" : "desc";
+  const orderBy: Record<string, unknown> = {};
+  if (sortBy === "account") {
+    orderBy.account = { name: sortOrder };
+  } else {
+    orderBy[sortBy] = sortOrder;
+  }
+
   const [incomes, total] = await Promise.all([
     prisma.income.findMany({
       where,
       include: { account: true, tags: { include: { tag: true } }, transactionGroup: true },
-      orderBy: { date: "desc" },
+      orderBy,
       skip,
       take: limit,
     }),

@@ -1,5 +1,8 @@
-import { useState, useEffect } from "react";
-import { Plus, Trash2, Pencil, TrendingUp, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import {
+  Plus, Pencil, TrendingUp, ChevronLeft, ChevronRight,
+  ArrowUpDown, ArrowUp, ArrowDown, X, Filter, Trash2,
+} from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
@@ -17,19 +20,44 @@ const SOURCE_LABELS: Record<IncomeSource, string> = {
   OTHER: "Other",
 };
 
-// Account types that support income
 const INCOME_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "INVESTMENT"];
+
+type SortField = "date" | "source" | "account" | "amount";
 
 export function IncomePage() {
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Income | null>(null);
+  const [sortBy, setSortBy] = useState<SortField>("date");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterAccountId, setFilterAccountId] = useState("");
+  const [filterSource, setFilterSource] = useState("");
+  const [filterTagId, setFilterTagId] = useState("");
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
 
-  const { data: incomeData, refetch } = useApi(() => getIncome({ page: page.toString(), limit: "20" }), [page]);
+  const queryParams = useMemo(() => {
+    const params: Record<string, string> = {
+      page: page.toString(),
+      limit: "20",
+      sortBy,
+      sortOrder,
+    };
+    if (filterAccountId) params.accountId = filterAccountId;
+    if (filterSource) params.source = filterSource;
+    if (filterTagId) params.tagId = filterTagId;
+    if (filterStartDate) params.startDate = filterStartDate;
+    if (filterEndDate) params.endDate = filterEndDate;
+    return params;
+  }, [page, sortBy, sortOrder, filterAccountId, filterSource, filterTagId, filterStartDate, filterEndDate]);
+
+  const { data: incomeData, refetch } = useApi(() => getIncome(queryParams), [queryParams]);
   const { data: accounts } = useApi(() => getAccounts(), []);
   const { data: tags } = useApi(() => getTags(), []);
 
   const eligibleAccounts = (accounts ?? []).filter((a) => INCOME_ACCOUNT_TYPES.includes(a.type));
+  const hasActiveFilters = !!(filterAccountId || filterSource || filterTagId || filterStartDate || filterEndDate);
 
   const handleSave = async (formData: Record<string, unknown>) => {
     if (editing) {
@@ -43,10 +71,36 @@ export function IncomePage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Delete this income entry?")) {
-      await deleteIncome(id);
-      refetch();
+    await deleteIncome(id);
+    setModalOpen(false);
+    setEditing(null);
+    refetch();
+  };
+
+  const toggleSort = (field: SortField) => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(field);
+      setSortOrder(field === "date" || field === "amount" ? "desc" : "asc");
     }
+    setPage(1);
+  };
+
+  const clearFilters = () => {
+    setFilterAccountId("");
+    setFilterSource("");
+    setFilterTagId("");
+    setFilterStartDate("");
+    setFilterEndDate("");
+    setPage(1);
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortBy !== field) return <ArrowUpDown className="ml-1 inline h-3 w-3 opacity-40" />;
+    return sortOrder === "asc"
+      ? <ArrowUp className="ml-1 inline h-3 w-3" />
+      : <ArrowDown className="ml-1 inline h-3 w-3" />;
   };
 
   const incomes = incomeData?.data ?? [];
@@ -56,10 +110,93 @@ export function IncomePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Income</h2>
-        <Button onClick={() => { setEditing(null); setModalOpen(true); }}>
-          <Plus className="h-4 w-4" /> Add Income
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant={filterOpen ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setFilterOpen(!filterOpen)}
+          >
+            <Filter className="h-4 w-4" />
+            {hasActiveFilters && <span className="ml-1 rounded-full bg-primary-foreground/20 px-1.5 text-xs">!</span>}
+          </Button>
+          <Button onClick={() => { setEditing(null); setModalOpen(true); }}>
+            <Plus className="h-4 w-4" /> Add Income
+          </Button>
+        </div>
       </div>
+
+      {/* Filter bar */}
+      {filterOpen && (
+        <Card>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Account</label>
+              <select
+                value={filterAccountId}
+                onChange={(e) => { setFilterAccountId(e.target.value); setPage(1); }}
+                className="rounded-md border border-border px-2 py-1.5 text-sm"
+              >
+                <option value="">All accounts</option>
+                {eligibleAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Source</label>
+              <select
+                value={filterSource}
+                onChange={(e) => { setFilterSource(e.target.value); setPage(1); }}
+                className="rounded-md border border-border px-2 py-1.5 text-sm"
+              >
+                <option value="">All sources</option>
+                {Object.entries(SOURCE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Tag</label>
+              <select
+                value={filterTagId}
+                onChange={(e) => { setFilterTagId(e.target.value); setPage(1); }}
+                className="rounded-md border border-border px-2 py-1.5 text-sm"
+              >
+                <option value="">All tags</option>
+                {(tags ?? []).map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">From</label>
+              <input
+                type="date"
+                value={filterStartDate}
+                onChange={(e) => { setFilterStartDate(e.target.value); setPage(1); }}
+                className="rounded-md border border-border px-2 py-1.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">To</label>
+              <input
+                type="date"
+                value={filterEndDate}
+                onChange={(e) => { setFilterEndDate(e.target.value); setPage(1); }}
+                className="rounded-md border border-border px-2 py-1.5 text-sm"
+              />
+            </div>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3 w-3" /> Clear
+              </button>
+            )}
+          </div>
+        </Card>
+      )}
 
       <Card>
         {incomes.length > 0 ? (
@@ -69,11 +206,19 @@ export function IncomePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="pb-3 font-medium">Date</th>
-                    <th className="pb-3 font-medium">Source</th>
-                    <th className="pb-3 font-medium">Account</th>
+                    <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("date")}>
+                      Date <SortIcon field="date" />
+                    </th>
+                    <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("source")}>
+                      Source <SortIcon field="source" />
+                    </th>
+                    <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("account")}>
+                      Account <SortIcon field="account" />
+                    </th>
                     <th className="pb-3 font-medium">Tags</th>
-                    <th className="pb-3 text-right font-medium">Amount</th>
+                    <th className="cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>
+                      Amount <SortIcon field="amount" />
+                    </th>
                     <th className="pb-3 text-right font-medium">Actions</th>
                   </tr>
                 </thead>
@@ -103,17 +248,12 @@ export function IncomePage() {
                         +{formatCurrency(income.amount)}
                       </td>
                       <td className="py-3 text-right">
-                        <div className="flex justify-end gap-1">
-                          <button
-                            onClick={() => { setEditing(income); setModalOpen(true); }}
-                            className="rounded p-1 hover:bg-accent"
-                          >
-                            <Pencil className="h-4 w-4 text-muted-foreground" />
-                          </button>
-                          <button onClick={() => handleDelete(income.id)} className="rounded p-1 hover:bg-accent">
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => { setEditing(income); setModalOpen(true); }}
+                          className="rounded p-1 hover:bg-accent"
+                        >
+                          <Pencil className="h-4 w-4 text-muted-foreground" />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -138,9 +278,6 @@ export function IncomePage() {
                       className="rounded p-1 hover:bg-accent"
                     >
                       <Pencil className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                    <button onClick={() => handleDelete(income.id)} className="rounded p-1 hover:bg-accent">
-                      <Trash2 className="h-4 w-4 text-destructive" />
                     </button>
                   </div>
                 </div>
@@ -174,11 +311,14 @@ export function IncomePage() {
           <EmptyState
             icon={TrendingUp}
             title="No income recorded"
-            description="Track dividends, interest, capital gains, and other passive income."
+            description={hasActiveFilters
+              ? "No income entries match your current filters. Try adjusting or clearing them."
+              : "Track dividends, interest, capital gains, and other passive income."
+            }
             action={
-              <Button onClick={() => { setEditing(null); setModalOpen(true); }}>
-                <Plus className="h-4 w-4" /> Add Income
-              </Button>
+              hasActiveFilters
+                ? <Button variant="secondary" onClick={clearFilters}>Clear Filters</Button>
+                : <Button onClick={() => { setEditing(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> Add Income</Button>
             }
           />
         )}
@@ -188,6 +328,7 @@ export function IncomePage() {
         open={modalOpen}
         onClose={() => { setModalOpen(false); setEditing(null); }}
         onSave={handleSave}
+        onDelete={handleDelete}
         income={editing}
         accounts={eligibleAccounts}
         tags={tags ?? []}
@@ -200,17 +341,23 @@ interface IncomeModalProps {
   open: boolean;
   onClose: () => void;
   onSave: (data: Record<string, unknown>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
   income: Income | null;
   accounts: Account[];
   tags: Tag[];
 }
 
-function IncomeModal({ open, onClose, onSave, income, accounts, tags }: IncomeModalProps) {
+function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, tags }: IncomeModalProps) {
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
-    if (open) setSelectedTagIds(income?.tags.map((t) => t.tagId) ?? []);
+    if (open) {
+      setSelectedTagIds(income?.tags.map((t) => t.tagId) ?? []);
+      setConfirmDelete(false);
+    }
   }, [open, income]);
 
   const toggleTag = (tagId: string) => {
@@ -232,6 +379,17 @@ function IncomeModal({ open, onClose, onSave, income, accounts, tags }: IncomeMo
       tagIds: selectedTagIds,
     });
     setSaving(false);
+  };
+
+  const handleDeleteClick = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    if (!income) return;
+    setDeleting(true);
+    await onDelete(income.id);
+    setDeleting(false);
   };
 
   return (
@@ -336,11 +494,26 @@ function IncomeModal({ open, onClose, onSave, income, accounts, tags }: IncomeMo
           />
         </div>
 
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={saving}>
-            {saving ? "Saving..." : income ? "Update" : "Add Income"}
-          </Button>
+        <div className="flex items-center justify-between pt-2">
+          <div>
+            {income && (
+              <button
+                type="button"
+                onClick={handleDeleteClick}
+                disabled={deleting}
+                className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving..." : income ? "Update" : "Add Income"}
+            </Button>
+          </div>
         </div>
       </form>
     </Modal>
