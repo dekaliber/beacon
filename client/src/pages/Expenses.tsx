@@ -169,6 +169,9 @@ function CategoryTypeahead({
   const [focusIdx, setFocusIdx] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
 
+  // Sync internal value when defaultValue changes (e.g. vendor-category autofill)
+  useEffect(() => { setValue(defaultValue ?? ""); }, [defaultValue]);
+
   const parentCategories = categories.filter((c) => !c.parentId);
   const childCategories = categories.filter((c) => c.parentId);
 
@@ -700,12 +703,12 @@ export function Expenses() {
 
   const toggleSort = (field: SortField) => {
     setSort((prev) => {
-      if (!prev || prev.field !== field) {
-        return { field, order: field === "date" || field === "amount" ? "desc" : "asc" };
-      }
-      if (prev.order === "desc") return { field, order: "asc" };
-      if (prev.order === "asc") return null; // 3rd click resets to unsorted
-      return { field, order: "desc" };
+      const defaultDesc = field === "date" || field === "amount";
+      const first = defaultDesc ? "desc" : "asc";
+      const second = defaultDesc ? "asc" : "desc";
+      if (!prev || prev.field !== field) return { field, order: first };
+      if (prev.order === first) return { field, order: second };
+      return null;
     });
     setPage(1);
   };
@@ -868,11 +871,11 @@ export function Expenses() {
               <table className="w-full table-fixed text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="w-[100px] cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
-                    <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("description")}>Description <SortIcon field="description" /></th>
-                    <th className="w-[130px] cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("vendor")}>Vendor <SortIcon field="vendor" /></th>
-                    <th className="w-[150px] cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("category")}>Category <SortIcon field="category" /></th>
-                    <th className="w-[130px] cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
+                    <th className="w-[100px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
+                    <th className="cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("description")}>Description <SortIcon field="description" /></th>
+                    <th className="w-[160px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("vendor")}>Vendor <SortIcon field="vendor" /></th>
+                    <th className="w-[180px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("category")}>Category <SortIcon field="category" /></th>
+                    <th className="w-[130px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
                     <th className="w-[100px] cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
                     <th className="w-[40px] pb-3"></th>
                   </tr>
@@ -1009,14 +1012,14 @@ function ExpenseRow({
 
   return (
     <tr className={rowBg}>
-      <td className="w-[100px] py-3">
+      <td className="w-[100px] py-3 pr-3">
         <EditableCell
           value={expense.date}
           type="date"
           onSave={(v) => onInlineUpdate(expense.id, "date", v)}
         />
       </td>
-      <td className="py-3">
+      <td className="py-3 pr-3">
         <div className="flex items-center gap-2">
           {expense.isReimbursementExpected && (
             <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-500" title={expense.reimbursementNote ?? "Reimbursement expected"} />
@@ -1045,14 +1048,14 @@ function ExpenseRow({
           )}
         </div>
       </td>
-      <td className="w-[130px] py-3">
+      <td className="w-[160px] py-3 pr-3">
         <EditableVendorCell
           value={expense.vendor}
           vendors={vendors}
           onSave={(v) => onInlineUpdate(expense.id, "vendor", v)}
         />
       </td>
-      <td className="w-[150px] py-3">
+      <td className="w-[180px] py-3 pr-3">
         <EditableCategoryCell
           value={expense.categoryId}
           label={expense.category?.name ?? ""}
@@ -1061,7 +1064,7 @@ function ExpenseRow({
           onSave={(v) => onInlineUpdate(expense.id, "categoryId", v)}
         />
       </td>
-      <td className="w-[130px] py-3">
+      <td className="w-[130px] py-3 pr-3">
         <EditableSelectCell
           value={expense.accountId}
           label={expense.account.name}
@@ -1076,8 +1079,8 @@ function ExpenseRow({
         />
       </td>
       <td className="w-[40px] py-3 text-right">
-        <button onClick={() => onEdit(expense)} className="rounded p-1 hover:bg-accent">
-          <Pencil className="h-4 w-4 text-muted-foreground" />
+        <button onClick={() => onEdit(expense)} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent">
+          <Pencil className="h-4 w-4" />
         </button>
       </td>
     </tr>
@@ -1104,20 +1107,20 @@ function GroupRows({
   if (collapsed) {
     return (
       <tr className="bg-muted/30 hover:bg-muted/50">
-        <td className="w-[100px] py-3">{formatDate(firstExpense.date)}</td>
-        <td className="py-3">
+        <td className="w-[100px] py-3 pr-3">{formatDate(firstExpense.date)}</td>
+        <td className="py-3 pr-3">
           <button onClick={onToggle} className="flex items-center gap-1.5 font-medium text-primary">
             <ChevronRight className="h-3.5 w-3.5" />
             {groupName}
             <span className="text-xs font-normal text-muted-foreground">({expenses.length} items)</span>
           </button>
         </td>
-        <td className="w-[130px] py-3 text-muted-foreground">{firstExpense.vendor}</td>
-        <td className="w-[150px] py-3">{firstExpense.category?.name ?? <span className="text-red-500">[Uncategorized]</span>}</td>
-        <td className="w-[130px] py-3">{firstExpense.account.name}</td>
+        <td className="w-[160px] py-3 pr-3 text-muted-foreground">{firstExpense.vendor}</td>
+        <td className="w-[180px] py-3 pr-3">{firstExpense.category?.name ?? <span className="text-red-500">[Uncategorized]</span>}</td>
+        <td className="w-[130px] py-3 pr-3">{firstExpense.account.name}</td>
         <td className="w-[100px] py-3 text-right font-semibold text-destructive">-{formatCurrency(totalAmount)}</td>
         <td className="w-[40px] py-3 text-right">
-          <button onClick={() => onEdit(firstExpense)} className="rounded p-1 hover:bg-accent"><Pencil className="h-4 w-4 text-muted-foreground" /></button>
+          <button onClick={() => onEdit(firstExpense)} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent"><Pencil className="h-4 w-4" /></button>
         </td>
       </tr>
     );

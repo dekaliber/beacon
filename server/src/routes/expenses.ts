@@ -52,15 +52,24 @@ expenseRoutes.get("/", async (req, res) => {
   }
 
   // Sorting
-  const sortBy = (req.query.sortBy as string) || "date";
+  const sortBy = req.query.sortBy as string | undefined;
   const sortOrder = (req.query.sortOrder as string) === "asc" ? "asc" : "desc";
-  const orderBy: Record<string, unknown> = {};
-  if (sortBy === "category") {
-    orderBy.category = { name: sortOrder };
+
+  // Build orderBy array: primary sort + secondary tiebreakers
+  let orderBy: Record<string, unknown>[];
+  if (!sortBy || sortBy === "date") {
+    // Default or explicit date sort: date, then recurring first, then creation order
+    orderBy = [
+      { date: sortOrder },
+      { recurrenceRuleId: { sort: "asc", nulls: "last" } },
+      { createdAt: "asc" },
+    ];
+  } else if (sortBy === "category") {
+    orderBy = [{ category: { name: sortOrder } }, { date: "desc" }];
   } else if (sortBy === "account") {
-    orderBy.account = { name: sortOrder };
+    orderBy = [{ account: { name: sortOrder } }, { date: "desc" }];
   } else {
-    orderBy[sortBy] = sortOrder;
+    orderBy = [{ [sortBy]: sortOrder }, { date: "desc" }];
   }
 
   const [expenses, total] = await Promise.all([

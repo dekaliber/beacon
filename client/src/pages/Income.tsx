@@ -203,12 +203,12 @@ export function IncomePage() {
 
   const toggleSort = (field: SortField) => {
     setSort((prev) => {
-      if (!prev || prev.field !== field) {
-        return { field, order: field === "date" || field === "amount" ? "desc" : "asc" };
-      }
-      if (prev.order === "desc") return { field, order: "asc" };
-      if (prev.order === "asc") return null;
-      return { field, order: "desc" };
+      const defaultDesc = field === "date" || field === "amount";
+      const first = defaultDesc ? "desc" : "asc";
+      const second = defaultDesc ? "asc" : "desc";
+      if (!prev || prev.field !== field) return { field, order: first };
+      if (prev.order === first) return { field, order: second };
+      return null;
     });
     setPage(1);
   };
@@ -286,10 +286,10 @@ export function IncomePage() {
               <table className="w-full table-fixed text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="w-[100px] cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
-                    <th className="w-[130px] cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("source")}>Source <SortIcon field="source" /></th>
-                    <th className="w-[150px] cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
-                    <th className="pb-3 font-medium">Tags</th>
+                    <th className="w-[100px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
+                    <th className="w-[130px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("source")}>Source <SortIcon field="source" /></th>
+                    <th className="w-[160px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
+                    <th className="pb-3 pr-3 font-medium">Tags</th>
                     <th className="w-[100px] cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
                     <th className="w-[40px] pb-3"></th>
                   </tr>
@@ -297,10 +297,10 @@ export function IncomePage() {
                 <tbody className="divide-y divide-border">
                   {incomes.map((income) => (
                     <tr key={income.id} className="hover:bg-muted/50">
-                      <td className="w-[100px] py-3">
+                      <td className="w-[100px] py-3 pr-3">
                         <EditableCell value={income.date} type="date" onSave={(v) => handleInlineUpdate(income.id, "date", v)} />
                       </td>
-                      <td className="w-[130px] py-3">
+                      <td className="w-[130px] py-3 pr-3">
                         <EditableSelectCell
                           value={income.source}
                           label={SOURCE_LABELS[income.source]}
@@ -308,7 +308,7 @@ export function IncomePage() {
                           onSave={(v) => handleInlineUpdate(income.id, "source", v)}
                         />
                       </td>
-                      <td className="w-[150px] py-3">
+                      <td className="w-[160px] py-3 pr-3">
                         <EditableSelectCell
                           value={income.accountId}
                           label={income.account.name}
@@ -316,7 +316,7 @@ export function IncomePage() {
                           onSave={(v) => handleInlineUpdate(income.id, "accountId", v)}
                         />
                       </td>
-                      <td className="py-3">
+                      <td className="py-3 pr-3">
                         <div className="flex flex-wrap gap-1">
                           {income.tags.map(({ tag }) => (
                             <span key={tag.id} className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: tag.color ? `${tag.color}20` : "hsl(var(--muted))", color: tag.color ?? "inherit" }}>
@@ -333,8 +333,8 @@ export function IncomePage() {
                         />
                       </td>
                       <td className="w-[40px] py-3 text-right">
-                        <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1 hover:bg-accent">
-                          <Pencil className="h-4 w-4 text-muted-foreground" />
+                        <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent">
+                          <Pencil className="h-4 w-4" />
                         </button>
                       </td>
                     </tr>

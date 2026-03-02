@@ -34,13 +34,16 @@ incomeRoutes.get("/", async (req, res) => {
   }
 
   // Sorting
-  const sortBy = (req.query.sortBy as string) || "date";
+  const sortBy = req.query.sortBy as string | undefined;
   const sortOrder = (req.query.sortOrder as string) === "asc" ? "asc" : "desc";
-  const orderBy: Record<string, unknown> = {};
-  if (sortBy === "account") {
-    orderBy.account = { name: sortOrder };
+
+  let orderBy: Record<string, unknown>[];
+  if (!sortBy || sortBy === "date") {
+    orderBy = [{ date: sortOrder }, { createdAt: "asc" }];
+  } else if (sortBy === "account") {
+    orderBy = [{ account: { name: sortOrder } }, { date: "desc" }];
   } else {
-    orderBy[sortBy] = sortOrder;
+    orderBy = [{ [sortBy]: sortOrder }, { date: "desc" }];
   }
 
   const [incomes, total] = await Promise.all([
