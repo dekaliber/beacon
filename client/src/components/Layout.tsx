@@ -2,20 +2,28 @@ import { NavLink, Outlet } from "react-router-dom";
 import {
   LayoutDashboard,
   Receipt,
+  TrendingUp,
   PiggyBank,
   Landmark,
   Tags,
+  Tag,
   Repeat,
+  Link2,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/expenses", icon: Receipt, label: "Expenses" },
+  { to: "/income", icon: TrendingUp, label: "Income" },
   { to: "/budgets", icon: PiggyBank, label: "Budgets" },
   { to: "/accounts", icon: Landmark, label: "Accounts" },
   { to: "/categories", icon: Tags, label: "Categories" },
+  { to: "/tags", icon: Tag, label: "Tags" },
   { to: "/recurring", icon: Repeat, label: "Recurring" },
+  { to: "/transaction-groups", icon: Link2, label: "Groups" },
+  { to: "/reimbursements", icon: AlertCircle, label: "Reimbursements" },
 ];
 
 export function Layout() {

@@ -1,13 +1,16 @@
-import { useState } from "react";
-import { Plus, Trash2, Pencil, Receipt, ChevronLeft, ChevronRight } from "lucide-react";
-import { Card, CardHeader, CardTitle } from "@/components/Card";
+import { useState, useEffect } from "react";
+import { Plus, Trash2, Pencil, Receipt, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
+import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
-import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, deleteExpense } from "@/api";
+import { getExpenses, getAccounts, getFlatCategories, getTags, createExpense, updateExpense, deleteExpense } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { Expense, Category, Account } from "@/types";
+import type { Expense, Category, Account, Tag } from "@/types";
+
+// Investment accounts cannot have expenses
+const EXPENSE_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH"];
 
 export function Expenses() {
   const [page, setPage] = useState(1);
@@ -17,6 +20,9 @@ export function Expenses() {
   const { data: expenseData, refetch } = useApi(() => getExpenses({ page: page.toString(), limit: "20" }), [page]);
   const { data: categories } = useApi(() => getFlatCategories(), []);
   const { data: accounts } = useApi(() => getAccounts(), []);
+  const { data: tags } = useApi(() => getTags(), []);
+
+  const eligibleAccounts = (accounts ?? []).filter((a) => EXPENSE_ACCOUNT_TYPES.includes(a.type));
 
   const handleSave = async (formData: Record<string, unknown>) => {
     if (editing) {
@@ -71,9 +77,35 @@ export function Expenses() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {expenses.map((expense) => (
-                    <tr key={expense.id} className="hover:bg-muted/50">
+                    <tr
+                      key={expense.id}
+                      className={expense.isReimbursementExpected ? "bg-amber-50/50 hover:bg-amber-50" : "hover:bg-muted/50"}
+                    >
                       <td className="py-3">{formatDate(expense.date)}</td>
-                      <td className="py-3 font-medium">{expense.description}</td>
+                      <td className="py-3">
+                        <div className="flex items-center gap-2">
+                          {expense.isReimbursementExpected && (
+                            <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-500" title={expense.reimbursementNote ?? "Reimbursement expected"} />
+                          )}
+                          <span className="font-medium">{expense.description}</span>
+                          {expense.tags.length > 0 && (
+                            <div className="flex gap-1">
+                              {expense.tags.map(({ tag }) => (
+                                <span
+                                  key={tag.id}
+                                  className="rounded-full px-1.5 py-0.5 text-xs font-medium"
+                                  style={{
+                                    backgroundColor: tag.color ? `${tag.color}25` : "hsl(var(--muted))",
+                                    color: tag.color ?? "inherit",
+                                  }}
+                                >
+                                  {tag.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </td>
                       <td className="py-3">{expense.category.name}</td>
                       <td className="py-3">{expense.account.name}</td>
                       <td className="py-3 text-right font-semibold text-destructive">
@@ -98,12 +130,20 @@ export function Expenses() {
             {/* Mobile list */}
             <div className="divide-y divide-border md:hidden">
               {expenses.map((expense) => (
-                <div key={expense.id} className="flex items-center justify-between py-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{expense.description}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {expense.category.name} &middot; {formatDate(expense.date)}
-                    </p>
+                <div
+                  key={expense.id}
+                  className={`flex items-center justify-between py-3 ${expense.isReimbursementExpected ? "bg-amber-50/50" : ""}`}
+                >
+                  <div className="min-w-0 flex-1 flex items-start gap-2">
+                    {expense.isReimbursementExpected && (
+                      <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{expense.description}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {expense.category.name} &middot; {formatDate(expense.date)}
+                      </p>
+                    </div>
                   </div>
                   <div className="ml-4 flex items-center gap-2">
                     <span className="font-semibold text-destructive">-{formatCurrency(expense.amount)}</span>
@@ -158,7 +198,8 @@ export function Expenses() {
         onSave={handleSave}
         expense={editing}
         categories={categories ?? []}
-        accounts={accounts ?? []}
+        accounts={eligibleAccounts}
+        tags={tags ?? []}
       />
     </div>
   );
@@ -171,10 +212,26 @@ interface ExpenseModalProps {
   expense: Expense | null;
   categories: Category[];
   accounts: Account[];
+  tags: Tag[];
 }
 
-function ExpenseModal({ open, onClose, onSave, expense, categories, accounts }: ExpenseModalProps) {
+function ExpenseModal({ open, onClose, onSave, expense, categories, accounts, tags }: ExpenseModalProps) {
   const [saving, setSaving] = useState(false);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [isReimbursementExpected, setIsReimbursementExpected] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setSelectedTagIds(expense?.tags.map((t) => t.tagId) ?? []);
+      setIsReimbursementExpected(expense?.isReimbursementExpected ?? false);
+    }
+  }, [open, expense]);
+
+  const toggleTag = (tagId: string) => {
+    setSelectedTagIds((prev) =>
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -186,7 +243,12 @@ function ExpenseModal({ open, onClose, onSave, expense, categories, accounts }: 
       date: form.get("date") as string,
       categoryId: form.get("categoryId") as string,
       accountId: form.get("accountId") as string,
-      notes: form.get("notes") as string || undefined,
+      notes: (form.get("notes") as string) || undefined,
+      isReimbursementExpected,
+      reimbursementNote: isReimbursementExpected
+        ? (form.get("reimbursementNote") as string) || undefined
+        : null,
+      tagIds: selectedTagIds,
     });
     setSaving(false);
   };
@@ -277,6 +339,34 @@ function ExpenseModal({ open, onClose, onSave, expense, categories, accounts }: 
           </select>
         </div>
 
+        {tags.length > 0 && (
+          <div>
+            <label className="mb-2 block text-sm font-medium">Tags</label>
+            <div className="flex flex-wrap gap-2">
+              {tags.map((tag) => {
+                const selected = selectedTagIds.includes(tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={() => toggleTag(tag.id)}
+                    className="rounded-full border px-3 py-1 text-xs font-medium transition-colors"
+                    style={
+                      selected && tag.color
+                        ? { backgroundColor: tag.color, borderColor: tag.color, color: "#fff" }
+                        : selected
+                        ? { backgroundColor: "hsl(var(--primary))", borderColor: "hsl(var(--primary))", color: "#fff" }
+                        : {}
+                    }
+                  >
+                    {tag.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div>
           <label className="mb-1 block text-sm font-medium">Notes (optional)</label>
           <textarea
@@ -286,6 +376,29 @@ function ExpenseModal({ open, onClose, onSave, expense, categories, accounts }: 
             className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             placeholder="Additional notes..."
           />
+        </div>
+
+        <div className="rounded-md border border-border p-3">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={isReimbursementExpected}
+              onChange={(e) => setIsReimbursementExpected(e.target.checked)}
+              className="h-4 w-4 rounded border-border"
+            />
+            <span className="text-sm font-medium">Expecting reimbursement or refund</span>
+          </label>
+          {isReimbursementExpected && (
+            <div className="mt-2">
+              <input
+                name="reimbursementNote"
+                type="text"
+                defaultValue={expense?.reimbursementNote ?? ""}
+                className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="e.g. Return pending, or expecting $25 from John"
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 pt-2">

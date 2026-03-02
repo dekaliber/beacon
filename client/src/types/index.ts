@@ -22,6 +22,36 @@ export interface Category {
   updatedAt: string;
 }
 
+export interface Tag {
+  id: string;
+  name: string;
+  color: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExpenseTag {
+  expenseId: string;
+  tagId: string;
+  tag: Tag;
+}
+
+export interface IncomeTag {
+  incomeId: string;
+  tagId: string;
+  tag: Tag;
+}
+
+export interface TransactionGroup {
+  id: string;
+  name: string;
+  notes: string | null;
+  expenses?: Expense[];
+  incomes?: Income[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Expense {
   id: string;
   amount: string;
@@ -30,9 +60,31 @@ export interface Expense {
   notes: string | null;
   categoryId: string;
   accountId: string;
+  isReimbursementExpected: boolean;
+  reimbursementNote: string | null;
+  transactionGroupId: string | null;
   category: Category;
   account: Account;
+  tags: ExpenseTag[];
+  transactionGroup: TransactionGroup | null;
   recurrenceRuleId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type IncomeSource = "DIVIDENDS" | "INTEREST" | "CAPITAL_GAINS" | "GIFTS" | "OTHER";
+
+export interface Income {
+  id: string;
+  amount: string;
+  source: IncomeSource;
+  date: string;
+  notes: string | null;
+  accountId: string;
+  transactionGroupId: string | null;
+  account: Account;
+  tags: IncomeTag[];
+  transactionGroup: TransactionGroup | null;
   createdAt: string;
   updatedAt: string;
 }

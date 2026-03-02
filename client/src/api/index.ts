@@ -6,8 +6,11 @@ import type {
   Category,
   DashboardData,
   Expense,
+  Income,
   PaginatedResponse,
   RecurrenceRule,
+  Tag,
+  TransactionGroup,
 } from "../types";
 
 // Accounts
@@ -31,6 +34,32 @@ export const getExpenses = (params?: Record<string, string>) => {
 export const createExpense = (data: Record<string, unknown>) => api.post<Expense>("/expenses", data);
 export const updateExpense = (id: string, data: Record<string, unknown>) => api.put<Expense>(`/expenses/${id}`, data);
 export const deleteExpense = (id: string) => api.delete(`/expenses/${id}`);
+
+// Income
+export const getIncome = (params?: Record<string, string>) => {
+  const query = params ? "?" + new URLSearchParams(params).toString() : "";
+  return api.get<PaginatedResponse<Income>>(`/income${query}`);
+};
+export const createIncome = (data: Record<string, unknown>) => api.post<Income>("/income", data);
+export const updateIncome = (id: string, data: Record<string, unknown>) => api.put<Income>(`/income/${id}`, data);
+export const deleteIncome = (id: string) => api.delete(`/income/${id}`);
+
+// Tags
+export const getTags = () => api.get<Tag[]>("/tags");
+export const createTag = (data: { name: string; color?: string }) => api.post<Tag>("/tags", data);
+export const updateTag = (id: string, data: { name?: string; color?: string }) => api.put<Tag>(`/tags/${id}`, data);
+export const deleteTag = (id: string) => api.delete(`/tags/${id}`);
+
+// Transaction Groups
+export const getTransactionGroups = () => api.get<TransactionGroup[]>("/transaction-groups");
+export const getTransactionGroup = (id: string) => api.get<TransactionGroup>(`/transaction-groups/${id}`);
+export const createTransactionGroup = (data: Record<string, unknown>) =>
+  api.post<TransactionGroup>("/transaction-groups", data);
+export const updateTransactionGroup = (id: string, data: Record<string, unknown>) =>
+  api.put<TransactionGroup>(`/transaction-groups/${id}`, data);
+export const updateTransactionGroupMembers = (id: string, data: Record<string, unknown>) =>
+  api.patch<TransactionGroup>(`/transaction-groups/${id}/members`, data);
+export const deleteTransactionGroup = (id: string) => api.delete(`/transaction-groups/${id}`);
 
 // Budgets
 export const getBudgets = (year?: number) => {

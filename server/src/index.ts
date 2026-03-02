@@ -6,6 +6,9 @@ import { expenseRoutes } from "./routes/expenses.js";
 import { budgetRoutes } from "./routes/budgets.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { recurrenceRoutes } from "./routes/recurrence.js";
+import { incomeRoutes } from "./routes/income.js";
+import { tagRoutes } from "./routes/tags.js";
+import { transactionGroupRoutes } from "./routes/transactionGroups.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -20,6 +23,9 @@ app.use("/api/expenses", expenseRoutes);
 app.use("/api/budgets", budgetRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/recurrence-rules", recurrenceRoutes);
+app.use("/api/income", incomeRoutes);
+app.use("/api/tags", tagRoutes);
+app.use("/api/transaction-groups", transactionGroupRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {
