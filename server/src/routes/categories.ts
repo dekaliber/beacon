@@ -47,6 +47,92 @@ categoryRoutes.get("/:id/usage", async (req, res) => {
   res.json({ count, categoryIds });
 });
 
+// Bulk sync categories to match a desired structure
+const syncSchema = z.object({
+  categories: z.record(z.string(), z.array(z.string())),
+});
+
+categoryRoutes.post("/sync", async (req, res) => {
+  const parsed = syncSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const desired = parsed.data.categories; // { "ParentName": ["Sub1", "Sub2", ...] }
+
+  // Get all existing categories
+  const existingParents = await prisma.category.findMany({
+    where: { parentId: null },
+    include: { children: true },
+  });
+
+  const parentMap = new Map(existingParents.map((p) => [p.name, p]));
+  const keptCategoryIds = new Set<string>();
+
+  // Upsert parents and children
+  for (const [parentName, subcategories] of Object.entries(desired)) {
+    let parent = parentMap.get(parentName);
+    if (!parent) {
+      parent = await prisma.category.create({
+        data: { name: parentName },
+      });
+      parent = { ...parent, children: [] };
+    }
+    keptCategoryIds.add(parent.id);
+
+    const childMap = new Map((parent.children ?? []).map((c) => [c.name, c]));
+
+    for (const subName of subcategories) {
+      let child = childMap.get(subName);
+      if (!child) {
+        child = await prisma.category.create({
+          data: { name: subName, parentId: parent.id },
+        });
+      } else if (child.parentId !== parent.id) {
+        child = await prisma.category.update({
+          where: { id: child.id },
+          data: { parentId: parent.id },
+        });
+      }
+      keptCategoryIds.add(child.id);
+    }
+
+    // Remove children of this parent that aren't in the desired list
+    for (const existingChild of parent.children ?? []) {
+      if (!keptCategoryIds.has(existingChild.id)) {
+        await prisma.expense.updateMany({
+          where: { categoryId: existingChild.id },
+          data: { categoryId: null },
+        });
+        await prisma.category.delete({ where: { id: existingChild.id } });
+      }
+    }
+  }
+
+  // Remove parent categories that aren't in the desired list
+  for (const existing of existingParents) {
+    if (!keptCategoryIds.has(existing.id)) {
+      const childIds = (existing.children ?? []).map((c) => c.id);
+      const allIds = [existing.id, ...childIds];
+      await prisma.expense.updateMany({
+        where: { categoryId: { in: allIds } },
+        data: { categoryId: null },
+      });
+      if (childIds.length > 0) {
+        await prisma.category.deleteMany({ where: { id: { in: childIds } } });
+      }
+      await prisma.category.delete({ where: { id: existing.id } });
+    }
+  }
+
+  // Return the updated tree
+  const updated = await prisma.category.findMany({
+    where: { parentId: null },
+    include: { children: true },
+    orderBy: { name: "asc" },
+  });
+
+  res.json(updated);
+});
+
 // Create category
 categoryRoutes.post("/", async (req, res) => {
   const parsed = categorySchema.safeParse(req.body);

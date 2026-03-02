@@ -3,17 +3,24 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 const defaultCategories = [
-  { name: "Housing", icon: "home", color: "#4F46E5", children: ["Rent/Mortgage", "Utilities", "Insurance", "Maintenance"] },
-  { name: "Transportation", icon: "car", color: "#0891B2", children: ["Gas", "Public Transit", "Parking", "Car Payment", "Car Insurance"] },
-  { name: "Food & Dining", icon: "utensils", color: "#059669", children: ["Groceries", "Restaurants", "Coffee", "Delivery"] },
-  { name: "Healthcare", icon: "heart-pulse", color: "#DC2626", children: ["Doctor", "Dentist", "Pharmacy", "Insurance Premium"] },
-  { name: "Entertainment", icon: "tv", color: "#7C3AED", children: ["Streaming", "Movies", "Games", "Events"] },
-  { name: "Shopping", icon: "shopping-bag", color: "#DB2777", children: ["Clothing", "Electronics", "Home Goods"] },
-  { name: "Personal", icon: "user", color: "#EA580C", children: ["Haircut", "Gym", "Subscriptions"] },
-  { name: "Education", icon: "book", color: "#2563EB", children: ["Tuition", "Books", "Courses"] },
-  { name: "Travel", icon: "plane", color: "#0D9488", children: ["Flights", "Hotels", "Activities"] },
-  { name: "Financial", icon: "landmark", color: "#64748B", children: ["Credit Card Payments", "Loan Payments", "Fees"] },
-  { name: "Other", icon: "ellipsis", color: "#6B7280", children: [] },
+  { name: "Auto", children: ["Auto Insurance", "Auto Payment", "Auto Registration", "Fuel & Charging", "Maintenance & Service", "Parking", "Parts & Supplies"] },
+  { name: "Business", children: ["Business Expenses", "CPA", "Rental Expense"] },
+  { name: "Cash", children: ["Cash & ATM"] },
+  { name: "Cash Back", children: ["Rewards Programs", "Statement Credits"] },
+  { name: "Dining", children: ["Drinks", "Fast Food", "Food Delivery", "Restaurants"] },
+  { name: "Entertainment", children: ["Concerts & Events", "Entertainment", "Movies & Concessions", "Music", "Streaming", "Video Games"] },
+  { name: "Gifts & Donations", children: ["Donations", "Gifts"] },
+  { name: "Groceries", children: ["Groceries"] },
+  { name: "Health & Wellness", children: ["Gym & Fitness", "Health Insurance", "Medical Office Visits", "Medication & Prescriptions", "Supplements & Nutrition"] },
+  { name: "Housing", children: ["Home Insurance", "Home Services", "Household Supplies", "Mortgage & HOA", "Rent"] },
+  { name: "Miscellaneous", children: ["Fees", "Government Services", "Postage & Shipping", "Repairs"] },
+  { name: "Personal Care", children: ["Dry Cleaning", "Haircut", "Massage & Spa"] },
+  { name: "Pets", children: ["Pet Food & Supplies", "Pet Sitting", "Veterinary"] },
+  { name: "Shopping", children: ["Art", "Clothing", "Electronics", "Furniture & Home", "Hobbies", "Reselling", "Shopping", "Sporting Goods"] },
+  { name: "Subscriptions", children: ["Publications", "Software Subscriptions", "Subscriptions", "Web Hosting"] },
+  { name: "Taxes", children: ["Taxes"] },
+  { name: "Travel", children: ["Car Rental", "Flights", "Hotel", "Public Transportation", "Rideshare & Taxi", "Travel"] },
+  { name: "Utilities", children: ["Utilities"] },
 ];
 
 async function main() {
@@ -23,8 +30,6 @@ async function main() {
     const parent = await prisma.category.create({
       data: {
         name: cat.name,
-        icon: cat.icon,
-        color: cat.color,
         isDefault: true,
       },
     });
