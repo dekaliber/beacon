@@ -73,7 +73,7 @@ model Expense {
   vendor      String   @default("")
   date        DateTime
   notes       String?
-  categoryId  String
+  categoryId  String?
   accountId   String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -86,7 +86,7 @@ model Expense {
 
   recurrenceRule   RecurrenceRule?   @relation(fields: [recurrenceRuleId], references: [id])
   transactionGroup TransactionGroup? @relation(fields: [transactionGroupId], references: [id])
-  category         Category          @relation(fields: [categoryId], references: [id])
+  category         Category?         @relation(fields: [categoryId], references: [id])
   account          Account           @relation(fields: [accountId], references: [id])
   tags             ExpenseTag[]
 

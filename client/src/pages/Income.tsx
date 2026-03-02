@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   Plus, Pencil, TrendingUp, ChevronLeft, ChevronRight,
-  ArrowUpDown, ArrowUp, ArrowDown, X, Filter, Trash2,
+  ArrowUpDown, ArrowUp, ArrowDown, X, Filter, Trash2, ChevronDown,
 } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -9,7 +9,7 @@ import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
 import { getIncome, getAccounts, getTags, createIncome, updateIncome, deleteIncome } from "@/api";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, toDateInputValue } from "@/lib/utils";
 import type { Account, Income, IncomeSource, Tag } from "@/types";
 
 const SOURCE_LABELS: Record<IncomeSource, string> = {
@@ -23,6 +23,78 @@ const SOURCE_LABELS: Record<IncomeSource, string> = {
 const INCOME_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "INVESTMENT"];
 
 type SortField = "date" | "source" | "account" | "amount";
+
+// ── Currency input ──
+function CurrencyInput({ name, defaultValue, required }: { name: string; defaultValue?: string; required?: boolean }) {
+  const [cents, setCents] = useState(() => {
+    if (!defaultValue) return 0;
+    return Math.round(parseFloat(defaultValue) * 100);
+  });
+  const display = "$" + (cents / 100).toFixed(2);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace") { e.preventDefault(); setCents((prev) => Math.floor(prev / 10)); }
+    else if (/^\d$/.test(e.key)) { e.preventDefault(); setCents((prev) => prev * 10 + parseInt(e.key)); }
+  };
+  return (
+    <>
+      <input type="text" value={display} onKeyDown={handleKeyDown} onChange={() => {}} className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" placeholder="$0.00" />
+      <input type="hidden" name={name} value={(cents / 100).toFixed(2)} />
+      {required && cents === 0 && <input type="text" required value="" className="hidden" tabIndex={-1} onChange={() => {}} />}
+    </>
+  );
+}
+
+// ── Inline editable cell ──
+function EditableCell({ value, onSave, type = "text", className = "" }: { value: string; onSave: (v: string) => void; type?: "text" | "date"; className?: string }) {
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
+
+  const commit = () => { setEditing(false); if (editValue !== value) onSave(editValue); };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type={type}
+        value={type === "date" ? toDateInputValue(editValue) : editValue}
+        onChange={(e) => setEditValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") { setEditValue(value); setEditing(false); } }}
+        className="w-full min-w-[60px] rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
+      />
+    );
+  }
+
+  return (
+    <span onClick={() => { setEditValue(value); setEditing(true); }} className={`cursor-pointer border-b border-dotted border-transparent hover:border-gray-400 ${className}`}>
+      {type === "date" ? formatDate(value) : value}
+    </span>
+  );
+}
+
+function EditableSelectCell({ value, label, options, onSave }: { value: string; label: string; options: { id: string; name: string }[]; onSave: (v: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const ref = useRef<HTMLSelectElement>(null);
+
+  useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
+
+  if (editing) {
+    return (
+      <select ref={ref} value={value} onChange={(e) => { onSave(e.target.value); setEditing(false); }} onBlur={() => setEditing(false)} className="w-full min-w-[80px] rounded border border-primary px-1 py-0.5 text-sm focus:outline-none">
+        {options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+      </select>
+    );
+  }
+
+  return (
+    <span onClick={() => setEditing(true)} className="cursor-pointer border-b border-dotted border-transparent hover:border-gray-400">{label}</span>
+  );
+}
+
+// ═══════════════ MAIN COMPONENT ═══════════════
 
 export function IncomePage() {
   const [page, setPage] = useState(1);
@@ -38,12 +110,7 @@ export function IncomePage() {
   const [filterEndDate, setFilterEndDate] = useState("");
 
   const queryParams = useMemo(() => {
-    const params: Record<string, string> = {
-      page: page.toString(),
-      limit: "20",
-      sortBy,
-      sortOrder,
-    };
+    const params: Record<string, string> = { page: page.toString(), limit: "20", sortBy, sortOrder };
     if (filterAccountId) params.accountId = filterAccountId;
     if (filterSource) params.source = filterSource;
     if (filterTagId) params.tagId = filterTagId;
@@ -60,11 +127,8 @@ export function IncomePage() {
   const hasActiveFilters = !!(filterAccountId || filterSource || filterTagId || filterStartDate || filterEndDate);
 
   const handleSave = async (formData: Record<string, unknown>) => {
-    if (editing) {
-      await updateIncome(editing.id, formData);
-    } else {
-      await createIncome(formData);
-    }
+    if (editing) { await updateIncome(editing.id, formData); }
+    else { await createIncome(formData); }
     setModalOpen(false);
     setEditing(null);
     refetch();
@@ -77,30 +141,28 @@ export function IncomePage() {
     refetch();
   };
 
+  const handleInlineUpdate = useCallback(async (id: string, field: string, value: string) => {
+    const data: Record<string, unknown> = {};
+    if (field === "date") data.date = value;
+    else if (field === "amount") data.amount = parseFloat(value);
+    else data[field] = value;
+    await updateIncome(id, data);
+    refetch();
+  }, [refetch]);
+
   const toggleSort = (field: SortField) => {
-    if (sortBy === field) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    } else {
-      setSortBy(field);
-      setSortOrder(field === "date" || field === "amount" ? "desc" : "asc");
-    }
+    if (sortBy === field) { setSortOrder(sortOrder === "asc" ? "desc" : "asc"); }
+    else { setSortBy(field); setSortOrder(field === "date" || field === "amount" ? "desc" : "asc"); }
     setPage(1);
   };
 
   const clearFilters = () => {
-    setFilterAccountId("");
-    setFilterSource("");
-    setFilterTagId("");
-    setFilterStartDate("");
-    setFilterEndDate("");
-    setPage(1);
+    setFilterAccountId(""); setFilterSource(""); setFilterTagId(""); setFilterStartDate(""); setFilterEndDate(""); setPage(1);
   };
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortBy !== field) return <ArrowUpDown className="ml-1 inline h-3 w-3 opacity-40" />;
-    return sortOrder === "asc"
-      ? <ArrowUp className="ml-1 inline h-3 w-3" />
-      : <ArrowDown className="ml-1 inline h-3 w-3" />;
+    return sortOrder === "asc" ? <ArrowUp className="ml-1 inline h-3 w-3" /> : <ArrowDown className="ml-1 inline h-3 w-3" />;
   };
 
   const incomes = incomeData?.data ?? [];
@@ -111,11 +173,7 @@ export function IncomePage() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Income</h2>
         <div className="flex gap-2">
-          <Button
-            variant={filterOpen ? "primary" : "secondary"}
-            size="sm"
-            onClick={() => setFilterOpen(!filterOpen)}
-          >
+          <Button variant={filterOpen ? "primary" : "secondary"} size="sm" onClick={() => setFilterOpen(!filterOpen)}>
             <Filter className="h-4 w-4" />
             {hasActiveFilters && <span className="ml-1 rounded-full bg-primary-foreground/20 px-1.5 text-xs">!</span>}
           </Button>
@@ -125,74 +183,40 @@ export function IncomePage() {
         </div>
       </div>
 
-      {/* Filter bar */}
       {filterOpen && (
         <Card>
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Account</label>
-              <select
-                value={filterAccountId}
-                onChange={(e) => { setFilterAccountId(e.target.value); setPage(1); }}
-                className="rounded-md border border-border px-2 py-1.5 text-sm"
-              >
+              <select value={filterAccountId} onChange={(e) => { setFilterAccountId(e.target.value); setPage(1); }} className="rounded-md border border-border px-2 py-1.5 text-sm">
                 <option value="">All accounts</option>
-                {eligibleAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
+                {eligibleAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Source</label>
-              <select
-                value={filterSource}
-                onChange={(e) => { setFilterSource(e.target.value); setPage(1); }}
-                className="rounded-md border border-border px-2 py-1.5 text-sm"
-              >
+              <select value={filterSource} onChange={(e) => { setFilterSource(e.target.value); setPage(1); }} className="rounded-md border border-border px-2 py-1.5 text-sm">
                 <option value="">All sources</option>
-                {Object.entries(SOURCE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
+                {Object.entries(SOURCE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Tag</label>
-              <select
-                value={filterTagId}
-                onChange={(e) => { setFilterTagId(e.target.value); setPage(1); }}
-                className="rounded-md border border-border px-2 py-1.5 text-sm"
-              >
+              <select value={filterTagId} onChange={(e) => { setFilterTagId(e.target.value); setPage(1); }} className="rounded-md border border-border px-2 py-1.5 text-sm">
                 <option value="">All tags</option>
-                {(tags ?? []).map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
+                {(tags ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">From</label>
-              <input
-                type="date"
-                value={filterStartDate}
-                onChange={(e) => { setFilterStartDate(e.target.value); setPage(1); }}
-                className="rounded-md border border-border px-2 py-1.5 text-sm"
-              />
+              <input type="date" value={filterStartDate} onChange={(e) => { setFilterStartDate(e.target.value); setPage(1); }} className="rounded-md border border-border px-2 py-1.5 text-sm" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">To</label>
-              <input
-                type="date"
-                value={filterEndDate}
-                onChange={(e) => { setFilterEndDate(e.target.value); setPage(1); }}
-                className="rounded-md border border-border px-2 py-1.5 text-sm"
-              />
+              <input type="date" value={filterEndDate} onChange={(e) => { setFilterEndDate(e.target.value); setPage(1); }} className="rounded-md border border-border px-2 py-1.5 text-sm" />
             </div>
             {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                className="flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3 w-3" /> Clear
-              </button>
+              <button onClick={clearFilters} className="flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"><X className="h-3 w-3" /> Clear</button>
             )}
           </div>
         </Card>
@@ -201,57 +225,52 @@ export function IncomePage() {
       <Card>
         {incomes.length > 0 ? (
           <>
-            {/* Desktop table */}
             <div className="hidden md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("date")}>
-                      Date <SortIcon field="date" />
-                    </th>
-                    <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("source")}>
-                      Source <SortIcon field="source" />
-                    </th>
-                    <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("account")}>
-                      Account <SortIcon field="account" />
-                    </th>
+                    <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
+                    <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("source")}>Source <SortIcon field="source" /></th>
+                    <th className="cursor-pointer select-none pb-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
                     <th className="pb-3 font-medium">Tags</th>
-                    <th className="cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>
-                      Amount <SortIcon field="amount" />
-                    </th>
+                    <th className="cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
                     <th className="pb-3 text-right font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {incomes.map((income) => (
                     <tr key={income.id} className="hover:bg-muted/50">
-                      <td className="py-3">{formatDate(income.date)}</td>
-                      <td className="py-3 font-medium">{SOURCE_LABELS[income.source]}</td>
-                      <td className="py-3">{income.account.name}</td>
+                      <td className="py-3">
+                        <EditableCell value={income.date} type="date" onSave={(v) => handleInlineUpdate(income.id, "date", v)} />
+                      </td>
+                      <td className="py-3">
+                        <EditableSelectCell
+                          value={income.source}
+                          label={SOURCE_LABELS[income.source]}
+                          options={Object.entries(SOURCE_LABELS).map(([id, name]) => ({ id, name }))}
+                          onSave={(v) => handleInlineUpdate(income.id, "source", v)}
+                        />
+                      </td>
+                      <td className="py-3">
+                        <EditableSelectCell
+                          value={income.accountId}
+                          label={income.account.name}
+                          options={eligibleAccounts.map((a) => ({ id: a.id, name: a.name }))}
+                          onSave={(v) => handleInlineUpdate(income.id, "accountId", v)}
+                        />
+                      </td>
                       <td className="py-3">
                         <div className="flex flex-wrap gap-1">
                           {income.tags.map(({ tag }) => (
-                            <span
-                              key={tag.id}
-                              className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
-                              style={{
-                                backgroundColor: tag.color ? `${tag.color}20` : "hsl(var(--muted))",
-                                color: tag.color ?? "inherit",
-                              }}
-                            >
+                            <span key={tag.id} className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: tag.color ? `${tag.color}20` : "hsl(var(--muted))", color: tag.color ?? "inherit" }}>
                               {tag.name}
                             </span>
                           ))}
                         </div>
                       </td>
-                      <td className="py-3 text-right font-semibold text-green-600">
-                        +{formatCurrency(income.amount)}
-                      </td>
+                      <td className="py-3 text-right font-semibold text-green-600">+{formatCurrency(income.amount)}</td>
                       <td className="py-3 text-right">
-                        <button
-                          onClick={() => { setEditing(income); setModalOpen(true); }}
-                          className="rounded p-1 hover:bg-accent"
-                        >
+                        <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1 hover:bg-accent">
                           <Pencil className="h-4 w-4 text-muted-foreground" />
                         </button>
                       </td>
@@ -261,48 +280,28 @@ export function IncomePage() {
               </table>
             </div>
 
-            {/* Mobile list */}
             <div className="divide-y divide-border md:hidden">
               {incomes.map((income) => (
                 <div key={income.id} className="flex items-center justify-between py-3">
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{SOURCE_LABELS[income.source]}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {income.account.name} &middot; {formatDate(income.date)}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{income.account.name} &middot; {formatDate(income.date)}</p>
                   </div>
                   <div className="ml-4 flex items-center gap-2">
                     <span className="font-semibold text-green-600">+{formatCurrency(income.amount)}</span>
-                    <button
-                      onClick={() => { setEditing(income); setModalOpen(true); }}
-                      className="rounded p-1 hover:bg-accent"
-                    >
-                      <Pencil className="h-4 w-4 text-muted-foreground" />
-                    </button>
+                    <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1 hover:bg-accent"><Pencil className="h-4 w-4 text-muted-foreground" /></button>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Pagination */}
             {pagination && pagination.totalPages > 1 && (
               <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
-                <p className="text-sm text-muted-foreground">
-                  {pagination.total} entr{pagination.total !== 1 ? "ies" : "y"}
-                </p>
+                <p className="text-sm text-muted-foreground">{pagination.total} entr{pagination.total !== 1 ? "ies" : "y"}</p>
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}>
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
+                  <Button variant="ghost" size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}><ChevronLeft className="h-4 w-4" /></Button>
                   <span className="text-sm">Page {page} of {pagination.totalPages}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={page === pagination.totalPages}
-                    onClick={() => setPage(page + 1)}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
+                  <Button variant="ghost" size="sm" disabled={page === pagination.totalPages} onClick={() => setPage(page + 1)}><ChevronRight className="h-4 w-4" /></Button>
                 </div>
               </div>
             )}
@@ -311,10 +310,7 @@ export function IncomePage() {
           <EmptyState
             icon={TrendingUp}
             title="No income recorded"
-            description={hasActiveFilters
-              ? "No income entries match your current filters. Try adjusting or clearing them."
-              : "Track dividends, interest, capital gains, and other passive income."
-            }
+            description={hasActiveFilters ? "No income entries match your current filters." : "Track dividends, interest, capital gains, and other passive income."}
             action={
               hasActiveFilters
                 ? <Button variant="secondary" onClick={clearFilters}>Clear Filters</Button>
@@ -337,6 +333,7 @@ export function IncomePage() {
   );
 }
 
+// ── Modal ──
 interface IncomeModalProps {
   open: boolean;
   onClose: () => void;
@@ -352,18 +349,18 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, tags }
   const [deleting, setDeleting] = useState(false);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showOptional, setShowOptional] = useState(false);
 
   useEffect(() => {
     if (open) {
       setSelectedTagIds(income?.tags.map((t) => t.tagId) ?? []);
       setConfirmDelete(false);
+      setShowOptional(!!income?.notes);
     }
   }, [open, income]);
 
   const toggleTag = (tagId: string) => {
-    setSelectedTagIds((prev) =>
-      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
-    );
+    setSelectedTagIds((prev) => prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]);
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -382,10 +379,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, tags }
   };
 
   const handleDeleteClick = async () => {
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      return;
-    }
+    if (!confirmDelete) { setConfirmDelete(true); return; }
     if (!income) return;
     setDeleting(true);
     await onDelete(income.id);
@@ -397,61 +391,27 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, tags }
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="mb-1 block text-sm font-medium">Amount</label>
-          <input
-            name="amount"
-            type="number"
-            step="0.01"
-            min="0.01"
-            required
-            defaultValue={income?.amount ?? ""}
-            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            placeholder="0.00"
-          />
+          <CurrencyInput name="amount" defaultValue={income?.amount} required />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium">Source</label>
-            <select
-              name="source"
-              required
-              defaultValue={income?.source ?? "DIVIDENDS"}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              {Object.entries(SOURCE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
+            <select name="source" required defaultValue={income?.source ?? "DIVIDENDS"} className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
+              {Object.entries(SOURCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           </div>
-
           <div>
             <label className="mb-1 block text-sm font-medium">Date</label>
-            <input
-              name="date"
-              type="date"
-              required
-              defaultValue={
-                income
-                  ? new Date(income.date).toISOString().split("T")[0]
-                  : new Date().toISOString().split("T")[0]
-              }
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
+            <input name="date" type="date" required defaultValue={toDateInputValue(income?.date)} className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
           </div>
         </div>
 
         <div>
           <label className="mb-1 block text-sm font-medium">Account</label>
-          <select
-            name="accountId"
-            required
-            defaultValue={income?.accountId ?? ""}
-            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          >
+          <select name="accountId" required defaultValue={income?.accountId ?? ""} className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
             <option value="">Select account</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
+            {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
         </div>
 
@@ -462,19 +422,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, tags }
               {tags.map((tag) => {
                 const selected = selectedTagIds.includes(tag.id);
                 return (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    onClick={() => toggleTag(tag.id)}
-                    className="rounded-full border px-3 py-1 text-xs font-medium transition-colors"
-                    style={
-                      selected && tag.color
-                        ? { backgroundColor: tag.color, borderColor: tag.color, color: "#fff" }
-                        : selected
-                        ? { backgroundColor: "hsl(var(--primary))", borderColor: "hsl(var(--primary))", color: "#fff" }
-                        : {}
-                    }
-                  >
+                  <button key={tag.id} type="button" onClick={() => toggleTag(tag.id)} className="rounded-full border px-3 py-1 text-xs font-medium transition-colors" style={selected && tag.color ? { backgroundColor: tag.color, borderColor: tag.color, color: "#fff" } : selected ? { backgroundColor: "hsl(var(--primary))", borderColor: "hsl(var(--primary))", color: "#fff" } : {}}>
                     {tag.name}
                   </button>
                 );
@@ -483,26 +431,24 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, tags }
           </div>
         )}
 
-        <div>
-          <label className="mb-1 block text-sm font-medium">Notes (optional)</label>
-          <textarea
-            name="notes"
-            rows={2}
-            defaultValue={income?.notes ?? ""}
-            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            placeholder="Additional notes..."
-          />
+        {/* Collapsible optional section */}
+        <div className="border-t border-border pt-3">
+          <button type="button" onClick={() => setShowOptional(!showOptional)} className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
+            {showOptional ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            More options
+          </button>
+          {showOptional && (
+            <div className="mt-3">
+              <label className="mb-1 block text-sm font-medium">Notes</label>
+              <textarea name="notes" rows={2} defaultValue={income?.notes ?? ""} className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Additional notes..." />
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between pt-2">
           <div>
             {income && (
-              <button
-                type="button"
-                onClick={handleDeleteClick}
-                disabled={deleting}
-                className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
-              >
+              <button type="button" onClick={handleDeleteClick} disabled={deleting} className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors">
                 <Trash2 className="h-4 w-4" />
                 {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}
               </button>
@@ -510,9 +456,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, tags }
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={saving}>
-              {saving ? "Saving..." : income ? "Update" : "Add Income"}
-            </Button>
+            <Button type="submit" disabled={saving}>{saving ? "Saving..." : income ? "Update" : "Add Income"}</Button>
           </div>
         </div>
       </form>

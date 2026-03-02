@@ -59,12 +59,12 @@ export interface Expense {
   vendor: string;
   date: string;
   notes: string | null;
-  categoryId: string;
+  categoryId: string | null;
   accountId: string;
   isReimbursementExpected: boolean;
   reimbursementNote: string | null;
   transactionGroupId: string | null;
-  category: Category;
+  category: Category | null;
   account: Account;
   tags: ExpenseTag[];
   transactionGroup: TransactionGroup | null;

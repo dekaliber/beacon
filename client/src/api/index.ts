@@ -24,7 +24,12 @@ export const getCategories = () => api.get<Category[]>("/categories");
 export const getFlatCategories = () => api.get<Category[]>("/categories/flat");
 export const createCategory = (data: Partial<Category>) => api.post<Category>("/categories", data);
 export const updateCategory = (id: string, data: Partial<Category>) => api.put<Category>(`/categories/${id}`, data);
-export const deleteCategory = (id: string) => api.delete(`/categories/${id}`);
+export const deleteCategory = (id: string, reassignTo?: string) => {
+  const query = reassignTo ? `?reassignTo=${reassignTo}` : "";
+  return api.delete(`/categories/${id}${query}`);
+};
+export const getCategoryUsage = (id: string) =>
+  api.get<{ count: number; categoryIds: string[] }>(`/categories/${id}/usage`);
 
 // Expenses
 export const getExpenses = (params?: Record<string, string>) => {
@@ -34,6 +39,10 @@ export const getExpenses = (params?: Record<string, string>) => {
 export const createExpense = (data: Record<string, unknown>) => api.post<Expense>("/expenses", data);
 export const updateExpense = (id: string, data: Record<string, unknown>) => api.put<Expense>(`/expenses/${id}`, data);
 export const deleteExpense = (id: string) => api.delete(`/expenses/${id}`);
+export const getExpenseVendors = () => api.get<string[]>("/expenses/vendors");
+export const getVendorCategory = (vendor: string) =>
+  api.get<{ categoryId: string | null }>(`/expenses/vendor-category?vendor=${encodeURIComponent(vendor)}`);
+export const getUncategorizedCount = () => api.get<{ count: number }>("/expenses/uncategorized-count");
 
 // Income
 export const getIncome = (params?: Record<string, string>) => {

@@ -5,7 +5,7 @@ import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
-import { getCategories, createCategory, updateCategory, deleteCategory } from "@/api";
+import { getCategories, getFlatCategories, createCategory, updateCategory, deleteCategory, getCategoryUsage } from "@/api";
 import type { Category } from "@/types";
 
 export function Categories() {
@@ -13,8 +13,10 @@ export function Categories() {
   const [editing, setEditing] = useState<Category | null>(null);
   const [parentId, setParentId] = useState<string | undefined>(undefined);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [deleteModal, setDeleteModal] = useState<{ category: Category; usageCount: number; categoryIds: string[] } | null>(null);
 
   const { data: categories, refetch } = useApi(() => getCategories(), []);
+  const { data: flatCategories, refetch: refetchFlat } = useApi(() => getFlatCategories(), []);
 
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
@@ -34,17 +36,24 @@ export function Categories() {
     setEditing(null);
     setParentId(undefined);
     refetch();
+    refetchFlat();
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm("Delete this category?")) {
-      try {
-        await deleteCategory(id);
-        refetch();
-      } catch (e) {
-        alert(e instanceof Error ? e.message : "Failed to delete");
-      }
+  const handleDeleteStart = async (cat: Category) => {
+    const usage = await getCategoryUsage(cat.id);
+    setDeleteModal({ category: cat, usageCount: usage.count, categoryIds: usage.categoryIds });
+  };
+
+  const handleDeleteConfirm = async (reassignTo?: string) => {
+    if (!deleteModal) return;
+    try {
+      await deleteCategory(deleteModal.category.id, reassignTo);
+      refetch();
+      refetchFlat();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to delete");
     }
+    setDeleteModal(null);
   };
 
   const openAddChild = (pid: string) => {
@@ -103,19 +112,15 @@ export function Categories() {
                     >
                       <Plus className="h-4 w-4 text-muted-foreground" />
                     </button>
-                    {!cat.isDefault && (
-                      <>
-                        <button
-                          onClick={() => { setEditing(cat); setParentId(cat.parentId ?? undefined); setModalOpen(true); }}
-                          className="rounded p-1 hover:bg-accent"
-                        >
-                          <Pencil className="h-4 w-4 text-muted-foreground" />
-                        </button>
-                        <button onClick={() => handleDelete(cat.id)} className="rounded p-1 hover:bg-accent">
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </button>
-                      </>
-                    )}
+                    <button
+                      onClick={() => { setEditing(cat); setParentId(cat.parentId ?? undefined); setModalOpen(true); }}
+                      className="rounded p-1 hover:bg-accent"
+                    >
+                      <Pencil className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                    <button onClick={() => handleDeleteStart(cat)} className="rounded p-1 hover:bg-accent">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </button>
                   </div>
                 </div>
 
@@ -124,19 +129,17 @@ export function Categories() {
                     {cat.children!.map((child) => (
                       <div key={child.id} className="flex items-center gap-3 py-2 pl-12 pr-4 hover:bg-muted/50">
                         <span className="flex-1 text-sm">{child.name}</span>
-                        {!child.isDefault && (
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => { setEditing(child); setParentId(child.parentId ?? undefined); setModalOpen(true); }}
-                              className="rounded p-1 hover:bg-accent"
-                            >
-                              <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                            </button>
-                            <button onClick={() => handleDelete(child.id)} className="rounded p-1 hover:bg-accent">
-                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                            </button>
-                          </div>
-                        )}
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => { setEditing(child); setParentId(child.parentId ?? undefined); setModalOpen(true); }}
+                            className="rounded p-1 hover:bg-accent"
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                          </button>
+                          <button onClick={() => handleDeleteStart(child)} className="rounded p-1 hover:bg-accent">
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -167,6 +170,18 @@ export function Categories() {
         category={editing}
         parentId={parentId}
       />
+
+      {deleteModal && (
+        <DeleteCategoryModal
+          category={deleteModal.category}
+          usageCount={deleteModal.usageCount}
+          allCategories={(flatCategories ?? []).filter(
+            (c) => !deleteModal.categoryIds.includes(c.id)
+          )}
+          onConfirm={handleDeleteConfirm}
+          onClose={() => setDeleteModal(null)}
+        />
+      )}
     </div>
   );
 }
@@ -232,6 +247,85 @@ function CategoryModal({ open, onClose, onSave, category, parentId }: CategoryMo
           </Button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+interface DeleteCategoryModalProps {
+  category: Category;
+  usageCount: number;
+  allCategories: Category[];
+  onConfirm: (reassignTo?: string) => void;
+  onClose: () => void;
+}
+
+function DeleteCategoryModal({ category, usageCount, allCategories, onConfirm, onClose }: DeleteCategoryModalProps) {
+  const [reassignTo, setReassignTo] = useState("");
+
+  const parentCategories = allCategories.filter((c) => !c.parentId);
+  const childCategories = allCategories.filter((c) => c.parentId);
+
+  return (
+    <Modal open={true} onClose={onClose} title="Delete Category">
+      <div className="space-y-4">
+        <p className="text-sm">
+          Are you sure you want to delete <strong>{category.name}</strong>
+          {category.children && category.children.length > 0 && (
+            <> and its {category.children.length} subcategories</>
+          )}
+          ?
+        </p>
+
+        {usageCount > 0 ? (
+          <>
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+              <p className="text-sm text-amber-800">
+                {usageCount} expense{usageCount !== 1 ? "s" : ""} currently use this category.
+                You can reassign them to a different category, or leave them uncategorized.
+              </p>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">Reassign expenses to</label>
+              <select
+                value={reassignTo}
+                onChange={(e) => setReassignTo(e.target.value)}
+                className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="">Leave uncategorized</option>
+                {parentCategories.map((parent) => {
+                  const children = childCategories.filter((c) => c.parentId === parent.id);
+                  if (children.length === 0) {
+                    return <option key={parent.id} value={parent.id}>{parent.name}</option>;
+                  }
+                  return (
+                    <optgroup key={parent.id} label={parent.name}>
+                      {children.map((child) => (
+                        <option key={child.id} value={child.id}>{child.name}</option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
+              </select>
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No expenses use this category.
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => onConfirm(reassignTo || undefined)}
+          >
+            Delete
+          </Button>
+        </div>
+      </div>
     </Modal>
   );
 }

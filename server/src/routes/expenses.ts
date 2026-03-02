@@ -12,12 +12,13 @@ const expenseSchema = z.object({
   vendor: z.string().min(1),
   date: z.string().transform((s) => new Date(s)),
   notes: z.string().optional(),
-  categoryId: z.string(),
+  categoryId: z.string().nullable().optional(),
   accountId: z.string(),
   isReimbursementExpected: z.boolean().optional(),
   reimbursementNote: z.string().nullable().optional(),
   tagIds: z.array(z.string()).optional(),
   transactionGroupId: z.string().nullable().optional(),
+  recurrenceRuleId: z.string().nullable().optional(),
 });
 
 // List expenses with filtering and pagination
@@ -28,7 +29,11 @@ expenseRoutes.get("/", async (req, res) => {
 
   const where: Record<string, unknown> = {};
 
-  if (req.query.categoryId) where.categoryId = req.query.categoryId;
+  if (req.query.categoryId === "uncategorized") {
+    where.categoryId = null;
+  } else if (req.query.categoryId) {
+    where.categoryId = req.query.categoryId;
+  }
   if (req.query.accountId) where.accountId = req.query.accountId;
   if (req.query.isReimbursementExpected === "true") where.isReimbursementExpected = true;
   if (req.query.tagId) where.tags = { some: { tagId: req.query.tagId } };
@@ -78,6 +83,38 @@ expenseRoutes.get("/", async (req, res) => {
     data: expenses,
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   });
+});
+
+// Get distinct vendors for autocomplete
+expenseRoutes.get("/vendors", async (_req, res) => {
+  const expenses = await prisma.expense.findMany({
+    where: { vendor: { not: "" } },
+    select: { vendor: true },
+    distinct: ["vendor"],
+    orderBy: { vendor: "asc" },
+  });
+  res.json(expenses.map((e) => e.vendor));
+});
+
+// Get the last-used categoryId for a given vendor
+expenseRoutes.get("/vendor-category", async (req, res) => {
+  const vendor = req.query.vendor as string;
+  if (!vendor) return res.json({ categoryId: null });
+
+  const expense = await prisma.expense.findFirst({
+    where: { vendor: { equals: vendor, mode: "insensitive" } },
+    orderBy: { date: "desc" },
+    select: { categoryId: true },
+  });
+  res.json({ categoryId: expense?.categoryId ?? null });
+});
+
+// Count uncategorized expenses
+expenseRoutes.get("/uncategorized-count", async (_req, res) => {
+  const count = await prisma.expense.count({
+    where: { categoryId: null },
+  });
+  res.json({ count });
 });
 
 // Get single expense
