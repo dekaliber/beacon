@@ -36,14 +36,14 @@ type SortState = { field: SortField; order: "asc" | "desc" } | null;
 function CurrencyInput({ name, defaultValue, required }: { name: string; defaultValue?: string; required?: boolean }) {
   const [rawValue, setRawValue] = useState(() => {
     if (!defaultValue) return "";
-    const num = parseFloat(defaultValue);
+    const num = Math.abs(parseFloat(defaultValue));
     return num ? num.toFixed(2) : "";
   });
 
   // Sync when defaultValue changes (e.g. modal reopened with different data)
   useEffect(() => {
     if (!defaultValue) { setRawValue(""); return; }
-    const num = parseFloat(defaultValue);
+    const num = Math.abs(parseFloat(defaultValue));
     setRawValue(num ? num.toFixed(2) : "");
   }, [defaultValue]);
 
