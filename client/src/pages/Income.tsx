@@ -27,20 +27,43 @@ type SortState = { field: SortField; order: "asc" | "desc" } | null;
 
 // ── Currency input ──
 function CurrencyInput({ name, defaultValue, required }: { name: string; defaultValue?: string; required?: boolean }) {
-  const [cents, setCents] = useState(() => {
-    if (!defaultValue) return 0;
-    return Math.round(parseFloat(defaultValue) * 100);
+  const [rawValue, setRawValue] = useState(() => {
+    if (!defaultValue) return "";
+    const num = parseFloat(defaultValue);
+    return num ? num.toFixed(2) : "";
   });
-  const display = "$" + (cents / 100).toFixed(2);
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Backspace") { e.preventDefault(); setCents((prev) => Math.floor(prev / 10)); }
-    else if (/^\d$/.test(e.key)) { e.preventDefault(); setCents((prev) => prev * 10 + parseInt(e.key)); }
+
+  const numericValue = parseFloat(rawValue) || 0;
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (val === "" || /^\d*\.?\d{0,2}$/.test(val)) {
+      setRawValue(val);
+    }
   };
+
+  const handleBlur = () => {
+    if (rawValue && !isNaN(parseFloat(rawValue))) {
+      setRawValue(parseFloat(rawValue).toFixed(2));
+    }
+  };
+
   return (
     <>
-      <input type="text" value={display} onKeyDown={handleKeyDown} onChange={() => {}} className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" placeholder="$0.00" />
-      <input type="hidden" name={name} value={(cents / 100).toFixed(2)} />
-      {required && cents === 0 && <input type="text" required value="" className="hidden" tabIndex={-1} onChange={() => {}} />}
+      <div className="relative">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+        <input
+          type="text"
+          value={rawValue}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          placeholder="0.00"
+          inputMode="decimal"
+        />
+      </div>
+      <input type="hidden" name={name} value={numericValue.toFixed(2)} />
+      {required && numericValue === 0 && <input type="text" required value="" className="hidden" tabIndex={-1} onChange={() => {}} />}
     </>
   );
 }
@@ -98,40 +121,49 @@ function EditableSelectCell({ value, label, options, onSave }: { value: string; 
 // ── Inline amount cell ──
 function EditableAmountCell({ value, onSave, positive }: { value: string; onSave: (v: string) => void; positive?: boolean }) {
   const [editing, setEditing] = useState(false);
-  const [cents, setCents] = useState(0);
+  const [editValue, setEditValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
 
   const startEdit = () => {
-    setCents(Math.round(parseFloat(value) * 100));
+    setEditValue(parseFloat(value).toFixed(2));
     setEditing(true);
   };
 
   const commit = () => {
     setEditing(false);
-    const newValue = (cents / 100).toFixed(2);
+    const parsed = parseFloat(editValue);
+    if (isNaN(parsed) || parsed === 0) return;
+    const newValue = parsed.toFixed(2);
     if (newValue !== parseFloat(value).toFixed(2)) onSave(newValue);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Backspace") { e.preventDefault(); setCents((prev) => Math.floor(prev / 10)); }
-    else if (/^\d$/.test(e.key)) { e.preventDefault(); setCents((prev) => prev * 10 + parseInt(e.key)); }
-    else if (e.key === "Enter") { e.preventDefault(); commit(); }
-    else if (e.key === "Escape") { setEditing(false); }
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (val === "" || /^\d*\.?\d{0,2}$/.test(val)) {
+      setEditValue(val);
+    }
   };
 
   if (editing) {
     return (
-      <input
-        ref={inputRef}
-        type="text"
-        value={"$" + (cents / 100).toFixed(2)}
-        onKeyDown={handleKeyDown}
-        onChange={() => {}}
-        onBlur={commit}
-        className="w-full rounded border border-primary px-1 py-0.5 text-right text-sm font-semibold focus:outline-none"
-      />
+      <div className="relative">
+        <span className="pointer-events-none absolute left-1 top-1/2 -translate-y-1/2 text-sm font-semibold">$</span>
+        <input
+          ref={inputRef}
+          type="text"
+          value={editValue}
+          onChange={handleChange}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); commit(); }
+            if (e.key === "Escape") setEditing(false);
+          }}
+          className="w-full rounded border border-primary pl-4 pr-1 py-0.5 text-right text-sm font-semibold focus:outline-none"
+          inputMode="decimal"
+        />
+      </div>
     );
   }
 
