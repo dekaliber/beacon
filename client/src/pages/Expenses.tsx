@@ -40,6 +40,13 @@ function CurrencyInput({ name, defaultValue, required }: { name: string; default
     return num ? num.toFixed(2) : "";
   });
 
+  // Sync when defaultValue changes (e.g. modal reopened with different data)
+  useEffect(() => {
+    if (!defaultValue) { setRawValue(""); return; }
+    const num = parseFloat(defaultValue);
+    setRawValue(num ? num.toFixed(2) : "");
+  }, [defaultValue]);
+
   const numericValue = parseFloat(rawValue) || 0;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
