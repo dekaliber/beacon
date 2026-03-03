@@ -64,10 +64,12 @@ export interface Expense {
   isReimbursementExpected: boolean;
   reimbursementNote: string | null;
   transactionGroupId: string | null;
+  parentExpenseId: string | null;
   category: Category | null;
   account: Account;
   tags: ExpenseTag[];
   transactionGroup: TransactionGroup | null;
+  offsets?: Expense[];
   recurrenceRuleId: string | null;
   createdAt: string;
   updatedAt: string;

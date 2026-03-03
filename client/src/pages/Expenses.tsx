@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   Plus, Pencil, Receipt, ChevronLeft, ChevronRight, AlertCircle,
   ArrowUpDown, ArrowUp, ArrowDown, X, Filter, ChevronDown, Trash2, Repeat,
-  AlertTriangle,
+  AlertTriangle, Undo2, CheckCircle2,
 } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -569,22 +569,26 @@ function EditableCategoryCell({
 }
 
 // ── Inline amount cell ──
-function EditableAmountCell({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+function EditableAmountCell({ value, onSave, isOffset }: { value: string; onSave: (v: string) => void; isOffset?: boolean }) {
   const [editing, setEditing] = useState(false);
   const [cents, setCents] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
 
+  const absValue = Math.abs(parseFloat(value));
+
   const startEdit = () => {
-    setCents(Math.round(parseFloat(value) * 100));
+    setCents(Math.round(absValue * 100));
     setEditing(true);
   };
 
   const commit = () => {
     setEditing(false);
-    const newValue = (cents / 100).toFixed(2);
-    if (newValue !== parseFloat(value).toFixed(2)) onSave(newValue);
+    const newAbsValue = (cents / 100).toFixed(2);
+    // For offsets, save as negative; for regular expenses, save as positive
+    const saveValue = isOffset ? (-parseFloat(newAbsValue)).toFixed(2) : newAbsValue;
+    if (parseFloat(saveValue).toFixed(2) !== parseFloat(value).toFixed(2)) onSave(saveValue);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -610,7 +614,7 @@ function EditableAmountCell({ value, onSave }: { value: string; onSave: (v: stri
 
   return (
     <span onClick={startEdit} className="cursor-pointer border-b border-dotted border-transparent hover:border-gray-400">
-      -{formatCurrency(value)}
+      {isOffset ? "+" : "-"}{formatCurrency(absValue)}
     </span>
   );
 }
@@ -621,6 +625,7 @@ export function Expenses() {
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
+  const [offsetParent, setOffsetParent] = useState<Expense | null>(null);
   const [sort, setSort] = useState<SortState>({ field: "date", order: "desc" });
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterAccountId, setFilterAccountId] = useState("");
@@ -672,6 +677,7 @@ export function Expenses() {
     }
     setModalOpen(false);
     setEditing(null);
+    setOffsetParent(null);
     refetch();
     refetchVendors();
     refetchUncat();
@@ -681,8 +687,15 @@ export function Expenses() {
     await deleteExpense(id);
     setModalOpen(false);
     setEditing(null);
+    setOffsetParent(null);
     refetch();
     refetchUncat();
+  };
+
+  const handleCreateOffset = (expense: Expense) => {
+    setEditing(null);
+    setOffsetParent(expense);
+    setModalOpen(true);
   };
 
   const handleInlineUpdate = useCallback(async (id: string, field: string, value: string) => {
@@ -698,6 +711,7 @@ export function Expenses() {
 
   const openEdit = (expense: Expense) => {
     setEditing(expense);
+    setOffsetParent(null);
     setModalOpen(true);
   };
 
@@ -797,7 +811,7 @@ export function Expenses() {
             <Filter className="h-4 w-4" />
             {hasActiveFilters && <span className="ml-1 rounded-full bg-primary-foreground/20 px-1.5 text-xs">!</span>}
           </Button>
-          <Button onClick={() => { setEditing(null); setModalOpen(true); }}>
+          <Button onClick={() => { setEditing(null); setOffsetParent(null); setModalOpen(true); }}>
             <Plus className="h-4 w-4" /> Add Expense
           </Button>
         </div>
@@ -877,18 +891,19 @@ export function Expenses() {
                     <th className="w-[180px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("category")}>Category <SortIcon field="category" /></th>
                     <th className="w-[130px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
                     <th className="w-[100px] cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
-                    <th className="w-[40px] pb-3"></th>
+                    <th className="w-[60px] pb-3"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {groupedRows.map((row) => {
                     if (row.type === "expense") {
                       return (
-                        <ExpenseRow
+                        <ExpenseRowWithOffsets
                           key={row.expense.id}
                           expense={row.expense}
                           onEdit={openEdit}
                           onInlineUpdate={handleInlineUpdate}
+                          onCreateOffset={handleCreateOffset}
                           vendors={vendorList ?? []}
                           accounts={eligibleAccounts}
                           categories={categories ?? []}
@@ -907,6 +922,7 @@ export function Expenses() {
                         onToggle={() => toggleGroupCollapse(row.groupId)}
                         onEdit={openEdit}
                         onInlineUpdate={handleInlineUpdate}
+                        onCreateOffset={handleCreateOffset}
                         firstExpense={firstByDate}
                         vendors={vendorList ?? []}
                         accounts={eligibleAccounts}
@@ -967,7 +983,7 @@ export function Expenses() {
             action={
               hasActiveFilters || showUncategorized
                 ? <Button variant="secondary" onClick={clearFilters}>Clear Filters</Button>
-                : <Button onClick={() => { setEditing(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> Add Expense</Button>
+                : <Button onClick={() => { setEditing(null); setOffsetParent(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> Add Expense</Button>
             }
           />
         )}
@@ -975,10 +991,11 @@ export function Expenses() {
 
       <ExpenseModal
         open={modalOpen}
-        onClose={() => { setModalOpen(false); setEditing(null); }}
+        onClose={() => { setModalOpen(false); setEditing(null); setOffsetParent(null); }}
         onSave={handleSave}
         onDelete={handleDelete}
         expense={editing}
+        offsetParent={offsetParent}
         categories={categories ?? []}
         accounts={eligibleAccounts}
         tags={tags ?? []}
@@ -988,108 +1005,167 @@ export function Expenses() {
   );
 }
 
-// ── Table row ──
-function ExpenseRow({
-  expense, onEdit, onInlineUpdate, vendors, accounts, categories,
+// ── Offset sub-row (lighter/smaller styling) ──
+function OffsetRow({
+  offset, onEdit, onInlineUpdate, accounts, categories,
 }: {
-  expense: Expense;
+  offset: Expense;
   onEdit: (e: Expense) => void;
   onInlineUpdate: (id: string, field: string, value: string) => Promise<void>;
-  vendors: string[];
   accounts: Account[];
   categories: Category[];
 }) {
-  const isUncategorized = !expense.categoryId;
-  const isRecurring = !!expense.recurrenceRuleId;
-
-  const rowBg = isUncategorized
-    ? "bg-red-50/50 hover:bg-red-50"
-    : isRecurring
-    ? "bg-blue-50/50 hover:bg-blue-50"
-    : expense.isReimbursementExpected
-    ? "bg-amber-50/50 hover:bg-amber-50"
-    : "hover:bg-muted/50";
-
   return (
-    <tr className={rowBg}>
-      <td className="w-[100px] py-3 pr-3">
-        <EditableCell
-          value={expense.date}
-          type="date"
-          onSave={(v) => onInlineUpdate(expense.id, "date", v)}
-        />
+    <tr className="bg-muted/20 hover:bg-muted/30">
+      <td className="w-[100px] py-2 pr-3 text-xs text-muted-foreground">
+        <EditableCell value={offset.date} type="date" onSave={(v) => onInlineUpdate(offset.id, "date", v)} className="text-xs text-muted-foreground" />
       </td>
-      <td className="py-3 pr-3">
-        <div className="flex items-center gap-2">
-          {expense.isReimbursementExpected && (
-            <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-500" title={expense.reimbursementNote ?? "Reimbursement expected"} />
-          )}
-          {isRecurring && <Repeat className="h-3.5 w-3.5 flex-shrink-0 text-blue-500" title="Recurring expense" />}
+      <td className="py-2 pr-3">
+        <div className="flex items-center gap-2 pl-6">
+          <Undo2 className="h-3 w-3 flex-shrink-0 text-muted-foreground/50" />
           <EditableCell
-            value={expense.description}
-            onSave={(v) => onInlineUpdate(expense.id, "description", v)}
-            className="font-medium"
+            value={offset.description}
+            onSave={(v) => onInlineUpdate(offset.id, "description", v)}
+            className="text-xs text-muted-foreground"
           />
-          {expense.tags.length > 0 && (
-            <div className="flex gap-1">
-              {expense.tags.map(({ tag }) => (
-                <span
-                  key={tag.id}
-                  className="rounded-full px-1.5 py-0.5 text-xs font-medium"
-                  style={{
-                    backgroundColor: tag.color ? `${tag.color}25` : "hsl(var(--muted))",
-                    color: tag.color ?? "inherit",
-                  }}
-                >
-                  {tag.name}
-                </span>
-              ))}
-            </div>
-          )}
         </div>
       </td>
-      <td className="w-[160px] py-3 pr-3">
-        <EditableVendorCell
-          value={expense.vendor}
-          vendors={vendors}
-          onSave={(v) => onInlineUpdate(expense.id, "vendor", v)}
-        />
+      <td className="w-[160px] py-2 pr-3 text-xs text-muted-foreground">
+        <EditableVendorCell value={offset.vendor} vendors={[]} onSave={(v) => onInlineUpdate(offset.id, "vendor", v)} />
       </td>
-      <td className="w-[180px] py-3 pr-3">
+      <td className="w-[180px] py-2 pr-3 text-xs text-muted-foreground">
         <EditableCategoryCell
-          value={expense.categoryId}
-          label={expense.category?.name ?? ""}
+          value={offset.categoryId}
+          label={offset.category?.name ?? ""}
           categories={categories}
-          isUncategorized={isUncategorized}
-          onSave={(v) => onInlineUpdate(expense.id, "categoryId", v)}
+          isUncategorized={!offset.categoryId}
+          onSave={(v) => onInlineUpdate(offset.id, "categoryId", v)}
         />
       </td>
-      <td className="w-[130px] py-3 pr-3">
+      <td className="w-[130px] py-2 pr-3 text-xs text-muted-foreground">
         <EditableSelectCell
-          value={expense.accountId}
-          label={expense.account.name}
+          value={offset.accountId}
+          label={offset.account.name}
           options={accounts.map((a) => ({ id: a.id, name: a.name }))}
-          onSave={(v) => onInlineUpdate(expense.id, "accountId", v)}
+          onSave={(v) => onInlineUpdate(offset.id, "accountId", v)}
         />
       </td>
-      <td className="w-[100px] py-3 text-right font-semibold text-destructive">
-        <EditableAmountCell
-          value={expense.amount}
-          onSave={(v) => onInlineUpdate(expense.id, "amount", v)}
-        />
+      <td className="w-[100px] py-2 text-right text-xs font-semibold text-green-600">
+        <EditableAmountCell value={offset.amount} onSave={(v) => onInlineUpdate(offset.id, "amount", v)} isOffset />
       </td>
-      <td className="w-[40px] py-3 text-right">
-        <button onClick={() => onEdit(expense)} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent">
-          <Pencil className="h-4 w-4" />
+      <td className="w-[60px] py-2 text-right">
+        <button onClick={() => onEdit(offset)} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent">
+          <Pencil className="h-3.5 w-3.5" />
         </button>
       </td>
     </tr>
   );
 }
 
+// ── Parent row with offset sub-rows ──
+function ExpenseRowWithOffsets({
+  expense, onEdit, onInlineUpdate, onCreateOffset, vendors, accounts, categories,
+}: {
+  expense: Expense;
+  onEdit: (e: Expense) => void;
+  onInlineUpdate: (id: string, field: string, value: string) => Promise<void>;
+  onCreateOffset: (e: Expense) => void;
+  vendors: string[];
+  accounts: Account[];
+  categories: Category[];
+}) {
+  const offsets = expense.offsets ?? [];
+  const hasOffsets = offsets.length > 0;
+  const offsetTotal = offsets.reduce((sum, o) => sum + Math.abs(parseFloat(o.amount)), 0);
+  const parentAmount = parseFloat(expense.amount);
+  const isFullyReimbursed = hasOffsets && offsetTotal >= parentAmount;
+
+  const isUncategorized = !expense.categoryId;
+  const isRecurring = !!expense.recurrenceRuleId;
+
+  const rowBg = isUncategorized
+    ? "bg-red-50/50 hover:bg-red-50"
+    : isFullyReimbursed
+    ? "bg-green-50/50 hover:bg-green-50"
+    : isRecurring
+    ? "bg-blue-50/50 hover:bg-blue-50"
+    : expense.isReimbursementExpected
+    ? "bg-amber-50/50 hover:bg-amber-50"
+    : "hover:bg-muted/50";
+
+  // Determine reimbursement status icon
+  const StatusIcon = () => {
+    if (isFullyReimbursed) {
+      return <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-green-500" title="Fully reimbursed" />;
+    }
+    if (expense.isReimbursementExpected) {
+      return <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-500" title={expense.reimbursementNote ?? "Reimbursement expected"} />;
+    }
+    return null;
+  };
+
+  return (
+    <>
+      <tr className={rowBg}>
+        <td className="w-[100px] py-3 pr-3">
+          <EditableCell value={expense.date} type="date" onSave={(v) => onInlineUpdate(expense.id, "date", v)} />
+        </td>
+        <td className="py-3 pr-3">
+          <div className="flex items-center gap-2">
+            <StatusIcon />
+            {isRecurring && <Repeat className="h-3.5 w-3.5 flex-shrink-0 text-blue-500" title="Recurring expense" />}
+            <EditableCell value={expense.description} onSave={(v) => onInlineUpdate(expense.id, "description", v)} className="font-medium" />
+            {expense.tags.length > 0 && (
+              <div className="flex gap-1">
+                {expense.tags.map(({ tag }) => (
+                  <span key={tag.id} className="rounded-full px-1.5 py-0.5 text-xs font-medium" style={{ backgroundColor: tag.color ? `${tag.color}25` : "hsl(var(--muted))", color: tag.color ?? "inherit" }}>
+                    {tag.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </td>
+        <td className="w-[160px] py-3 pr-3">
+          <EditableVendorCell value={expense.vendor} vendors={vendors} onSave={(v) => onInlineUpdate(expense.id, "vendor", v)} />
+        </td>
+        <td className="w-[180px] py-3 pr-3">
+          <EditableCategoryCell value={expense.categoryId} label={expense.category?.name ?? ""} categories={categories} isUncategorized={isUncategorized} onSave={(v) => onInlineUpdate(expense.id, "categoryId", v)} />
+        </td>
+        <td className="w-[130px] py-3 pr-3">
+          <EditableSelectCell value={expense.accountId} label={expense.account.name} options={accounts.map((a) => ({ id: a.id, name: a.name }))} onSave={(v) => onInlineUpdate(expense.id, "accountId", v)} />
+        </td>
+        <td className="w-[100px] py-3 text-right font-semibold text-destructive">
+          <EditableAmountCell value={expense.amount} onSave={(v) => onInlineUpdate(expense.id, "amount", v)} />
+        </td>
+        <td className="w-[60px] py-3 text-right">
+          <div className="flex items-center justify-end gap-0.5">
+            <button onClick={() => onCreateOffset(expense)} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent" title="Add offset / reimbursement">
+              <Undo2 className="h-3.5 w-3.5" />
+            </button>
+            <button onClick={() => onEdit(expense)} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent">
+              <Pencil className="h-4 w-4" />
+            </button>
+          </div>
+        </td>
+      </tr>
+      {offsets.map((offset) => (
+        <OffsetRow
+          key={offset.id}
+          offset={offset}
+          onEdit={onEdit}
+          onInlineUpdate={onInlineUpdate}
+          accounts={accounts}
+          categories={categories}
+        />
+      ))}
+    </>
+  );
+}
+
 // ── Collapsible group ──
 function GroupRows({
-  groupName, expenses, collapsed, onToggle, onEdit, onInlineUpdate, firstExpense, vendors, accounts, categories,
+  groupName, expenses, collapsed, onToggle, onEdit, onInlineUpdate, onCreateOffset, firstExpense, vendors, accounts, categories,
 }: {
   groupName: string;
   expenses: Expense[];
@@ -1097,6 +1173,7 @@ function GroupRows({
   onToggle: () => void;
   onEdit: (e: Expense) => void;
   onInlineUpdate: (id: string, field: string, value: string) => Promise<void>;
+  onCreateOffset: (e: Expense) => void;
   firstExpense: Expense;
   vendors: string[];
   accounts: Account[];
@@ -1119,7 +1196,7 @@ function GroupRows({
         <td className="w-[180px] py-3 pr-3">{firstExpense.category?.name ?? <span className="text-red-500">[Uncategorized]</span>}</td>
         <td className="w-[130px] py-3 pr-3">{firstExpense.account.name}</td>
         <td className="w-[100px] py-3 text-right font-semibold text-destructive">-{formatCurrency(totalAmount)}</td>
-        <td className="w-[40px] py-3 text-right">
+        <td className="w-[60px] py-3 text-right">
           <button onClick={() => onEdit(firstExpense)} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent"><Pencil className="h-4 w-4" /></button>
         </td>
       </tr>
@@ -1138,7 +1215,7 @@ function GroupRows({
         </td>
       </tr>
       {expenses.map((expense) => (
-        <ExpenseRow key={expense.id} expense={expense} onEdit={onEdit} onInlineUpdate={onInlineUpdate} vendors={vendors} accounts={accounts} categories={categories} />
+        <ExpenseRowWithOffsets key={expense.id} expense={expense} onEdit={onEdit} onInlineUpdate={onInlineUpdate} onCreateOffset={onCreateOffset} vendors={vendors} accounts={accounts} categories={categories} />
       ))}
     </>
   );
@@ -1151,13 +1228,14 @@ interface ExpenseModalProps {
   onSave: (data: Record<string, unknown>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   expense: Expense | null;
+  offsetParent: Expense | null;
   categories: Category[];
   accounts: Account[];
   tags: Tag[];
   vendors: string[];
 }
 
-function ExpenseModal({ open, onClose, onSave, onDelete, expense, categories, accounts, tags, vendors }: ExpenseModalProps) {
+function ExpenseModal({ open, onClose, onSave, onDelete, expense, offsetParent, categories, accounts, tags, vendors }: ExpenseModalProps) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
@@ -1167,17 +1245,29 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, categories, ac
   const [showOptional, setShowOptional] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
 
+  const isOffsetMode = !!offsetParent && !expense;
+
   useEffect(() => {
     if (open) {
-      setSelectedTagIds(expense?.tags.map((t) => t.tagId) ?? []);
-      setIsReimbursementExpected(expense?.isReimbursementExpected ?? false);
-      setIsRecurring(!!expense?.recurrenceRuleId);
-      setConfirmDelete(false);
-      setSelectedCategoryId(expense?.categoryId ?? "");
-      // Auto-expand optional if any optional fields have data
-      setShowOptional(!!(expense?.notes || expense?.isReimbursementExpected || expense?.recurrenceRuleId));
+      if (isOffsetMode) {
+        // Offset mode: inherit parent's tags, category; no reimbursement/recurring
+        setSelectedTagIds(offsetParent.tags.map((t) => t.tagId));
+        setIsReimbursementExpected(false);
+        setIsRecurring(false);
+        setConfirmDelete(false);
+        setSelectedCategoryId(offsetParent.categoryId ?? "");
+        setShowOptional(false);
+      } else {
+        setSelectedTagIds(expense?.tags.map((t) => t.tagId) ?? []);
+        setIsReimbursementExpected(expense?.isReimbursementExpected ?? false);
+        setIsRecurring(!!expense?.recurrenceRuleId);
+        setConfirmDelete(false);
+        setSelectedCategoryId(expense?.categoryId ?? "");
+        // Auto-expand optional if any optional fields have data
+        setShowOptional(!!(expense?.notes || expense?.isReimbursementExpected || expense?.recurrenceRuleId));
+      }
     }
-  }, [open, expense]);
+  }, [open, expense, offsetParent, isOffsetMode]);
 
   const toggleTag = (tagId: string) => {
     setSelectedTagIds((prev) =>
@@ -1201,21 +1291,26 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, categories, ac
     setSaving(true);
     const form = new FormData(e.currentTarget);
 
+    const rawAmount = parseFloat(form.get("amount") as string);
     const expenseData: Record<string, unknown> = {
-      amount: parseFloat(form.get("amount") as string),
+      amount: isOffsetMode ? -Math.abs(rawAmount) : rawAmount,
       description: form.get("description") as string,
       vendor: form.get("vendor") as string,
       date: form.get("date") as string,
       categoryId: form.get("categoryId") as string || null,
       accountId: form.get("accountId") as string,
       notes: (form.get("notes") as string) || undefined,
-      isReimbursementExpected,
-      reimbursementNote: isReimbursementExpected
+      isReimbursementExpected: isOffsetMode ? false : isReimbursementExpected,
+      reimbursementNote: isOffsetMode ? null : isReimbursementExpected
         ? (form.get("reimbursementNote") as string) || undefined
         : null,
       tagIds: selectedTagIds,
-      recurrenceRuleId: isRecurring ? (expense?.recurrenceRuleId ?? undefined) : null,
+      recurrenceRuleId: isOffsetMode ? null : isRecurring ? (expense?.recurrenceRuleId ?? undefined) : null,
     };
+
+    if (isOffsetMode) {
+      expenseData.parentExpenseId = offsetParent.id;
+    }
 
     await onSave(expenseData);
 
@@ -1248,11 +1343,17 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, categories, ac
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={expense ? "Edit Expense" : "Add Expense"}>
+    <Modal open={open} onClose={onClose} title={isOffsetMode ? "Add Offset" : expense ? "Edit Expense" : "Add Expense"}>
       <form onSubmit={handleSubmit} className="space-y-4">
+        {isOffsetMode && (
+          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+            Offset for: <span className="font-medium text-foreground">{offsetParent.description}</span> ({formatCurrency(offsetParent.amount)})
+          </div>
+        )}
+
         <div>
           <label className="mb-1 block text-sm font-medium">Amount</label>
-          <CurrencyInput name="amount" defaultValue={expense?.amount} required />
+          <CurrencyInput name="amount" defaultValue={isOffsetMode ? offsetParent.amount : expense?.amount} required />
         </div>
 
         <div>
@@ -1261,7 +1362,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, categories, ac
             name="description"
             type="text"
             required
-            defaultValue={expense?.description ?? ""}
+            defaultValue={isOffsetMode ? offsetParent.description : expense?.description ?? ""}
             className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             placeholder="What did you spend on?"
           />
@@ -1271,7 +1372,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, categories, ac
           <label className="mb-1 block text-sm font-medium">Vendor</label>
           <VendorAutocomplete
             name="vendor"
-            defaultValue={expense?.vendor}
+            defaultValue={isOffsetMode ? offsetParent.vendor : expense?.vendor}
             vendors={vendors}
             onSelect={handleVendorSelect}
             required
@@ -1285,7 +1386,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, categories, ac
               name="date"
               type="date"
               required
-              defaultValue={toDateInputValue(expense?.date)}
+              defaultValue={isOffsetMode ? toDateInputValue(offsetParent.date) : toDateInputValue(expense?.date)}
               className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
@@ -1294,7 +1395,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, categories, ac
             <select
               name="accountId"
               required
-              defaultValue={expense?.accountId ?? ""}
+              defaultValue={isOffsetMode ? "" : expense?.accountId ?? ""}
               className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="">Select account</option>
@@ -1341,84 +1442,99 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, categories, ac
           </div>
         )}
 
-        {/* Collapsible optional section */}
-        <div className="border-t border-border pt-3">
-          <button
-            type="button"
-            onClick={() => setShowOptional(!showOptional)}
-            className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
-          >
-            {showOptional ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-            More options
-          </button>
-          {showOptional && (
-            <div className="mt-3 space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium">Notes</label>
-                <textarea
-                  name="notes"
-                  rows={2}
-                  defaultValue={expense?.notes ?? ""}
-                  className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                  placeholder="Additional notes..."
-                />
-              </div>
-
-              <div className="rounded-md border border-border p-3">
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={isReimbursementExpected}
-                    onChange={(e) => setIsReimbursementExpected(e.target.checked)}
-                    className="h-4 w-4 rounded border-border"
+        {/* Collapsible optional section — hidden in offset mode */}
+        {!isOffsetMode && (
+          <div className="border-t border-border pt-3">
+            <button
+              type="button"
+              onClick={() => setShowOptional(!showOptional)}
+              className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              {showOptional ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+              More options
+            </button>
+            {showOptional && (
+              <div className="mt-3 space-y-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Notes</label>
+                  <textarea
+                    name="notes"
+                    rows={2}
+                    defaultValue={expense?.notes ?? ""}
+                    className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    placeholder="Additional notes..."
                   />
-                  <span className="text-sm font-medium">Expecting reimbursement or refund</span>
-                </label>
-                {isReimbursementExpected && (
-                  <div className="mt-2">
+                </div>
+
+                <div className="rounded-md border border-border p-3">
+                  <label className="flex cursor-pointer items-center gap-2">
                     <input
-                      name="reimbursementNote"
-                      type="text"
-                      defaultValue={expense?.reimbursementNote ?? ""}
-                      className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                      placeholder="e.g. Return pending, or expecting $25 from John"
+                      type="checkbox"
+                      checked={isReimbursementExpected}
+                      onChange={(e) => setIsReimbursementExpected(e.target.checked)}
+                      className="h-4 w-4 rounded border-border"
                     />
-                  </div>
-                )}
-              </div>
+                    <span className="text-sm font-medium">Expecting reimbursement or refund</span>
+                  </label>
+                  {isReimbursementExpected && (
+                    <div className="mt-2">
+                      <input
+                        name="reimbursementNote"
+                        type="text"
+                        defaultValue={expense?.reimbursementNote ?? ""}
+                        className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        placeholder="e.g. Return pending, or expecting $25 from John"
+                      />
+                    </div>
+                  )}
+                </div>
 
-              <div className="rounded-md border border-border p-3">
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={isRecurring}
-                    onChange={(e) => setIsRecurring(e.target.checked)}
-                    className="h-4 w-4 rounded border-border"
-                  />
-                  <span className="text-sm font-medium">Recurring expense</span>
-                </label>
-                {isRecurring && !expense && (
-                  <div className="mt-3 grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-muted-foreground">Frequency</label>
-                      <select name="frequency" defaultValue="MONTHLY" className="w-full rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
-                        {Object.entries(FREQUENCY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                      </select>
+                <div className="rounded-md border border-border p-3">
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={isRecurring}
+                      onChange={(e) => setIsRecurring(e.target.checked)}
+                      className="h-4 w-4 rounded border-border"
+                    />
+                    <span className="text-sm font-medium">Recurring expense</span>
+                  </label>
+                  {isRecurring && !expense && (
+                    <div className="mt-3 grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Frequency</label>
+                        <select name="frequency" defaultValue="MONTHLY" className="w-full rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
+                          {Object.entries(FREQUENCY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Interval</label>
+                        <input name="interval" type="number" min="1" defaultValue="1" className="w-full rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="mb-1 block text-xs font-medium text-muted-foreground">End Date</label>
+                        <input name="endDate" type="date" className="w-full rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
+                      </div>
                     </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-muted-foreground">Interval</label>
-                      <input name="interval" type="number" min="1" defaultValue="1" className="w-full rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="mb-1 block text-xs font-medium text-muted-foreground">End Date</label>
-                      <input name="endDate" type="date" className="w-full rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
+
+        {/* Notes field for offset mode (standalone, no reimbursement/recurring) */}
+        {isOffsetMode && (
+          <div>
+            <label className="mb-1 block text-sm font-medium">Notes</label>
+            <textarea
+              name="notes"
+              rows={2}
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="e.g. Refund received, reimbursement from employer..."
+            />
+          </div>
+        )}
 
         <div className="flex items-center justify-between pt-2">
           <div>
@@ -1437,7 +1553,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, categories, ac
           <div className="flex gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={saving}>
-              {saving ? "Saving..." : expense ? "Update" : "Add Expense"}
+              {saving ? "Saving..." : isOffsetMode ? "Add Offset" : expense ? "Update" : "Add Expense"}
             </Button>
           </div>
         </div>

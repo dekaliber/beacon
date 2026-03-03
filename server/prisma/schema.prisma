@@ -83,16 +83,20 @@ model Expense {
 
   recurrenceRuleId   String?
   transactionGroupId String?
+  parentExpenseId    String?
 
   recurrenceRule   RecurrenceRule?   @relation(fields: [recurrenceRuleId], references: [id])
   transactionGroup TransactionGroup? @relation(fields: [transactionGroupId], references: [id])
   category         Category?         @relation(fields: [categoryId], references: [id])
   account          Account           @relation(fields: [accountId], references: [id])
+  parentExpense    Expense?          @relation("ExpenseOffsets", fields: [parentExpenseId], references: [id], onDelete: Cascade)
+  offsets          Expense[]         @relation("ExpenseOffsets")
   tags             ExpenseTag[]
 
   @@index([date])
   @@index([categoryId])
   @@index([accountId])
+  @@index([parentExpenseId])
   @@map("expenses")
 }
 

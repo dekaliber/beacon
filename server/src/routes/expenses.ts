@@ -7,7 +7,7 @@ export const expenseRoutes = Router();
 const EXPENSE_ALLOWED_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH"];
 
 const expenseSchema = z.object({
-  amount: z.number().positive(),
+  amount: z.number().refine((v) => v !== 0, "Amount cannot be zero"),
   description: z.string().min(1),
   vendor: z.string().min(1),
   date: z.string().transform((s) => new Date(s)),
@@ -19,6 +19,7 @@ const expenseSchema = z.object({
   tagIds: z.array(z.string()).optional(),
   transactionGroupId: z.string().nullable().optional(),
   recurrenceRuleId: z.string().nullable().optional(),
+  parentExpenseId: z.string().nullable().optional(),
 });
 
 // List expenses with filtering and pagination
@@ -27,7 +28,9 @@ expenseRoutes.get("/", async (req, res) => {
   const limit = parseInt(req.query.limit as string) || 50;
   const skip = (page - 1) * limit;
 
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = {
+    parentExpenseId: null, // Exclude offset rows from main list
+  };
 
   if (req.query.categoryId === "uncategorized") {
     where.categoryId = null;
@@ -72,14 +75,22 @@ expenseRoutes.get("/", async (req, res) => {
     orderBy = [{ [sortBy]: sortOrder }, { date: "desc" }];
   }
 
+  const expenseInclude = {
+    category: true,
+    account: true,
+    tags: { include: { tag: true } },
+    transactionGroup: true,
+  };
+
   const [expenses, total] = await Promise.all([
     prisma.expense.findMany({
       where,
       include: {
-        category: true,
-        account: true,
-        tags: { include: { tag: true } },
-        transactionGroup: true,
+        ...expenseInclude,
+        offsets: {
+          include: expenseInclude,
+          orderBy: { createdAt: "asc" as const },
+        },
       },
       orderBy,
       skip,
@@ -118,10 +129,10 @@ expenseRoutes.get("/vendor-category", async (req, res) => {
   res.json({ categoryId: expense?.categoryId ?? null });
 });
 
-// Count uncategorized expenses
+// Count uncategorized expenses (exclude offsets)
 expenseRoutes.get("/uncategorized-count", async (_req, res) => {
   const count = await prisma.expense.count({
-    where: { categoryId: null },
+    where: { categoryId: null, parentExpenseId: null },
   });
   res.json({ count });
 });
@@ -136,6 +147,14 @@ expenseRoutes.get("/:id", async (req, res) => {
       recurrenceRule: true,
       tags: { include: { tag: true } },
       transactionGroup: true,
+      offsets: {
+        include: {
+          category: true,
+          account: true,
+          tags: { include: { tag: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
   if (!expense) return res.status(404).json({ error: "Expense not found" });
@@ -168,6 +187,10 @@ expenseRoutes.post("/", async (req, res) => {
       account: true,
       tags: { include: { tag: true } },
       transactionGroup: true,
+      offsets: {
+        include: { category: true, account: true, tags: { include: { tag: true } } },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
   res.status(201).json(expense);
@@ -204,6 +227,10 @@ expenseRoutes.put("/:id", async (req, res) => {
       account: true,
       tags: { include: { tag: true } },
       transactionGroup: true,
+      offsets: {
+        include: { category: true, account: true, tags: { include: { tag: true } } },
+        orderBy: { createdAt: "asc" },
+      },
     },
   });
   res.json(expense);
