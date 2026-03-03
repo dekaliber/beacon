@@ -4,6 +4,7 @@ export interface Account {
   type: "CHECKING" | "SAVINGS" | "CREDIT_CARD" | "CASH" | "INVESTMENT";
   balance: string;
   currency: string;
+  isJoint: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

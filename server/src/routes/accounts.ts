@@ -9,6 +9,7 @@ const accountSchema = z.object({
   type: z.enum(["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH", "INVESTMENT"]),
   balance: z.number().default(0),
   currency: z.string().default("USD"),
+  isJoint: z.boolean().optional(),
 });
 
 // List all accounts

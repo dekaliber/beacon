@@ -906,11 +906,12 @@ export function Expenses() {
               <table className="w-full table-fixed text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="w-[100px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
+                    <th className="w-[70px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
                     <th className="cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("description")}>Description <SortIcon field="description" /></th>
-                    <th className="w-[160px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("vendor")}>Vendor <SortIcon field="vendor" /></th>
-                    <th className="w-[180px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("category")}>Category <SortIcon field="category" /></th>
-                    <th className="w-[130px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
+                    <th className="w-[170px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("vendor")}>Vendor <SortIcon field="vendor" /></th>
+                    <th className="w-[190px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("category")}>Category <SortIcon field="category" /></th>
+                    <th className="w-[140px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
+                    <th className="w-[30px] pb-3"></th>
                     <th className="w-[100px] cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
                     <th className="w-[60px] pb-3"></th>
                   </tr>
@@ -1038,7 +1039,7 @@ function OffsetRow({
 }) {
   return (
     <tr className="bg-muted/20 hover:bg-muted/30">
-      <td className="w-[100px] py-2 pr-3 text-xs text-muted-foreground">
+      <td className="w-[70px] py-2 pr-3 text-xs text-muted-foreground">
         <EditableCell value={offset.date} type="date" onSave={(v) => onInlineUpdate(offset.id, "date", v)} className="text-xs text-muted-foreground" />
       </td>
       <td className="py-2 pr-3">
@@ -1051,10 +1052,10 @@ function OffsetRow({
           />
         </div>
       </td>
-      <td className="w-[160px] py-2 pr-3 text-xs text-muted-foreground">
+      <td className="w-[170px] py-2 pr-3 text-xs text-muted-foreground">
         <EditableVendorCell value={offset.vendor} vendors={[]} onSave={(v) => onInlineUpdate(offset.id, "vendor", v)} />
       </td>
-      <td className="w-[180px] py-2 pr-3 text-xs text-muted-foreground">
+      <td className="w-[190px] py-2 pr-3 text-xs text-muted-foreground">
         <EditableCategoryCell
           value={offset.categoryId}
           label={offset.category?.name ?? ""}
@@ -1063,13 +1064,18 @@ function OffsetRow({
           onSave={(v) => onInlineUpdate(offset.id, "categoryId", v)}
         />
       </td>
-      <td className="w-[130px] py-2 pr-3 text-xs text-muted-foreground">
+      <td className="w-[140px] py-2 pr-3 text-xs text-muted-foreground">
         <EditableSelectCell
           value={offset.accountId}
           label={offset.account.name}
           options={accounts.map((a) => ({ id: a.id, name: a.name }))}
           onSave={(v) => onInlineUpdate(offset.id, "accountId", v)}
         />
+      </td>
+      <td className="w-[30px] py-2 text-center">
+        <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${offset.account.isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
+          {offset.account.isJoint ? "J" : "P"}
+        </span>
       </td>
       <td className="w-[100px] py-2 text-right text-xs font-semibold text-green-600">
         <EditableAmountCell value={offset.amount} onSave={(v) => onInlineUpdate(offset.id, "amount", v)} isOffset />
@@ -1128,7 +1134,7 @@ function ExpenseRowWithOffsets({
   return (
     <>
       <tr className={rowBg}>
-        <td className="w-[100px] py-3 pr-3">
+        <td className="w-[70px] py-3 pr-3">
           <EditableCell value={expense.date} type="date" onSave={(v) => onInlineUpdate(expense.id, "date", v)} />
         </td>
         <td className="py-3 pr-3">
@@ -1147,14 +1153,19 @@ function ExpenseRowWithOffsets({
             )}
           </div>
         </td>
-        <td className="w-[160px] py-3 pr-3">
+        <td className="w-[170px] py-3 pr-3">
           <EditableVendorCell value={expense.vendor} vendors={vendors} onSave={(v) => onInlineUpdate(expense.id, "vendor", v)} />
         </td>
-        <td className="w-[180px] py-3 pr-3">
+        <td className="w-[190px] py-3 pr-3">
           <EditableCategoryCell value={expense.categoryId} label={expense.category?.name ?? ""} categories={categories} isUncategorized={isUncategorized} onSave={(v) => onInlineUpdate(expense.id, "categoryId", v)} />
         </td>
-        <td className="w-[130px] py-3 pr-3">
+        <td className="w-[140px] py-3 pr-3">
           <EditableSelectCell value={expense.accountId} label={expense.account.name} options={accounts.map((a) => ({ id: a.id, name: a.name }))} onSave={(v) => onInlineUpdate(expense.id, "accountId", v)} />
+        </td>
+        <td className="w-[30px] py-3 text-center">
+          <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${expense.account.isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
+            {expense.account.isJoint ? "J" : "P"}
+          </span>
         </td>
         <td className="w-[100px] py-3 text-right font-semibold text-destructive">
           <EditableAmountCell value={expense.amount} onSave={(v) => onInlineUpdate(expense.id, "amount", v)} />
@@ -1205,7 +1216,7 @@ function GroupRows({
   if (collapsed) {
     return (
       <tr className="bg-muted/30 hover:bg-muted/50">
-        <td className="w-[100px] py-3 pr-3">{formatDate(firstExpense.date)}</td>
+        <td className="w-[70px] py-3 pr-3">{formatDate(firstExpense.date)}</td>
         <td className="py-3 pr-3">
           <button onClick={onToggle} className="flex items-center gap-1.5 font-medium text-primary">
             <ChevronRight className="h-3.5 w-3.5" />
@@ -1213,9 +1224,14 @@ function GroupRows({
             <span className="text-xs font-normal text-muted-foreground">({expenses.length} items)</span>
           </button>
         </td>
-        <td className="w-[160px] py-3 pr-3 text-muted-foreground">{firstExpense.vendor}</td>
-        <td className="w-[180px] py-3 pr-3">{firstExpense.category?.name ?? <span className="text-red-500">[Uncategorized]</span>}</td>
-        <td className="w-[130px] py-3 pr-3">{firstExpense.account.name}</td>
+        <td className="w-[170px] py-3 pr-3 text-muted-foreground">{firstExpense.vendor}</td>
+        <td className="w-[190px] py-3 pr-3">{firstExpense.category?.name ?? <span className="text-red-500">[Uncategorized]</span>}</td>
+        <td className="w-[140px] py-3 pr-3">{firstExpense.account.name}</td>
+        <td className="w-[30px] py-3 text-center">
+          <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${firstExpense.account.isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
+            {firstExpense.account.isJoint ? "J" : "P"}
+          </span>
+        </td>
         <td className="w-[100px] py-3 text-right font-semibold text-destructive">-{formatCurrency(totalAmount)}</td>
         <td className="w-[60px] py-3 text-right">
           <button onClick={() => onEdit(firstExpense)} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent"><Pencil className="h-4 w-4" /></button>
@@ -1227,7 +1243,7 @@ function GroupRows({
   return (
     <>
       <tr className="bg-muted/30">
-        <td colSpan={7} className="py-2">
+        <td colSpan={8} className="py-2">
           <button onClick={onToggle} className="flex items-center gap-1.5 font-medium text-primary text-sm">
             <ChevronDown className="h-3.5 w-3.5" />
             {groupName}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Trash2, Pencil, Landmark, CreditCard, Banknote, PiggyBank, TrendingUp } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -68,7 +68,12 @@ export function Accounts() {
                     <Icon className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="font-semibold">{account.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold">{account.name}</p>
+                      <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${account.isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
+                        {account.isJoint ? "J" : "P"}
+                      </span>
+                    </div>
                     <p className="text-sm text-muted-foreground">{accountTypeLabels[account.type]}</p>
                     <p className="mt-1 text-lg font-bold">{formatCurrency(account.balance)}</p>
                   </div>
@@ -122,6 +127,11 @@ interface AccountModalProps {
 
 function AccountModal({ open, onClose, onSave, account }: AccountModalProps) {
   const [saving, setSaving] = useState(false);
+  const [isJoint, setIsJoint] = useState(false);
+
+  useEffect(() => {
+    if (open) setIsJoint(account?.isJoint ?? false);
+  }, [open, account]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -131,6 +141,7 @@ function AccountModal({ open, onClose, onSave, account }: AccountModalProps) {
       name: form.get("name") as string,
       type: form.get("type") as Account["type"],
       balance: parseFloat(form.get("balance") as string) || 0,
+      isJoint,
     } as Partial<Account>);
     setSaving(false);
   };
@@ -173,6 +184,21 @@ function AccountModal({ open, onClose, onSave, account }: AccountModalProps) {
             defaultValue={account?.balance ?? "0"}
             className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
+        </div>
+
+        <div className="rounded-md border border-border p-3">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={isJoint}
+              onChange={(e) => setIsJoint(e.target.checked)}
+              className="h-4 w-4 rounded border-border"
+            />
+            <span className="text-sm font-medium">Joint account</span>
+          </label>
+          <p className="mt-1 ml-6 text-xs text-muted-foreground">
+            Transactions from joint accounts are shared expenses/income
+          </p>
         </div>
 
         <div className="flex justify-end gap-2 pt-2">

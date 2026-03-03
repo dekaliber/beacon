@@ -21,9 +21,9 @@ export function formatDate(date: string | Date): string {
   const str = typeof date === "string" ? date : date.toISOString();
   const d = new Date(str.replace(/-/g, "/").replace("T", " ").split(".")[0]);
   return d.toLocaleDateString("en-US", {
-    month: "short",
+    month: "numeric",
     day: "numeric",
-    year: "numeric",
+    year: "2-digit",
   });
 }
 

@@ -325,10 +325,11 @@ export function IncomePage() {
               <table className="w-full table-fixed text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="w-[100px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
+                    <th className="w-[70px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
                     <th className="w-[130px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("source")}>Source <SortIcon field="source" /></th>
-                    <th className="w-[160px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
+                    <th className="w-[170px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
                     <th className="pb-3 pr-3 font-medium">Tags</th>
+                    <th className="w-[30px] pb-3"></th>
                     <th className="w-[100px] cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
                     <th className="w-[40px] pb-3"></th>
                   </tr>
@@ -336,7 +337,7 @@ export function IncomePage() {
                 <tbody className="divide-y divide-border">
                   {incomes.map((income) => (
                     <tr key={income.id} className="hover:bg-muted/50">
-                      <td className="w-[100px] py-3 pr-3">
+                      <td className="w-[70px] py-3 pr-3">
                         <EditableCell value={income.date} type="date" onSave={(v) => handleInlineUpdate(income.id, "date", v)} />
                       </td>
                       <td className="w-[130px] py-3 pr-3">
@@ -347,7 +348,7 @@ export function IncomePage() {
                           onSave={(v) => handleInlineUpdate(income.id, "source", v)}
                         />
                       </td>
-                      <td className="w-[160px] py-3 pr-3">
+                      <td className="w-[170px] py-3 pr-3">
                         <EditableSelectCell
                           value={income.accountId}
                           label={income.account.name}
@@ -363,6 +364,11 @@ export function IncomePage() {
                             </span>
                           ))}
                         </div>
+                      </td>
+                      <td className="w-[30px] py-3 text-center">
+                        <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${income.account.isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
+                          {income.account.isJoint ? "J" : "P"}
+                        </span>
                       </td>
                       <td className="w-[100px] py-3 text-right font-semibold text-green-600">
                         <EditableAmountCell
