@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
-import { addDays, addWeeks, addMonths, addYears } from "date-fns";
 
 export const recurrenceRoutes = Router();
 
@@ -17,15 +16,52 @@ const recurrenceSchema = z.object({
   accountId: z.string(),
 });
 
+/**
+ * Compute the next occurrence date using UTC-only arithmetic.
+ * date-fns uses local time which causes off-by-one errors when
+ * JS Date strings ("2026-03-01") are parsed as UTC midnight.
+ */
 export function computeNextOccurrence(current: Date, frequency: string, interval: number): Date {
+  const y = current.getUTCFullYear();
+  const m = current.getUTCMonth();
+  const d = current.getUTCDate();
+
   switch (frequency) {
-    case "DAILY": return addDays(current, interval);
-    case "WEEKLY": return addWeeks(current, interval);
-    case "BIWEEKLY": return addWeeks(current, interval * 2);
-    case "MONTHLY": return addMonths(current, interval);
-    case "QUARTERLY": return addMonths(current, interval * 3);
-    case "YEARLY": return addYears(current, interval);
-    default: return addMonths(current, interval);
+    case "DAILY":
+      return new Date(Date.UTC(y, m, d + interval));
+    case "WEEKLY":
+      return new Date(Date.UTC(y, m, d + 7 * interval));
+    case "BIWEEKLY":
+      return new Date(Date.UTC(y, m, d + 14 * interval));
+    case "MONTHLY": {
+      const target = new Date(Date.UTC(y, m + interval, d));
+      // Handle month overflow (e.g. Jan 31 + 1 month → Feb has no 31st)
+      if (target.getUTCDate() !== d) {
+        return new Date(Date.UTC(y, m + interval + 1, 0)); // last day of target month
+      }
+      return target;
+    }
+    case "QUARTERLY": {
+      const target = new Date(Date.UTC(y, m + 3 * interval, d));
+      if (target.getUTCDate() !== d) {
+        return new Date(Date.UTC(y, m + 3 * interval + 1, 0));
+      }
+      return target;
+    }
+    case "YEARLY": {
+      const target = new Date(Date.UTC(y + interval, m, d));
+      if (target.getUTCDate() !== d) {
+        return new Date(Date.UTC(y + interval, m + 1, 0));
+      }
+      return target;
+    }
+    default: {
+      const target = new Date(Date.UTC(y, m + interval, d));
+      if (target.getUTCDate() !== d) {
+        return new Date(Date.UTC(y, m + interval + 1, 0));
+      }
+      return target;
+    }
   }
 }
 
@@ -35,7 +71,7 @@ export function computeNextOccurrence(current: Date, frequency: string, interval
  */
 export async function generateUpcomingExpenses() {
   const now = new Date();
-  const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59);
+  const endOfNextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 2, 0, 23, 59, 59));
 
   const rules = await prisma.recurrenceRule.findMany({
     where: {
@@ -181,7 +217,7 @@ recurrenceRoutes.delete("/:id", async (req, res) => {
 
   // Delete any future pending expenses generated from this rule
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  today.setUTCHours(0, 0, 0, 0);
   await prisma.expense.deleteMany({
     where: {
       recurrenceRuleId: req.params.id,

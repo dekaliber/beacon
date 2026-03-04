@@ -1430,6 +1430,32 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, offsetParent, 
     const form = new FormData(e.currentTarget);
 
     const rawAmount = parseFloat(form.get("amount") as string);
+
+    // Determine recurrenceRuleId
+    let recurrenceRuleId: string | null | undefined = isOffsetMode
+      ? null
+      : isRecurring
+        ? (expense?.recurrenceRuleId ?? null)
+        : null;
+
+    // If recurring is toggled on and no rule exists yet, create one first
+    if (isRecurring && !recurrenceRuleId && !isOffsetMode) {
+      try {
+        const rule = await createRecurrenceRule({
+          description: form.get("description") as string,
+          vendor: form.get("vendor") as string,
+          amount: rawAmount,
+          frequency: form.get("frequency") as string,
+          interval: parseInt(form.get("interval") as string) || 1,
+          startDate: form.get("date") as string,
+          endDate: (form.get("endDate") as string) || undefined,
+          categoryId: form.get("categoryId") as string,
+          accountId: form.get("accountId") as string,
+        });
+        recurrenceRuleId = rule.id;
+      } catch { /* ignore */ }
+    }
+
     const expenseData: Record<string, unknown> = {
       amount: isOffsetMode ? -Math.abs(rawAmount) : rawAmount,
       description: form.get("description") as string,
@@ -1443,7 +1469,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, offsetParent, 
         ? (form.get("reimbursementNote") as string) || undefined
         : null,
       tagIds: selectedTagIds,
-      recurrenceRuleId: isOffsetMode ? null : isRecurring ? (expense?.recurrenceRuleId ?? undefined) : null,
+      recurrenceRuleId,
     };
 
     if (isOffsetMode) {
@@ -1451,24 +1477,6 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, offsetParent, 
     }
 
     await onSave(expenseData);
-
-    // If recurring is toggled on for a new expense, create a recurrence rule
-    if (!expense && isRecurring) {
-      try {
-        await createRecurrenceRule({
-          description: form.get("description") as string,
-          vendor: form.get("vendor") as string,
-          amount: parseFloat(form.get("amount") as string),
-          frequency: form.get("frequency") as string,
-          interval: parseInt(form.get("interval") as string) || 1,
-          startDate: form.get("date") as string,
-          endDate: (form.get("endDate") as string) || undefined,
-          categoryId: form.get("categoryId") as string,
-          accountId: form.get("accountId") as string,
-        });
-      } catch { /* ignore */ }
-    }
-
     setSaving(false);
   };
 
@@ -1637,7 +1645,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, offsetParent, 
                     />
                     <span className="text-sm font-medium">Recurring expense</span>
                   </label>
-                  {isRecurring && !expense && (
+                  {isRecurring && !expense?.recurrenceRuleId && (
                     <div className="mt-3 grid grid-cols-2 gap-3">
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted-foreground">Frequency</label>

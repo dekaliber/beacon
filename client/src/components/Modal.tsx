@@ -29,14 +29,16 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       onClick={(e) => e.target === overlayRef.current && onClose()}
     >
-      <div className={cn("w-full max-w-lg rounded-lg bg-background p-6 shadow-xl", className)}>
-        <div className="mb-4 flex items-center justify-between">
+      <div className={cn("flex w-full max-w-lg flex-col rounded-lg bg-background shadow-xl max-h-[90vh]", className)}>
+        <div className="flex items-center justify-between px-6 pt-6 pb-4">
           <h2 className="text-lg font-semibold">{title}</h2>
           <button onClick={onClose} className="rounded-md p-1 hover:bg-accent">
             <X className="h-5 w-5" />
           </button>
         </div>
-        {children}
+        <div className="overflow-y-auto px-6 pb-6">
+          {children}
+        </div>
       </div>
     </div>
   );
