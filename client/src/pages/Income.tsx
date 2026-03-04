@@ -125,6 +125,108 @@ function EditableSelectCell({ value, label, options, onSave }: { value: string; 
   );
 }
 
+// ── Inline account typeahead cell ──
+function EditableAccountCell({
+  value, label, accounts, onSave,
+}: {
+  value: string;
+  label: string;
+  accounts: Account[];
+  onSave: (newValue: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [search, setSearch] = useState("");
+  const [focusIdx, setFocusIdx] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const sortedAccounts = useMemo(() =>
+    [...accounts].sort((a, b) => a.name.localeCompare(b.name)),
+    [accounts],
+  );
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return sortedAccounts;
+    const terms = search.toLowerCase().split(/\s+/);
+    return sortedAccounts.filter((a) => {
+      const words = a.name.toLowerCase().split(/\s+/);
+      return terms.every((t) => words.some((w) => w.startsWith(t)));
+    });
+  }, [search, sortedAccounts]);
+
+  useEffect(() => { setFocusIdx(0); }, [filtered]);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      const handler = (e: MouseEvent) => {
+        if (ref.current && !ref.current.contains(e.target as Node)) {
+          setEditing(false);
+          setSearch("");
+        }
+      };
+      document.addEventListener("mousedown", handler);
+      return () => document.removeEventListener("mousedown", handler);
+    }
+  }, [editing]);
+
+  const selectItem = (id: string) => {
+    setEditing(false);
+    setSearch("");
+    if (id !== value) onSave(id);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx((i) => Math.min(i + 1, filtered.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx((i) => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter" && filtered[focusIdx]) { e.preventDefault(); selectItem(filtered[focusIdx].id); }
+    else if (e.key === "Escape") { setEditing(false); setSearch(""); }
+  };
+
+  if (editing) {
+    return (
+      <div ref={ref} className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Type to filter..."
+          className="w-full rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
+        />
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 min-w-[180px] rounded-md border border-border bg-background shadow-lg">
+          <div className="max-h-48 overflow-auto">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-muted-foreground">No matches</p>
+            ) : (
+              filtered.map((a, i) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  onMouseDown={() => selectItem(a.id)}
+                >
+                  {a.name}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <span
+      onClick={() => { setSearch(""); setEditing(true); }}
+      className="cursor-pointer border-b border-dotted border-transparent hover:border-gray-400"
+    >
+      {label}
+    </span>
+  );
+}
+
 // ── Inline amount cell ──
 function EditableAmountCell({ value, onSave, positive }: { value: string; onSave: (v: string) => void; positive?: boolean }) {
   const [editing, setEditing] = useState(false);
@@ -490,10 +592,10 @@ export function IncomePage() {
                       />
                     </td>
                     <td className="w-[170px] py-3 pr-3">
-                      <EditableSelectCell
+                      <EditableAccountCell
                         value={income.accountId}
                         label={income.account.name}
-                        options={eligibleAccounts.map((a) => ({ id: a.id, name: a.name }))}
+                        accounts={eligibleAccounts}
                         onSave={(v) => handleInlineUpdate(income.id, "accountId", v)}
                       />
                     </td>

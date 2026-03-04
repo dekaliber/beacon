@@ -254,14 +254,19 @@ expenseRoutes.put("/:id", async (req, res) => {
     if (rule && rule.isActive) {
       const syncFields = ["amount", "description", "vendor", "categoryId", "accountId"] as const;
       const ruleUpdate: Record<string, unknown> = {};
-      const matchOldValues: Record<string, unknown> = {};
       for (const field of syncFields) {
         if (field in data) {
           ruleUpdate[field] = (data as Record<string, unknown>)[field];
-          matchOldValues[field] = rule[field];
         }
       }
       if (Object.keys(ruleUpdate).length > 0) {
+        // Match ALL sync fields against old rule values so that any
+        // manually edited pending expense is excluded from the bulk update.
+        const matchUnedited: Record<string, unknown> = {};
+        for (const field of syncFields) {
+          matchUnedited[field] = rule[field];
+        }
+
         await prisma.recurrenceRule.update({
           where: { id: original.recurrenceRuleId },
           data: ruleUpdate,
@@ -273,7 +278,7 @@ expenseRoutes.put("/:id", async (req, res) => {
             recurrenceRuleId: original.recurrenceRuleId,
             date: { gt: today },
             id: { not: original.id },
-            ...matchOldValues,
+            ...matchUnedited,
           },
           data: ruleUpdate,
         });
@@ -290,22 +295,44 @@ expenseRoutes.delete("/:id", async (req, res) => {
   if (!expense) return res.status(404).json({ error: "Expense not found" });
 
   // If linked to a recurrence rule and this is a past/present expense,
-  // deactivate the rule and remove future pending instances.
+  // deactivate the rule and remove future pending instances that haven't
+  // been manually edited. Manually edited ones are unlinked and preserved.
   // If it's a future expense, just delete this single instance (skip occurrence).
   if (expense.recurrenceRuleId) {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
     if (expense.date <= today) {
+      const rule = await prisma.recurrenceRule.findUnique({
+        where: { id: expense.recurrenceRuleId },
+      });
       await prisma.recurrenceRule.update({
         where: { id: expense.recurrenceRuleId },
         data: { isActive: false },
       });
-      await prisma.expense.deleteMany({
-        where: {
-          recurrenceRuleId: expense.recurrenceRuleId,
-          date: { gt: today },
-        },
-      });
+      if (rule) {
+        // Build match criteria for unmodified expenses
+        const syncFields = ["amount", "description", "vendor", "categoryId", "accountId"] as const;
+        const matchUnedited: Record<string, unknown> = {};
+        for (const field of syncFields) {
+          matchUnedited[field] = rule[field];
+        }
+        // Delete unmodified future expenses
+        await prisma.expense.deleteMany({
+          where: {
+            recurrenceRuleId: expense.recurrenceRuleId,
+            date: { gt: today },
+            ...matchUnedited,
+          },
+        });
+        // Unlink manually edited future expenses so they remain as standalone
+        await prisma.expense.updateMany({
+          where: {
+            recurrenceRuleId: expense.recurrenceRuleId,
+            date: { gt: today },
+          },
+          data: { recurrenceRuleId: null },
+        });
+      }
     }
   }
 
