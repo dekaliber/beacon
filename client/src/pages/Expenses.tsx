@@ -15,7 +15,7 @@ import {
   createRecurrenceRule, getTransactionGroups,
   getExpenseVendors, getVendorCategory, getUncategorizedCount,
 } from "@/api";
-import { formatCurrency, formatDate, toDateInputValue } from "@/lib/utils";
+import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/utils";
 import type { Expense, Category, Account, Tag, TransactionGroup } from "@/types";
 
 const EXPENSE_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH"];
@@ -826,12 +826,12 @@ export function Expenses() {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [showUncategorized, setShowUncategorized] = useState(false);
 
-  // Today's date string for splitting upcoming vs regular
-  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  // Today's date string for splitting upcoming vs regular (local timezone)
+  const todayStr = useMemo(() => localToday(), []);
   const tomorrowStr = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
-    return d.toISOString().split("T")[0];
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }, []);
 
   const queryParams = useMemo(() => {

@@ -27,9 +27,15 @@ export function formatDate(date: string | Date): string {
   });
 }
 
+// Local YYYY-MM-DD for today (avoids UTC shift in evening hours)
+export function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 // Extract YYYY-MM-DD for <input type="date"> without timezone shift
 export function toDateInputValue(date?: string | null): string {
-  if (!date) return new Date().toISOString().split("T")[0];
+  if (!date) return localToday();
   if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
   return date.split("T")[0];
 }

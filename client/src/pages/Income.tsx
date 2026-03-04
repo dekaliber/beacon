@@ -9,7 +9,7 @@ import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
 import { getIncome, getAccounts, getTags, createIncome, updateIncome, deleteIncome } from "@/api";
-import { formatCurrency, formatDate, toDateInputValue } from "@/lib/utils";
+import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/utils";
 import type { Account, Income, IncomeSource, Tag } from "@/types";
 
 const SOURCE_LABELS: Record<IncomeSource, string> = {
@@ -403,12 +403,12 @@ export function IncomePage() {
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
 
-  // Today's date string for splitting upcoming vs regular
-  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  // Today's date string for splitting upcoming vs regular (local timezone)
+  const todayStr = useMemo(() => localToday(), []);
   const tomorrowStr = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
-    return d.toISOString().split("T")[0];
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }, []);
 
   const queryParams = useMemo(() => {
