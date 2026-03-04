@@ -25,8 +25,12 @@ const expenseSchema = z.object({
 
 // List expenses with filtering and pagination
 expenseRoutes.get("/", async (req, res) => {
-  // Auto-generate upcoming recurring expenses
-  await generateUpcomingExpenses();
+  // Auto-generate upcoming recurring expenses (best-effort, don't block listing)
+  try {
+    await generateUpcomingExpenses();
+  } catch (err) {
+    console.error("Failed to generate upcoming expenses:", err);
+  }
 
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 50;

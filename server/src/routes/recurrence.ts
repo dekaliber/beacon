@@ -47,6 +47,20 @@ export async function generateUpcomingExpenses() {
   const created = [];
 
   for (const rule of rules) {
+    // Validate that referenced category and account still exist
+    const [category, account] = await Promise.all([
+      rule.categoryId ? prisma.category.findUnique({ where: { id: rule.categoryId } }) : null,
+      prisma.account.findUnique({ where: { id: rule.accountId } }),
+    ]);
+    if (!account || (rule.categoryId && !category)) {
+      // Referenced record was deleted — deactivate the rule to prevent repeated failures
+      await prisma.recurrenceRule.update({
+        where: { id: rule.id },
+        data: { isActive: false },
+      });
+      continue;
+    }
+
     let current = new Date(rule.nextOccurrence);
     let lastAdvanced = current;
 
@@ -69,18 +83,23 @@ export async function generateUpcomingExpenses() {
       });
 
       if (!existing) {
-        const expense = await prisma.expense.create({
-          data: {
-            amount: rule.amount,
-            description: rule.description,
-            vendor: rule.vendor,
-            date: current,
-            categoryId: rule.categoryId,
-            accountId: rule.accountId,
-            recurrenceRuleId: rule.id,
-          },
-        });
-        created.push(expense);
+        try {
+          const expense = await prisma.expense.create({
+            data: {
+              amount: rule.amount,
+              description: rule.description,
+              vendor: rule.vendor,
+              date: current,
+              categoryId: rule.categoryId,
+              accountId: rule.accountId,
+              recurrenceRuleId: rule.id,
+            },
+          });
+          created.push(expense);
+        } catch (err) {
+          console.error(`Failed to create recurring expense for rule ${rule.id}:`, err);
+          break;
+        }
       }
 
       // Advance to next occurrence
