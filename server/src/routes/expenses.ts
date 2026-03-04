@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
+import { generateUpcomingExpenses } from "./recurrence.js";
 
 export const expenseRoutes = Router();
 
@@ -24,6 +25,9 @@ const expenseSchema = z.object({
 
 // List expenses with filtering and pagination
 expenseRoutes.get("/", async (req, res) => {
+  // Auto-generate upcoming recurring expenses
+  await generateUpcomingExpenses();
+
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 50;
   const skip = (page - 1) * limit;

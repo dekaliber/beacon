@@ -657,6 +657,14 @@ export function Expenses() {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [showUncategorized, setShowUncategorized] = useState(false);
 
+  // Today's date string for splitting upcoming vs regular
+  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const tomorrowStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split("T")[0];
+  }, []);
+
   const queryParams = useMemo(() => {
     const params: Record<string, string> = {
       page: page.toString(),
@@ -674,11 +682,35 @@ export function Expenses() {
     if (filterAccountId) params.accountId = filterAccountId;
     if (filterTagId) params.tagId = filterTagId;
     if (filterStartDate) params.startDate = filterStartDate;
-    if (filterEndDate) params.endDate = filterEndDate;
+    // Cap main table at today to exclude future-dated (upcoming) expenses
+    if (!filterEndDate || filterEndDate > todayStr) {
+      params.endDate = todayStr;
+    } else {
+      params.endDate = filterEndDate;
+    }
     return params;
-  }, [page, sort, filterAccountId, filterCategoryId, filterTagId, filterStartDate, filterEndDate, showUncategorized]);
+  }, [page, sort, filterAccountId, filterCategoryId, filterTagId, filterStartDate, filterEndDate, showUncategorized, todayStr]);
+
+  // Upcoming expenses query: future-dated, sorted ascending
+  const upcomingParams = useMemo(() => {
+    const params: Record<string, string> = {
+      startDate: tomorrowStr,
+      sortBy: "date",
+      sortOrder: "asc",
+      limit: "100",
+    };
+    if (showUncategorized) {
+      params.categoryId = "uncategorized";
+    } else if (filterCategoryId) {
+      params.categoryId = filterCategoryId;
+    }
+    if (filterAccountId) params.accountId = filterAccountId;
+    if (filterTagId) params.tagId = filterTagId;
+    return params;
+  }, [tomorrowStr, filterAccountId, filterCategoryId, filterTagId, showUncategorized]);
 
   const { data: expenseData, refetch } = useApi(() => getExpenses(queryParams), [queryParams]);
+  const { data: upcomingData, refetch: refetchUpcoming } = useApi(() => getExpenses(upcomingParams), [upcomingParams]);
   const { data: categories } = useApi(() => getFlatCategories(), []);
   const { data: accounts } = useApi(() => getAccounts(), []);
   const { data: tags } = useApi(() => getTags(), []);
@@ -690,6 +722,11 @@ export function Expenses() {
   const hasActiveFilters = !!(filterAccountId || filterCategoryId || filterTagId || filterStartDate || filterEndDate);
   const uncategorizedCount = uncatData?.count ?? 0;
 
+  const refetchAll = useCallback(() => {
+    refetch();
+    refetchUpcoming();
+  }, [refetch, refetchUpcoming]);
+
   const handleSave = async (formData: Record<string, unknown>) => {
     if (editing) {
       await updateExpense(editing.id, formData);
@@ -699,7 +736,7 @@ export function Expenses() {
     setModalOpen(false);
     setEditing(null);
     setOffsetParent(null);
-    refetch();
+    refetchAll();
     refetchVendors();
     refetchUncat();
   };
@@ -709,7 +746,7 @@ export function Expenses() {
     setModalOpen(false);
     setEditing(null);
     setOffsetParent(null);
-    refetch();
+    refetchAll();
     refetchUncat();
   };
 
@@ -725,10 +762,10 @@ export function Expenses() {
     else if (field === "amount") data.amount = parseFloat(value);
     else data[field] = value;
     await updateExpense(id, data);
-    refetch();
+    refetchAll();
     if (field === "vendor") refetchVendors();
     if (field === "categoryId") refetchUncat();
-  }, [refetch, refetchVendors, refetchUncat]);
+  }, [refetchAll, refetchVendors, refetchUncat]);
 
   const openEdit = (expense: Expense) => {
     setEditing(expense);
@@ -775,6 +812,7 @@ export function Expenses() {
 
   const expenses = expenseData?.data ?? [];
   const pagination = expenseData?.pagination;
+  const upcomingExpenses = upcomingData?.data ?? [];
 
   const { groupedRows, groupMap } = useMemo(() => {
     const gMap = new Map<string, Expense[]>();
@@ -895,6 +933,62 @@ export function Expenses() {
                 <X className="h-3 w-3" /> Clear
               </button>
             )}
+          </div>
+        </Card>
+      )}
+
+      {/* Upcoming expenses table */}
+      {upcomingExpenses.length > 0 && (
+        <Card>
+          <h3 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">Upcoming</h3>
+          <div className="hidden md:block">
+            <table className="w-full table-fixed text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="w-[70px] pb-3 pr-3 font-medium">Date</th>
+                  <th className="pb-3 pr-3 font-medium">Description</th>
+                  <th className="w-[170px] pb-3 pr-3 font-medium">Vendor</th>
+                  <th className="w-[190px] pb-3 pr-3 font-medium">Category</th>
+                  <th className="w-[140px] pb-3 pr-3 font-medium">Account</th>
+                  <th className="w-[30px] pb-3"></th>
+                  <th className="w-[100px] pb-3 text-right font-medium">Amount</th>
+                  <th className="w-[60px] pb-3"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {upcomingExpenses.map((expense) => (
+                  <ExpenseRowWithOffsets
+                    key={expense.id}
+                    expense={expense}
+                    onEdit={openEdit}
+                    onInlineUpdate={handleInlineUpdate}
+                    onCreateOffset={handleCreateOffset}
+                    vendors={vendorList ?? []}
+                    accounts={eligibleAccounts}
+                    categories={categories ?? []}
+                    isUpcoming
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {/* Mobile upcoming */}
+          <div className="divide-y divide-border md:hidden">
+            {upcomingExpenses.map((expense) => (
+              <div key={expense.id} className="flex items-center justify-between py-3 italic opacity-60">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{expense.description}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {expense.vendor && <>{expense.vendor} &middot; </>}
+                    {expense.category?.name ?? <span className="text-red-500">[Uncategorized]</span>} &middot; {formatDate(expense.date)}
+                  </p>
+                </div>
+                <div className="ml-4 flex items-center gap-2">
+                  <span className="font-semibold text-destructive">-{formatCurrency(expense.amount)}</span>
+                  <button onClick={() => openEdit(expense)} className="rounded p-1 hover:bg-accent"><Pencil className="h-4 w-4 text-muted-foreground" /></button>
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
       )}
@@ -1029,16 +1123,19 @@ export function Expenses() {
 
 // ── Offset sub-row (lighter/smaller styling) ──
 function OffsetRow({
-  offset, onEdit, onInlineUpdate, accounts, categories,
+  offset, onEdit, onInlineUpdate, accounts, categories, isUpcoming,
 }: {
   offset: Expense;
   onEdit: (e: Expense) => void;
   onInlineUpdate: (id: string, field: string, value: string) => Promise<void>;
   accounts: Account[];
   categories: Category[];
+  isUpcoming?: boolean;
 }) {
+  const upcomingClass = isUpcoming ? "italic opacity-60" : "";
+
   return (
-    <tr className="bg-muted/20 hover:bg-muted/30">
+    <tr className={`bg-muted/20 hover:bg-muted/30 ${upcomingClass}`}>
       <td className="w-[70px] py-2 pr-3 text-xs text-muted-foreground">
         <EditableCell value={offset.date} type="date" onSave={(v) => onInlineUpdate(offset.id, "date", v)} className="text-xs text-muted-foreground" />
       </td>
@@ -1091,12 +1188,13 @@ function OffsetRow({
 
 // ── Parent row with offset sub-rows ──
 function ExpenseRowWithOffsets({
-  expense, onEdit, onInlineUpdate, onCreateOffset, vendors, accounts, categories,
+  expense, onEdit, onInlineUpdate, onCreateOffset, vendors, accounts, categories, isUpcoming,
 }: {
   expense: Expense;
   onEdit: (e: Expense) => void;
   onInlineUpdate: (id: string, field: string, value: string) => Promise<void>;
   onCreateOffset: (e: Expense) => void;
+  isUpcoming?: boolean;
   vendors: string[];
   accounts: Account[];
   categories: Category[];
@@ -1120,6 +1218,8 @@ function ExpenseRowWithOffsets({
     ? "bg-amber-50/50 hover:bg-amber-50"
     : "hover:bg-muted/50";
 
+  const upcomingClass = isUpcoming ? "italic opacity-60" : "";
+
   // Determine reimbursement status icon
   const StatusIcon = () => {
     if (isFullyReimbursed) {
@@ -1133,7 +1233,7 @@ function ExpenseRowWithOffsets({
 
   return (
     <>
-      <tr className={rowBg}>
+      <tr className={`${rowBg} ${upcomingClass}`}>
         <td className="w-[70px] py-3 pr-3">
           <EditableCell value={expense.date} type="date" onSave={(v) => onInlineUpdate(expense.id, "date", v)} />
         </td>
@@ -1189,6 +1289,7 @@ function ExpenseRowWithOffsets({
           onInlineUpdate={onInlineUpdate}
           accounts={accounts}
           categories={categories}
+          isUpcoming={isUpcoming}
         />
       ))}
     </>

@@ -195,6 +195,14 @@ export function IncomePage() {
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
 
+  // Today's date string for splitting upcoming vs regular
+  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const tomorrowStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split("T")[0];
+  }, []);
+
   const queryParams = useMemo(() => {
     const params: Record<string, string> = { page: page.toString(), limit: "20" };
     if (sort) {
@@ -205,30 +213,55 @@ export function IncomePage() {
     if (filterSource) params.source = filterSource;
     if (filterTagId) params.tagId = filterTagId;
     if (filterStartDate) params.startDate = filterStartDate;
-    if (filterEndDate) params.endDate = filterEndDate;
+    // Cap main table at today to exclude future-dated (upcoming) income
+    if (!filterEndDate || filterEndDate > todayStr) {
+      params.endDate = todayStr;
+    } else {
+      params.endDate = filterEndDate;
+    }
     return params;
-  }, [page, sort, filterAccountId, filterSource, filterTagId, filterStartDate, filterEndDate]);
+  }, [page, sort, filterAccountId, filterSource, filterTagId, filterStartDate, filterEndDate, todayStr]);
+
+  // Upcoming income query: future-dated, sorted ascending
+  const upcomingParams = useMemo(() => {
+    const params: Record<string, string> = {
+      startDate: tomorrowStr,
+      sortBy: "date",
+      sortOrder: "asc",
+      limit: "100",
+    };
+    if (filterAccountId) params.accountId = filterAccountId;
+    if (filterSource) params.source = filterSource;
+    if (filterTagId) params.tagId = filterTagId;
+    return params;
+  }, [tomorrowStr, filterAccountId, filterSource, filterTagId]);
 
   const { data: incomeData, refetch } = useApi(() => getIncome(queryParams), [queryParams]);
+  const { data: upcomingData, refetch: refetchUpcoming } = useApi(() => getIncome(upcomingParams), [upcomingParams]);
   const { data: accounts } = useApi(() => getAccounts(), []);
   const { data: tags } = useApi(() => getTags(), []);
 
   const eligibleAccounts = (accounts ?? []).filter((a) => INCOME_ACCOUNT_TYPES.includes(a.type));
   const hasActiveFilters = !!(filterAccountId || filterSource || filterTagId || filterStartDate || filterEndDate);
 
+  const refetchAll = useCallback(() => {
+    refetch();
+    refetchUpcoming();
+  }, [refetch, refetchUpcoming]);
+
   const handleSave = async (formData: Record<string, unknown>) => {
     if (editing) { await updateIncome(editing.id, formData); }
     else { await createIncome(formData); }
     setModalOpen(false);
     setEditing(null);
-    refetch();
+    refetchAll();
   };
 
   const handleDelete = async (id: string) => {
     await deleteIncome(id);
     setModalOpen(false);
     setEditing(null);
-    refetch();
+    refetchAll();
   };
 
   const handleInlineUpdate = useCallback(async (id: string, field: string, value: string) => {
@@ -237,8 +270,8 @@ export function IncomePage() {
     else if (field === "amount") data.amount = parseFloat(value);
     else data[field] = value;
     await updateIncome(id, data);
-    refetch();
-  }, [refetch]);
+    refetchAll();
+  }, [refetchAll]);
 
   const toggleSort = (field: SortField) => {
     setSort((prev) => {
@@ -263,6 +296,7 @@ export function IncomePage() {
 
   const incomes = incomeData?.data ?? [];
   const pagination = incomeData?.pagination;
+  const upcomingIncomes = upcomingData?.data ?? [];
 
   return (
     <div className="space-y-6">
@@ -314,6 +348,94 @@ export function IncomePage() {
             {hasActiveFilters && (
               <button onClick={clearFilters} className="flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"><X className="h-3 w-3" /> Clear</button>
             )}
+          </div>
+        </Card>
+      )}
+
+      {/* Upcoming income table */}
+      {upcomingIncomes.length > 0 && (
+        <Card>
+          <h3 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">Upcoming</h3>
+          <div className="hidden md:block">
+            <table className="w-full table-fixed text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="w-[70px] pb-3 pr-3 font-medium">Date</th>
+                  <th className="w-[130px] pb-3 pr-3 font-medium">Source</th>
+                  <th className="w-[170px] pb-3 pr-3 font-medium">Account</th>
+                  <th className="pb-3 pr-3 font-medium">Tags</th>
+                  <th className="w-[30px] pb-3"></th>
+                  <th className="w-[100px] pb-3 text-right font-medium">Amount</th>
+                  <th className="w-[40px] pb-3"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {upcomingIncomes.map((income) => (
+                  <tr key={income.id} className="italic opacity-60 hover:opacity-80">
+                    <td className="w-[70px] py-3 pr-3">
+                      <EditableCell value={income.date} type="date" onSave={(v) => handleInlineUpdate(income.id, "date", v)} />
+                    </td>
+                    <td className="w-[130px] py-3 pr-3">
+                      <EditableSelectCell
+                        value={income.source}
+                        label={SOURCE_LABELS[income.source]}
+                        options={Object.entries(SOURCE_LABELS).map(([id, name]) => ({ id, name }))}
+                        onSave={(v) => handleInlineUpdate(income.id, "source", v)}
+                      />
+                    </td>
+                    <td className="w-[170px] py-3 pr-3">
+                      <EditableSelectCell
+                        value={income.accountId}
+                        label={income.account.name}
+                        options={eligibleAccounts.map((a) => ({ id: a.id, name: a.name }))}
+                        onSave={(v) => handleInlineUpdate(income.id, "accountId", v)}
+                      />
+                    </td>
+                    <td className="py-3 pr-3">
+                      <div className="flex flex-wrap gap-1">
+                        {income.tags.map(({ tag }) => (
+                          <span key={tag.id} className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: tag.color ? `${tag.color}20` : "hsl(var(--muted))", color: tag.color ?? "inherit" }}>
+                            {tag.name}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="w-[30px] py-3 text-center">
+                      <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${income.account.isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
+                        {income.account.isJoint ? "J" : "P"}
+                      </span>
+                    </td>
+                    <td className="w-[100px] py-3 text-right font-semibold text-green-600">
+                      <EditableAmountCell
+                        value={income.amount}
+                        positive
+                        onSave={(v) => handleInlineUpdate(income.id, "amount", v)}
+                      />
+                    </td>
+                    <td className="w-[40px] py-3 text-right">
+                      <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {/* Mobile upcoming */}
+          <div className="divide-y divide-border md:hidden">
+            {upcomingIncomes.map((income) => (
+              <div key={income.id} className="flex items-center justify-between py-3 italic opacity-60">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{SOURCE_LABELS[income.source]}</p>
+                  <p className="text-sm text-muted-foreground">{income.account.name} &middot; {formatDate(income.date)}</p>
+                </div>
+                <div className="ml-4 flex items-center gap-2">
+                  <span className="font-semibold text-green-600">+{formatCurrency(income.amount)}</span>
+                  <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1 hover:bg-accent"><Pencil className="h-4 w-4 text-muted-foreground" /></button>
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
       )}

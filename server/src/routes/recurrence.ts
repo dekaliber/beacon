@@ -17,7 +17,7 @@ const recurrenceSchema = z.object({
   accountId: z.string(),
 });
 
-function computeNextOccurrence(current: Date, frequency: string, interval: number): Date {
+export function computeNextOccurrence(current: Date, frequency: string, interval: number): Date {
   switch (frequency) {
     case "DAILY": return addDays(current, interval);
     case "WEEKLY": return addWeeks(current, interval);
@@ -27,6 +27,78 @@ function computeNextOccurrence(current: Date, frequency: string, interval: numbe
     case "YEARLY": return addYears(current, interval);
     default: return addMonths(current, interval);
   }
+}
+
+/**
+ * Generate upcoming expenses from active recurrence rules through end of next month.
+ * Idempotent: skips dates that already have a generated expense for the rule.
+ */
+export async function generateUpcomingExpenses() {
+  const now = new Date();
+  const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59);
+
+  const rules = await prisma.recurrenceRule.findMany({
+    where: {
+      isActive: true,
+      nextOccurrence: { lte: endOfNextMonth },
+    },
+  });
+
+  const created = [];
+
+  for (const rule of rules) {
+    let current = new Date(rule.nextOccurrence);
+    let lastAdvanced = current;
+
+    while (current <= endOfNextMonth) {
+      // Check if past end date
+      if (rule.endDate && current > rule.endDate) {
+        await prisma.recurrenceRule.update({
+          where: { id: rule.id },
+          data: { isActive: false, nextOccurrence: current },
+        });
+        break;
+      }
+
+      // Check for existing expense to prevent duplicates
+      const existing = await prisma.expense.findFirst({
+        where: {
+          recurrenceRuleId: rule.id,
+          date: current,
+        },
+      });
+
+      if (!existing) {
+        const expense = await prisma.expense.create({
+          data: {
+            amount: rule.amount,
+            description: rule.description,
+            vendor: rule.vendor,
+            date: current,
+            categoryId: rule.categoryId,
+            accountId: rule.accountId,
+            recurrenceRuleId: rule.id,
+          },
+        });
+        created.push(expense);
+      }
+
+      // Advance to next occurrence
+      const next = computeNextOccurrence(current, rule.frequency, rule.interval);
+      lastAdvanced = next;
+      current = next;
+    }
+
+    // Update rule's nextOccurrence to point past the generated window
+    if (lastAdvanced > rule.nextOccurrence) {
+      await prisma.recurrenceRule.update({
+        where: { id: rule.id },
+        data: { nextOccurrence: lastAdvanced },
+      });
+    }
+  }
+
+  return created;
 }
 
 // List recurrence rules
@@ -43,12 +115,24 @@ recurrenceRoutes.post("/", async (req, res) => {
   const parsed = recurrenceSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
+  // Set nextOccurrence to the first occurrence AFTER startDate,
+  // since the initial expense for startDate is created separately.
+  const firstNext = computeNextOccurrence(
+    parsed.data.startDate,
+    parsed.data.frequency,
+    parsed.data.interval ?? 1,
+  );
+
   const rule = await prisma.recurrenceRule.create({
     data: {
       ...parsed.data,
-      nextOccurrence: parsed.data.startDate,
+      nextOccurrence: firstNext,
     },
   });
+
+  // Immediately generate upcoming expenses for this new rule
+  await generateUpcomingExpenses();
+
   res.status(201).json(rule);
 });
 
@@ -70,53 +154,27 @@ recurrenceRoutes.put("/:id", async (req, res) => {
 
 // Delete (deactivate) recurrence rule
 recurrenceRoutes.delete("/:id", async (req, res) => {
+  // Deactivate the rule
   await prisma.recurrenceRule.update({
     where: { id: req.params.id },
     data: { isActive: false },
   });
-  res.status(204).send();
-});
 
-// Process due recurring expenses (generates expense records)
-recurrenceRoutes.post("/process", async (_req, res) => {
-  const now = new Date();
-  const dueRules = await prisma.recurrenceRule.findMany({
+  // Delete any future pending expenses generated from this rule
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  await prisma.expense.deleteMany({
     where: {
-      isActive: true,
-      nextOccurrence: { lte: now },
+      recurrenceRuleId: req.params.id,
+      date: { gt: today },
     },
   });
 
-  const created = [];
-  for (const rule of dueRules) {
-    // Create expense from rule
-    const expense = await prisma.expense.create({
-      data: {
-        amount: rule.amount,
-        description: rule.description,
-        vendor: rule.vendor,
-        date: rule.nextOccurrence,
-        categoryId: rule.categoryId,
-        accountId: rule.accountId,
-        recurrenceRuleId: rule.id,
-      },
-    });
-    created.push(expense);
+  res.status(204).send();
+});
 
-    // Compute next occurrence
-    const next = computeNextOccurrence(rule.nextOccurrence, rule.frequency, rule.interval);
-
-    // Deactivate if past end date
-    const isExpired = rule.endDate && next > rule.endDate;
-
-    await prisma.recurrenceRule.update({
-      where: { id: rule.id },
-      data: {
-        nextOccurrence: next,
-        isActive: !isExpired,
-      },
-    });
-  }
-
+// Process recurring expenses (generates upcoming instances)
+recurrenceRoutes.post("/process", async (_req, res) => {
+  const created = await generateUpcomingExpenses();
   res.json({ processed: created.length, expenses: created });
 });
