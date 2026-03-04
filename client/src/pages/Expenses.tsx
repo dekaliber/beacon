@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   Plus, Pencil, Receipt, ChevronLeft, ChevronRight, AlertCircle,
   ArrowUpDown, ArrowUp, ArrowDown, X, Filter, ChevronDown, Trash2, Repeat,
-  AlertTriangle, Undo2, CheckCircle2,
+  AlertTriangle, Undo2, CheckCircle2, Upload, FileText, Check,
 } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
 import {
   getExpenses, getAccounts, getFlatCategories, getTags,
-  createExpense, updateExpense, deleteExpense,
+  createExpense, updateExpense, deleteExpense, importExpenses,
   createRecurrenceRule, getTransactionGroups,
   getExpenseVendors, getVendorCategory, getUncategorizedCount,
 } from "@/api";
@@ -825,6 +825,7 @@ export function Expenses() {
   const [filterEndDate, setFilterEndDate] = useState("");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [showUncategorized, setShowUncategorized] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   // Today's date string for splitting upcoming vs regular (local timezone)
   const todayStr = useMemo(() => localToday(), []);
@@ -1076,6 +1077,9 @@ export function Expenses() {
             <Filter className="h-4 w-4" />
             {hasActiveFilters && <span className="ml-1 rounded-full bg-primary-foreground/20 px-1.5 text-xs">!</span>}
           </Button>
+          <Button variant="secondary" onClick={() => setImportModalOpen(true)}>
+            <Upload className="h-4 w-4" /> Import
+          </Button>
           <Button onClick={() => { setEditing(null); setOffsetParent(null); setModalOpen(true); }}>
             <Plus className="h-4 w-4" /> Add Expense
           </Button>
@@ -1323,6 +1327,14 @@ export function Expenses() {
         accounts={eligibleAccounts}
         tags={tags ?? []}
         vendors={vendorList ?? []}
+      />
+
+      <ImportModal
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onComplete={() => { setImportModalOpen(false); refetchAll(); refetchVendors(); refetchUncat(); }}
+        categories={categories ?? []}
+        accounts={eligibleAccounts}
       />
 
       {/* Recurring action confirmation dialog */}
@@ -1603,6 +1615,323 @@ function GroupRows({
         <ExpenseRowWithOffsets key={expense.id} expense={expense} onEdit={onEdit} onInlineUpdate={onInlineUpdate} onCreateOffset={onCreateOffset} vendors={vendors} accounts={accounts} categories={categories} />
       ))}
     </>
+  );
+}
+
+// ── Import Modal ──
+
+interface ParsedRow {
+  raw: string[];
+  date: string;
+  description: string;
+  vendor: string;
+  categoryName: string;
+  accountName: string;
+  amount: number;
+  categoryId: string | null;
+  accountId: string | null;
+  errors: string[];
+}
+
+function parseDate(s: string): string | null {
+  s = s.trim();
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // M/D/YYYY or MM/DD/YYYY
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+  return null;
+}
+
+function parseCSVLine(line: string, delimiter: string): string[] {
+  const fields: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
+      else if (ch === '"') { inQuotes = false; }
+      else { current += ch; }
+    } else {
+      if (ch === '"') { inQuotes = true; }
+      else if (ch === delimiter) { fields.push(current.trim()); current = ""; }
+      else { current += ch; }
+    }
+  }
+  fields.push(current.trim());
+  return fields;
+}
+
+function ImportModal({
+  open, onClose, onComplete, categories, accounts,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onComplete: () => void;
+  categories: Category[];
+  accounts: Account[];
+}) {
+  const [step, setStep] = useState<"upload" | "preview" | "result">("upload");
+  const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<{ imported: number; errors: Array<{ row: number; message: string }> } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      setStep("upload");
+      setRows([]);
+      setResult(null);
+      setImporting(false);
+    }
+  }, [open]);
+
+  // Build lookup maps
+  const categoryMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of categories) {
+      map.set(c.name.toLowerCase(), c.id);
+    }
+    return map;
+  }, [categories]);
+
+  const accountMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of accounts) {
+      map.set(a.name.toLowerCase(), a.id);
+    }
+    return map;
+  }, [accounts]);
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = reader.result as string;
+      const lines = text.split(/\r?\n/).filter((l) => l.trim());
+      if (lines.length < 2) return;
+
+      // Detect delimiter from first line
+      const delimiter = lines[0].includes("\t") ? "\t" : ",";
+
+      // Skip header, parse data rows
+      const parsed: ParsedRow[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const fields = parseCSVLine(lines[i], delimiter);
+        if (fields.length < 6) continue;
+
+        const [rawDate, desc, vendor, catName, acctName, rawAmt] = fields;
+        const errors: string[] = [];
+
+        const date = parseDate(rawDate);
+        if (!date) errors.push("Invalid date");
+
+        const description = desc?.trim() || "";
+        if (!description) errors.push("Missing description");
+
+        const vendorVal = vendor?.trim() || "";
+        if (!vendorVal) errors.push("Missing vendor");
+
+        const categoryName = catName?.trim() || "";
+        let categoryId: string | null = null;
+        if (categoryName) {
+          categoryId = categoryMap.get(categoryName.toLowerCase()) ?? null;
+          if (!categoryId) errors.push(`Unknown category "${categoryName}"`);
+        }
+
+        const accountName = acctName?.trim() || "";
+        let accountId: string | null = null;
+        if (accountName) {
+          accountId = accountMap.get(accountName.toLowerCase()) ?? null;
+          if (!accountId) errors.push(`Unknown account "${accountName}"`);
+        } else {
+          errors.push("Missing account");
+        }
+
+        const amount = parseFloat(rawAmt);
+        if (isNaN(amount) || amount <= 0) errors.push("Invalid amount");
+
+        parsed.push({
+          raw: fields,
+          date: date || rawDate,
+          description,
+          vendor: vendorVal,
+          categoryName,
+          accountName,
+          amount: isNaN(amount) ? 0 : amount,
+          categoryId,
+          accountId,
+          errors,
+        });
+      }
+      setRows(parsed);
+      setStep("preview");
+    };
+    reader.readAsText(file);
+  };
+
+  const validRows = rows.filter((r) => r.errors.length === 0);
+
+  const handleImport = async () => {
+    setImporting(true);
+    try {
+      const payload = validRows.map((r) => ({
+        amount: r.amount,
+        description: r.description,
+        vendor: r.vendor,
+        date: r.date,
+        categoryId: r.categoryId,
+        accountId: r.accountId,
+      }));
+      const res = await importExpenses(payload);
+      setResult(res);
+      setStep("result");
+    } catch {
+      setResult({ imported: 0, errors: [{ row: 0, message: "Import request failed" }] });
+      setStep("result");
+    }
+    setImporting(false);
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Import Expenses">
+      {step === "upload" && (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Upload a CSV or TSV file with these columns in order:
+          </p>
+          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono">
+            Date, Description, Vendor, Category, Account, Amount
+          </div>
+          <p className="text-xs text-muted-foreground">
+            First row should be a header (it will be skipped). Dates can be YYYY-MM-DD or M/D/YYYY.
+            Category and account names must match existing entries.
+          </p>
+          <div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,.tsv,.txt"
+              onChange={handleFile}
+              className="hidden"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => fileRef.current?.click()}
+              className="w-full justify-center"
+            >
+              <FileText className="h-4 w-4" /> Choose File
+            </Button>
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {step === "preview" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">
+              {validRows.length} of {rows.length} rows valid
+            </p>
+            {rows.length > validRows.length && (
+              <p className="text-xs text-destructive">
+                {rows.length - validRows.length} row{rows.length - validRows.length !== 1 ? "s" : ""} with errors
+              </p>
+            )}
+          </div>
+
+          <div className="max-h-[50vh] overflow-auto rounded-md border border-border">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-background">
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="px-2 py-1.5 font-medium">#</th>
+                  <th className="px-2 py-1.5 font-medium">Date</th>
+                  <th className="px-2 py-1.5 font-medium">Description</th>
+                  <th className="px-2 py-1.5 font-medium">Vendor</th>
+                  <th className="px-2 py-1.5 font-medium">Category</th>
+                  <th className="px-2 py-1.5 font-medium">Account</th>
+                  <th className="px-2 py-1.5 font-medium text-right">Amount</th>
+                  <th className="px-2 py-1.5 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, i) => (
+                  <tr key={i} className={`border-b border-border ${row.errors.length > 0 ? "bg-destructive/5" : ""}`}>
+                    <td className="px-2 py-1.5 text-muted-foreground">{i + 1}</td>
+                    <td className="px-2 py-1.5">{row.date}</td>
+                    <td className="px-2 py-1.5 max-w-[150px] truncate">{row.description}</td>
+                    <td className="px-2 py-1.5 max-w-[120px] truncate">{row.vendor}</td>
+                    <td className="px-2 py-1.5 max-w-[120px] truncate">{row.categoryName || "—"}</td>
+                    <td className="px-2 py-1.5 max-w-[100px] truncate">{row.accountName}</td>
+                    <td className="px-2 py-1.5 text-right">{row.amount > 0 ? formatCurrency(row.amount) : "—"}</td>
+                    <td className="px-2 py-1.5">
+                      {row.errors.length > 0 ? (
+                        <span className="text-destructive" title={row.errors.join("; ")}>
+                          <AlertCircle className="inline h-3 w-3" /> {row.errors[0]}
+                        </span>
+                      ) : (
+                        <span className="text-green-600"><Check className="inline h-3 w-3" /></span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex items-center justify-between pt-2">
+            <Button type="button" variant="secondary" onClick={() => { setStep("upload"); setRows([]); }}>
+              Back
+            </Button>
+            <div className="flex gap-2">
+              <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+              <Button
+                type="button"
+                disabled={validRows.length === 0 || importing}
+                onClick={handleImport}
+              >
+                {importing ? "Importing..." : `Import ${validRows.length} Expense${validRows.length !== 1 ? "s" : ""}`}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === "result" && result && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-4">
+            <CheckCircle2 className="h-6 w-6 text-green-600 shrink-0" />
+            <div>
+              <p className="text-sm font-medium">
+                {result.imported} expense{result.imported !== 1 ? "s" : ""} imported successfully
+              </p>
+              {result.errors.length > 0 && (
+                <p className="text-xs text-destructive mt-1">
+                  {result.errors.length} row{result.errors.length !== 1 ? "s" : ""} failed on server
+                </p>
+              )}
+            </div>
+          </div>
+
+          {result.errors.length > 0 && (
+            <div className="max-h-[150px] overflow-auto rounded-md border border-border p-2 text-xs text-destructive">
+              {result.errors.map((e, i) => (
+                <div key={i}>Row {e.row}: {e.message}</div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex justify-end pt-2">
+            <Button type="button" onClick={onComplete}>Done</Button>
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }
 

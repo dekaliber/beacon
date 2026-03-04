@@ -45,6 +45,8 @@ export const getExpenseVendors = () => api.get<string[]>("/expenses/vendors");
 export const getVendorCategory = (vendor: string) =>
   api.get<{ categoryId: string | null }>(`/expenses/vendor-category?vendor=${encodeURIComponent(vendor)}`);
 export const getUncategorizedCount = () => api.get<{ count: number }>("/expenses/uncategorized-count");
+export const importExpenses = (expenses: Record<string, unknown>[]) =>
+  api.post<{ imported: number; errors: Array<{ row: number; message: string }> }>("/expenses/import", { expenses });
 
 // Income
 export const getIncome = (params?: Record<string, string>) => {

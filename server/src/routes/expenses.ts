@@ -204,6 +204,47 @@ expenseRoutes.post("/", async (req, res) => {
   res.status(201).json(expense);
 });
 
+// Bulk import expenses
+const importRowSchema = z.object({
+  amount: z.number().refine((v) => v !== 0, "Amount cannot be zero"),
+  description: z.string().min(1),
+  vendor: z.string().min(1),
+  date: z.string().transform((s) => new Date(s)),
+  categoryId: z.string().nullable().optional(),
+  accountId: z.string(),
+});
+
+const importSchema = z.object({
+  expenses: z.array(importRowSchema),
+});
+
+expenseRoutes.post("/import", async (req, res) => {
+  const parsed = importSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const rows = parsed.data.expenses;
+  let imported = 0;
+  const errors: Array<{ row: number; message: string }> = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    try {
+      const row = rows[i];
+      // Validate account type
+      const account = await prisma.account.findUnique({ where: { id: row.accountId } });
+      if (!account || !EXPENSE_ALLOWED_ACCOUNT_TYPES.includes(account.type)) {
+        errors.push({ row: i + 1, message: `Invalid account` });
+        continue;
+      }
+      await prisma.expense.create({ data: row });
+      imported++;
+    } catch (err) {
+      errors.push({ row: i + 1, message: err instanceof Error ? err.message : "Unknown error" });
+    }
+  }
+
+  res.json({ imported, errors });
+});
+
 // Update expense
 expenseRoutes.put("/:id", async (req, res) => {
   const parsed = expenseSchema.partial().safeParse(req.body);
