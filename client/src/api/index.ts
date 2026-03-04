@@ -37,8 +37,10 @@ export const getExpenses = (params?: Record<string, string>) => {
   return api.get<PaginatedResponse<Expense>>(`/expenses${query}`);
 };
 export const createExpense = (data: Record<string, unknown>) => api.post<Expense>("/expenses", data);
-export const updateExpense = (id: string, data: Record<string, unknown>) => api.put<Expense>(`/expenses/${id}`, data);
-export const deleteExpense = (id: string) => api.delete(`/expenses/${id}`);
+export const updateExpense = (id: string, data: Record<string, unknown>, updateFuture?: boolean) =>
+  api.put<Expense>(`/expenses/${id}${updateFuture ? "?updateFuture=true" : ""}`, data);
+export const deleteExpense = (id: string, deleteFuture?: boolean) =>
+  api.delete(`/expenses/${id}${deleteFuture ? "?deleteFuture=true" : ""}`);
 export const getExpenseVendors = () => api.get<string[]>("/expenses/vendors");
 export const getVendorCategory = (vendor: string) =>
   api.get<{ categoryId: string | null }>(`/expenses/vendor-category?vendor=${encodeURIComponent(vendor)}`);

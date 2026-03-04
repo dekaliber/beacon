@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
-import { generateUpcomingExpenses } from "./recurrence.js";
+import { generateUpcomingExpenses, computeNextOccurrence } from "./recurrence.js";
 
 export const expenseRoutes = Router();
 
@@ -210,6 +210,7 @@ expenseRoutes.put("/:id", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   const { tagIds, ...data } = parsed.data;
+  const updateFuture = req.query.updateFuture === "true";
 
   // Get original expense to check recurrence rule linkage
   const original = await prisma.expense.findUnique({ where: { id: req.params.id } });
@@ -246,12 +247,16 @@ expenseRoutes.put("/:id", async (req, res) => {
     },
   });
 
-  // Sync changes to recurrence rule and future pending expenses
-  if (original.recurrenceRuleId) {
+  // Propagate changes to rule and future pending expenses (only when explicitly requested)
+  if (updateFuture && original.recurrenceRuleId) {
     const rule = await prisma.recurrenceRule.findUnique({
       where: { id: original.recurrenceRuleId },
     });
     if (rule && rule.isActive) {
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+
+      // Update non-date fields on the rule and all future pending expenses
       const syncFields = ["amount", "description", "vendor", "categoryId", "accountId"] as const;
       const ruleUpdate: Record<string, unknown> = {};
       for (const field of syncFields) {
@@ -260,27 +265,51 @@ expenseRoutes.put("/:id", async (req, res) => {
         }
       }
       if (Object.keys(ruleUpdate).length > 0) {
-        // Match ALL sync fields against old rule values so that any
-        // manually edited pending expense is excluded from the bulk update.
-        const matchUnedited: Record<string, unknown> = {};
-        for (const field of syncFields) {
-          matchUnedited[field] = rule[field];
-        }
-
         await prisma.recurrenceRule.update({
           where: { id: original.recurrenceRuleId },
           data: ruleUpdate,
         });
-        const today = new Date();
-        today.setUTCHours(0, 0, 0, 0);
         await prisma.expense.updateMany({
           where: {
             recurrenceRuleId: original.recurrenceRuleId,
             date: { gt: today },
             id: { not: original.id },
-            ...matchUnedited,
           },
           data: ruleUpdate,
+        });
+      }
+
+      // If date changed, recalculate dates on future pending expenses
+      if (data.date) {
+        const newDate = data.date;
+        // Get all future pending expenses for this rule, sorted by date
+        const futureExpenses = await prisma.expense.findMany({
+          where: {
+            recurrenceRuleId: original.recurrenceRuleId,
+            date: { gt: today },
+            id: { not: original.id },
+          },
+          orderBy: { date: "asc" },
+        });
+
+        // Recalculate dates from the edited expense's new date
+        let anchor = newDate;
+        for (const fe of futureExpenses) {
+          const nextDate = computeNextOccurrence(anchor, rule.frequency, rule.interval);
+          await prisma.expense.update({
+            where: { id: fe.id },
+            data: { date: nextDate },
+          });
+          anchor = nextDate;
+        }
+
+        // Update rule's nextOccurrence to the next date past all generated ones
+        const lastGenerated = futureExpenses.length > 0
+          ? computeNextOccurrence(anchor, rule.frequency, rule.interval)
+          : computeNextOccurrence(newDate, rule.frequency, rule.interval);
+        await prisma.recurrenceRule.update({
+          where: { id: original.recurrenceRuleId },
+          data: { nextOccurrence: lastGenerated },
         });
       }
     }
@@ -293,47 +322,23 @@ expenseRoutes.put("/:id", async (req, res) => {
 expenseRoutes.delete("/:id", async (req, res) => {
   const expense = await prisma.expense.findUnique({ where: { id: req.params.id } });
   if (!expense) return res.status(404).json({ error: "Expense not found" });
+  const deleteFuture = req.query.deleteFuture === "true";
 
-  // If linked to a recurrence rule and this is a past/present expense,
-  // deactivate the rule and remove future pending instances that haven't
-  // been manually edited. Manually edited ones are unlinked and preserved.
-  // If it's a future expense, just delete this single instance (skip occurrence).
-  if (expense.recurrenceRuleId) {
+  if (deleteFuture && expense.recurrenceRuleId) {
+    // Deactivate rule and delete all future pending instances
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
-    if (expense.date <= today) {
-      const rule = await prisma.recurrenceRule.findUnique({
-        where: { id: expense.recurrenceRuleId },
-      });
-      await prisma.recurrenceRule.update({
-        where: { id: expense.recurrenceRuleId },
-        data: { isActive: false },
-      });
-      if (rule) {
-        // Build match criteria for unmodified expenses
-        const syncFields = ["amount", "description", "vendor", "categoryId", "accountId"] as const;
-        const matchUnedited: Record<string, unknown> = {};
-        for (const field of syncFields) {
-          matchUnedited[field] = rule[field];
-        }
-        // Delete unmodified future expenses
-        await prisma.expense.deleteMany({
-          where: {
-            recurrenceRuleId: expense.recurrenceRuleId,
-            date: { gt: today },
-            ...matchUnedited,
-          },
-        });
-        // Unlink manually edited future expenses so they remain as standalone
-        await prisma.expense.updateMany({
-          where: {
-            recurrenceRuleId: expense.recurrenceRuleId,
-            date: { gt: today },
-          },
-          data: { recurrenceRuleId: null },
-        });
-      }
-    }
+    await prisma.recurrenceRule.update({
+      where: { id: expense.recurrenceRuleId },
+      data: { isActive: false },
+    });
+    await prisma.expense.deleteMany({
+      where: {
+        recurrenceRuleId: expense.recurrenceRuleId,
+        date: { gt: today },
+        id: { not: expense.id },
+      },
+    });
   }
 
   await prisma.expense.delete({ where: { id: req.params.id } });

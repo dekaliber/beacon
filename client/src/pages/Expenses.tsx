@@ -896,9 +896,17 @@ export function Expenses() {
     refetchUpcoming();
   }, [refetch, refetchUpcoming]);
 
-  const handleSave = async (formData: Record<string, unknown>) => {
+  // ── Recurring confirmation state ──
+  const [recurringConfirm, setRecurringConfirm] = useState<{
+    mode: "edit" | "delete";
+    expenseId: string;
+    data?: Record<string, unknown>;
+    field?: string;
+  } | null>(null);
+
+  const handleSave = async (formData: Record<string, unknown>, updateFuture?: boolean) => {
     if (editing) {
-      await updateExpense(editing.id, formData);
+      await updateExpense(editing.id, formData, updateFuture);
     } else {
       await createExpense(formData);
     }
@@ -910,8 +918,8 @@ export function Expenses() {
     refetchUncat();
   };
 
-  const handleDelete = async (id: string) => {
-    await deleteExpense(id);
+  const handleDelete = async (id: string, deleteFuture?: boolean) => {
+    await deleteExpense(id, deleteFuture);
     setModalOpen(false);
     setEditing(null);
     setOffsetParent(null);
@@ -930,11 +938,40 @@ export function Expenses() {
     if (field === "date") data.date = value;
     else if (field === "amount") data.amount = parseFloat(value);
     else data[field] = value;
+
+    // Check if this expense is recurring — if so, show confirmation
+    const allExpenses = [...(expenseData?.data ?? []), ...(upcomingData?.data ?? [])];
+    const exp = allExpenses.find((e) => e.id === id)
+      || allExpenses.flatMap((e) => e.offsets ?? []).find((e) => e.id === id);
+    if (exp?.recurrenceRuleId) {
+      setRecurringConfirm({ mode: "edit", expenseId: id, data, field });
+      return;
+    }
+
     await updateExpense(id, data);
     refetchAll();
     if (field === "vendor") refetchVendors();
     if (field === "categoryId") refetchUncat();
-  }, [refetchAll, refetchVendors, refetchUncat]);
+  }, [expenseData, upcomingData, refetchAll, refetchVendors, refetchUncat]);
+
+  const handleRecurringConfirmChoice = async (updateFuture: boolean) => {
+    if (!recurringConfirm) return;
+    const { mode, expenseId, data, field } = recurringConfirm;
+    setRecurringConfirm(null);
+    if (mode === "edit" && data) {
+      await updateExpense(expenseId, data, updateFuture);
+      refetchAll();
+      if (field === "vendor") refetchVendors();
+      if (field === "categoryId") refetchUncat();
+    } else if (mode === "delete") {
+      await deleteExpense(expenseId, updateFuture);
+      setModalOpen(false);
+      setEditing(null);
+      setOffsetParent(null);
+      refetchAll();
+      refetchUncat();
+    }
+  };
 
   const openEdit = (expense: Expense) => {
     setEditing(expense);
@@ -1279,6 +1316,7 @@ export function Expenses() {
         onClose={() => { setModalOpen(false); setEditing(null); setOffsetParent(null); }}
         onSave={handleSave}
         onDelete={handleDelete}
+        onRecurringDelete={(id) => setRecurringConfirm({ mode: "delete", expenseId: id })}
         expense={editing}
         offsetParent={offsetParent}
         categories={categories ?? []}
@@ -1286,6 +1324,46 @@ export function Expenses() {
         tags={tags ?? []}
         vendors={vendorList ?? []}
       />
+
+      {/* Recurring action confirmation dialog */}
+      {recurringConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-lg bg-background p-6 shadow-xl">
+            <h3 className="text-base font-semibold">
+              {recurringConfirm.mode === "edit" ? "Update Recurring Expense" : "Delete Recurring Expense"}
+            </h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {recurringConfirm.mode === "edit"
+                ? "Would you like to update only this instance, or all future pending instances?"
+                : "Would you like to delete only this instance, or this and all future pending instances?"}
+            </p>
+            <div className="mt-4 flex flex-col gap-2">
+              <Button
+                variant="secondary"
+                className="w-full justify-center"
+                onClick={() => handleRecurringConfirmChoice(false)}
+              >
+                This instance only
+              </Button>
+              <Button
+                className="w-full justify-center"
+                onClick={() => handleRecurringConfirmChoice(true)}
+              >
+                {recurringConfirm.mode === "edit"
+                  ? "Update all future pending instances"
+                  : "Delete this and all future pending instances"}
+              </Button>
+              <button
+                type="button"
+                className="mt-1 text-sm text-muted-foreground hover:text-foreground"
+                onClick={() => setRecurringConfirm(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1532,8 +1610,9 @@ function GroupRows({
 interface ExpenseModalProps {
   open: boolean;
   onClose: () => void;
-  onSave: (data: Record<string, unknown>) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
+  onSave: (data: Record<string, unknown>, updateFuture?: boolean) => Promise<void>;
+  onDelete: (id: string, deleteFuture?: boolean) => Promise<void>;
+  onRecurringDelete: (id: string) => void;
   expense: Expense | null;
   offsetParent: Expense | null;
   categories: Category[];
@@ -1542,7 +1621,7 @@ interface ExpenseModalProps {
   vendors: string[];
 }
 
-function ExpenseModal({ open, onClose, onSave, onDelete, expense, offsetParent, categories, accounts, tags, vendors }: ExpenseModalProps) {
+function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expense, offsetParent, categories, accounts, tags, vendors }: ExpenseModalProps) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
@@ -1551,6 +1630,8 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, offsetParent, 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showOptional, setShowOptional] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
+  const [showRecurringConfirm, setShowRecurringConfirm] = useState(false);
+  const [pendingSaveData, setPendingSaveData] = useState<Record<string, unknown> | null>(null);
 
   const isOffsetMode = !!offsetParent && !expense;
 
@@ -1572,6 +1653,8 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, offsetParent, 
         setSelectedCategoryId(expense?.categoryId ?? "");
         // Auto-expand optional if any optional fields have data
         setShowOptional(!!(expense?.notes || expense?.isReimbursementExpected || expense?.recurrenceRuleId));
+        setShowRecurringConfirm(false);
+        setPendingSaveData(null);
       }
     }
   }, [open, expense, offsetParent, isOffsetMode]);
@@ -1645,13 +1728,36 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, offsetParent, 
       expenseData.parentExpenseId = offsetParent.id;
     }
 
+    // If editing a recurring expense, show confirmation dialog
+    if (expense?.recurrenceRuleId) {
+      setPendingSaveData(expenseData);
+      setShowRecurringConfirm(true);
+      setSaving(false);
+      return;
+    }
+
     await onSave(expenseData);
     setSaving(false);
   };
 
+  const handleRecurringSaveChoice = async (updateFuture: boolean) => {
+    if (!pendingSaveData) return;
+    setSaving(true);
+    await onSave(pendingSaveData, updateFuture);
+    setSaving(false);
+    setShowRecurringConfirm(false);
+    setPendingSaveData(null);
+  };
+
   const handleDeleteClick = async () => {
-    if (!confirmDelete) { setConfirmDelete(true); return; }
     if (!expense) return;
+    // For recurring expenses, use the parent's recurring confirm dialog
+    if (expense.recurrenceRuleId) {
+      onRecurringDelete(expense.id);
+      return;
+    }
+    // Non-recurring: two-click confirmation
+    if (!confirmDelete) { setConfirmDelete(true); return; }
     setDeleting(true);
     await onDelete(expense.id);
     setDeleting(false);
@@ -1848,27 +1954,62 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, offsetParent, 
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-2">
-          <div>
-            {expense && (
+        {showRecurringConfirm ? (
+          <div className="rounded-md border border-border bg-muted/30 p-4 space-y-3">
+            <p className="text-sm font-medium">Update Recurring Expense</p>
+            <p className="text-sm text-muted-foreground">
+              Would you like to update only this instance, or all future pending instances?
+            </p>
+            <div className="flex flex-col gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full justify-center"
+                disabled={saving}
+                onClick={() => handleRecurringSaveChoice(false)}
+              >
+                This instance only
+              </Button>
+              <Button
+                type="button"
+                className="w-full justify-center"
+                disabled={saving}
+                onClick={() => handleRecurringSaveChoice(true)}
+              >
+                {saving ? "Saving..." : "Update all future pending instances"}
+              </Button>
               <button
                 type="button"
-                onClick={handleDeleteClick}
-                disabled={deleting}
-                className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                className="mt-1 text-sm text-muted-foreground hover:text-foreground"
+                onClick={() => { setShowRecurringConfirm(false); setPendingSaveData(null); }}
               >
-                <Trash2 className="h-4 w-4" />
-                {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}
+                Cancel
               </button>
-            )}
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={saving}>
-              {saving ? "Saving..." : isOffsetMode ? "Add Offset" : expense ? "Update" : "Add Expense"}
-            </Button>
+        ) : (
+          <div className="flex items-center justify-between pt-2">
+            <div>
+              {expense && (
+                <button
+                  type="button"
+                  onClick={handleDeleteClick}
+                  disabled={deleting}
+                  className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}
+                </button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving..." : isOffsetMode ? "Add Offset" : expense ? "Update" : "Add Expense"}
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </form>
     </Modal>
   );
