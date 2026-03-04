@@ -204,6 +204,20 @@ recurrenceRoutes.put("/:id", async (req, res) => {
     where: { id: req.params.id },
     data,
   });
+
+  // If endDate was changed, remove future expenses past the new end date
+  if (data.endDate) {
+    await prisma.expense.deleteMany({
+      where: {
+        recurrenceRuleId: rule.id,
+        date: { gt: data.endDate as Date },
+      },
+    });
+  }
+
+  // Regenerate upcoming expenses (fills any gaps if end date was extended)
+  await generateUpcomingExpenses();
+
   res.json(rule);
 });
 

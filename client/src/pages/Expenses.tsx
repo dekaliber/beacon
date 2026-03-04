@@ -291,6 +291,112 @@ function CategoryTypeahead({
   );
 }
 
+// ── Account typeahead ──
+function AccountTypeahead({
+  name, defaultValue, accounts, required,
+}: {
+  name: string;
+  defaultValue?: string;
+  accounts: Account[];
+  required?: boolean;
+}) {
+  const [value, setValue] = useState(defaultValue ?? "");
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const [focusIdx, setFocusIdx] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setValue(defaultValue ?? ""); }, [defaultValue]);
+
+  const sortedAccounts = useMemo(() =>
+    [...accounts].sort((a, b) => a.name.localeCompare(b.name)),
+    [accounts],
+  );
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return sortedAccounts;
+    const terms = search.toLowerCase().split(/\s+/);
+    return sortedAccounts.filter((a) => {
+      const words = a.name.toLowerCase().split(/\s+/);
+      return terms.every((t) => words.some((w) => w.startsWith(t)));
+    });
+  }, [search, sortedAccounts]);
+
+  useEffect(() => { setFocusIdx(0); }, [filtered]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const selectedLabel = useMemo(() => {
+    if (!value) return "";
+    return sortedAccounts.find((a) => a.id === value)?.name ?? "";
+  }, [value, sortedAccounts]);
+
+  const selectItem = (id: string) => {
+    setValue(id);
+    setOpen(false);
+    setSearch("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx((i) => Math.min(i + 1, filtered.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx((i) => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter" && filtered[focusIdx]) { e.preventDefault(); selectItem(filtered[focusIdx].id); }
+    else if (e.key === "Escape") setOpen(false);
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <input type="hidden" name={name} value={value} />
+      {required && !value && <input type="text" required value="" className="hidden" tabIndex={-1} onChange={() => {}} />}
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full rounded-md border border-border px-3 py-2 text-left text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+      >
+        {selectedLabel || <span className="text-muted-foreground">Select account</span>}
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-border bg-background shadow-lg">
+          <div className="border-b border-border p-2">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type to filter..."
+              className="w-full rounded border border-border px-2 py-1 text-sm focus:outline-none"
+              autoFocus
+            />
+          </div>
+          <div className="max-h-48 overflow-auto">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-muted-foreground">No matches</p>
+            ) : (
+              filtered.map((a, i) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  onMouseDown={() => selectItem(a.id)}
+                >
+                  {a.name}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Inline editable cell ──
 function EditableCell({
   value, onSave, type = "text", className = "",
@@ -1538,15 +1644,12 @@ function ExpenseModal({ open, onClose, onSave, onDelete, expense, offsetParent, 
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Account</label>
-            <select
+            <AccountTypeahead
               name="accountId"
               required
               defaultValue={isOffsetMode ? "" : expense?.accountId ?? ""}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="">Select account</option>
-              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
+              accounts={accounts}
+            />
           </div>
         </div>
 
