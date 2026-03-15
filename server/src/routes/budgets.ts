@@ -125,7 +125,7 @@ async function computeMetrics(
     select: { amount: true },
   });
   const ytdCompletedMonths = completedRows.reduce(
-    (s, e) => s + Math.abs(Number(e.amount)), 0,
+    (s, e) => s + Number(e.amount), 0,
   );
 
   // ── 2. MTD total including pending future-dated rows (display) ────────────
@@ -137,7 +137,7 @@ async function computeMetrics(
     },
     select: { amount: true },
   });
-  const mtdTotal = mtdRows.reduce((s, e) => s + Math.abs(Number(e.amount)), 0);
+  const mtdTotal = mtdRows.reduce((s, e) => s + Number(e.amount), 0);
 
   // ── 3. Normalization ───────────────────────────────────────────────────────
   const rules = await prisma.recurrenceRule.findMany({
@@ -188,13 +188,13 @@ async function computeMetrics(
     const ytdPayments     = ytdByRule.get(rule.id)     ?? [];
     const pendingPayments = pendingByRule.get(rule.id) ?? [];
     const pendingDateSet  = pendingDates.get(rule.id)  ?? new Set<string>();
-    const ruleAmount      = Math.abs(Number(rule.amount));
+    const ruleAmount      = Number(rule.amount);
 
     // ── Per-occurrence projection amount ──────────────────────────────────
     let projectedPerOccurrence = ruleAmount;
 
     if (ytdPayments.length >= 2) {
-      const ytdSum     = ytdPayments.reduce((s, p) => s + Math.abs(Number(p.amount)), 0);
+      const ytdSum     = ytdPayments.reduce((s, p) => s + Number(p.amount), 0);
       const rollingAvg = ytdSum / ytdPayments.length;
 
       // ytdPayments sorted DESC → index 0 is most recent completed payment.
@@ -205,7 +205,7 @@ async function computeMetrics(
       // Note: there is a brief window after a permanent change where the last
       // completed payment still shows the old amount (before the first payment
       // at the new rate posts). Self-corrects on next payment — acceptable.
-      const lastCompleted = Math.abs(Number(ytdPayments[0].amount));
+      const lastCompleted = Number(ytdPayments[0].amount);
       if (Math.abs(lastCompleted - ruleAmount) < 0.01) {
         projectedPerOccurrence = ruleAmount;
       } else {
@@ -237,8 +237,8 @@ async function computeMetrics(
     }
 
     // ── Expected annual and normalized YTD for this rule ─────────────────
-    const ytdActual      = ytdPayments.reduce((s, p)    => s + Math.abs(Number(p.amount)), 0);
-    const pendingSum     = pendingPayments.reduce((s, p) => s + Math.abs(Number(p.amount)), 0);
+    const ytdActual      = ytdPayments.reduce((s, p)    => s + Number(p.amount), 0);
+    const pendingSum     = pendingPayments.reduce((s, p) => s + Number(p.amount), 0);
     const additionalProj = additionalOccurrences * projectedPerOccurrence;
     const expectedAnnual = ytdActual + pendingSum + additionalProj;
     recurringExpectedAnnual += expectedAnnual;
@@ -261,7 +261,7 @@ async function computeMetrics(
     select: { amount: true },
   });
   const actualDiscretionaryYTD = discretionaryRows.reduce(
-    (s, e) => s + Math.abs(Number(e.amount)), 0,
+    (s, e) => s + Number(e.amount), 0,
   );
 
   const normalizedYTD = normalizedRecurringYTD + actualDiscretionaryYTD;
@@ -308,7 +308,7 @@ async function buildMonthlyComparison(
   const daily = new Array<number>(daysInMonth).fill(0);
   for (const row of rows) {
     const idx = row.date.getUTCDate() - 1;
-    daily[idx] += Math.abs(Number(row.amount));
+    daily[idx] += Number(row.amount);
   }
 
   let cum = 0;
