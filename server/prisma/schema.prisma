@@ -50,10 +50,11 @@ model Category {
   icon      String?
   color     String?
   kind      CategoryKind @default(EXPENSE)
-  isDefault Boolean      @default(false)
-  parentId  String?
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  isDefault      Boolean      @default(false)
+  ignoreInBudget Boolean      @default(false)
+  parentId       String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   parent   Category?  @relation("CategoryToSubcategory", fields: [parentId], references: [id])
   children Category[] @relation("CategoryToSubcategory")
@@ -78,6 +79,7 @@ model Expense {
 
   isReimbursementExpected Boolean @default(false)
   reimbursementNote       String?
+  ignoreInBudget          Boolean @default(false)
 
   recurrenceRuleId   String?
   transactionGroupId String?

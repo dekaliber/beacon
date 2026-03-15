@@ -10,6 +10,7 @@ const categorySchema = z.object({
   color: z.string().optional(),
   kind: z.enum(["EXPENSE", "INCOME"]).optional().default("EXPENSE"),
   parentId: z.string().nullable().optional(),
+  ignoreInBudget: z.boolean().optional(),
 });
 
 // List all categories (tree structure)

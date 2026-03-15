@@ -62,6 +62,24 @@ function effectiveAnnual(
   return resolveMonthlyAmounts(annualAmount, overrides).reduce((s, m) => s + m.amount, 0);
 }
 
+/**
+ * Build a Prisma expense filter fragment that excludes expenses that should be
+ * ignored in budget calculations: transactions with `ignoreInBudget = true`,
+ * and transactions whose category has `ignoreInBudget = true`.
+ */
+function ignoredExpenseFilter(ignoredCategoryIds: string[]): Record<string, unknown> {
+  const filter: Record<string, unknown> = { ignoreInBudget: false };
+  if (ignoredCategoryIds.length > 0) {
+    // Include expenses with no category or a category that isn't ignored.
+    // Using OR so that NULL categoryId is preserved (SQL NOT IN excludes NULLs).
+    filter.OR = [
+      { categoryId: null },
+      { categoryId: { notIn: ignoredCategoryIds } },
+    ];
+  }
+  return filter;
+}
+
 // ── Core normalization ─────────────────────────────────────────────────────────
 
 /**
@@ -98,6 +116,7 @@ async function computeMetrics(
   year: number,
   accountIds: string[],
   today: Date,
+  ignoredCategoryIds: string[] = [],
 ): Promise<{
   ytdCompletedMonths: number;   // actual spend in months prior to current month (display only)
   mtdTotal: number;             // actual spend in current month incl. pending (display only)
@@ -120,6 +139,7 @@ async function computeMetrics(
     where: {
       accountId: { in: accountIds },
       date: { gte: startOfYear, lt: startOfMonth },
+      ...ignoredExpenseFilter(ignoredCategoryIds),
     },
     select: { amount: true },
   });
@@ -132,6 +152,7 @@ async function computeMetrics(
     where: {
       accountId: { in: accountIds },
       date: { gte: startOfMonth, lte: endOfMonth },
+      ...ignoredExpenseFilter(ignoredCategoryIds),
     },
     select: { amount: true },
   });
@@ -151,12 +172,20 @@ async function computeMetrics(
 
   const [ytdRecurring, futurePending] = await Promise.all([
     prisma.expense.findMany({
-      where: { recurrenceRuleId: { in: ruleIds }, date: { gte: startOfYear, lte: today } },
+      where: {
+        recurrenceRuleId: { in: ruleIds },
+        date: { gte: startOfYear, lte: today },
+        ...ignoredExpenseFilter(ignoredCategoryIds),
+      },
       select: { recurrenceRuleId: true, amount: true, date: true },
       orderBy: { date: "desc" },
     }),
     prisma.expense.findMany({
-      where: { recurrenceRuleId: { in: ruleIds }, date: { gt: today, lte: endOfYear } },
+      where: {
+        recurrenceRuleId: { in: ruleIds },
+        date: { gt: today, lte: endOfYear },
+        ...ignoredExpenseFilter(ignoredCategoryIds),
+      },
       select: { recurrenceRuleId: true, amount: true, date: true },
     }),
   ]);
@@ -183,6 +212,9 @@ async function computeMetrics(
   let recurringExpectedAnnual = 0;
 
   for (const rule of rules) {
+    // Skip rules whose category is ignored in budget calculations
+    if (rule.categoryId && ignoredCategoryIds.includes(rule.categoryId)) continue;
+
     const ytdPayments     = ytdByRule.get(rule.id)     ?? [];
     const pendingPayments = pendingByRule.get(rule.id) ?? [];
     const pendingDateSet  = pendingDates.get(rule.id)  ?? new Set<string>();
@@ -254,6 +286,7 @@ async function computeMetrics(
       accountId: { in: accountIds },
       recurrenceRuleId: null,
       date: { gte: startOfYear, lte: today },
+      ...ignoredExpenseFilter(ignoredCategoryIds),
     },
     select: { amount: true },
   });
@@ -280,6 +313,7 @@ async function buildMonthlyComparison(
   year: number,
   month: number,
   accountIds: string[],
+  ignoredCategoryIds: string[] = [],
 ): Promise<{ day: number; cumulative: number }[]> {
   if (accountIds.length === 0) return [];
 
@@ -296,6 +330,7 @@ async function buildMonthlyComparison(
     where: {
       accountId: { in: accountIds },
       date: { gte: startDate, lte: effectiveEnd },
+      ...ignoredExpenseFilter(ignoredCategoryIds),
     },
     select: { date: true, amount: true },
     orderBy: { date: "asc" },
@@ -354,12 +389,19 @@ budgetRoutes.get("/:year", async (req, res) => {
   const pctElapsed = totalDays > 0 ? elapsed / totalDays : 0;
 
   // Account IDs split by isJoint
-  const accounts  = await prisma.account.findMany({
-    where: { isActive: true },
-    select: { id: true, isJoint: true },
-  });
-  const personalIds = accounts.filter((a) => !a.isJoint).map((a) => a.id);
-  const jointIds    = accounts.filter((a) =>  a.isJoint).map((a) => a.id);
+  const [accounts, ignoredCategories] = await Promise.all([
+    prisma.account.findMany({
+      where: { isActive: true },
+      select: { id: true, isJoint: true },
+    }),
+    prisma.category.findMany({
+      where: { ignoreInBudget: true },
+      select: { id: true },
+    }),
+  ]);
+  const personalIds        = accounts.filter((a) => !a.isJoint).map((a) => a.id);
+  const jointIds           = accounts.filter((a) =>  a.isJoint).map((a) => a.id);
+  const ignoredCategoryIds = ignoredCategories.map((c) => c.id);
 
   // Budget records and settings
   const [settings, annualBudgets] = await Promise.all([
@@ -390,8 +432,8 @@ budgetRoutes.get("/:year", async (req, res) => {
 
   // Compute spend metrics for both account sets in parallel
   const [personalMetrics, jointMetrics] = await Promise.all([
-    computeMetrics(year, personalIds, today),
-    computeMetrics(year, jointIds,    today),
+    computeMetrics(year, personalIds, today, ignoredCategoryIds),
+    computeMetrics(year, jointIds,    today, ignoredCategoryIds),
   ]);
 
   // Total metrics = personal + joint × splitRatio (applied per field)
@@ -430,9 +472,9 @@ budgetRoutes.get("/:year", async (req, res) => {
 
   async function buildChartForAccounts(ids: string[], ratio = 1) {
     const [current, previous, priorYear] = await Promise.all([
-      buildMonthlyComparison(curYear,       curMonth,  ids),
-      buildMonthlyComparison(prevMonthYear, prevMonth, ids),
-      buildMonthlyComparison(curYear - 1,   curMonth,  ids),
+      buildMonthlyComparison(curYear,       curMonth,  ids, ignoredCategoryIds),
+      buildMonthlyComparison(prevMonthYear, prevMonth, ids, ignoredCategoryIds),
+      buildMonthlyComparison(curYear - 1,   curMonth,  ids, ignoredCategoryIds),
     ]);
     if (ratio === 1) return { current, previous, priorYear };
     const scale = (arr: { day: number; cumulative: number }[]) =>

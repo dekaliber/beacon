@@ -18,6 +18,7 @@ export interface Category {
   color: string | null;
   kind: "EXPENSE" | "INCOME";
   isDefault: boolean;
+  ignoreInBudget: boolean;
   parentId: string | null;
   parent?: Category | null;
   children?: Category[];
@@ -64,6 +65,7 @@ export interface Expense {
   accountId: string;
   isReimbursementExpected: boolean;
   reimbursementNote: string | null;
+  ignoreInBudget: boolean;
   transactionGroupId: string | null;
   parentExpenseId: string | null;
   category: Category | null;

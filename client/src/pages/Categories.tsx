@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Pencil, Tags, TrendingUp, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Pencil, Tags, TrendingUp, ChevronDown, ChevronRight, EyeOff } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
@@ -206,6 +206,8 @@ function CategoryList({ categories, expanded, icon: Icon, onToggleExpand, onAddC
 
               <span className="flex-1 font-medium">{cat.name}</span>
 
+              {cat.ignoreInBudget && <span title="Ignored in budget" className="inline-flex flex-shrink-0"><EyeOff className="h-4 w-4 text-gray-300" /></span>}
+
               {hasChildren && (
                 <span className="text-xs text-muted-foreground">
                   {cat.children!.length} subcategories
@@ -237,6 +239,7 @@ function CategoryList({ categories, expanded, icon: Icon, onToggleExpand, onAddC
                 {cat.children!.map((child) => (
                   <div key={child.id} className="flex items-center gap-3 py-2 pl-12 pr-4 hover:bg-muted/50">
                     <span className="flex-1 text-sm">{child.name}</span>
+                    {child.ignoreInBudget && <span title="Ignored in budget" className="inline-flex flex-shrink-0"><EyeOff className="h-3.5 w-3.5 text-gray-300" /></span>}
                     <div className="flex gap-1">
                       <button
                         onClick={() => onEdit(child)}
@@ -282,9 +285,13 @@ interface CategoryModalProps {
 function CategoryModal({ open, onClose, onSave, category, parentId, kind }: CategoryModalProps) {
   const [saving, setSaving] = useState(false);
   const [selectedColor, setSelectedColor] = useState(category?.color ?? CATEGORY_COLORS[0]);
+  const [ignoreInBudget, setIgnoreInBudget] = useState(category?.ignoreInBudget ?? false);
 
   useEffect(() => {
-    if (open) setSelectedColor(category?.color ?? CATEGORY_COLORS[0]);
+    if (open) {
+      setSelectedColor(category?.color ?? CATEGORY_COLORS[0]);
+      setIgnoreInBudget(category?.ignoreInBudget ?? false);
+    }
   }, [open, category]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -294,6 +301,7 @@ function CategoryModal({ open, onClose, onSave, category, parentId, kind }: Cate
     await onSave({
       name: form.get("name") as string,
       color: (form.get("color") as string) || undefined,
+      ignoreInBudget,
       parentId,
       kind,
     } as Partial<Category>);
@@ -342,6 +350,18 @@ function CategoryModal({ open, onClose, onSave, category, parentId, kind }: Cate
             </div>
           </div>
         )}
+
+        <div className="rounded-md border border-border p-3">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={ignoreInBudget}
+              onChange={(e) => setIgnoreInBudget(e.target.checked)}
+              className="h-4 w-4 rounded border-border"
+            />
+            <span className="text-sm font-medium">Ignore in budget</span>
+          </label>
+        </div>
 
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>

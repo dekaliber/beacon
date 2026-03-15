@@ -4,7 +4,7 @@ import {
   Plus, Pencil, Receipt, AlertCircle,
   ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Repeat,
   AlertTriangle, Undo2, CheckCircle2, Upload, FileText, Check, GripVertical,
-  ChevronRight, ChevronDown, Search,
+  ChevronRight, ChevronDown, Search, EyeOff,
 } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -2419,6 +2419,7 @@ function ExpenseRowWithOffsets({
           <div className="flex items-center justify-end gap-1.5">
             <StatusIcon />
             {isRecurring && <span title="Recurring expense" className="inline-flex flex-shrink-0"><Repeat className="h-3.5 w-3.5 text-blue-500" /></span>}
+            {expense.ignoreInBudget && <span title="Ignored in budget" className="inline-flex flex-shrink-0"><EyeOff className="h-3.5 w-3.5 text-gray-300" /></span>}
           </div>
         </td>
         <td className={`w-[170px] py-2 pr-3${isFullyOffset ? " text-gray-300" : ""}`}>
@@ -2837,6 +2838,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
   const [deleting, setDeleting] = useState(false);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [isReimbursementExpected, setIsReimbursementExpected] = useState(false);
+  const [ignoreInBudget, setIgnoreInBudget] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringInterval, setRecurringInterval] = useState("");
   const [showEndDate, setShowEndDate] = useState(false);
@@ -2868,13 +2870,14 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
       } else {
         setSelectedTagIds(expense?.tags.map((t) => t.tagId) ?? []);
         setIsReimbursementExpected(expense?.isReimbursementExpected ?? false);
+        setIgnoreInBudget(expense?.ignoreInBudget ?? false);
         setIsRecurring(!!expense?.recurrenceRuleId);
         setRecurringInterval("");
         setShowEndDate(false);
         setConfirmDelete(false);
         setSelectedCategoryId(expense?.categoryId ?? "");
         // Auto-expand optional if any optional fields have data
-        setShowOptional(!!(expense?.notes || expense?.isReimbursementExpected || expense?.recurrenceRuleId));
+        setShowOptional(!!(expense?.notes || expense?.isReimbursementExpected || expense?.recurrenceRuleId || expense?.ignoreInBudget));
         setShowRecurringConfirm(false);
         setPendingSaveData(null);
         setAmountIsNegative(!!(expense && parseFloat(expense.amount) < 0));
@@ -2937,6 +2940,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
       reimbursementNote: isOffsetMode ? null : isReimbursementExpected
         ? (form.get("reimbursementNote") as string) || undefined
         : null,
+      ignoreInBudget: isOffsetMode ? false : ignoreInBudget,
       tagIds: selectedTagIds,
       recurrenceRuleId,
     };
@@ -3116,6 +3120,18 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
                     )}
                   </div>
                 )}
+
+                <div className="rounded-md border border-border p-3">
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={ignoreInBudget}
+                      onChange={(e) => setIgnoreInBudget(e.target.checked)}
+                      className="h-4 w-4 rounded border-border"
+                    />
+                    <span className="text-sm font-medium">Ignore in budget</span>
+                  </label>
+                </div>
 
                 {!expense?.parentExpenseId && (
                 <div className="rounded-md border border-border p-3">

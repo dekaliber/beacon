@@ -18,6 +18,7 @@ const expenseSchema = z.object({
   accountId: z.string(),
   isReimbursementExpected: z.boolean().optional(),
   reimbursementNote: z.string().nullable().optional(),
+  ignoreInBudget: z.boolean().optional(),
   tagIds: z.array(z.string()).optional(),
   transactionGroupId: z.string().nullable().optional(),
   recurrenceRuleId: z.string().nullable().optional(),
