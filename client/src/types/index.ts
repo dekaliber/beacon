@@ -148,6 +148,7 @@ export interface BudgetOverview {
   daysElapsed: number;
   daysInYear: number;
   pctElapsed: number;
+  completedMonths: number;           // calendar months fully elapsed within the year
   settings: { jointSplitRatio: number };
   personal: BudgetPanel;
   joint: BudgetPanel;

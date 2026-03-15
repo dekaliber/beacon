@@ -24,13 +24,13 @@ import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
 import { getBudgetOverview, setAnnualBudget } from "@/api";
 import { formatCurrency } from "@/lib/utils";
-import type { BudgetPanel, ChartDay } from "@/types";
+import type { BudgetPanel, BudgetOverview, ChartDay } from "@/types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-const MONTH_NAMES = [
-  "January","February","March","April","May","June",
-  "July","August","September","October","November","December",
+const SHORT_MONTHS = [
+  "Jan","Feb","Mar","Apr","May","Jun",
+  "Jul","Aug","Sep","Oct","Nov","Dec",
 ];
 
 function fmt(n: number) {
@@ -170,6 +170,105 @@ function PaceBar({ normalizedYTD, budget, pctElapsed }: PaceBarProps) {
   );
 }
 
+// ── Projection explanation modal ──────────────────────────────────────────────
+
+function ProjectionModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-sm p-1 text-muted-foreground opacity-70 hover:opacity-100 hover:bg-accent"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        <h3 className="mb-1 text-base font-semibold">How the annual projection works</h3>
+        <p className="mb-5 text-xs text-muted-foreground">
+          The projected annual spend, % vs pace, and progress bar use adjusted figures — not raw
+          totals — to give you a stable view of your trajectory throughout the year.
+        </p>
+
+        <div className="space-y-5 text-sm">
+          <section>
+            <h4 className="mb-1.5 font-semibold text-foreground">Why raw totals can be misleading</h4>
+            <p className="text-muted-foreground leading-relaxed">
+              If you check your budget on January 2nd after paying a $4,000 rent on January 1st,
+              your raw spend would suggest you're on pace for over $700,000 a year. The projection
+              smooths this out by treating each recurring expense as if it were spread evenly
+              across time, rather than hitting all at once.
+            </p>
+          </section>
+
+          <section>
+            <h4 className="mb-1.5 font-semibold text-foreground">How recurring expenses are normalized</h4>
+            <p className="text-muted-foreground leading-relaxed">
+              For any expense linked to a recurring rule — rent, utilities, subscriptions, and so
+              on — the projection first estimates the full-year cost by adding up what you've
+              actually paid, any upcoming payments already scheduled, and any remaining occurrences
+              projected through year-end. It then spreads that estimated annual cost evenly over
+              time, so the pace calculation reflects a steady accrual rather than lumpy payment
+              dates.
+            </p>
+          </section>
+
+          <section>
+            <h4 className="mb-1.5 font-semibold text-foreground">When amounts vary month to month</h4>
+            <p className="text-muted-foreground leading-relaxed">
+              If a recurring payment has come through at least twice this year, the projection
+              checks whether the most recent payment matches the rule's expected amount:
+            </p>
+            <ul className="mt-2 space-y-1.5 text-muted-foreground">
+              <li className="flex gap-2">
+                <span className="mt-0.5 shrink-0 text-foreground">•</span>
+                <span>
+                  <strong className="text-foreground">If it matches</strong>, the rule amount is
+                  used going forward — the change was likely permanent (e.g. a rent increase).
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="mt-0.5 shrink-0 text-foreground">•</span>
+                <span>
+                  <strong className="text-foreground">If it doesn't match</strong>, the average of
+                  all payments so far is used instead — the deviation was likely a one-time
+                  adjustment, like a slightly different utility bill.
+                </span>
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h4 className="mb-1.5 font-semibold text-foreground">Expenses that end before year-end</h4>
+            <p className="text-muted-foreground leading-relaxed">
+              If a recurring expense has an end date before December 31st, the projection only
+              counts the portion of the year it's active — and the pace calculation only measures
+              you against the budget for that window. For example, a $100/month subscription
+              ending in June projects to $600 for the year, and the pace bar treats $600 as the
+              relevant target while it's active, rather than $1,200.
+            </p>
+          </section>
+
+          <section>
+            <h4 className="mb-1.5 font-semibold text-foreground">One-off purchases</h4>
+            <p className="text-muted-foreground leading-relaxed">
+              Anything not linked to a recurring rule is treated as discretionary spend. These are
+              projected linearly based on your average daily spending so far this year, so a large
+              one-time purchase like a TV does move the run rate — by design, since it reflects
+              real money spent.
+            </p>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Monthly comparison chart ──────────────────────────────────────────────────
 
 interface ComparisonChartProps {
@@ -193,21 +292,26 @@ function ComparisonChart({
   const hasData = data.some((d) => d.current || d.previous || d.priorYear);
   if (!hasData) return null;
 
+  // Tailwind v4 defines colors as --color-* with full hex values, so
+  // reference them directly without an hsl() wrapper.
+  const colorPrimary = "var(--color-primary)";
+  const colorMuted   = "var(--color-muted-foreground)";
+
   return (
     <div className="mt-4">
       <p className="mb-3 text-sm font-medium text-card-foreground">Monthly Spending</p>
       <ResponsiveContainer width="100%" height={180}>
         <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
           <XAxis
             dataKey="day"
-            tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+            tick={{ fontSize: 11, fill: colorMuted }}
             tickLine={false}
             interval={4}
           />
           <YAxis
             tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-            tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+            tick={{ fontSize: 11, fill: colorMuted }}
             tickLine={false}
             axisLine={false}
             width={40}
@@ -224,11 +328,11 @@ function ComparisonChart({
             labelFormatter={(day) => `Day ${day}`}
             contentStyle={{ fontSize: 12 }}
           />
-          {/* Current month — solid primary */}
+          {/* Current month — primary dashed */}
           <Line
             type="monotone"
             dataKey="current"
-            stroke="var(--primary)"
+            stroke={colorPrimary}
             strokeWidth={2}
             dot={false}
             connectNulls
@@ -239,18 +343,18 @@ function ComparisonChart({
           <Line
             type="monotone"
             dataKey="previous"
-            stroke="var(--muted-foreground)"
+            stroke={colorMuted}
             strokeWidth={1.5}
             dot={false}
             connectNulls
             strokeOpacity={0.6}
             name="previous"
           />
-          {/* Same month prior year — muted lighter */}
+          {/* Same month prior year — muted lighter dashed */}
           <Line
             type="monotone"
             dataKey="priorYear"
-            stroke="var(--muted-foreground)"
+            stroke={colorMuted}
             strokeWidth={1.5}
             strokeDasharray="4 4"
             dot={false}
@@ -258,21 +362,21 @@ function ComparisonChart({
             strokeOpacity={0.35}
             name="priorYear"
           />
-          <ReferenceLine y={0} stroke="var(--border)" />
+          <ReferenceLine y={0} stroke="var(--color-border)" />
         </LineChart>
       </ResponsiveContainer>
       {/* Legend */}
       <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-5 rounded" style={{ background: "var(--primary)", borderTop: "2px dashed var(--primary)" }} />
+          <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke={colorPrimary} strokeWidth="2" strokeDasharray="6 3" /></svg>
           {currentMonthName}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-5 rounded bg-current opacity-60" />
+          <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke={colorMuted} strokeWidth="1.5" strokeOpacity="0.6" /></svg>
           {prevMonthName}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-5 rounded bg-current opacity-35" style={{ borderTop: "2px dashed currentColor" }} />
+          <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke={colorMuted} strokeWidth="1.5" strokeOpacity="0.35" strokeDasharray="4 4" /></svg>
           {priorYearMonthName}
         </span>
       </div>
@@ -287,6 +391,8 @@ interface PanelProps {
   subtitle?: string;
   panel: BudgetPanel;
   pctElapsed: number;
+  completedMonthCount: number;
+  monthsRemaining: number;
   editable?: boolean;
   onSaveBudget?: (amount: number) => void;
   currentMonthName: string;
@@ -300,6 +406,8 @@ function BudgetPanelCard({
   subtitle,
   panel,
   pctElapsed,
+  completedMonthCount,
+  monthsRemaining,
   editable = false,
   onSaveBudget,
   currentMonthName,
@@ -307,114 +415,181 @@ function BudgetPanelCard({
   priorYearMonthName,
   today,
 }: PanelProps) {
-  const { percentAboveBelow, projectedAnnual, remaining } = panel;
-  const isOverPace  = percentAboveBelow > 0;
-  const isNoBudget  = panel.effectiveAnnualBudget === 0;
-  const daysLeft    = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() - today.getDate();
+  const [showModal, setShowModal] = useState(false);
+  const { projectedAnnual, remaining } = panel;
+  const isOverPace = panel.percentAboveBelow > 0;
+  const isNoBudget = panel.effectiveAnnualBudget === 0;
+  // For historical/future years use the chart month (Dec / Jan); for the
+  // current year use today so days-remaining stays accurate.
+  const isCurrentYear = today.getFullYear() === parseInt(currentMonthName.split(" ")[1]);
+  const mtdMonthLabel = currentMonthName.split(" ")[0];   // e.g. "Mar", "Dec"
+  const daysLeft = isCurrentYear
+    ? new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() - today.getDate()
+    : 0;
+
+  // ── Derived metrics ────────────────────────────────────────────────────────
+  const avgMonthly =
+    completedMonthCount > 0
+      ? panel.ytdCompletedMonths / completedMonthCount
+      : null;
+
+  const remainingPerMonth =
+    panel.effectiveAnnualBudget > 0 && monthsRemaining > 0
+      ? remaining / monthsRemaining
+      : null;
+
+  // Completed months label: "Jan–Feb" / "Jan–Nov" / "Full year" / "Jan"
+  const completedLabel =
+    completedMonthCount === 0
+      ? "No completed months yet"
+      : completedMonthCount === 12
+        ? "Full year"
+        : completedMonthCount === 1
+          ? "January"
+          : `Jan–${SHORT_MONTHS[completedMonthCount - 1]}`;
 
   return (
-    <Card className="flex flex-col gap-5">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-              {title}
-            </p>
-            {subtitle && (
-              <span className="text-xs text-muted-foreground">· {subtitle}</span>
+    <>
+      {showModal && <ProjectionModal onClose={() => setShowModal(false)} />}
+
+      <Card className="flex flex-col gap-5">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                {title}
+              </p>
+              {subtitle && (
+                <span className="text-xs text-muted-foreground">· {subtitle}</span>
+              )}
+            </div>
+            {editable && onSaveBudget ? (
+              <div className="mt-1">
+                <p className="text-xs text-muted-foreground mb-0.5">Annual Budget</p>
+                <BudgetEditor value={panel.annualBudget} onSave={onSaveBudget} />
+              </div>
+            ) : (
+              <div className="mt-1">
+                <p className="text-xs text-muted-foreground mb-0.5">Annual Budget (derived)</p>
+                <p className="text-2xl font-bold">
+                  {panel.effectiveAnnualBudget > 0 ? fmt(panel.effectiveAnnualBudget) : "—"}
+                </p>
+              </div>
             )}
           </div>
-          {editable && onSaveBudget ? (
-            <div className="mt-1">
-              <p className="text-xs text-muted-foreground mb-0.5">Annual Budget</p>
-              <BudgetEditor value={panel.annualBudget} onSave={onSaveBudget} />
-            </div>
-          ) : (
-            <div className="mt-1">
-              <p className="text-xs text-muted-foreground mb-0.5">Annual Budget (derived)</p>
-              <p className="text-2xl font-bold">
-                {panel.effectiveAnnualBudget > 0 ? fmt(panel.effectiveAnnualBudget) : "—"}
-              </p>
+
+          {/* Run-rate badge */}
+          {!isNoBudget && (
+            <div
+              className={`flex-shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${
+                isOverPace
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-success/10 text-success"
+              }`}
+            >
+              {pctLabel(panel.percentAboveBelow)} vs pace
             </div>
           )}
         </div>
 
-        {/* Run-rate badge */}
-        {!isNoBudget && (
-          <div
-            className={`flex-shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${
-              isOverPace
-                ? "bg-destructive/10 text-destructive"
-                : "bg-success/10 text-success"
-            }`}
-          >
-            {pctLabel(percentAboveBelow)} vs pace
-          </div>
-        )}
-      </div>
+        {/* Metrics — 3 columns × 2 rows */}
+        <div className="grid grid-cols-3 gap-3">
+          {/* Row 1 */}
+          <Metric
+            label={`${mtdMonthLabel} so far`}
+            value={completedMonthCount > 0 || isCurrentYear ? fmt(panel.mtdTotal) : "—"}
+            sub={isCurrentYear && daysLeft > 0 ? `${daysLeft} days remaining` : "month complete"}
+          />
+          <Metric
+            label={completedLabel}
+            value={completedMonthCount > 0 ? fmt(panel.ytdCompletedMonths) : "—"}
+            sub="completed months"
+          />
+          <Metric
+            label="Avg monthly spend"
+            value={avgMonthly != null ? fmt(avgMonthly) : "—"}
+            sub={completedMonthCount > 0 ? `over ${completedMonthCount} month${completedMonthCount !== 1 ? "s" : ""}` : "no completed months"}
+          />
 
-      {/* Metrics row */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Metric
-          label={`Jan–${MONTH_NAMES[today.getMonth() - 1] ?? "Dec"} total`}
-          value={fmt(panel.ytdCompletedMonths)}
-          sub="completed months"
-        />
-        <Metric
-          label={`${currentMonthName} so far`}
-          value={fmt(panel.mtdTotal)}
-          sub={`${daysLeft} days remaining`}
-        />
-        <Metric
-          label="Proj. annual spend"
-          value={fmt(projectedAnnual)}
-          valueClass={
-            panel.effectiveAnnualBudget > 0 && projectedAnnual > panel.effectiveAnnualBudget
-              ? "text-destructive"
-              : undefined
-          }
-          sub={
-            <span className="flex items-center gap-1">
-              adjusted rate
-              <span
-                title="Recurring expenses are normalized to their expected annual cost so that large payments on a single day (e.g. rent on the 1st) don't distort the projection."
-                className="cursor-help text-muted-foreground hover:text-foreground"
-              >
-                <Info className="h-3 w-3" />
+          {/* Row 2 */}
+          <Metric
+            label="Annual projection"
+            value={fmt(projectedAnnual)}
+            valueClass={
+              panel.effectiveAnnualBudget > 0 && projectedAnnual > panel.effectiveAnnualBudget
+                ? "text-destructive"
+                : undefined
+            }
+            sub={
+              <span className="flex items-center gap-1">
+                adjusted rate
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="inline-flex items-center text-muted-foreground hover:text-foreground"
+                  title="How is this calculated?"
+                >
+                  <Info className="h-3 w-3" />
+                </button>
               </span>
-            </span>
-          }
-        />
-        <Metric
-          label="Remaining budget"
-          value={
-            panel.effectiveAnnualBudget > 0
-              ? (remaining < 0 ? "−" : "") + fmt(remaining)
-              : "—"
-          }
-          valueClass={remaining < 0 ? "text-destructive" : "text-success"}
-          sub={remaining < 0 ? "projected over budget" : "projected headroom"}
-        />
-      </div>
+            }
+          />
+          <Metric
+            label="Remaining budget"
+            value={
+              panel.effectiveAnnualBudget > 0
+                ? (remaining < 0 ? "−" : "") + fmt(remaining)
+                : "—"
+            }
+            valueClass={
+              panel.effectiveAnnualBudget > 0
+                ? remaining < 0
+                  ? "text-destructive"
+                  : "text-success"
+                : undefined
+            }
+            sub={remaining < 0 ? "projected over budget" : "projected headroom"}
+          />
+          <Metric
+            label="Remaining / month"
+            value={
+              remainingPerMonth != null
+                ? (remainingPerMonth < 0 ? "−" : "") + fmt(remainingPerMonth)
+                : "—"
+            }
+            valueClass={
+              remainingPerMonth != null
+                ? remainingPerMonth < 0
+                  ? "text-destructive"
+                  : "text-success"
+                : undefined
+            }
+            sub={
+              monthsRemaining > 0
+                ? `${monthsRemaining} month${monthsRemaining !== 1 ? "s" : ""} remaining`
+                : "year complete"
+            }
+          />
+        </div>
 
-      {/* Progress bar */}
-      {!isNoBudget && (
-        <PaceBar
-          normalizedYTD={panel.normalizedYTD}
-          budget={panel.effectiveAnnualBudget}
-          pctElapsed={pctElapsed}
-        />
-      )}
+        {/* Progress bar */}
+        {!isNoBudget && (
+          <PaceBar
+            normalizedYTD={panel.normalizedYTD}
+            budget={panel.effectiveAnnualBudget}
+            pctElapsed={pctElapsed}
+          />
+        )}
 
-      {/* Monthly comparison chart */}
-      <ComparisonChart
-        chart={panel.chart}
-        currentMonthName={currentMonthName}
-        prevMonthName={prevMonthName}
-        priorYearMonthName={priorYearMonthName}
-      />
-    </Card>
+        {/* Monthly comparison chart */}
+        <ComparisonChart
+          chart={panel.chart}
+          currentMonthName={currentMonthName}
+          prevMonthName={prevMonthName}
+          priorYearMonthName={priorYearMonthName}
+        />
+      </Card>
+    </>
   );
 }
 
@@ -443,7 +618,7 @@ function Metric({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function Budgets() {
-  const now       = new Date();
+  const now   = new Date();
   const [year, setYear] = useState(now.getFullYear());
 
   const { data, loading, refetch } = useApi(
@@ -456,16 +631,32 @@ export function Budgets() {
     refetch();
   };
 
-  // Chart month labels
-  const curMonth         = now.getMonth();      // 0-indexed
-  const curYear          = now.getFullYear();
-  const prevMonthIdx     = curMonth === 0 ? 11 : curMonth - 1;
-  const prevMonthYear    = curMonth === 0 ? curYear - 1 : curYear;
-  const currentMonthName = `${MONTH_NAMES[curMonth]} ${curYear}`;
-  const prevMonthName    = `${MONTH_NAMES[prevMonthIdx]} ${prevMonthYear}`;
-  const priorYearMonthName = `${MONTH_NAMES[curMonth]} ${curYear - 1}`;
+  // Completed-month / months-remaining counts derived from the viewed year
+  const curYear      = now.getFullYear();
+  const curMonthIdx  = now.getMonth();                      // 0-indexed
+
+  const completedMonthCount =
+    year < curYear ? 12 :
+    year > curYear ? 0  :
+    curMonthIdx;                                            // e.g. March → 2
+
+  const monthsRemaining =
+    year < curYear ? 0  :
+    year > curYear ? 12 :
+    12 - curMonthIdx;                                       // e.g. March → 10
+
+  // Chart month labels — anchored to the same month used on the server
+  const chartMonthIdx    = year < curYear ? 11 : year > curYear ? 0 : curMonthIdx;
+  const chartYear        = year < curYear ? year : year > curYear ? year : curYear;
+  const prevChartIdx     = chartMonthIdx === 0 ? 11 : chartMonthIdx - 1;
+  const prevChartYear    = chartMonthIdx === 0 ? chartYear - 1 : chartYear;
+
+  const currentMonthName   = `${SHORT_MONTHS[chartMonthIdx]} ${chartYear}`;
+  const prevMonthName      = `${SHORT_MONTHS[prevChartIdx]} ${prevChartYear}`;
+  const priorYearMonthName = `${SHORT_MONTHS[chartMonthIdx]} ${chartYear - 1}`;
 
   const sharedChartProps = { currentMonthName, prevMonthName, priorYearMonthName, today: now };
+  const sharedPanelProps = { completedMonthCount, monthsRemaining, ...sharedChartProps };
 
   const hasAnyBudget =
     data && (data.personal.annualBudget != null || data.joint.annualBudget != null);
@@ -507,7 +698,7 @@ export function Budgets() {
             panel={data.total}
             pctElapsed={data.pctElapsed}
             editable={false}
-            {...sharedChartProps}
+            {...sharedPanelProps}
           />
 
           {/* Personal + Joint — side by side */}
@@ -518,7 +709,7 @@ export function Budgets() {
               pctElapsed={data.pctElapsed}
               editable
               onSaveBudget={(amount) => handleSaveBudget("personal", amount)}
-              {...sharedChartProps}
+              {...sharedPanelProps}
             />
             <BudgetPanelCard
               title="Joint"
@@ -527,7 +718,7 @@ export function Budgets() {
               pctElapsed={data.pctElapsed}
               editable
               onSaveBudget={(amount) => handleSaveBudget("joint", amount)}
-              {...sharedChartProps}
+              {...sharedPanelProps}
             />
           </div>
         </>

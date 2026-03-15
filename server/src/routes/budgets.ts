@@ -383,8 +383,17 @@ budgetRoutes.get("/:year", async (req, res) => {
   const year = parseInt(req.params.year);
   if (isNaN(year)) return res.status(400).json({ error: "Invalid year" });
 
-  const today    = new Date();
-  const elapsed  = daysElapsedInYear(year, today);
+  const today = new Date();
+  // Clamp the reference point to within the requested year so historical and
+  // future-year queries stay fully contained in that year.
+  const effectiveToday =
+    year < today.getUTCFullYear()
+      ? new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999)) // Dec 31 EOD of past year
+      : year > today.getUTCFullYear()
+        ? new Date(Date.UTC(year, 0, 1))                  // Jan 1 of future year
+        : today;
+
+  const elapsed  = daysElapsedInYear(year, effectiveToday);
   const totalDays = daysInYear(year);
   const pctElapsed = totalDays > 0 ? elapsed / totalDays : 0;
 
@@ -426,22 +435,33 @@ budgetRoutes.get("/:year", async (req, res) => {
     month: o.month, amount: Number(o.amount),
   }));
 
-  const effPersonal = effectiveAnnual(personalAnnualRaw, personalOverrides);
-  const effJoint    = effectiveAnnual(jointAnnualRaw,    jointOverrides);
-  const effTotal    = effPersonal + effJoint * splitRatio;
+  const effPersonal    = effectiveAnnual(personalAnnualRaw, personalOverrides);
+  const effJoint       = effectiveAnnual(jointAnnualRaw,    jointOverrides);
+  const effJointScaled = effJoint * splitRatio;           // user's share of joint budget
+  const effTotal       = effPersonal + effJointScaled;
 
   // Compute spend metrics for both account sets in parallel
   const [personalMetrics, jointMetrics] = await Promise.all([
-    computeMetrics(year, personalIds, today, ignoredCategoryIds),
-    computeMetrics(year, jointIds,    today, ignoredCategoryIds),
+    computeMetrics(year, personalIds, effectiveToday, ignoredCategoryIds),
+    computeMetrics(year, jointIds,    effectiveToday, ignoredCategoryIds),
   ]);
 
-  // Total metrics = personal + joint × splitRatio (applied per field)
+  // Scale joint metrics to the user's share before building the joint panel
+  // and rolling into total. This keeps the joint panel self-consistent at the
+  // user's split fraction rather than showing the full joint pool.
+  const scaledJoint = {
+    ytdCompletedMonths: jointMetrics.ytdCompletedMonths * splitRatio,
+    mtdTotal:           jointMetrics.mtdTotal           * splitRatio,
+    normalizedYTD:      jointMetrics.normalizedYTD      * splitRatio,
+    projectedAnnual:    jointMetrics.projectedAnnual    * splitRatio,
+  };
+
+  // Total = personal + already-scaled joint (no further multiplier)
   const totalMetrics = {
-    ytdCompletedMonths: personalMetrics.ytdCompletedMonths + jointMetrics.ytdCompletedMonths * splitRatio,
-    mtdTotal:           personalMetrics.mtdTotal           + jointMetrics.mtdTotal           * splitRatio,
-    normalizedYTD:      personalMetrics.normalizedYTD      + jointMetrics.normalizedYTD      * splitRatio,
-    projectedAnnual:    personalMetrics.projectedAnnual    + jointMetrics.projectedAnnual    * splitRatio,
+    ytdCompletedMonths: personalMetrics.ytdCompletedMonths + scaledJoint.ytdCompletedMonths,
+    mtdTotal:           personalMetrics.mtdTotal           + scaledJoint.mtdTotal,
+    normalizedYTD:      personalMetrics.normalizedYTD      + scaledJoint.normalizedYTD,
+    projectedAnnual:    personalMetrics.projectedAnnual    + scaledJoint.projectedAnnual,
   };
 
   /** Derive run-rate stats from raw metrics + the effective annual budget. */
@@ -463,10 +483,10 @@ budgetRoutes.get("/:year", async (req, res) => {
     };
   }
 
-  // Monthly comparison chart data (current, previous, same month last year)
-  const now      = today;
-  const curYear  = now.getUTCFullYear();
-  const curMonth = now.getUTCMonth() + 1;
+  // Monthly comparison chart data — anchor to effectiveToday so historical
+  // years show the last month of that year rather than the current real month.
+  const curYear  = effectiveToday.getUTCFullYear();
+  const curMonth = effectiveToday.getUTCMonth() + 1;
   const prevMonth     = curMonth === 1 ? 12 : curMonth - 1;
   const prevMonthYear = curMonth === 1 ? curYear - 1 : curYear;
 
@@ -504,11 +524,18 @@ budgetRoutes.get("/:year", async (req, res) => {
     priorYear: mergeChartSeries(personalChart.priorYear, jointChart.priorYear),
   };
 
+  // Number of calendar months fully completed within the year as of effectiveToday.
+  // For a past year Dec-31 is used as the anchor, and getUTCMonth() returns 11 (Dec index),
+  // but all 12 months are complete — so clamp to 12 for any finished year.
+  const completedMonths =
+    year < today.getUTCFullYear() ? 12 : effectiveToday.getUTCMonth();
+
   res.json({
     year,
     daysElapsed: elapsed,
     daysInYear: totalDays,
     pctElapsed: Math.round(pctElapsed * 10000) / 10000,
+    completedMonths,
     settings: { jointSplitRatio: splitRatio },
     personal: {
       annualBudget: personalAnnualRaw,
@@ -518,11 +545,12 @@ budgetRoutes.get("/:year", async (req, res) => {
       chart: personalChart,
     },
     joint: {
-      annualBudget: jointAnnualRaw,
-      effectiveAnnualBudget: Math.round(effJoint * 100) / 100,
-      monthlyBudgets: resolveMonthlyAmounts(jointAnnualRaw, jointOverrides),
-      ...panelStats(jointMetrics, effJoint),
-      chart: jointChart,
+      annualBudget: jointAnnualRaw,          // full joint budget — kept unscaled for the editor
+      effectiveAnnualBudget: Math.round(effJointScaled * 100) / 100,
+      monthlyBudgets: resolveMonthlyAmounts(jointAnnualRaw, jointOverrides)
+        .map((m) => ({ ...m, amount: Math.round(m.amount * splitRatio * 100) / 100 })),
+      ...panelStats(scaledJoint, effJointScaled),
+      chart: jointChart,                     // chart was already scaled by splitRatio
     },
     total: {
       annualBudget: null, // always derived: personal + joint × splitRatio
