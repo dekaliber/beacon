@@ -120,7 +120,6 @@ async function computeMetrics(
     where: {
       accountId: { in: accountIds },
       date: { gte: startOfYear, lt: startOfMonth },
-      parentExpenseId: null,
     },
     select: { amount: true },
   });
@@ -133,7 +132,6 @@ async function computeMetrics(
     where: {
       accountId: { in: accountIds },
       date: { gte: startOfMonth, lte: endOfMonth },
-      parentExpenseId: null,
     },
     select: { amount: true },
   });
@@ -255,7 +253,6 @@ async function computeMetrics(
     where: {
       accountId: { in: accountIds },
       recurrenceRuleId: null,
-      parentExpenseId: null,
       date: { gte: startOfYear, lte: today },
     },
     select: { amount: true },
@@ -299,7 +296,6 @@ async function buildMonthlyComparison(
     where: {
       accountId: { in: accountIds },
       date: { gte: startDate, lte: effectiveEnd },
-      parentExpenseId: null,
     },
     select: { date: true, amount: true },
     orderBy: { date: "asc" },
