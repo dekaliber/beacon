@@ -50,15 +50,16 @@ budgetRoutes.get("/:year/:month", async (req, res) => {
   });
 
   // Resolve category names
-  const categoryIds = byCategory.map((c) => c.categoryId);
+  const categoryIds = byCategory.map((c) => c.categoryId).filter((id): id is string => id !== null);
   const categories = await prisma.category.findMany({
     where: { id: { in: categoryIds } },
     include: { parent: true },
   });
-  const categoryMap = new Map(categories.map((c) => [c.id, c]));
+  type CategoryWithParent = typeof categories[0];
+  const categoryMap = new Map<string, CategoryWithParent>(categories.map((c) => [c.id, c]));
 
   const categoryBreakdown = byCategory.map((item) => {
-    const cat = categoryMap.get(item.categoryId);
+    const cat = item.categoryId ? categoryMap.get(item.categoryId) : undefined;
     return {
       categoryId: item.categoryId,
       categoryName: cat?.name ?? "Unknown",

@@ -1,64 +1,123 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
-  Plus, Pencil, Receipt, ChevronLeft, ChevronRight, AlertCircle,
-  ArrowUpDown, ArrowUp, ArrowDown, X, Filter, ChevronDown, Trash2, Repeat,
-  AlertTriangle, Undo2, CheckCircle2, Upload, FileText, Check,
+  Plus, Pencil, Receipt, AlertCircle,
+  ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Repeat,
+  AlertTriangle, Undo2, CheckCircle2, Upload, FileText, Check, GripVertical,
+  ChevronRight, ChevronDown, Search,
 } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
+import { MultiSelectDropdown } from "@/components/MultiSelectDropdown";
+import type { MultiSelectOption, MultiSelectGroup } from "@/components/MultiSelectDropdown";
+import { BulkEditBar } from "@/components/BulkEditBar";
+import type { GroupAction } from "@/components/BulkEditBar";
 import { useApi } from "@/hooks/useApi";
 import {
   getExpenses, getAccounts, getFlatCategories, getTags,
   createExpense, updateExpense, deleteExpense, importExpenses,
-  createRecurrenceRule, getTransactionGroups,
+  createRecurrenceRule, createTransactionGroup, updateTransactionGroup,
   getExpenseVendors, getVendorCategory, getUncategorizedCount,
+  updateExpenseParent, createTag,
 } from "@/api";
 import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/utils";
-import type { Expense, Category, Account, Tag, TransactionGroup } from "@/types";
+import type { Expense, Category, Account, Tag } from "@/types";
 
 const EXPENSE_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH"];
 
-const FREQUENCY_LABELS: Record<string, string> = {
-  DAILY: "Daily",
-  WEEKLY: "Weekly",
-  BIWEEKLY: "Biweekly",
-  MONTHLY: "Monthly",
-  QUARTERLY: "Quarterly",
-  YEARLY: "Yearly",
-};
+// ── Drag-and-drop helpers ──
+const DRAG_THRESHOLD = 5; // px of movement before drag activates
+const INTERACTIVE_TAGS = new Set(["INPUT", "TEXTAREA", "BUTTON", "SELECT", "A"]);
+
+function isInteractiveElement(el: EventTarget | null): boolean {
+  let node = el as HTMLElement | null;
+  while (node && node !== document.body) {
+    if (INTERACTIVE_TAGS.has(node.tagName)) return true;
+    if (node.getAttribute("contenteditable") === "true") return true;
+    if (node.getAttribute("role") === "option") return true;
+    node = node.parentElement;
+  }
+  return false;
+}
+
+function getTargetIdAtPoint(x: number, y: number): string | null {
+  const el = document.elementFromPoint(x, y);
+  if (!el) return null;
+  let node = el as HTMLElement | null;
+  while (node && node !== document.body) {
+    const expId = (node as HTMLElement).dataset?.expenseId;
+    if (expId) return expId;
+    const dz = (node as HTMLElement).dataset?.dropzone;
+    if (dz) return `__dz__${dz}`;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+interface DragState {
+  sourceId: string;
+  sourceType: "negative" | "offset";
+  sourceParentId: string | null;
+  startPos: { x: number; y: number };
+  mousePos: { x: number; y: number };
+  started: boolean;
+  targetId: string | null;
+}
+
+const FREQUENCY_OPTIONS = [
+  { value: "DAILY",   singular: "day",   plural: "days"   },
+  { value: "WEEKLY",  singular: "week",  plural: "weeks"  },
+  { value: "MONTHLY", singular: "month", plural: "months" },
+  { value: "YEARLY",  singular: "year",  plural: "years"  },
+];
 
 type SortField = "date" | "description" | "vendor" | "category" | "account" | "amount";
 type SortState = { field: SortField; order: "asc" | "desc" } | null;
 
+interface GroupMeta {
+  groupId: string;
+  isPrimary: boolean;
+  primaryExpenseId: string | null;
+  isFirstInGroup: boolean;
+  isLastInGroup: boolean;
+}
+
 // ── Currency input helper ──
-function CurrencyInput({ name, defaultValue, required }: { name: string; defaultValue?: string; required?: boolean }) {
+function CurrencyInput({ name, defaultValue, required, onChange, autoFocus }: { name: string; defaultValue?: string; required?: boolean; onChange?: (value: number) => void; autoFocus?: boolean }) {
   const [rawValue, setRawValue] = useState(() => {
     if (!defaultValue) return "";
-    const num = Math.abs(parseFloat(defaultValue));
-    return num ? num.toFixed(2) : "";
+    const num = parseFloat(defaultValue);
+    return isNaN(num) || num === 0 ? "" : num.toFixed(2);
   });
 
   // Sync when defaultValue changes (e.g. modal reopened with different data)
   useEffect(() => {
     if (!defaultValue) { setRawValue(""); return; }
-    const num = Math.abs(parseFloat(defaultValue));
-    setRawValue(num ? num.toFixed(2) : "");
+    const num = parseFloat(defaultValue);
+    setRawValue(isNaN(num) || num === 0 ? "" : num.toFixed(2));
   }, [defaultValue]);
 
   const numericValue = parseFloat(rawValue) || 0;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    if (val === "" || /^\d*\.?\d{0,2}$/.test(val)) {
+    if (val === "" || val === "-" || /^-?\d*\.?\d{0,2}$/.test(val)) {
       setRawValue(val);
+      const parsed = parseFloat(val);
+      if (!isNaN(parsed)) onChange?.(parsed);
     }
   };
 
   const handleBlur = () => {
-    if (rawValue && !isNaN(parseFloat(rawValue))) {
-      setRawValue(parseFloat(rawValue).toFixed(2));
+    if (rawValue === "-") {
+      setRawValue("");
+      onChange?.(0);
+    } else if (rawValue && !isNaN(parseFloat(rawValue))) {
+      const formatted = parseFloat(rawValue).toFixed(2);
+      setRawValue(formatted);
+      onChange?.(parseFloat(formatted));
     }
   };
 
@@ -71,9 +130,10 @@ function CurrencyInput({ name, defaultValue, required }: { name: string; default
           value={rawValue}
           onChange={handleChange}
           onBlur={handleBlur}
+          autoFocus={autoFocus}
           className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           placeholder="0.00"
-          inputMode="decimal"
+          inputMode="text"
         />
       </div>
       <input type="hidden" name={name} value={numericValue.toFixed(2)} />
@@ -156,6 +216,7 @@ function VendorAutocomplete({
             <button
               key={v}
               type="button"
+              tabIndex={-1}
               className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
               onMouseDown={() => selectItem(v)}
             >
@@ -170,18 +231,24 @@ function VendorAutocomplete({
 
 // ── Category typeahead select ──
 function CategoryTypeahead({
-  name, defaultValue, categories, required,
+  name, defaultValue, categories, required, triggerRef: externalTriggerRef, onTabFromSearch,
 }: {
   name: string;
   defaultValue?: string;
   categories: Category[];
   required?: boolean;
+  triggerRef?: React.RefObject<HTMLButtonElement | null>;
+  onTabFromSearch?: () => void;
 }) {
   const [value, setValue] = useState(defaultValue ?? "");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [focusIdx, setFocusIdx] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+  const internalTriggerRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = externalTriggerRef ?? internalTriggerRef;
+  const clickingRef = useRef(false);
+  const justSelectedRef = useRef(false);
 
   // Sync internal value when defaultValue changes (e.g. vendor-category autofill)
   useEffect(() => { setValue(defaultValue ?? ""); }, [defaultValue]);
@@ -234,9 +301,18 @@ function CategoryTypeahead({
     setValue(id);
     setOpen(false);
     setSearch("");
+    justSelectedRef.current = true;
+    setTimeout(() => triggerRef.current?.focus(), 0);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      setOpen(false);
+      setSearch("");
+      onTabFromSearch?.();
+      return;
+    }
     if (!open) return;
     if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx((i) => Math.min(i + 1, filtered.length - 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx((i) => Math.max(i - 1, 0)); }
@@ -249,8 +325,21 @@ function CategoryTypeahead({
       <input type="hidden" name={name} value={value} />
       {required && !value && <input type="text" required value="" className="hidden" tabIndex={-1} onChange={() => {}} />}
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen(!open)}
+        onMouseDown={() => { clickingRef.current = true; }}
+        onFocus={(e) => {
+          if (justSelectedRef.current || clickingRef.current) {
+            justSelectedRef.current = false;
+            clickingRef.current = false;
+            return;
+          }
+          // Only auto-open when tabbing forward (related target precedes this button in DOM)
+          const related = e.relatedTarget as Element | null;
+          if (related && !(related.compareDocumentPosition(e.currentTarget) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+          setOpen(true);
+        }}
+        onClick={() => setOpen((o) => !o)}
         className="w-full rounded-md border border-border px-3 py-2 text-left text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
       >
         {selectedLabel || <span className="text-muted-foreground">Select category</span>}
@@ -276,6 +365,7 @@ function CategoryTypeahead({
                 <button
                   key={o.id}
                   type="button"
+                  tabIndex={-1}
                   className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
                   onMouseDown={() => selectItem(o.id)}
                 >
@@ -293,18 +383,24 @@ function CategoryTypeahead({
 
 // ── Account typeahead ──
 function AccountTypeahead({
-  name, defaultValue, accounts, required,
+  name, defaultValue, accounts, required, onTabFromSearch, triggerRef: externalTriggerRef,
 }: {
   name: string;
   defaultValue?: string;
   accounts: Account[];
   required?: boolean;
+  onTabFromSearch?: () => void;
+  triggerRef?: React.RefObject<HTMLButtonElement | null>;
 }) {
   const [value, setValue] = useState(defaultValue ?? "");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [focusIdx, setFocusIdx] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+  const internalTriggerRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = externalTriggerRef ?? internalTriggerRef;
+  const clickingRef = useRef(false);
+  const justSelectedRef = useRef(false);
 
   useEffect(() => { setValue(defaultValue ?? ""); }, [defaultValue]);
 
@@ -341,9 +437,18 @@ function AccountTypeahead({
     setValue(id);
     setOpen(false);
     setSearch("");
+    justSelectedRef.current = true;
+    setTimeout(() => triggerRef.current?.focus(), 0);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      setOpen(false);
+      setSearch("");
+      onTabFromSearch?.();
+      return;
+    }
     if (!open) return;
     if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx((i) => Math.min(i + 1, filtered.length - 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx((i) => Math.max(i - 1, 0)); }
@@ -356,8 +461,21 @@ function AccountTypeahead({
       <input type="hidden" name={name} value={value} />
       {required && !value && <input type="text" required value="" className="hidden" tabIndex={-1} onChange={() => {}} />}
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen(!open)}
+        onMouseDown={() => { clickingRef.current = true; }}
+        onFocus={(e) => {
+          if (justSelectedRef.current || clickingRef.current) {
+            justSelectedRef.current = false;
+            clickingRef.current = false;
+            return;
+          }
+          // Only auto-open when tabbing forward (related target precedes this button in DOM)
+          const related = e.relatedTarget as Element | null;
+          if (related && !(related.compareDocumentPosition(e.currentTarget) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+          setOpen(true);
+        }}
+        onClick={() => setOpen((o) => !o)}
         className="w-full rounded-md border border-border px-3 py-2 text-left text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
       >
         {selectedLabel || <span className="text-muted-foreground">Select account</span>}
@@ -383,10 +501,181 @@ function AccountTypeahead({
                 <button
                   key={a.id}
                   type="button"
+                  tabIndex={-1}
                   className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
                   onMouseDown={() => selectItem(a.id)}
                 >
                   {a.name}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Tag typeahead (multi-select) ──
+function TagTypeahead({
+  tags, selectedIds, onChange, onCreateTag, triggerRef: externalTriggerRef, onTabFromSearch,
+}: {
+  tags: Tag[];
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+  onCreateTag: (name: string) => Promise<Tag>;
+  triggerRef?: React.RefObject<HTMLButtonElement | null>;
+  onTabFromSearch?: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const [focusIdx, setFocusIdx] = useState(0);
+  const [creating, setCreating] = useState(false);
+  const [localTags, setLocalTags] = useState<Tag[]>([]);
+  const ref = useRef<HTMLDivElement>(null);
+  const internalTriggerRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = externalTriggerRef ?? internalTriggerRef;
+  const clickingRef = useRef(false);
+
+  const allTags = useMemo(() => {
+    const ids = new Set(tags.map((t) => t.id));
+    return [...tags, ...localTags.filter((t) => !ids.has(t.id))];
+  }, [tags, localTags]);
+
+  const sortedTags = useMemo(() => [...allTags].sort((a, b) => a.name.localeCompare(b.name)), [allTags]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return sortedTags;
+    const terms = search.toLowerCase().split(/\s+/);
+    return sortedTags.filter((t) => {
+      const words = t.name.toLowerCase().split(/\s+/);
+      return terms.every((term) => words.some((w) => w.startsWith(term)));
+    });
+  }, [search, sortedTags]);
+
+  const showCreate = !!search.trim() && filtered.length === 0;
+  const totalOptions = filtered.length + (showCreate ? 1 : 0);
+
+  useEffect(() => { setFocusIdx(0); }, [filtered]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const toggleTag = (id: string) => {
+    onChange(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
+  };
+
+  const handleCreate = async () => {
+    const name = search.trim();
+    if (!name || creating) return;
+    setCreating(true);
+    try {
+      const newTag = await onCreateTag(name);
+      setLocalTags((prev) => [...prev, newTag]);
+      onChange([...selectedIds, newTag.id]);
+      setSearch("");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      setOpen(false);
+      setSearch("");
+      onTabFromSearch?.();
+      return;
+    }
+    if (!open) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx((i) => Math.min(i + 1, totalOptions - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx((i) => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter") {
+      e.preventDefault();
+      if (showCreate) { handleCreate(); }
+      else if (filtered[focusIdx]) { toggleTag(filtered[focusIdx].id); }
+    }
+    else if (e.key === "Escape") setOpen(false);
+  };
+
+  const selectedTags = sortedTags.filter((t) => selectedIds.includes(t.id));
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        onMouseDown={() => { clickingRef.current = true; }}
+        onFocus={(e) => {
+          if (clickingRef.current) { clickingRef.current = false; return; }
+          // Only auto-open when tabbing forward
+          const related = e.relatedTarget as Element | null;
+          if (related && !(related.compareDocumentPosition(e.currentTarget) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+          setOpen(true);
+        }}
+        onClick={() => setOpen((o) => !o)}
+        className="w-full rounded-md border border-border px-3 py-2 text-left text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary min-h-[38px]"
+      >
+        {selectedTags.length === 0 ? (
+          <span className="text-muted-foreground">Select tags</span>
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {selectedTags.map((t) => (
+              <span
+                key={t.id}
+                className="rounded-full px-2 py-0.5 text-xs font-medium"
+                style={t.color ? { backgroundColor: t.color, color: "#fff" } : { backgroundColor: "hsl(var(--primary))", color: "#fff" }}
+              >
+                {t.name}
+              </span>
+            ))}
+          </div>
+        )}
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-border bg-background shadow-lg">
+          <div className="border-b border-border p-2">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type to filter or create..."
+              className="w-full rounded border border-border px-2 py-1 text-sm focus:outline-none"
+              autoFocus
+            />
+          </div>
+          <div className="max-h-48 overflow-auto">
+            {showCreate ? (
+              <button
+                type="button"
+                tabIndex={-1}
+                className={`block w-full px-3 py-1.5 text-left text-sm ${focusIdx === 0 ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                onMouseDown={handleCreate}
+                disabled={creating}
+              >
+                {creating ? "Creating..." : `Create tag: "${search.trim()}"`}
+              </button>
+            ) : filtered.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-muted-foreground">No tags yet</p>
+            ) : (
+              filtered.map((t, i) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  tabIndex={-1}
+                  className={`flex items-center gap-2 w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  onMouseDown={() => toggleTag(t.id)}
+                >
+                  <span className={`h-4 w-4 flex-shrink-0 rounded border flex items-center justify-center ${selectedIds.includes(t.id) ? "bg-primary border-primary" : "border-border"}`}>
+                    {selectedIds.includes(t.id) && <Check className="h-3 w-3 text-white" />}
+                  </span>
+                  {t.name}
                 </button>
               ))
             )}
@@ -444,16 +733,19 @@ function EditableCell({
 // ── Inline editable select cell ──
 // ── Inline vendor cell with autocomplete ──
 function EditableVendorCell({
-  value, vendors, onSave,
+  value, vendors, onSave, className = "text-muted-foreground",
 }: {
   value: string;
   vendors: string[];
   onSave: (newValue: string) => void;
+  className?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(value);
   const [focusIdx, setFocusIdx] = useState(0);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, minWidth: 0 });
   const ref = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
@@ -472,7 +764,11 @@ function EditableVendorCell({
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        ref.current && !ref.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
         if (editValue !== value) onSave(editValue);
         setEditing(false);
       }
@@ -487,9 +783,18 @@ function EditableVendorCell({
     if (final !== value) onSave(final);
   };
 
-  if (editing) {
-    return (
-      <div ref={ref} className="relative">
+  const startEditing = () => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left, minWidth: rect.width });
+    }
+    setEditValue(value);
+    setEditing(true);
+  };
+
+  return (
+    <div ref={ref}>
+      {editing ? (
         <input
           ref={inputRef}
           type="text"
@@ -503,31 +808,34 @@ function EditableVendorCell({
           }}
           className="w-full rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
         />
-        {filtered.length > 0 && (
-          <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-36 overflow-auto rounded-md border border-border bg-background shadow-lg">
-            {filtered.map((v, i) => (
-              <button
-                key={v}
-                type="button"
-                className={`block w-full px-2 py-1 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
-                onMouseDown={() => commit(v)}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <span
-      onClick={() => { setEditValue(value); setEditing(true); }}
-      className="cursor-pointer border-b border-dotted border-transparent hover:border-gray-400 text-muted-foreground"
-    >
-      {value || <span className="italic">—</span>}
-    </span>
+      ) : (
+        <span
+          onClick={startEditing}
+          className={`cursor-pointer border-b border-dotted border-transparent hover:border-gray-400 ${className}`}
+        >
+          {value || <span className="italic">—</span>}
+        </span>
+      )}
+      {editing && filtered.length > 0 && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{ position: "fixed", top: dropdownPos.top, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 150), zIndex: 9999 }}
+          className="max-h-36 overflow-auto rounded-md border border-border bg-background shadow-lg"
+        >
+          {filtered.map((v, i) => (
+            <button
+              key={v}
+              type="button"
+              className={`block w-full px-2 py-1 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+              onMouseDown={() => commit(v)}
+            >
+              {v}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </div>
   );
 }
 
@@ -544,7 +852,9 @@ function EditableCategoryCell({
   const [editing, setEditing] = useState(false);
   const [search, setSearch] = useState("");
   const [focusIdx, setFocusIdx] = useState(0);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, minWidth: 0 });
   const ref = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const parentCats = categories.filter((c) => !c.parentId);
@@ -581,7 +891,11 @@ function EditableCategoryCell({
     if (editing) {
       inputRef.current?.focus();
       const handler = (e: MouseEvent) => {
-        if (ref.current && !ref.current.contains(e.target as Node)) {
+        const target = e.target as Node;
+        if (
+          ref.current && !ref.current.contains(target) &&
+          dropdownRef.current && !dropdownRef.current.contains(target)
+        ) {
           setEditing(false);
           setSearch("");
         }
@@ -604,9 +918,18 @@ function EditableCategoryCell({
     else if (e.key === "Escape") { setEditing(false); setSearch(""); }
   };
 
-  if (editing) {
-    return (
-      <div ref={ref} className="relative">
+  const startEditing = () => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left, minWidth: rect.width });
+    }
+    setSearch("");
+    setEditing(true);
+  };
+
+  return (
+    <div ref={ref}>
+      {editing ? (
         <input
           ref={inputRef}
           type="text"
@@ -616,7 +939,20 @@ function EditableCategoryCell({
           placeholder="Type to filter..."
           className="w-full rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
         />
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 min-w-[220px] rounded-md border border-border bg-background shadow-lg">
+      ) : (
+        <span
+          onClick={startEditing}
+          className={`cursor-pointer border-b border-dotted border-transparent hover:border-gray-400 ${isUncategorized ? "text-red-500 font-medium" : ""}`}
+        >
+          {isUncategorized ? "[Uncategorized]" : label}
+        </span>
+      )}
+      {editing && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{ position: "fixed", top: dropdownPos.top, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 220), zIndex: 9999 }}
+          className="rounded-md border border-border bg-background shadow-lg"
+        >
           <div className="max-h-48 overflow-auto">
             {filtered.length === 0 ? (
               <p className="px-3 py-2 text-sm text-muted-foreground">No matches</p>
@@ -634,34 +970,29 @@ function EditableCategoryCell({
               ))
             )}
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <span
-      onClick={() => { setSearch(""); setEditing(true); }}
-      className={`cursor-pointer border-b border-dotted border-transparent hover:border-gray-400 ${isUncategorized ? "text-red-500 font-medium" : ""}`}
-    >
-      {isUncategorized ? "[Uncategorized]" : label}
-    </span>
+        </div>,
+        document.body
+      )}
+    </div>
   );
 }
 
 // ── Inline account typeahead cell ──
 function EditableAccountCell({
-  value, label, accounts, onSave,
+  value, label, color, accounts, onSave,
 }: {
   value: string;
   label: string;
+  color?: string | null;
   accounts: Account[];
   onSave: (newValue: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [search, setSearch] = useState("");
   const [focusIdx, setFocusIdx] = useState(0);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, minWidth: 0 });
   const ref = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const sortedAccounts = useMemo(() =>
@@ -684,7 +1015,11 @@ function EditableAccountCell({
     if (editing) {
       inputRef.current?.focus();
       const handler = (e: MouseEvent) => {
-        if (ref.current && !ref.current.contains(e.target as Node)) {
+        const target = e.target as Node;
+        if (
+          ref.current && !ref.current.contains(target) &&
+          dropdownRef.current && !dropdownRef.current.contains(target)
+        ) {
           setEditing(false);
           setSearch("");
         }
@@ -707,9 +1042,18 @@ function EditableAccountCell({
     else if (e.key === "Escape") { setEditing(false); setSearch(""); }
   };
 
-  if (editing) {
-    return (
-      <div ref={ref} className="relative">
+  const startEditing = () => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left, minWidth: rect.width });
+    }
+    setSearch("");
+    setEditing(true);
+  };
+
+  return (
+    <div ref={ref}>
+      {editing ? (
         <input
           ref={inputRef}
           type="text"
@@ -719,7 +1063,21 @@ function EditableAccountCell({
           placeholder="Type to filter..."
           className="w-full rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
         />
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 min-w-[180px] rounded-md border border-border bg-background shadow-lg">
+      ) : (
+        <span
+          onClick={startEditing}
+          className="inline-block cursor-pointer whitespace-nowrap rounded-md px-2 py-0.5 text-sm text-foreground"
+          style={{ backgroundColor: color ?? "#e2e2df" }}
+        >
+          {label}
+        </span>
+      )}
+      {editing && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{ position: "fixed", top: dropdownPos.top, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 180), zIndex: 9999 }}
+          className="rounded-md border border-border bg-background shadow-lg"
+        >
           <div className="max-h-48 overflow-auto">
             {filtered.length === 0 ? (
               <p className="px-3 py-2 text-sm text-muted-foreground">No matches</p>
@@ -736,18 +1094,10 @@ function EditableAccountCell({
               ))
             )}
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <span
-      onClick={() => { setSearch(""); setEditing(true); }}
-      className="cursor-pointer border-b border-dotted border-transparent hover:border-gray-400"
-    >
-      {label}
-    </span>
+        </div>,
+        document.body
+      )}
+    </div>
   );
 }
 
@@ -759,7 +1109,10 @@ function EditableAmountCell({ value, onSave, isOffset }: { value: string; onSave
 
   useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
 
-  const absValue = Math.abs(parseFloat(value));
+  const numericValue = parseFloat(value);
+  const absValue = Math.abs(numericValue);
+  // Treat as "negative" (credit/income) if it's an offset child OR a standalone negative amount
+  const isNegative = isOffset || numericValue < 0;
 
   const startEdit = () => {
     setEditValue(absValue.toFixed(2));
@@ -770,7 +1123,7 @@ function EditableAmountCell({ value, onSave, isOffset }: { value: string; onSave
     setEditing(false);
     const parsed = parseFloat(editValue);
     if (isNaN(parsed) || parsed === 0) return;
-    const saveValue = isOffset ? (-parsed).toFixed(2) : parsed.toFixed(2);
+    const saveValue = isNegative ? (-parsed).toFixed(2) : parsed.toFixed(2);
     if (parseFloat(saveValue).toFixed(2) !== parseFloat(value).toFixed(2)) onSave(saveValue);
   };
 
@@ -804,28 +1157,81 @@ function EditableAmountCell({ value, onSave, isOffset }: { value: string; onSave
 
   return (
     <span onClick={startEdit} className="cursor-pointer border-b border-dotted border-transparent hover:border-gray-400">
-      {isOffset ? "+" : "-"}{formatCurrency(absValue)}
+      {isNegative ? `+${formatCurrency(absValue)}` : formatCurrency(absValue)}
     </span>
   );
 }
 
 // ═══════════════ MAIN COMPONENT ═══════════════
 
+interface ExpenseFilterState {
+  accountIds: string[];
+  categoryIds: string[];
+  tagIds: string[];
+  startDate: string;
+  endDate: string;
+}
+
+const EXPENSE_DEFAULT_FILTERS: ExpenseFilterState = {
+  accountIds: [],
+  categoryIds: [],
+  tagIds: [],
+  startDate: `${new Date().getFullYear()}-01-01`,
+  endDate: "",
+};
+
+function loadExpenseFilters(): ExpenseFilterState {
+  try {
+    const get = (key: string) => {
+      const item = localStorage.getItem(`beacon-expenses-${key}`);
+      return item !== null ? JSON.parse(item) : null;
+    };
+    return {
+      accountIds: get("accountIds") ?? EXPENSE_DEFAULT_FILTERS.accountIds,
+      categoryIds: get("categoryIds") ?? EXPENSE_DEFAULT_FILTERS.categoryIds,
+      tagIds: get("tagIds") ?? EXPENSE_DEFAULT_FILTERS.tagIds,
+      startDate: get("startDate") ?? EXPENSE_DEFAULT_FILTERS.startDate,
+      endDate: get("endDate") ?? EXPENSE_DEFAULT_FILTERS.endDate,
+    };
+  } catch {
+    return { ...EXPENSE_DEFAULT_FILTERS };
+  }
+}
+
+function saveExpenseFilters(filters: ExpenseFilterState) {
+  localStorage.setItem("beacon-expenses-accountIds", JSON.stringify(filters.accountIds));
+  localStorage.setItem("beacon-expenses-categoryIds", JSON.stringify(filters.categoryIds));
+  localStorage.setItem("beacon-expenses-tagIds", JSON.stringify(filters.tagIds));
+  localStorage.setItem("beacon-expenses-startDate", JSON.stringify(filters.startDate));
+  localStorage.setItem("beacon-expenses-endDate", JSON.stringify(filters.endDate));
+}
+
 export function Expenses() {
-  const [page, setPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const loadingMoreRef = useRef(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [offsetParent, setOffsetParent] = useState<Expense | null>(null);
   const [sort, setSort] = useState<SortState>({ field: "date", order: "desc" });
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filterAccountId, setFilterAccountId] = useState("");
-  const [filterCategoryId, setFilterCategoryId] = useState("");
-  const [filterTagId, setFilterTagId] = useState("");
-  const [filterStartDate, setFilterStartDate] = useState("");
-  const [filterEndDate, setFilterEndDate] = useState("");
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState(""); // raw input value
+  const [appliedSearch, setAppliedSearch] = useState(""); // committed on Enter, drives API
   const [showUncategorized, setShowUncategorized] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const [upcomingExpanded, setUpcomingExpanded] = useState(false);
+  const dragStateRef = useRef<DragState | null>(null);
+  dragStateRef.current = dragState;
+
+  // Staged = what the filter panel shows (being edited by user)
+  // Applied = what actually drives the API query (committed on Apply click)
+  const [staged, setStaged] = useState<ExpenseFilterState>(loadExpenseFilters);
+  const [applied, setApplied] = useState<ExpenseFilterState>(loadExpenseFilters);
 
   // Today's date string for splitting upcoming vs regular (local timezone)
   const todayStr = useMemo(() => localToday(), []);
@@ -835,33 +1241,33 @@ export function Expenses() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }, []);
 
-  const queryParams = useMemo(() => {
-    const params: Record<string, string> = {
-      page: page.toString(),
-      limit: "20",
-    };
+  const filterParams = useMemo(() => {
+    const params: Record<string, string> = { limit: "50" };
     if (sort) {
       params.sortBy = sort.field;
       params.sortOrder = sort.order;
     }
     if (showUncategorized) {
       params.categoryId = "uncategorized";
-    } else if (filterCategoryId) {
-      params.categoryId = filterCategoryId;
+    } else if (applied.categoryIds.length > 0) {
+      params.categoryIds = applied.categoryIds.join(",");
     }
-    if (filterAccountId) params.accountId = filterAccountId;
-    if (filterTagId) params.tagId = filterTagId;
-    if (filterStartDate) params.startDate = filterStartDate;
+    if (applied.accountIds.length > 0) params.accountIds = applied.accountIds.join(",");
+    if (applied.tagIds.length > 0) params.tagIds = applied.tagIds.join(",");
+    if (appliedSearch.trim()) params.search = appliedSearch.trim();
+    params.startDate = applied.startDate || EXPENSE_DEFAULT_FILTERS.startDate;
     // Cap main table at today to exclude future-dated (upcoming) expenses
-    if (!filterEndDate || filterEndDate > todayStr) {
-      params.endDate = todayStr;
-    } else {
-      params.endDate = filterEndDate;
-    }
+    const endDate = applied.endDate || todayStr;
+    params.endDate = endDate > todayStr ? todayStr : endDate;
     return params;
-  }, [page, sort, filterAccountId, filterCategoryId, filterTagId, filterStartDate, filterEndDate, showUncategorized, todayStr]);
+  }, [sort, applied, showUncategorized, todayStr, appliedSearch]);
 
-  // Upcoming expenses query: future-dated, sorted ascending
+  const queryParams = useMemo(() => ({
+    ...filterParams,
+    page: currentPage.toString(),
+  }), [filterParams, currentPage]);
+
+  // Upcoming expenses query: future-dated, sorted ascending — mirrors applied filters
   const upcomingParams = useMemo(() => {
     const params: Record<string, string> = {
       startDate: tomorrowStr,
@@ -871,31 +1277,138 @@ export function Expenses() {
     };
     if (showUncategorized) {
       params.categoryId = "uncategorized";
-    } else if (filterCategoryId) {
-      params.categoryId = filterCategoryId;
+    } else if (applied.categoryIds.length > 0) {
+      params.categoryIds = applied.categoryIds.join(",");
     }
-    if (filterAccountId) params.accountId = filterAccountId;
-    if (filterTagId) params.tagId = filterTagId;
+    if (applied.accountIds.length > 0) params.accountIds = applied.accountIds.join(",");
+    if (applied.tagIds.length > 0) params.tagIds = applied.tagIds.join(",");
     return params;
-  }, [tomorrowStr, filterAccountId, filterCategoryId, filterTagId, showUncategorized]);
+  }, [tomorrowStr, applied, showUncategorized]);
 
-  const { data: expenseData, refetch } = useApi(() => getExpenses(queryParams), [queryParams]);
+  const { data: expenseData, loading } = useApi(() => getExpenses(queryParams), [queryParams]);
   const { data: upcomingData, refetch: refetchUpcoming } = useApi(() => getExpenses(upcomingParams), [upcomingParams]);
   const { data: categories } = useApi(() => getFlatCategories(), []);
   const { data: accounts } = useApi(() => getAccounts(), []);
-  const { data: tags } = useApi(() => getTags(), []);
-  const { data: groups } = useApi(() => getTransactionGroups(), []);
+  const { data: tags, refetch: refetchTags } = useApi(() => getTags(), []);
   const { data: vendorList, refetch: refetchVendors } = useApi(() => getExpenseVendors(), []);
   const { data: uncatData, refetch: refetchUncat } = useApi(() => getUncategorizedCount(), []);
+  // Note: transaction group metadata is now embedded in each expense's `transactionGroup` field;
+  // no separate groups query is needed.
+
+  // Reset accumulated data when filters/sort change
+  useEffect(() => {
+    setCurrentPage(1);
+    setAllExpenses([]);
+    setHasMore(false);
+    loadingMoreRef.current = false;
+    setUpcomingExpanded(false);
+  }, [filterParams]);
+
+  // Accumulate expense pages as they load
+  useEffect(() => {
+    if (!expenseData) return;
+    const { data, pagination: pag } = expenseData;
+    if (pag.page === 1) {
+      setAllExpenses(data ?? []);
+    } else {
+      setAllExpenses((prev) => [...prev, ...(data ?? [])]);
+    }
+    setHasMore(pag.page < pag.totalPages);
+    loadingMoreRef.current = false;
+  }, [expenseData]);
+
+  // Infinite scroll: load next page when sentinel enters viewport
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !loadingMoreRef.current) {
+          loadingMoreRef.current = true;
+          setCurrentPage((p) => p + 1);
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore]);
+
+  // Back to top button: show after ~50 rows scrolled
+  useEffect(() => {
+    const handleScroll = () => setShowBackToTop(window.scrollY > 2500);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // "a" keyboard shortcut to open Add Expense modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (modalOpen || importModalOpen) return;
+      const target = e.target as HTMLElement;
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable) return;
+      if (e.key === "a" || e.key === "A") {
+        setEditing(null);
+        setOffsetParent(null);
+        setModalOpen(true);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [modalOpen, importModalOpen]);
 
   const eligibleAccounts = (accounts ?? []).filter((a) => EXPENSE_ACCOUNT_TYPES.includes(a.type));
-  const hasActiveFilters = !!(filterAccountId || filterCategoryId || filterTagId || filterStartDate || filterEndDate);
+  const hasActiveFilters = !!(
+    applied.accountIds.length > 0 ||
+    applied.categoryIds.length > 0 ||
+    applied.tagIds.length > 0 ||
+    applied.startDate !== EXPENSE_DEFAULT_FILTERS.startDate ||
+    (applied.endDate && applied.endDate !== todayStr) ||
+    showUncategorized
+  );
   const uncategorizedCount = uncatData?.count ?? 0;
 
+  // Re-fetch every page that has already been loaded so mutations are visible
+  // without losing scroll position or truncating the list.
+  const refreshLoaded = useCallback(async () => {
+    const pagesToRefresh = Math.max(currentPage, 1);
+    const freshItems: Expense[] = [];
+    let moreAvailable = false;
+
+    for (let p = 1; p <= pagesToRefresh; p++) {
+      const result = await getExpenses({ ...filterParams, page: String(p) });
+      if (!result) break;
+      freshItems.push(...(result.data ?? []));
+      moreAvailable = p < result.pagination.totalPages;
+      if (p >= result.pagination.totalPages) break;
+    }
+
+    setAllExpenses(freshItems);
+    setHasMore(moreAvailable);
+  }, [currentPage, filterParams]);
+
   const refetchAll = useCallback(() => {
-    refetch();
+    refreshLoaded();
     refetchUpcoming();
-  }, [refetch, refetchUpcoming]);
+  }, [refreshLoaded, refetchUpcoming]);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const handleSetGroupPrimary = useCallback(
+    async (groupId: string, expenseId: string) => {
+      await updateTransactionGroup(groupId, { primaryExpenseId: expenseId });
+      refetchAll();
+    },
+    [refetchAll],
+  );
 
   // ── Recurring confirmation state ──
   const [recurringConfirm, setRecurringConfirm] = useState<{
@@ -934,6 +1447,68 @@ export function Expenses() {
     setModalOpen(true);
   };
 
+  const handleDragStart = useCallback((e: React.MouseEvent, expense: Expense, sourceType: "negative" | "offset") => {
+    if (e.button !== 0) return;
+    if (isInteractiveElement(e.target)) return;
+    e.preventDefault();
+    setDragState({
+      sourceId: expense.id,
+      sourceType,
+      sourceParentId: expense.parentExpenseId,
+      startPos: { x: e.clientX, y: e.clientY },
+      mousePos: { x: e.clientX, y: e.clientY },
+      started: false,
+      targetId: null,
+    });
+  }, []);
+
+  const executeDrop = useCallback(async (state: DragState) => {
+    if (state.sourceType === "offset") {
+      if (!state.targetId?.startsWith("__dz__")) return;
+      await updateExpenseParent(state.sourceId, null);
+    } else {
+      const targetId = state.targetId!;
+      if (targetId === state.sourceId) return;
+      await updateExpenseParent(state.sourceId, targetId);
+    }
+    refetchAll();
+    refetchUncat();
+  }, [refetchAll, refetchUncat]);
+
+  const executeDropRef = useRef(executeDrop);
+  executeDropRef.current = executeDrop;
+
+  useEffect(() => {
+    if (!dragState) return;
+
+    function onMove(e: MouseEvent) {
+      setDragState((prev) => {
+        if (!prev) return null;
+        const dx = e.clientX - prev.startPos.x;
+        const dy = e.clientY - prev.startPos.y;
+        const started = prev.started || Math.hypot(dx, dy) > DRAG_THRESHOLD;
+        const targetId = started ? getTargetIdAtPoint(e.clientX, e.clientY) : prev.targetId;
+        return { ...prev, mousePos: { x: e.clientX, y: e.clientY }, started, targetId };
+      });
+    }
+
+    async function onUp() {
+      const latest = dragStateRef.current;
+      if (latest?.started && latest?.targetId) {
+        await executeDropRef.current(latest);
+      }
+      setDragState(null);
+    }
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    return () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragState?.sourceId]);
+
   const handleInlineUpdate = useCallback(async (id: string, field: string, value: string) => {
     const data: Record<string, unknown> = {};
     if (field === "date") data.date = value;
@@ -941,9 +1516,9 @@ export function Expenses() {
     else data[field] = value;
 
     // Check if this expense is recurring — if so, show confirmation
-    const allExpenses = [...(expenseData?.data ?? []), ...(upcomingData?.data ?? [])];
-    const exp = allExpenses.find((e) => e.id === id)
-      || allExpenses.flatMap((e) => e.offsets ?? []).find((e) => e.id === id);
+    const allVisible = [...allExpenses, ...(upcomingData?.data ?? [])];
+    const exp = allVisible.find((e) => e.id === id)
+      || allVisible.flatMap((e) => e.offsets ?? []).find((e) => e.id === id);
     if (exp?.recurrenceRuleId) {
       setRecurringConfirm({ mode: "edit", expenseId: id, data, field });
       return;
@@ -953,7 +1528,7 @@ export function Expenses() {
     refetchAll();
     if (field === "vendor") refetchVendors();
     if (field === "categoryId") refetchUncat();
-  }, [expenseData, upcomingData, refetchAll, refetchVendors, refetchUncat]);
+  }, [allExpenses, upcomingData, refetchAll, refetchVendors, refetchUncat]);
 
   const handleRecurringConfirmChoice = async (updateFuture: boolean) => {
     if (!recurringConfirm) return;
@@ -989,25 +1564,20 @@ export function Expenses() {
       if (prev.order === first) return { field, order: second };
       return null;
     });
-    setPage(1);
   };
 
-  const clearFilters = () => {
-    setFilterAccountId("");
-    setFilterCategoryId("");
-    setFilterTagId("");
-    setFilterStartDate("");
-    setFilterEndDate("");
+  const applyFilters = () => {
+    setApplied({ ...staged });
+    saveExpenseFilters(staged);
+    clearSelection();
+  };
+
+  const resetFilters = () => {
+    setStaged({ ...EXPENSE_DEFAULT_FILTERS });
+    setApplied({ ...EXPENSE_DEFAULT_FILTERS });
+    saveExpenseFilters(EXPENSE_DEFAULT_FILTERS);
     setShowUncategorized(false);
-    setPage(1);
-  };
-
-  const toggleGroupCollapse = (groupId: string) => {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev);
-      next.has(groupId) ? next.delete(groupId) : next.add(groupId);
-      return next;
-    });
+    clearSelection();
   };
 
   const SortIcon = ({ field }: { field: SortField }) => {
@@ -1017,38 +1587,228 @@ export function Expenses() {
       : <ArrowDown className="ml-1 inline h-3 w-3" />;
   };
 
-  const expenses = expenseData?.data ?? [];
-  const pagination = expenseData?.pagination;
-  const upcomingExpenses = upcomingData?.data ?? [];
+  const expenses = allExpenses;
 
-  const { groupedRows, groupMap } = useMemo(() => {
-    const gMap = new Map<string, Expense[]>();
-    for (const e of expenses) {
-      if (e.transactionGroupId) {
-        const arr = gMap.get(e.transactionGroupId) ?? [];
-        arr.push(e);
-        gMap.set(e.transactionGroupId, arr);
-      }
+  // Upcoming expenses are a small fixed set (future-dated), so client-side filtering
+  // is fine here. Mirror the server logic: text contains OR exact amount match.
+  const upcomingExpenses = useMemo(() => {
+    // For recurring expenses, show only the next (earliest) instance per rule.
+    // Data is sorted ascending by date, so the first seen per ruleId is the nearest.
+    const seenRuleIds = new Set<string>();
+    const all = (upcomingData?.data ?? []).filter((e) => {
+      if (!e.recurrenceRuleId) return true;
+      if (seenRuleIds.has(e.recurrenceRuleId)) return false;
+      seenRuleIds.add(e.recurrenceRuleId);
+      return true;
+    });
+    if (!appliedSearch.trim()) return all;
+    const q = appliedSearch.trim().toLowerCase();
+    const asNumber = parseFloat(appliedSearch.trim());
+    return all.filter((e) =>
+      e.description.toLowerCase().includes(q) ||
+      e.vendor.toLowerCase().includes(q) ||
+      (!isNaN(asNumber) && asNumber > 0 && Math.abs(parseFloat(e.amount)) === asNumber)
+    );
+  }, [upcomingData, appliedSearch]);
+
+  // ── Group action derivation ─────────────────────────────────────────────
+  // Determines whether the bulk-edit bar should show "Group Transactions" or
+  // "Remove from Group" based on the selected expenses' group memberships.
+  const { groupAction, targetGroupId } = useMemo((): {
+    groupAction: GroupAction;
+    targetGroupId: string | null;
+  } => {
+    if (selectedIds.size === 0) return { groupAction: "group", targetGroupId: null };
+    const selected = expenses.filter((e) => selectedIds.has(e.id));
+    const distinctGroupIds = [
+      ...new Set(selected.filter((e) => e.transactionGroupId).map((e) => e.transactionGroupId!)),
+    ];
+    const hasUngrouped = selected.some((e) => !e.transactionGroupId);
+
+    if (distinctGroupIds.length === 0) {
+      // All ungrouped → create new group
+      return { groupAction: "group", targetGroupId: null };
     }
-    const seenGroups = new Set<string>();
-    const rows: Array<{ type: "expense"; expense: Expense } | { type: "group-header"; groupId: string; expenses: Expense[] }> = [];
-    for (const e of expenses) {
-      if (e.transactionGroupId) {
-        if (!seenGroups.has(e.transactionGroupId)) {
-          seenGroups.add(e.transactionGroupId);
-          rows.push({ type: "group-header", groupId: e.transactionGroupId, expenses: gMap.get(e.transactionGroupId)! });
-        }
+    if (distinctGroupIds.length === 1 && hasUngrouped) {
+      // Exactly one existing group + some ungrouped → add ungrouped to existing
+      return { groupAction: "group", targetGroupId: distinctGroupIds[0] };
+    }
+    if (distinctGroupIds.length === 1 && !hasUngrouped) {
+      // All in the same group → offer to remove
+      return { groupAction: "ungroup", targetGroupId: distinctGroupIds[0] };
+    }
+    // 2+ distinct groups (with or without ungrouped) → must remove first
+    return { groupAction: "ungroup", targetGroupId: null };
+  }, [selectedIds, expenses]);
+
+  const handleGroupAction = useCallback(async () => {
+    const selectedArr = [...selectedIds];
+    if (groupAction === "group") {
+      if (targetGroupId) {
+        // Add only the ungrouped expenses to the existing group
+        const ungroupedIds = expenses
+          .filter((e) => selectedIds.has(e.id) && !e.transactionGroupId)
+          .map((e) => e.id);
+        await updateTransactionGroup(targetGroupId, { addExpenseIds: ungroupedIds });
       } else {
-        rows.push({ type: "expense", expense: e });
+        await createTransactionGroup({ expenseIds: selectedArr });
+      }
+    } else {
+      // Remove selected from their respective groups
+      const byGroup = new Map<string, string[]>();
+      for (const e of expenses.filter((e) => selectedIds.has(e.id) && e.transactionGroupId)) {
+        const arr = byGroup.get(e.transactionGroupId!) ?? [];
+        arr.push(e.id);
+        byGroup.set(e.transactionGroupId!, arr);
+      }
+      await Promise.all(
+        [...byGroup.entries()].map(([gId, ids]) =>
+          updateTransactionGroup(gId, { removeExpenseIds: ids }),
+        ),
+      );
+    }
+    clearSelection();
+    refetchAll();
+    refetchUncat();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIds, expenses, groupAction, targetGroupId]);
+
+  // "Set as primary": shown only when exactly one non-primary grouped expense is selected
+  const setAsPrimaryTarget = useMemo((): { expenseId: string; groupId: string } | null => {
+    if (selectedIds.size !== 1) return null;
+    const [id] = [...selectedIds];
+    const expense = expenses.find((e) => e.id === id);
+    if (!expense?.transactionGroupId) return null;
+    if (expense.transactionGroup?.primaryExpenseId === id) return null;
+    return { expenseId: id, groupId: expense.transactionGroupId };
+  }, [selectedIds, expenses]);
+
+  const handleSetAsPrimary = useCallback(async () => {
+    if (!setAsPrimaryTarget) return;
+    await handleSetGroupPrimary(setAsPrimaryTarget.groupId, setAsPrimaryTarget.expenseId);
+    clearSelection();
+  }, [setAsPrimaryTarget, handleSetGroupPrimary, clearSelection]);
+
+  const dragSource = useMemo(() => {
+    if (!dragState) return null;
+    const all = expenses.flatMap((e) => [e, ...(e.offsets ?? [])]);
+    return all.find((e) => e.id === dragState.sourceId) ?? null;
+  }, [dragState?.sourceId, expenses]);
+
+  // Flat rows with optional group metadata. Grouped expenses are emitted together the
+  // first time any member is encountered (server already sorted them by primary date).
+  const groupedRows = useMemo(() => {
+    const seenGroupIds = new Set<string>();
+
+    // Collect all members per group, in the order they appear in `expenses`
+    const groupMembersInOrder = new Map<string, Expense[]>();
+    for (const e of expenses) {
+      if (e.transactionGroupId) {
+        const arr = groupMembersInOrder.get(e.transactionGroupId) ?? [];
+        arr.push(e);
+        groupMembersInOrder.set(e.transactionGroupId, arr);
       }
     }
-    const groupLookup = new Map<string, TransactionGroup>();
-    for (const g of (groups ?? [])) groupLookup.set(g.id, g);
-    return { groupedRows: rows, groupMap: groupLookup };
-  }, [expenses, groups]);
+
+    const rows: Array<{ expense: Expense; groupMeta?: GroupMeta }> = [];
+    for (const e of expenses) {
+      if (!e.transactionGroupId) {
+        rows.push({ expense: e });
+        continue;
+      }
+      const groupId = e.transactionGroupId;
+      if (seenGroupIds.has(groupId)) continue; // already emitted by first encounter
+      seenGroupIds.add(groupId);
+
+      const members = groupMembersInOrder.get(groupId) ?? [e];
+      const primaryExpenseId = e.transactionGroup?.primaryExpenseId ?? null;
+
+      // Sort members: primary first, then non-fully-offset (date desc), then fully-offset (date desc)
+      const isFullyOffset = (m: Expense) => {
+        if (!m.offsets?.length) return false;
+        const offsetTotal = m.offsets.reduce((sum, o) => sum + Math.abs(o.amount), 0);
+        return offsetTotal >= Math.abs(m.amount);
+      };
+      const sortedMembers = [...members].sort((a, b) => {
+        const aIsPrimary = primaryExpenseId ? a.id === primaryExpenseId : false;
+        const bIsPrimary = primaryExpenseId ? b.id === primaryExpenseId : false;
+        if (aIsPrimary !== bIsPrimary) return aIsPrimary ? -1 : 1;
+        const aFullyOffset = isFullyOffset(a);
+        const bFullyOffset = isFullyOffset(b);
+        if (aFullyOffset !== bFullyOffset) return aFullyOffset ? 1 : -1;
+        // Tiebreak: date descending
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      });
+
+      sortedMembers.forEach((member, idx) => {
+        rows.push({
+          expense: member,
+          groupMeta: {
+            groupId,
+            isPrimary: primaryExpenseId ? member.id === primaryExpenseId : idx === 0,
+            primaryExpenseId,
+            isFirstInGroup: idx === 0,
+            isLastInGroup: idx === sortedMembers.length - 1,
+          },
+        });
+      });
+    }
+    return rows;
+  }, [expenses]);
 
   const parentCategories = (categories ?? []).filter((c) => !c.parentId);
   const childCategories = (categories ?? []).filter((c) => c.parentId);
+
+  // Multi-select filter options
+  const accountFilterOptions = useMemo<MultiSelectOption[]>(() => {
+    const personal = eligibleAccounts
+      .filter((a) => !a.isJoint)
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((a) => ({ id: a.id, label: a.name, groupKey: "personal" }));
+    const joint = eligibleAccounts
+      .filter((a) => a.isJoint)
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((a) => ({ id: a.id, label: a.name, groupKey: "joint" }));
+    return [...personal, ...joint];
+  }, [eligibleAccounts]);
+
+  const accountGroups = useMemo<MultiSelectGroup[]>(() =>
+    [
+      { key: "personal", label: "Personal" },
+      { key: "joint", label: "Joint" },
+    ].filter((g) => accountFilterOptions.some((o) => o.groupKey === g.key)),
+  [accountFilterOptions]);
+
+  const categoryFilterOptions = useMemo<MultiSelectOption[]>(() => {
+    const opts: MultiSelectOption[] = [];
+    for (const parent of parentCategories) {
+      const children = childCategories.filter((c) => c.parentId === parent.id);
+      if (children.length === 0) {
+        opts.push({ id: parent.id, label: parent.name });
+      } else {
+        for (const child of children) {
+          opts.push({ id: child.id, label: `${parent.name} > ${child.name}` });
+        }
+      }
+    }
+    return opts;
+  }, [parentCategories, childCategories]);
+
+  const tagFilterOptions = useMemo<MultiSelectOption[]>(() =>
+    (tags ?? []).map((t) => ({ id: t.id, label: t.name })),
+  [tags]);
+
+  const allRegularExpenseIds = useMemo(
+    () => groupedRows.map((row) => row.expense.id),
+    [groupedRows],
+  );
+
+  const allUpcomingExpenseIds = useMemo(
+    () => upcomingExpenses.map((e) => e.id),
+    [upcomingExpenses],
+  );
+
+
 
   return (
     <div className="space-y-6">
@@ -1060,7 +1820,7 @@ export function Expenses() {
             <Button
               variant={showUncategorized ? "destructive" : "secondary"}
               size="sm"
-              onClick={() => { setShowUncategorized(!showUncategorized); setPage(1); }}
+              onClick={() => { setShowUncategorized(!showUncategorized); }}
             >
               <AlertTriangle className="h-4 w-4" />
               Show Uncategorized
@@ -1069,9 +1829,22 @@ export function Expenses() {
               </span>
             </Button>
           )}
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); if (!e.target.value.trim()) setAppliedSearch(""); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") setAppliedSearch(searchQuery);
+                if (e.key === "Escape") { setSearchQuery(""); setAppliedSearch(""); }
+              }}
+              placeholder="Search..."
+              className="h-9 w-44 rounded-md border border-border bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
           <Button
             variant={filterOpen ? "primary" : "secondary"}
-            size="sm"
             onClick={() => setFilterOpen(!filterOpen)}
           >
             <Filter className="h-4 w-4" />
@@ -1091,58 +1864,50 @@ export function Expenses() {
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Account</label>
-              <select
-                value={filterAccountId}
-                onChange={(e) => { setFilterAccountId(e.target.value); setPage(1); }}
-                className="rounded-md border border-border px-2 py-1.5 text-sm"
-              >
-                <option value="">All accounts</option>
-                {eligibleAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
+              <MultiSelectDropdown
+                options={accountFilterOptions}
+                selected={staged.accountIds}
+                onChange={(ids) => setStaged((s) => ({ ...s, accountIds: ids }))}
+                placeholder="All Accounts"
+                groups={accountGroups}
+              />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Category</label>
-              <select
-                value={filterCategoryId}
-                onChange={(e) => { setFilterCategoryId(e.target.value); setShowUncategorized(false); setPage(1); }}
-                className="rounded-md border border-border px-2 py-1.5 text-sm"
-              >
-                <option value="">All categories</option>
-                {parentCategories.map((parent) => {
-                  const children = childCategories.filter((c) => c.parentId === parent.id);
-                  if (children.length === 0) return <option key={parent.id} value={parent.id}>{parent.name}</option>;
-                  return (
-                    <optgroup key={parent.id} label={parent.name}>
-                      {children.map((child) => <option key={child.id} value={child.id}>{child.name}</option>)}
-                    </optgroup>
-                  );
-                })}
-              </select>
+              <MultiSelectDropdown
+                options={categoryFilterOptions}
+                selected={staged.categoryIds}
+                onChange={(ids) => setStaged((s) => ({ ...s, categoryIds: ids }))}
+                placeholder="All Categories"
+              />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Tag</label>
-              <select
-                value={filterTagId}
-                onChange={(e) => { setFilterTagId(e.target.value); setPage(1); }}
-                className="rounded-md border border-border px-2 py-1.5 text-sm"
-              >
-                <option value="">All tags</option>
-                {(tags ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
+              <MultiSelectDropdown
+                options={tagFilterOptions}
+                selected={staged.tagIds}
+                onChange={(ids) => setStaged((s) => ({ ...s, tagIds: ids }))}
+                placeholder="All Tags"
+              />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">From</label>
-              <input type="date" value={filterStartDate} onChange={(e) => { setFilterStartDate(e.target.value); setPage(1); }} className="rounded-md border border-border px-2 py-1.5 text-sm" />
+              <input type="date" value={staged.startDate} onChange={(e) => setStaged((s) => ({ ...s, startDate: e.target.value }))} className="rounded-md border border-border px-2 py-1.5 text-sm" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">To</label>
-              <input type="date" value={filterEndDate} onChange={(e) => { setFilterEndDate(e.target.value); setPage(1); }} className="rounded-md border border-border px-2 py-1.5 text-sm" />
+              <input type="date" value={staged.endDate || todayStr} onChange={(e) => setStaged((s) => ({ ...s, endDate: e.target.value }))} className="rounded-md border border-border px-2 py-1.5 text-sm" />
             </div>
-            {(hasActiveFilters || showUncategorized) && (
-              <button onClick={clearFilters} className="flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground">
-                <X className="h-3 w-3" /> Clear
-              </button>
-            )}
+            {/* Invisible label spacer keeps Reset + Apply vertically aligned with the filter fields */}
+            <div>
+              <label className="mb-1 block text-xs invisible select-none" aria-hidden="true">x</label>
+              <div className="flex h-8 items-center gap-3">
+                <button onClick={resetFilters} className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+                  Reset to defaults
+                </button>
+                <Button size="sm" onClick={applyFilters}>Apply</Button>
+              </div>
+            </div>
           </div>
         </Card>
       )}
@@ -1151,55 +1916,106 @@ export function Expenses() {
       {upcomingExpenses.length > 0 && (
         <Card>
           <h3 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">Upcoming</h3>
-          <div className="hidden md:block">
-            <table className="w-full table-fixed text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="w-[70px] pb-3 pr-3 font-medium">Date</th>
-                  <th className="pb-3 pr-3 font-medium">Description</th>
-                  <th className="w-[170px] pb-3 pr-3 font-medium">Vendor</th>
-                  <th className="w-[190px] pb-3 pr-3 font-medium">Category</th>
-                  <th className="w-[140px] pb-3 pr-3 font-medium">Account</th>
-                  <th className="w-[30px] pb-3"></th>
-                  <th className="w-[100px] pb-3 text-right font-medium">Amount</th>
-                  <th className="w-[60px] pb-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {upcomingExpenses.map((expense) => (
-                  <ExpenseRowWithOffsets
-                    key={expense.id}
-                    expense={expense}
-                    onEdit={openEdit}
-                    onInlineUpdate={handleInlineUpdate}
-                    onCreateOffset={handleCreateOffset}
-                    vendors={vendorList ?? []}
-                    accounts={eligibleAccounts}
-                    categories={categories ?? []}
-                    isUpcoming
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {/* Mobile upcoming */}
-          <div className="divide-y divide-border md:hidden">
-            {upcomingExpenses.map((expense) => (
-              <div key={expense.id} className="flex items-center justify-between py-3 italic opacity-60">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{expense.description}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {expense.vendor && <>{expense.vendor} &middot; </>}
-                    {expense.category?.name ?? <span className="text-red-500">[Uncategorized]</span>} &middot; {formatDate(expense.date)}
-                  </p>
+          {(() => {
+            const UPCOMING_PAGE_SIZE = 5;
+            const hasMore = upcomingExpenses.length > UPCOMING_PAGE_SIZE;
+            const visibleUpcoming = upcomingExpanded ? upcomingExpenses : upcomingExpenses.slice(0, UPCOMING_PAGE_SIZE);
+            return (
+              <>
+                <div className="hidden md:block">
+                  <div className="relative">
+                    <table className="w-full table-fixed text-sm">
+                      <thead>
+                        <tr className="border-b border-border text-left text-muted-foreground">
+                          <th className="w-[44px] pb-3 pr-2 border-l-[3px] border-l-transparent text-center">
+                            <input
+                              type="checkbox"
+                              ref={(el) => { if (el) { el.indeterminate = allUpcomingExpenseIds.some((id) => selectedIds.has(id)) && !allUpcomingExpenseIds.every((id) => selectedIds.has(id)); } }}
+                              checked={allUpcomingExpenseIds.length > 0 && allUpcomingExpenseIds.every((id) => selectedIds.has(id))}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedIds((prev) => new Set([...prev, ...allUpcomingExpenseIds]));
+                                } else {
+                                  setSelectedIds((prev) => { const next = new Set(prev); allUpcomingExpenseIds.forEach((id) => next.delete(id)); return next; });
+                                }
+                              }}
+                              className="h-4 w-4 rounded accent-primary"
+                            />
+                          </th>
+                          <th className="w-[70px] pb-3 pr-3 font-medium">Date</th>
+                          <th className="pb-3 pr-3 font-medium">Description</th>
+                          <th className="w-[60px] pb-3"></th>
+                          <th className="w-[170px] pb-3 pr-3 font-medium">Vendor</th>
+                          <th className="w-[190px] pb-3 pr-3 font-medium">Category</th>
+                          <th className="w-[155px] pb-3 pr-3 font-medium">Account</th>
+                          <th className="w-[30px] pb-3"></th>
+                          <th className="w-[90px] pb-3 text-right font-medium">Amount</th>
+                          <th className="w-[60px] pb-3"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {visibleUpcoming.map((expense) => (
+                          <ExpenseRowWithOffsets
+                            key={expense.id}
+                            expense={expense}
+                            onEdit={openEdit}
+                            onInlineUpdate={handleInlineUpdate}
+                            onCreateOffset={handleCreateOffset}
+                            vendors={vendorList ?? []}
+                            accounts={eligibleAccounts}
+                            categories={categories ?? []}
+                            isUpcoming
+                            isSelected={selectedIds.has(expense.id)}
+                            onToggleSelect={toggleSelect}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                    {hasMore && !upcomingExpanded && (
+                      <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-card to-transparent" />
+                    )}
+                  </div>
                 </div>
-                <div className="ml-4 flex items-center gap-2">
-                  <span className="font-semibold text-destructive">-{formatCurrency(expense.amount)}</span>
-                  <button onClick={() => openEdit(expense)} className="rounded p-1 hover:bg-accent"><Pencil className="h-4 w-4 text-muted-foreground" /></button>
+                {/* Mobile upcoming */}
+                <div className="md:hidden">
+                  <div className="relative">
+                    <div className="divide-y divide-border">
+                      {visibleUpcoming.map((expense) => (
+                        <div key={expense.id} className="flex items-center justify-between py-3 italic opacity-60">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-medium">{expense.description}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {expense.vendor && <>{expense.vendor} &middot; </>}
+                              {expense.category?.name ?? <span className="text-red-500">[Uncategorized]</span>} &middot; {formatDate(expense.date)}
+                            </p>
+                          </div>
+                          <div className="ml-4 flex items-center gap-2">
+                            <span className="font-semibold text-destructive">-{formatCurrency(expense.amount)}</span>
+                            <button onClick={() => openEdit(expense)} className="rounded p-1 hover:bg-accent"><Pencil className="h-4 w-4 text-muted-foreground" /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {hasMore && !upcomingExpanded && (
+                      <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-card to-transparent" />
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+                {hasMore && (
+                  <button
+                    onClick={() => setUpcomingExpanded((v) => !v)}
+                    className="mt-2 flex w-full items-center justify-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    {upcomingExpanded ? (
+                      <><ChevronDown className="h-4 w-4 rotate-180" /> Collapse</>
+                    ) : (
+                      <><ChevronDown className="h-4 w-4" /> Show {upcomingExpenses.length - UPCOMING_PAGE_SIZE} more</>
+                    )}
+                  </button>
+                )}
+              </>
+            );
+          })()}
         </Card>
       )}
 
@@ -1210,52 +2026,50 @@ export function Expenses() {
               <table className="w-full table-fixed text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="w-[44px] pb-3 pr-2 border-l-[3px] border-l-transparent text-center">
+                      <input
+                        type="checkbox"
+                        ref={(el) => { if (el) { el.indeterminate = allRegularExpenseIds.some((id) => selectedIds.has(id)) && !allRegularExpenseIds.every((id) => selectedIds.has(id)); } }}
+                        checked={allRegularExpenseIds.length > 0 && allRegularExpenseIds.every((id) => selectedIds.has(id))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds((prev) => new Set([...prev, ...allRegularExpenseIds]));
+                          } else {
+                            setSelectedIds((prev) => { const next = new Set(prev); allRegularExpenseIds.forEach((id) => next.delete(id)); return next; });
+                          }
+                        }}
+                        className="h-4 w-4 rounded accent-primary"
+                      />
+                    </th>
                     <th className="w-[70px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
                     <th className="cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("description")}>Description <SortIcon field="description" /></th>
+                    <th className="w-[60px] pb-3"></th>
                     <th className="w-[170px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("vendor")}>Vendor <SortIcon field="vendor" /></th>
                     <th className="w-[190px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("category")}>Category <SortIcon field="category" /></th>
-                    <th className="w-[140px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
+                    <th className="w-[155px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
                     <th className="w-[30px] pb-3"></th>
-                    <th className="w-[100px] cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
+                    <th className="w-[90px] cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
                     <th className="w-[60px] pb-3"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {groupedRows.map((row) => {
-                    if (row.type === "expense") {
-                      return (
-                        <ExpenseRowWithOffsets
-                          key={row.expense.id}
-                          expense={row.expense}
-                          onEdit={openEdit}
-                          onInlineUpdate={handleInlineUpdate}
-                          onCreateOffset={handleCreateOffset}
-                          vendors={vendorList ?? []}
-                          accounts={eligibleAccounts}
-                          categories={categories ?? []}
-                        />
-                      );
-                    }
-                    const group = groupMap.get(row.groupId);
-                    const collapsed = collapsedGroups.has(row.groupId);
-                    const firstByDate = [...row.expenses].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
-                    return (
-                      <GroupRows
-                        key={`grp-${row.groupId}`}
-                        groupName={group?.name ?? "Unnamed Group"}
-                        expenses={row.expenses}
-                        collapsed={collapsed}
-                        onToggle={() => toggleGroupCollapse(row.groupId)}
-                        onEdit={openEdit}
-                        onInlineUpdate={handleInlineUpdate}
-                        onCreateOffset={handleCreateOffset}
-                        firstExpense={firstByDate}
-                        vendors={vendorList ?? []}
-                        accounts={eligibleAccounts}
-                        categories={categories ?? []}
-                      />
-                    );
-                  })}
+                  {groupedRows.map((row) => (
+                    <ExpenseRowWithOffsets
+                      key={row.expense.id}
+                      expense={row.expense}
+                      onEdit={openEdit}
+                      onInlineUpdate={handleInlineUpdate}
+                      onCreateOffset={handleCreateOffset}
+                      vendors={vendorList ?? []}
+                      accounts={eligibleAccounts}
+                      categories={categories ?? []}
+                      isSelected={selectedIds.has(row.expense.id)}
+                      onToggleSelect={toggleSelect}
+                      dragState={dragState}
+                      onDragStart={handleDragStart}
+                      groupMeta={row.groupMeta}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -1280,23 +2094,21 @@ export function Expenses() {
                     </div>
                   </div>
                   <div className="ml-4 flex items-center gap-2">
-                    <span className="font-semibold text-destructive">-{formatCurrency(expense.amount)}</span>
+                    <span className={`font-semibold ${parseFloat(expense.amount) < 0 ? "text-green-600" : ""}`}>
+                      {parseFloat(expense.amount) < 0
+                        ? `+${formatCurrency(Math.abs(parseFloat(expense.amount)))}`
+                        : formatCurrency(parseFloat(expense.amount))}
+                    </span>
                     <button onClick={() => openEdit(expense)} className="rounded p-1 hover:bg-accent"><Pencil className="h-4 w-4 text-muted-foreground" /></button>
                   </div>
                 </div>
               ))}
             </div>
 
-            {pagination && pagination.totalPages > 1 && (
-              <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
-                <p className="text-sm text-muted-foreground">{pagination.total} expense{pagination.total !== 1 ? "s" : ""}</p>
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}><ChevronLeft className="h-4 w-4" /></Button>
-                  <span className="text-sm">Page {page} of {pagination.totalPages}</span>
-                  <Button variant="ghost" size="sm" disabled={page === pagination.totalPages} onClick={() => setPage(page + 1)}><ChevronRight className="h-4 w-4" /></Button>
-                </div>
-              </div>
+            {loading && currentPage > 1 && (
+              <div className="py-4 text-center text-sm text-muted-foreground">Loading more...</div>
             )}
+            <div ref={sentinelRef} className="h-1" />
           </>
         ) : (
           <EmptyState
@@ -1308,7 +2120,7 @@ export function Expenses() {
             }
             action={
               hasActiveFilters || showUncategorized
-                ? <Button variant="secondary" onClick={clearFilters}>Clear Filters</Button>
+                ? <Button variant="secondary" onClick={resetFilters}>Clear Filters</Button>
                 : <Button onClick={() => { setEditing(null); setOffsetParent(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> Add Expense</Button>
             }
           />
@@ -1327,6 +2139,7 @@ export function Expenses() {
         accounts={eligibleAccounts}
         tags={tags ?? []}
         vendors={vendorList ?? []}
+        onCreateTag={async (name) => { const t = await createTag({ name }); refetchTags(); return t; }}
       />
 
       <ImportModal
@@ -1336,6 +2149,24 @@ export function Expenses() {
         categories={categories ?? []}
         accounts={eligibleAccounts}
       />
+
+      {selectedIds.size > 0 && (
+        <BulkEditBar
+          ids={[...selectedIds]}
+          categories={categories ?? []}
+          tags={tags ?? []}
+          groupAction={groupAction}
+          setAsPrimaryTarget={setAsPrimaryTarget}
+          onClear={clearSelection}
+          onSuccess={() => {
+            clearSelection();
+            refetchAll();
+            refetchUncat();
+          }}
+          onGroupAction={handleGroupAction}
+          onSetAsPrimary={handleSetAsPrimary}
+        />
+      )}
 
       {/* Recurring action confirmation dialog */}
       {recurringConfirm && (
@@ -1376,13 +2207,44 @@ export function Expenses() {
           </div>
         </div>
       )}
+
+      {showBackToTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg transition-opacity hover:opacity-90"
+          aria-label="Back to top"
+        >
+          <ArrowUp className="h-4 w-4" />
+          <span>Back to Top</span>
+        </button>
+      )}
+
+      {/* Floating drag follower */}
+      {dragState?.started && dragSource && (
+        <div
+          style={{
+            position: "fixed",
+            left: dragState.mousePos.x + 14,
+            top: dragState.mousePos.y - 12,
+            pointerEvents: "none",
+            zIndex: 9999,
+          }}
+          className="flex items-center gap-2 rounded border border-border bg-white px-3 py-1.5 text-sm shadow-lg opacity-95"
+        >
+          <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="font-medium">{dragSource.vendor}</span>
+          <span className="text-green-600 font-semibold">
+            +{formatCurrency(Math.abs(parseFloat(dragSource.amount)))}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Offset sub-row (lighter/smaller styling) ──
 function OffsetRow({
-  offset, onEdit, onInlineUpdate, accounts, categories, isUpcoming,
+  offset, onEdit, onInlineUpdate, accounts, categories, isUpcoming, dragState, onDragStart, isGrouped, isFullyOffset,
 }: {
   offset: Expense;
   onEdit: (e: Expense) => void;
@@ -1390,28 +2252,40 @@ function OffsetRow({
   accounts: Account[];
   categories: Category[];
   isUpcoming?: boolean;
+  dragState?: DragState | null;
+  onDragStart?: (e: React.MouseEvent, expense: Expense, sourceType: "negative" | "offset") => void;
+  isGrouped?: boolean;
+  isFullyOffset?: boolean;
 }) {
   const upcomingClass = isUpcoming ? "italic opacity-60" : "";
+  const textClass = isFullyOffset ? "text-gray-300" : "text-muted-foreground";
+  const isBeingDragged = dragState?.started && dragState?.sourceId === offset.id;
+  const isDraggable = !isUpcoming;
 
   return (
-    <tr className={`bg-muted/20 hover:bg-muted/30 ${upcomingClass}`}>
-      <td className="w-[70px] py-2 pr-3 text-xs text-muted-foreground">
-        <EditableCell value={offset.date} type="date" onSave={(v) => onInlineUpdate(offset.id, "date", v)} className="text-xs text-muted-foreground" />
+    <tr
+      className={`bg-muted/20 hover:bg-muted/30 ${upcomingClass} ${isDraggable ? "cursor-grab" : ""} ${isBeingDragged ? "opacity-40" : ""}`}
+      onMouseDown={isDraggable ? (e) => onDragStart?.(e, offset, "offset") : undefined}
+    >
+      <td className={`w-[44px] py-2 pr-2 border-l-[3px] text-center ${isGrouped ? "border-primary/30" : "border-transparent"}`}></td>
+      <td className={`w-[70px] py-2 pr-3 ${textClass}`}>
+        <EditableCell value={offset.date} type="date" onSave={(v) => onInlineUpdate(offset.id, "date", v)} className={textClass} />
       </td>
       <td className="py-2 pr-3">
-        <div className="flex items-center gap-2 pl-6">
+        <div className="flex items-center gap-2">
           <Undo2 className="h-3 w-3 flex-shrink-0 text-muted-foreground/50" />
           <EditableCell
             value={offset.description}
             onSave={(v) => onInlineUpdate(offset.id, "description", v)}
-            className="text-xs text-muted-foreground"
+            className={textClass}
           />
         </div>
       </td>
-      <td className="w-[170px] py-2 pr-3 text-xs text-muted-foreground">
-        <EditableVendorCell value={offset.vendor} vendors={[]} onSave={(v) => onInlineUpdate(offset.id, "vendor", v)} />
+      <td className="w-[60px] py-2"></td>
+      <td className={`w-[170px] py-2 pr-3 ${textClass}`}>
+        <EditableVendorCell value={offset.vendor} vendors={[]} onSave={(v) => onInlineUpdate(offset.id, "vendor", v)} className={textClass} />
       </td>
-      <td className="w-[190px] py-2 pr-3 text-xs text-muted-foreground">
+      <td className={`w-[190px] py-2 pr-3 ${textClass}`}>
         <EditableCategoryCell
           value={offset.categoryId}
           label={offset.category?.name ?? ""}
@@ -1420,10 +2294,11 @@ function OffsetRow({
           onSave={(v) => onInlineUpdate(offset.id, "categoryId", v)}
         />
       </td>
-      <td className="w-[140px] py-2 pr-3 text-xs text-muted-foreground">
+      <td className={`w-[195px] py-2 pr-3 ${textClass}`}>
         <EditableAccountCell
           value={offset.accountId}
           label={offset.account.name}
+          color={offset.account.color}
           accounts={accounts}
           onSave={(v) => onInlineUpdate(offset.id, "accountId", v)}
         />
@@ -1433,7 +2308,7 @@ function OffsetRow({
           {offset.account.isJoint ? "J" : "P"}
         </span>
       </td>
-      <td className="w-[100px] py-2 text-right text-xs font-semibold text-green-600">
+      <td className="w-[90px] py-2 text-right font-semibold text-green-600">
         <EditableAmountCell value={offset.amount} onSave={(v) => onInlineUpdate(offset.id, "amount", v)} isOffset />
       </td>
       <td className="w-[60px] py-2 text-right">
@@ -1448,6 +2323,7 @@ function OffsetRow({
 // ── Parent row with offset sub-rows ──
 function ExpenseRowWithOffsets({
   expense, onEdit, onInlineUpdate, onCreateOffset, vendors, accounts, categories, isUpcoming,
+  isSelected, onToggleSelect, dragState, onDragStart, groupMeta,
 }: {
   expense: Expense;
   onEdit: (e: Expense) => void;
@@ -1457,83 +2333,118 @@ function ExpenseRowWithOffsets({
   vendors: string[];
   accounts: Account[];
   categories: Category[];
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  dragState?: DragState | null;
+  onDragStart?: (e: React.MouseEvent, expense: Expense, sourceType: "negative" | "offset") => void;
+  groupMeta?: GroupMeta;
 }) {
   const offsets = expense.offsets ?? [];
   const hasOffsets = offsets.length > 0;
   const offsetTotal = offsets.reduce((sum, o) => sum + Math.abs(parseFloat(o.amount)), 0);
   const parentAmount = parseFloat(expense.amount);
   const isFullyReimbursed = hasOffsets && offsetTotal >= parentAmount;
+  const rawOffsetSum = offsets.reduce((s, o) => s + parseFloat(o.amount), 0);
+  const isFullyOffset = hasOffsets && Math.abs(parentAmount + rawOffsetSum) < 0.005;
 
   const isUncategorized = !expense.categoryId;
   const isRecurring = !!expense.recurrenceRuleId;
+  const isNegativeStandalone = parentAmount < 0 && !isUpcoming;
+  const isBeingDragged = dragState?.started && dragState?.sourceId === expense.id;
+  const isDragTarget = dragState?.started && dragState?.targetId === expense.id && dragState?.sourceId !== expense.id;
+  const showOffsetDropZone = dragState?.started && dragState?.sourceType === "offset" && dragState?.sourceParentId === expense.id;
 
   const rowBg = isUncategorized
     ? "bg-red-50/50 hover:bg-red-50"
-    : isFullyReimbursed
-    ? "bg-green-50/50 hover:bg-green-50"
     : isRecurring
     ? "bg-blue-50/50 hover:bg-blue-50"
-    : expense.isReimbursementExpected
+    : expense.isReimbursementExpected && !isFullyReimbursed
     ? "bg-amber-50/50 hover:bg-amber-50"
     : "hover:bg-muted/50";
 
   const upcomingClass = isUpcoming ? "italic opacity-60" : "";
+  const dragTargetClass = isDragTarget ? "ring-2 ring-blue-400 ring-inset bg-blue-50/60" : "";
+  const dragGhostClass = isBeingDragged ? "opacity-40" : "";
+  const dragCursorClass = isNegativeStandalone ? "cursor-grab" : "";
 
   // Determine reimbursement status icon
   const StatusIcon = () => {
     if (isFullyReimbursed) {
-      return <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-green-500" title="Fully reimbursed" />;
+      return <span title="Fully reimbursed" className="inline-flex flex-shrink-0"><CheckCircle2 className="h-4 w-4 text-green-500" /></span>;
     }
     if (expense.isReimbursementExpected) {
-      return <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-500" title={expense.reimbursementNote ?? "Reimbursement expected"} />;
+      return <span title={expense.reimbursementNote ?? "Reimbursement expected"} className="inline-flex flex-shrink-0"><AlertCircle className="h-4 w-4 text-amber-500" /></span>;
     }
     return null;
   };
 
   return (
     <>
-      <tr className={`${rowBg} ${upcomingClass}`}>
-        <td className="w-[70px] py-3 pr-3">
+      <tr
+        data-expense-id={expense.id}
+        className={`group/row ${rowBg} ${upcomingClass} ${dragTargetClass} ${dragGhostClass} ${dragCursorClass}`}
+        onMouseDown={isNegativeStandalone ? (e) => onDragStart?.(e, expense, "negative") : undefined}
+      >
+        <td
+          className={`w-[44px] py-2 pr-2 border-l-[3px] text-center ${
+            groupMeta
+              ? groupMeta.isPrimary ? "border-primary" : "border-primary/30"
+              : "border-transparent"
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={isSelected ?? false}
+            onChange={() => onToggleSelect?.(expense.id)}
+            onClick={(e) => e.stopPropagation()}
+            className="h-4 w-4 rounded accent-primary"
+          />
+        </td>
+        <td className={`w-[70px] py-2 pr-3 ${isFullyOffset ? "text-gray-300" : (groupMeta && !groupMeta.isPrimary) ? "text-muted-foreground" : ""}`}>
           <EditableCell value={expense.date} type="date" onSave={(v) => onInlineUpdate(expense.id, "date", v)} />
         </td>
-        <td className="py-3 pr-3">
-          <div className="flex items-center gap-2">
+        <td className="py-2 pr-3">
+          <EditableCell value={expense.description} onSave={(v) => onInlineUpdate(expense.id, "description", v)} className={`font-medium${isFullyOffset ? " text-gray-300" : ""}`} />
+          {expense.tags.length > 0 && (
+            <div className="mt-0.5 flex flex-wrap gap-1">
+              {expense.tags.map(({ tag }) => (
+                <span key={tag.id} className="whitespace-nowrap rounded-full px-1.5 py-0.5 text-xs font-medium" style={{ backgroundColor: tag.color ? `${tag.color}25` : "hsl(var(--muted))", color: tag.color ?? "inherit" }}>
+                  {tag.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </td>
+        <td className="w-[60px] py-2 pr-3">
+          <div className="flex items-center justify-end gap-1.5">
             <StatusIcon />
-            {isRecurring && <Repeat className="h-3.5 w-3.5 flex-shrink-0 text-blue-500" title="Recurring expense" />}
-            <EditableCell value={expense.description} onSave={(v) => onInlineUpdate(expense.id, "description", v)} className="font-medium" />
-            {expense.tags.length > 0 && (
-              <div className="flex gap-1">
-                {expense.tags.map(({ tag }) => (
-                  <span key={tag.id} className="rounded-full px-1.5 py-0.5 text-xs font-medium" style={{ backgroundColor: tag.color ? `${tag.color}25` : "hsl(var(--muted))", color: tag.color ?? "inherit" }}>
-                    {tag.name}
-                  </span>
-                ))}
-              </div>
-            )}
+            {isRecurring && <span title="Recurring expense" className="inline-flex flex-shrink-0"><Repeat className="h-3.5 w-3.5 text-blue-500" /></span>}
           </div>
         </td>
-        <td className="w-[170px] py-3 pr-3">
-          <EditableVendorCell value={expense.vendor} vendors={vendors} onSave={(v) => onInlineUpdate(expense.id, "vendor", v)} />
+        <td className={`w-[170px] py-2 pr-3${isFullyOffset ? " text-gray-300" : ""}`}>
+          <EditableVendorCell value={expense.vendor} vendors={vendors} onSave={(v) => onInlineUpdate(expense.id, "vendor", v)} className={isFullyOffset ? "text-gray-300" : undefined} />
         </td>
-        <td className="w-[190px] py-3 pr-3">
+        <td className={`w-[190px] py-2 pr-3${isFullyOffset ? " text-gray-300" : ""}`}>
           <EditableCategoryCell value={expense.categoryId} label={expense.category?.name ?? ""} categories={categories} isUncategorized={isUncategorized} onSave={(v) => onInlineUpdate(expense.id, "categoryId", v)} />
         </td>
-        <td className="w-[140px] py-3 pr-3">
-          <EditableAccountCell value={expense.accountId} label={expense.account.name} accounts={accounts} onSave={(v) => onInlineUpdate(expense.id, "accountId", v)} />
+        <td className={`w-[195px] py-2 pr-3${isFullyOffset ? " text-gray-300" : ""}`}>
+          <EditableAccountCell value={expense.accountId} label={expense.account.name} color={expense.account.color} accounts={accounts} onSave={(v) => onInlineUpdate(expense.id, "accountId", v)} />
         </td>
-        <td className="w-[30px] py-3 text-center">
+        <td className="w-[30px] py-2 text-center">
           <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${expense.account.isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
             {expense.account.isJoint ? "J" : "P"}
           </span>
         </td>
-        <td className="w-[100px] py-3 text-right font-semibold text-destructive">
+        <td className={`w-[90px] py-2 text-right font-semibold ${parseFloat(expense.amount) < 0 ? "text-green-600" : ""}`}>
           <EditableAmountCell value={expense.amount} onSave={(v) => onInlineUpdate(expense.id, "amount", v)} />
         </td>
-        <td className="w-[60px] py-3 text-right">
+        <td className="w-[60px] py-2 text-right">
           <div className="flex items-center justify-end gap-0.5">
-            <button onClick={() => onCreateOffset(expense)} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent" title="Add offset / reimbursement">
-              <Undo2 className="h-3.5 w-3.5" />
-            </button>
+            {parseFloat(expense.amount) >= 0 && (
+              <button onClick={() => onCreateOffset(expense)} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent" title="Add offset / reimbursement">
+                <Undo2 className="h-3.5 w-3.5" />
+              </button>
+            )}
             <button onClick={() => onEdit(expense)} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent">
               <Pencil className="h-4 w-4" />
             </button>
@@ -1549,71 +2460,33 @@ function ExpenseRowWithOffsets({
           accounts={accounts}
           categories={categories}
           isUpcoming={isUpcoming}
+          dragState={dragState}
+          onDragStart={onDragStart}
+          isGrouped={!!groupMeta}
+          isFullyOffset={isFullyOffset}
         />
       ))}
-    </>
-  );
-}
-
-// ── Collapsible group ──
-function GroupRows({
-  groupName, expenses, collapsed, onToggle, onEdit, onInlineUpdate, onCreateOffset, firstExpense, vendors, accounts, categories,
-}: {
-  groupName: string;
-  expenses: Expense[];
-  collapsed: boolean;
-  onToggle: () => void;
-  onEdit: (e: Expense) => void;
-  onInlineUpdate: (id: string, field: string, value: string) => Promise<void>;
-  onCreateOffset: (e: Expense) => void;
-  firstExpense: Expense;
-  vendors: string[];
-  accounts: Account[];
-  categories: Category[];
-}) {
-  const totalAmount = expenses.reduce((sum, e) => sum + parseFloat(e.amount), 0);
-
-  if (collapsed) {
-    return (
-      <tr className="bg-muted/30 hover:bg-muted/50">
-        <td className="w-[70px] py-3 pr-3">{formatDate(firstExpense.date)}</td>
-        <td className="py-3 pr-3">
-          <button onClick={onToggle} className="flex items-center gap-1.5 font-medium text-primary">
-            <ChevronRight className="h-3.5 w-3.5" />
-            {groupName}
-            <span className="text-xs font-normal text-muted-foreground">({expenses.length} items)</span>
-          </button>
-        </td>
-        <td className="w-[170px] py-3 pr-3 text-muted-foreground">{firstExpense.vendor}</td>
-        <td className="w-[190px] py-3 pr-3">{firstExpense.category?.name ?? <span className="text-red-500">[Uncategorized]</span>}</td>
-        <td className="w-[140px] py-3 pr-3">{firstExpense.account.name}</td>
-        <td className="w-[30px] py-3 text-center">
-          <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${firstExpense.account.isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
-            {firstExpense.account.isJoint ? "J" : "P"}
-          </span>
-        </td>
-        <td className="w-[100px] py-3 text-right font-semibold text-destructive">-{formatCurrency(totalAmount)}</td>
-        <td className="w-[60px] py-3 text-right">
-          <button onClick={() => onEdit(firstExpense)} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent"><Pencil className="h-4 w-4" /></button>
-        </td>
-      </tr>
-    );
-  }
-
-  return (
-    <>
-      <tr className="bg-muted/30">
-        <td colSpan={8} className="py-2">
-          <button onClick={onToggle} className="flex items-center gap-1.5 font-medium text-primary text-sm">
-            <ChevronDown className="h-3.5 w-3.5" />
-            {groupName}
-            <span className="text-xs font-normal text-muted-foreground">({expenses.length} items &middot; total: -{formatCurrency(totalAmount)})</span>
-          </button>
-        </td>
-      </tr>
-      {expenses.map((expense) => (
-        <ExpenseRowWithOffsets key={expense.id} expense={expense} onEdit={onEdit} onInlineUpdate={onInlineUpdate} onCreateOffset={onCreateOffset} vendors={vendors} accounts={accounts} categories={categories} />
-      ))}
+      {showOffsetDropZone && (
+        <tr
+          data-dropzone={expense.id}
+          className={`transition-colors ${
+            dragState?.targetId === `__dz__${expense.id}`
+              ? "bg-blue-50"
+              : ""
+          }`}
+        >
+          <td
+            colSpan={9}
+            className={`py-2 px-4 text-sm text-center border-2 border-dashed rounded transition-colors ${
+              dragState?.targetId === `__dz__${expense.id}`
+                ? "border-blue-400 text-blue-600"
+                : "border-gray-300 text-muted-foreground"
+            }`}
+          >
+            Drop here to make independent
+          </td>
+        </tr>
+      )}
     </>
   );
 }
@@ -1690,9 +2563,11 @@ function ImportModal({
   // Build lookup maps
   const categoryMap = useMemo(() => {
     const map = new Map<string, string>();
-    for (const c of categories) {
+    // Add top-level categories first, then subcategories so subcategories win on name collision
+    for (const c of (categories ?? []).filter((c) => !c.parentId))
       map.set(c.name.toLowerCase(), c.id);
-    }
+    for (const c of (categories ?? []).filter((c) => c.parentId))
+      map.set(c.name.toLowerCase(), c.id);
     return map;
   }, [categories]);
 
@@ -1722,6 +2597,7 @@ function ImportModal({
         const fields = parseCSVLine(lines[i], delimiter);
         if (fields.length < 6) continue;
 
+        // Columns: Date, Description, Vendor, Category, Account, Amount, Tags
         const [rawDate, desc, vendor, catName, acctName, rawAmt] = fields;
         const errors: string[] = [];
 
@@ -1750,8 +2626,10 @@ function ImportModal({
           errors.push("Missing account");
         }
 
-        const amount = parseFloat(rawAmt);
-        if (isNaN(amount) || amount <= 0) errors.push("Invalid amount");
+        const cleanAmt = rawAmt?.replace(/[$,]/g, "") ?? "";
+        const amount = parseFloat(cleanAmt);
+        if (isNaN(amount)) errors.push("Invalid amount");
+        else if (amount === 0) errors.push("Amount cannot be zero");
 
         parsed.push({
           raw: fields,
@@ -1807,6 +2685,7 @@ function ImportModal({
           </div>
           <p className="text-xs text-muted-foreground">
             First row should be a header (it will be skipped). Dates can be YYYY-MM-DD or M/D/YYYY.
+            Amounts can be negative (e.g. -25.00) to record income-offsetting entries.
             Category and account names must match existing entries.
           </p>
           <div>
@@ -1868,7 +2747,9 @@ function ImportModal({
                     <td className="px-2 py-1.5 max-w-[120px] truncate">{row.vendor}</td>
                     <td className="px-2 py-1.5 max-w-[120px] truncate">{row.categoryName || "—"}</td>
                     <td className="px-2 py-1.5 max-w-[100px] truncate">{row.accountName}</td>
-                    <td className="px-2 py-1.5 text-right">{row.amount > 0 ? formatCurrency(row.amount) : "—"}</td>
+                    <td className={`px-2 py-1.5 text-right font-medium ${row.amount < 0 ? "text-green-600" : ""}`}>
+                      {row.amount === 0 ? "—" : row.amount < 0 ? `+${formatCurrency(Math.abs(row.amount))}` : formatCurrency(row.amount)}
+                    </td>
                     <td className="px-2 py-1.5">
                       {row.errors.length > 0 ? (
                         <span className="text-destructive" title={row.errors.join("; ")}>
@@ -1948,19 +2829,27 @@ interface ExpenseModalProps {
   accounts: Account[];
   tags: Tag[];
   vendors: string[];
+  onCreateTag: (name: string) => Promise<Tag>;
 }
 
-function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expense, offsetParent, categories, accounts, tags, vendors }: ExpenseModalProps) {
+function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expense, offsetParent, categories, accounts, tags, vendors, onCreateTag }: ExpenseModalProps) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [isReimbursementExpected, setIsReimbursementExpected] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringInterval, setRecurringInterval] = useState("");
+  const [showEndDate, setShowEndDate] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showOptional, setShowOptional] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const [showRecurringConfirm, setShowRecurringConfirm] = useState(false);
   const [pendingSaveData, setPendingSaveData] = useState<Record<string, unknown> | null>(null);
+  const [amountIsNegative, setAmountIsNegative] = useState(false);
+  const accountTriggerRef = useRef<HTMLButtonElement>(null);
+  const categoryTriggerRef = useRef<HTMLButtonElement>(null);
+  const tagsTriggerRef = useRef<HTMLButtonElement>(null);
+  const submitBtnRef = useRef<HTMLButtonElement>(null);
 
   const isOffsetMode = !!offsetParent && !expense;
 
@@ -1971,6 +2860,8 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
         setSelectedTagIds(offsetParent.tags.map((t) => t.tagId));
         setIsReimbursementExpected(false);
         setIsRecurring(false);
+        setRecurringInterval("");
+        setShowEndDate(false);
         setConfirmDelete(false);
         setSelectedCategoryId(offsetParent.categoryId ?? "");
         setShowOptional(false);
@@ -1978,21 +2869,18 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
         setSelectedTagIds(expense?.tags.map((t) => t.tagId) ?? []);
         setIsReimbursementExpected(expense?.isReimbursementExpected ?? false);
         setIsRecurring(!!expense?.recurrenceRuleId);
+        setRecurringInterval("");
+        setShowEndDate(false);
         setConfirmDelete(false);
         setSelectedCategoryId(expense?.categoryId ?? "");
         // Auto-expand optional if any optional fields have data
         setShowOptional(!!(expense?.notes || expense?.isReimbursementExpected || expense?.recurrenceRuleId));
         setShowRecurringConfirm(false);
         setPendingSaveData(null);
+        setAmountIsNegative(!!(expense && parseFloat(expense.amount) < 0));
       }
     }
   }, [open, expense, offsetParent, isOffsetMode]);
-
-  const toggleTag = (tagId: string) => {
-    setSelectedTagIds((prev) =>
-      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
-    );
-  };
 
   const handleVendorSelect = async (vendor: string) => {
     if (!expense && vendor) {
@@ -2103,7 +2991,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
 
         <div>
           <label className="mb-1 block text-sm font-medium">Amount</label>
-          <CurrencyInput name="amount" defaultValue={isOffsetMode ? offsetParent.amount : expense?.amount} required />
+          <CurrencyInput name="amount" defaultValue={isOffsetMode ? offsetParent.amount : expense?.amount} required autoFocus onChange={(v) => !isOffsetMode && setAmountIsNegative(v < 0)} />
         </div>
 
         <div>
@@ -2139,6 +3027,8 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
               defaultValue={isOffsetMode ? toDateInputValue(offsetParent.date) : toDateInputValue(expense?.date)}
               className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
+            {/* Relay: captures focus as it exits the date field and forwards to Account, but not on Shift+Tab backwards from Account */}
+            <span tabIndex={0} className="sr-only" onFocus={(e) => { if (e.relatedTarget !== accountTriggerRef.current) accountTriggerRef.current?.focus(); }} />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Account</label>
@@ -2147,6 +3037,8 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
               required
               defaultValue={isOffsetMode ? "" : expense?.accountId ?? ""}
               accounts={accounts}
+              triggerRef={accountTriggerRef}
+              onTabFromSearch={() => categoryTriggerRef.current?.focus()}
             />
           </div>
         </div>
@@ -2158,42 +3050,29 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
             defaultValue={selectedCategoryId}
             categories={categories}
             required
+            triggerRef={categoryTriggerRef}
+            onTabFromSearch={() => tagsTriggerRef.current?.focus()}
           />
         </div>
 
-        {tags.length > 0 && (
-          <div>
-            <label className="mb-2 block text-sm font-medium">Tags</label>
-            <div className="flex flex-wrap gap-2">
-              {tags.map((tag) => {
-                const selected = selectedTagIds.includes(tag.id);
-                return (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    onClick={() => toggleTag(tag.id)}
-                    className="rounded-full border px-3 py-1 text-xs font-medium transition-colors"
-                    style={
-                      selected && tag.color
-                        ? { backgroundColor: tag.color, borderColor: tag.color, color: "#fff" }
-                        : selected
-                        ? { backgroundColor: "hsl(var(--primary))", borderColor: "hsl(var(--primary))", color: "#fff" }
-                        : {}
-                    }
-                  >
-                    {tag.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        <div>
+          <label className="mb-1 block text-sm font-medium">Tags</label>
+          <TagTypeahead
+            tags={tags}
+            selectedIds={selectedTagIds}
+            onChange={setSelectedTagIds}
+            onCreateTag={onCreateTag}
+            triggerRef={tagsTriggerRef}
+            onTabFromSearch={() => submitBtnRef.current?.focus()}
+          />
+        </div>
 
         {/* Collapsible optional section — hidden in offset mode */}
         {!isOffsetMode && (
           <div className="border-t border-border pt-3">
             <button
               type="button"
+              tabIndex={-1}
               onClick={() => setShowOptional(!showOptional)}
               className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
             >
@@ -2213,29 +3092,32 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
                   />
                 </div>
 
-                <div className="rounded-md border border-border p-3">
-                  <label className="flex cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={isReimbursementExpected}
-                      onChange={(e) => setIsReimbursementExpected(e.target.checked)}
-                      className="h-4 w-4 rounded border-border"
-                    />
-                    <span className="text-sm font-medium">Expecting reimbursement or refund</span>
-                  </label>
-                  {isReimbursementExpected && (
-                    <div className="mt-2">
+                {!amountIsNegative && (
+                  <div className="rounded-md border border-border p-3">
+                    <label className="flex cursor-pointer items-center gap-2">
                       <input
-                        name="reimbursementNote"
-                        type="text"
-                        defaultValue={expense?.reimbursementNote ?? ""}
-                        className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                        placeholder="e.g. Return pending, or expecting $25 from John"
+                        type="checkbox"
+                        checked={isReimbursementExpected}
+                        onChange={(e) => setIsReimbursementExpected(e.target.checked)}
+                        className="h-4 w-4 rounded border-border"
                       />
-                    </div>
-                  )}
-                </div>
+                      <span className="text-sm font-medium">Expecting reimbursement or refund</span>
+                    </label>
+                    {isReimbursementExpected && (
+                      <div className="mt-2">
+                        <input
+                          name="reimbursementNote"
+                          type="text"
+                          defaultValue={expense?.reimbursementNote ?? ""}
+                          className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                          placeholder="e.g. Return pending, or expecting $25 from John"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
 
+                {!expense?.parentExpenseId && (
                 <div className="rounded-md border border-border p-3">
                   <label className="flex cursor-pointer items-center gap-2">
                     <input
@@ -2247,24 +3129,59 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
                     <span className="text-sm font-medium">Recurring expense</span>
                   </label>
                   {isRecurring && !expense?.recurrenceRuleId && (
-                    <div className="mt-3 grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Frequency</label>
-                        <select name="frequency" defaultValue="MONTHLY" className="w-full rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
-                          {Object.entries(FREQUENCY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    <div className="mt-3">
+                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2 text-sm">
+                        <span className="text-muted-foreground">Repeats every</span>
+                        <input
+                          name="interval"
+                          type="number"
+                          min="1"
+                          max="99"
+                          value={recurringInterval}
+                          onChange={(e) => setRecurringInterval(e.target.value)}
+                          placeholder="1"
+                          className="w-14 rounded-md border border-border px-2 py-1 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                        <select
+                          name="frequency"
+                          defaultValue="MONTHLY"
+                          className="rounded-md border border-border px-2 py-1 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        >
+                          {FREQUENCY_OPTIONS.map(({ value, singular, plural }) => {
+                            const n = parseInt(recurringInterval) || 1;
+                            return <option key={value} value={value}>{n === 1 ? singular : plural}</option>;
+                          })}
                         </select>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Interval</label>
-                        <input name="interval" type="number" min="1" defaultValue="1" className="w-full rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="mb-1 block text-xs font-medium text-muted-foreground">End Date</label>
-                        <input name="endDate" type="date" className="w-full rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
+                        {!showEndDate && (
+                          <button type="button" onClick={() => setShowEndDate(true)} className="text-xs text-primary hover:underline">
+                            + Add end date
+                          </button>
+                        )}
+                        {showEndDate && (
+                          <>
+                            <span className="text-muted-foreground">until</span>
+                            <span className="flex items-center gap-1">
+                              <input
+                                name="endDate"
+                                type="date"
+                                className="w-[7.75rem] rounded-md border border-border px-2 py-1 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowEndDate(false)}
+                                className="text-sm leading-none text-muted-foreground hover:text-foreground"
+                                aria-label="Remove end date"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
                 </div>
+                )}
               </div>
             )}
           </div>
@@ -2332,8 +3249,8 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
               )}
             </div>
             <div className="flex gap-2">
-              <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-              <Button type="submit" disabled={saving}>
+              <Button type="button" variant="secondary" tabIndex={-1} onClick={onClose}>Cancel</Button>
+              <Button ref={submitBtnRef} type="submit" disabled={saving}>
                 {saving ? "Saving..." : isOffsetMode ? "Add Offset" : expense ? "Update" : "Add Expense"}
               </Button>
             </div>

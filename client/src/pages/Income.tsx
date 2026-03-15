@@ -1,39 +1,33 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
-  Plus, Pencil, TrendingUp, ChevronLeft, ChevronRight,
-  ArrowUpDown, ArrowUp, ArrowDown, X, Filter, Trash2, ChevronDown,
+  Plus, Pencil, TrendingUp, ChevronRight,
+  ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, ChevronDown, Search,
+  Upload, FileText, Check, CheckCircle2, AlertCircle,
 } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
+import { MultiSelectDropdown } from "@/components/MultiSelectDropdown";
+import type { MultiSelectOption, MultiSelectGroup } from "@/components/MultiSelectDropdown";
 import { useApi } from "@/hooks/useApi";
-import { getIncome, getAccounts, getTags, createIncome, updateIncome, deleteIncome } from "@/api";
+import { getIncome, getAccounts, getFlatCategories, createIncome, updateIncome, deleteIncome, importIncome } from "@/api";
 import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/utils";
-import type { Account, Income, IncomeSource, Tag } from "@/types";
-
-const SOURCE_LABELS: Record<IncomeSource, string> = {
-  DIVIDENDS: "Dividends",
-  INTEREST: "Interest",
-  CAPITAL_GAINS: "Capital Gains",
-  GIFTS: "Gifts",
-  OTHER: "Other",
-};
+import type { Account, Category, Income } from "@/types";
 
 const INCOME_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "INVESTMENT"];
 
-type SortField = "date" | "source" | "account" | "amount";
+type SortField = "date" | "category" | "account" | "amount";
 type SortState = { field: SortField; order: "asc" | "desc" } | null;
 
 // ── Currency input ──
-function CurrencyInput({ name, defaultValue, required }: { name: string; defaultValue?: string; required?: boolean }) {
+function CurrencyInput({ name, defaultValue, required, autoFocus }: { name: string; defaultValue?: string; required?: boolean; autoFocus?: boolean }) {
   const [rawValue, setRawValue] = useState(() => {
     if (!defaultValue) return "";
     const num = parseFloat(defaultValue);
     return num ? num.toFixed(2) : "";
   });
 
-  // Sync when defaultValue changes (e.g. modal reopened with different data)
   useEffect(() => {
     if (!defaultValue) { setRawValue(""); return; }
     const num = parseFloat(defaultValue);
@@ -64,6 +58,7 @@ function CurrencyInput({ name, defaultValue, required }: { name: string; default
           value={rawValue}
           onChange={handleChange}
           onBlur={handleBlur}
+          autoFocus={autoFocus}
           className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           placeholder="0.00"
           inputMode="decimal"
@@ -101,58 +96,41 @@ function EditableCell({ value, onSave, type = "text", className = "" }: { value:
 
   return (
     <span onClick={() => { setEditValue(value); setEditing(true); }} className={`cursor-pointer border-b border-dotted border-transparent hover:border-gray-400 ${className}`}>
-      {type === "date" ? formatDate(value) : value}
+      {type === "date" ? formatDate(value) : (value || <span className="text-muted-foreground italic">—</span>)}
     </span>
   );
 }
 
-function EditableSelectCell({ value, label, options, onSave }: { value: string; label: string; options: { id: string; name: string }[]; onSave: (v: string) => void }) {
-  const [editing, setEditing] = useState(false);
-  const ref = useRef<HTMLSelectElement>(null);
-
-  useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
-
-  if (editing) {
-    return (
-      <select ref={ref} value={value} onChange={(e) => { onSave(e.target.value); setEditing(false); }} onBlur={() => setEditing(false)} className="w-full rounded border border-primary px-1 py-0.5 text-sm focus:outline-none">
-        {options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-      </select>
-    );
-  }
-
-  return (
-    <span onClick={() => setEditing(true)} className="cursor-pointer border-b border-dotted border-transparent hover:border-gray-400">{label}</span>
-  );
-}
-
-// ── Inline account typeahead cell ──
-function EditableAccountCell({
-  value, label, accounts, onSave,
+// ── Inline typeahead cell (shared for category, account, etc.) ──
+function EditableTypeaheadCell({
+  value, label, color, items, onSave,
 }: {
-  value: string;
+  value: string | null;
   label: string;
-  accounts: Account[];
-  onSave: (newValue: string) => void;
+  color?: string | null;
+  items: { id: string; name: string }[];
+  onSave: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [search, setSearch] = useState("");
   const [focusIdx, setFocusIdx] = useState(0);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, minWidth: 0 });
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const sortedAccounts = useMemo(() =>
-    [...accounts].sort((a, b) => a.name.localeCompare(b.name)),
-    [accounts],
+  const sorted = useMemo(() =>
+    [...items].sort((a, b) => a.name.localeCompare(b.name)),
+    [items],
   );
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return sortedAccounts;
+    if (!search.trim()) return sorted;
     const terms = search.toLowerCase().split(/\s+/);
-    return sortedAccounts.filter((a) => {
-      const words = a.name.toLowerCase().split(/\s+/);
+    return sorted.filter((item) => {
+      const words = item.name.toLowerCase().split(/\s+/);
       return terms.every((t) => words.some((w) => w.startsWith(t)));
     });
-  }, [search, sortedAccounts]);
+  }, [search, sorted]);
 
   useEffect(() => { setFocusIdx(0); }, [filtered]);
 
@@ -183,47 +161,64 @@ function EditableAccountCell({
     else if (e.key === "Escape") { setEditing(false); setSearch(""); }
   };
 
-  if (editing) {
-    return (
-      <div ref={ref} className="relative">
-        <input
-          ref={inputRef}
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Type to filter..."
-          className="w-full rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
-        />
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 min-w-[180px] rounded-md border border-border bg-background shadow-lg">
-          <div className="max-h-48 overflow-auto">
-            {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-muted-foreground">No matches</p>
-            ) : (
-              filtered.map((a, i) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
-                  onMouseDown={() => selectItem(a.id)}
-                >
-                  {a.name}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const startEditing = () => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left, minWidth: rect.width });
+    }
+    setSearch("");
+    setEditing(true);
+  };
 
   return (
-    <span
-      onClick={() => { setSearch(""); setEditing(true); }}
-      className="cursor-pointer border-b border-dotted border-transparent hover:border-gray-400"
-    >
-      {label}
-    </span>
+    <div ref={ref}>
+      {editing ? (
+        <>
+          <input
+            ref={inputRef}
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type to filter..."
+            className="w-full rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
+          />
+          <div
+            style={{ position: "fixed", top: dropdownPos.top, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 180), zIndex: 9999 }}
+            className="rounded-md border border-border bg-background shadow-lg"
+          >
+            <div className="max-h-48 overflow-auto">
+              {filtered.length === 0 ? (
+                <p className="px-3 py-2 text-sm text-muted-foreground">No matches</p>
+              ) : (
+                filtered.map((item, i) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                    onMouseDown={() => selectItem(item.id)}
+                  >
+                    {item.name}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      ) : color != null ? (
+        <span
+          onClick={startEditing}
+          className="inline-block cursor-pointer whitespace-nowrap rounded-md px-2 py-0.5 text-sm text-foreground"
+          style={{ backgroundColor: color }}
+        >
+          {label}
+        </span>
+      ) : (
+        <span onClick={startEditing} className="cursor-pointer border-b border-dotted border-transparent hover:border-gray-400">
+          {label || <span className="text-muted-foreground italic">—</span>}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -283,36 +278,43 @@ function EditableAmountCell({ value, onSave, positive }: { value: string; onSave
   );
 }
 
-// ── Account typeahead ──
-function AccountTypeahead({
-  name, defaultValue, accounts, required,
+// ── Item typeahead (modal, shared for account, category, etc.) ──
+function ItemTypeahead({
+  name, defaultValue, items, placeholder, required, triggerRef: externalTriggerRef, onTabFromSearch,
 }: {
   name: string;
   defaultValue?: string;
-  accounts: Account[];
+  items: { id: string; name: string }[];
+  placeholder?: string;
   required?: boolean;
+  triggerRef?: React.RefObject<HTMLButtonElement | null>;
+  onTabFromSearch?: () => void;
 }) {
   const [value, setValue] = useState(defaultValue ?? "");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [focusIdx, setFocusIdx] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+  const internalTriggerRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = externalTriggerRef ?? internalTriggerRef;
+  const clickingRef = useRef(false);
+  const justSelectedRef = useRef(false);
 
   useEffect(() => { setValue(defaultValue ?? ""); }, [defaultValue]);
 
-  const sortedAccounts = useMemo(() =>
-    [...accounts].sort((a, b) => a.name.localeCompare(b.name)),
-    [accounts],
+  const sorted = useMemo(() =>
+    [...items].sort((a, b) => a.name.localeCompare(b.name)),
+    [items],
   );
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return sortedAccounts;
+    if (!search.trim()) return sorted;
     const terms = search.toLowerCase().split(/\s+/);
-    return sortedAccounts.filter((a) => {
-      const words = a.name.toLowerCase().split(/\s+/);
+    return sorted.filter((item) => {
+      const words = item.name.toLowerCase().split(/\s+/);
       return terms.every((t) => words.some((w) => w.startsWith(t)));
     });
-  }, [search, sortedAccounts]);
+  }, [search, sorted]);
 
   useEffect(() => { setFocusIdx(0); }, [filtered]);
 
@@ -324,18 +326,24 @@ function AccountTypeahead({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const selectedLabel = useMemo(() => {
-    if (!value) return "";
-    return sortedAccounts.find((a) => a.id === value)?.name ?? "";
-  }, [value, sortedAccounts]);
+  const selectedLabel = useMemo(() => sorted.find((item) => item.id === value)?.name ?? "", [value, sorted]);
 
   const selectItem = (id: string) => {
     setValue(id);
     setOpen(false);
     setSearch("");
+    justSelectedRef.current = true;
+    setTimeout(() => triggerRef.current?.focus(), 0);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      setOpen(false);
+      setSearch("");
+      onTabFromSearch?.();
+      return;
+    }
     if (!open) return;
     if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx((i) => Math.min(i + 1, filtered.length - 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx((i) => Math.max(i - 1, 0)); }
@@ -348,11 +356,24 @@ function AccountTypeahead({
       <input type="hidden" name={name} value={value} />
       {required && !value && <input type="text" required value="" className="hidden" tabIndex={-1} onChange={() => {}} />}
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen(!open)}
+        onMouseDown={() => { clickingRef.current = true; }}
+        onFocus={(e) => {
+          if (justSelectedRef.current || clickingRef.current) {
+            justSelectedRef.current = false;
+            clickingRef.current = false;
+            return;
+          }
+          // Only auto-open when tabbing forward (related target precedes this button in DOM)
+          const related = e.relatedTarget as Element | null;
+          if (related && !(related.compareDocumentPosition(e.currentTarget) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+          setOpen(true);
+        }}
+        onClick={() => setOpen((o) => !o)}
         className="w-full rounded-md border border-border px-3 py-2 text-left text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
       >
-        {selectedLabel || <span className="text-muted-foreground">Select account</span>}
+        {selectedLabel || <span className="text-muted-foreground">{placeholder ?? "Select..."}</span>}
       </button>
       {open && (
         <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-border bg-background shadow-lg">
@@ -371,14 +392,15 @@ function AccountTypeahead({
             {filtered.length === 0 ? (
               <p className="px-3 py-2 text-sm text-muted-foreground">No matches</p>
             ) : (
-              filtered.map((a, i) => (
+              filtered.map((item, i) => (
                 <button
-                  key={a.id}
+                  key={item.id}
                   type="button"
+                  tabIndex={-1}
                   className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
-                  onMouseDown={() => selectItem(a.id)}
+                  onMouseDown={() => selectItem(item.id)}
                 >
-                  {a.name}
+                  {item.name}
                 </button>
               ))
             )}
@@ -391,19 +413,61 @@ function AccountTypeahead({
 
 // ═══════════════ MAIN COMPONENT ═══════════════
 
+interface IncomeFilterState {
+  accountIds: string[];
+  categoryId: string;
+  startDate: string;
+  endDate: string;
+}
+
+const INCOME_DEFAULT_FILTERS: IncomeFilterState = {
+  accountIds: [],
+  categoryId: "",
+  startDate: `${new Date().getFullYear()}-01-01`,
+  endDate: "",
+};
+
+function loadIncomeFilters(): IncomeFilterState {
+  try {
+    const get = (key: string) => {
+      const item = localStorage.getItem(`beacon-income-${key}`);
+      return item !== null ? JSON.parse(item) : null;
+    };
+    return {
+      accountIds: get("accountIds") ?? INCOME_DEFAULT_FILTERS.accountIds,
+      categoryId: get("categoryId") ?? INCOME_DEFAULT_FILTERS.categoryId,
+      startDate: get("startDate") ?? INCOME_DEFAULT_FILTERS.startDate,
+      endDate: get("endDate") ?? INCOME_DEFAULT_FILTERS.endDate,
+    };
+  } catch {
+    return { ...INCOME_DEFAULT_FILTERS };
+  }
+}
+
+function saveIncomeFilters(filters: IncomeFilterState) {
+  localStorage.setItem("beacon-income-accountIds", JSON.stringify(filters.accountIds));
+  localStorage.setItem("beacon-income-categoryId", JSON.stringify(filters.categoryId));
+  localStorage.setItem("beacon-income-startDate", JSON.stringify(filters.startDate));
+  localStorage.setItem("beacon-income-endDate", JSON.stringify(filters.endDate));
+}
+
 export function IncomePage() {
-  const [page, setPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [allIncomes, setAllIncomes] = useState<Income[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const loadingMoreRef = useRef(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const [editing, setEditing] = useState<Income | null>(null);
   const [sort, setSort] = useState<SortState>({ field: "date", order: "desc" });
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filterAccountId, setFilterAccountId] = useState("");
-  const [filterSource, setFilterSource] = useState("");
-  const [filterTagId, setFilterTagId] = useState("");
-  const [filterStartDate, setFilterStartDate] = useState("");
-  const [filterEndDate, setFilterEndDate] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Today's date string for splitting upcoming vs regular (local timezone)
+  const [staged, setStaged] = useState<IncomeFilterState>(loadIncomeFilters);
+  const [applied, setApplied] = useState<IncomeFilterState>(loadIncomeFilters);
+
   const todayStr = useMemo(() => localToday(), []);
   const tomorrowStr = useMemo(() => {
     const d = new Date();
@@ -411,51 +475,124 @@ export function IncomePage() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }, []);
 
-  const queryParams = useMemo(() => {
-    const params: Record<string, string> = { page: page.toString(), limit: "20" };
+  const filterParams = useMemo(() => {
+    const params: Record<string, string> = { limit: "50" };
     if (sort) {
       params.sortBy = sort.field;
       params.sortOrder = sort.order;
     }
-    if (filterAccountId) params.accountId = filterAccountId;
-    if (filterSource) params.source = filterSource;
-    if (filterTagId) params.tagId = filterTagId;
-    if (filterStartDate) params.startDate = filterStartDate;
-    // Cap main table at today to exclude future-dated (upcoming) income
-    if (!filterEndDate || filterEndDate > todayStr) {
-      params.endDate = todayStr;
-    } else {
-      params.endDate = filterEndDate;
-    }
+    if (applied.accountIds.length > 0) params.accountIds = applied.accountIds.join(",");
+    if (applied.categoryId) params.categoryId = applied.categoryId;
+    params.startDate = applied.startDate || INCOME_DEFAULT_FILTERS.startDate;
+    const endDate = applied.endDate || todayStr;
+    params.endDate = endDate > todayStr ? todayStr : endDate;
     return params;
-  }, [page, sort, filterAccountId, filterSource, filterTagId, filterStartDate, filterEndDate, todayStr]);
+  }, [sort, applied, todayStr]);
 
-  // Upcoming income query: future-dated, sorted ascending
-  const upcomingParams = useMemo(() => {
-    const params: Record<string, string> = {
-      startDate: tomorrowStr,
-      sortBy: "date",
-      sortOrder: "asc",
-      limit: "100",
-    };
-    if (filterAccountId) params.accountId = filterAccountId;
-    if (filterSource) params.source = filterSource;
-    if (filterTagId) params.tagId = filterTagId;
-    return params;
-  }, [tomorrowStr, filterAccountId, filterSource, filterTagId]);
+  const queryParams = useMemo(() => ({
+    ...filterParams,
+    page: currentPage.toString(),
+  }), [filterParams, currentPage]);
 
-  const { data: incomeData, refetch } = useApi(() => getIncome(queryParams), [queryParams]);
+  const upcomingParams = useMemo(() => ({
+    startDate: tomorrowStr,
+    sortBy: "date",
+    sortOrder: "asc",
+    limit: "100",
+  }), [tomorrowStr]);
+
+  const { data: incomeData, loading } = useApi(() => getIncome(queryParams), [queryParams]);
   const { data: upcomingData, refetch: refetchUpcoming } = useApi(() => getIncome(upcomingParams), [upcomingParams]);
   const { data: accounts } = useApi(() => getAccounts(), []);
-  const { data: tags } = useApi(() => getTags(), []);
+  const { data: incomeCategories } = useApi(() => getFlatCategories("INCOME"), []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    setAllIncomes([]);
+    setHasMore(false);
+    loadingMoreRef.current = false;
+  }, [filterParams]);
+
+  useEffect(() => {
+    if (!incomeData) return;
+    const { data, pagination: pag } = incomeData;
+    if (pag.page === 1) {
+      setAllIncomes(data ?? []);
+    } else {
+      setAllIncomes((prev) => [...prev, ...(data ?? [])]);
+    }
+    setHasMore(pag.page < pag.totalPages);
+    loadingMoreRef.current = false;
+  }, [incomeData]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !loadingMoreRef.current) {
+          loadingMoreRef.current = true;
+          setCurrentPage((p) => p + 1);
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore]);
+
+  useEffect(() => {
+    const handleScroll = () => setShowBackToTop(window.scrollY > 2500);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // "a" keyboard shortcut to open Add Income modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (modalOpen || importModalOpen) return;
+      const target = e.target as HTMLElement;
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable) return;
+      if (e.key === "a" || e.key === "A") {
+        setEditing(null);
+        setModalOpen(true);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [modalOpen, importModalOpen]);
 
   const eligibleAccounts = (accounts ?? []).filter((a) => INCOME_ACCOUNT_TYPES.includes(a.type));
-  const hasActiveFilters = !!(filterAccountId || filterSource || filterTagId || filterStartDate || filterEndDate);
+  const categories = incomeCategories ?? [];
+
+  const hasActiveFilters = !!(
+    applied.accountIds.length > 0 ||
+    applied.categoryId ||
+    applied.startDate !== INCOME_DEFAULT_FILTERS.startDate ||
+    (applied.endDate && applied.endDate !== todayStr)
+  );
+
+  const refreshLoaded = useCallback(async () => {
+    const pagesToRefresh = Math.max(currentPage, 1);
+    const freshItems: Income[] = [];
+    let moreAvailable = false;
+
+    for (let p = 1; p <= pagesToRefresh; p++) {
+      const result = await getIncome({ ...filterParams, page: String(p) });
+      if (!result) break;
+      freshItems.push(...(result.data ?? []));
+      moreAvailable = p < result.pagination.totalPages;
+      if (p >= result.pagination.totalPages) break;
+    }
+
+    setAllIncomes(freshItems);
+    setHasMore(moreAvailable);
+  }, [currentPage, filterParams]);
 
   const refetchAll = useCallback(() => {
-    refetch();
+    refreshLoaded();
     refetchUpcoming();
-  }, [refetch, refetchUpcoming]);
+  }, [refreshLoaded, refetchUpcoming]);
 
   const handleSave = async (formData: Record<string, unknown>) => {
     if (editing) { await updateIncome(editing.id, formData); }
@@ -490,11 +627,17 @@ export function IncomePage() {
       if (prev.order === first) return { field, order: second };
       return null;
     });
-    setPage(1);
   };
 
-  const clearFilters = () => {
-    setFilterAccountId(""); setFilterSource(""); setFilterTagId(""); setFilterStartDate(""); setFilterEndDate(""); setPage(1);
+  const applyFilters = () => {
+    setApplied({ ...staged });
+    saveIncomeFilters(staged);
+  };
+
+  const resetFilters = () => {
+    setStaged({ ...INCOME_DEFAULT_FILTERS });
+    setApplied({ ...INCOME_DEFAULT_FILTERS });
+    saveIncomeFilters(INCOME_DEFAULT_FILTERS);
   };
 
   const SortIcon = ({ field }: { field: SortField }) => {
@@ -502,18 +645,67 @@ export function IncomePage() {
     return sort.order === "asc" ? <ArrowUp className="ml-1 inline h-3 w-3" /> : <ArrowDown className="ml-1 inline h-3 w-3" />;
   };
 
-  const incomes = incomeData?.data ?? [];
-  const pagination = incomeData?.pagination;
-  const upcomingIncomes = upcomingData?.data ?? [];
+  const incomes = useMemo(() => {
+    if (!searchQuery.trim()) return allIncomes;
+    const q = searchQuery.toLowerCase();
+    return allIncomes.filter((inc) =>
+      (inc.category?.name ?? "").toLowerCase().includes(q) ||
+      (inc.source ?? "").toLowerCase().includes(q) ||
+      parseFloat(inc.amount).toFixed(2).includes(q)
+    );
+  }, [allIncomes, searchQuery]);
+
+  const upcomingIncomes = useMemo(() => {
+    const all = upcomingData?.data ?? [];
+    if (!searchQuery.trim()) return all;
+    const q = searchQuery.toLowerCase();
+    return all.filter((inc) =>
+      (inc.category?.name ?? "").toLowerCase().includes(q) ||
+      (inc.source ?? "").toLowerCase().includes(q) ||
+      parseFloat(inc.amount).toFixed(2).includes(q)
+    );
+  }, [upcomingData, searchQuery]);
+
+  const accountFilterOptions = useMemo<MultiSelectOption[]>(() => {
+    const personal = eligibleAccounts
+      .filter((a) => !a.isJoint)
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((a) => ({ id: a.id, label: a.name, groupKey: "personal" }));
+    const joint = eligibleAccounts
+      .filter((a) => a.isJoint)
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((a) => ({ id: a.id, label: a.name, groupKey: "joint" }));
+    return [...personal, ...joint];
+  }, [eligibleAccounts]);
+
+  const accountGroups = useMemo<MultiSelectGroup[]>(() =>
+    [
+      { key: "personal", label: "Personal" },
+      { key: "joint", label: "Joint" },
+    ].filter((g) => accountFilterOptions.some((o) => o.groupKey === g.key)),
+  [accountFilterOptions]);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Income</h2>
         <div className="flex gap-2">
-          <Button variant={filterOpen ? "primary" : "secondary"} size="sm" onClick={() => setFilterOpen(!filterOpen)}>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search..."
+              className="h-9 w-44 rounded-md border border-border bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <Button variant={filterOpen ? "primary" : "secondary"} onClick={() => setFilterOpen(!filterOpen)}>
             <Filter className="h-4 w-4" />
             {hasActiveFilters && <span className="ml-1 rounded-full bg-primary-foreground/20 px-1.5 text-xs">!</span>}
+          </Button>
+          <Button variant="secondary" onClick={() => setImportModalOpen(true)}>
+            <Upload className="h-4 w-4" /> Import
           </Button>
           <Button onClick={() => { setEditing(null); setModalOpen(true); }}>
             <Plus className="h-4 w-4" /> Add Income
@@ -526,36 +718,44 @@ export function IncomePage() {
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Account</label>
-              <select value={filterAccountId} onChange={(e) => { setFilterAccountId(e.target.value); setPage(1); }} className="rounded-md border border-border px-2 py-1.5 text-sm">
-                <option value="">All accounts</option>
-                {eligibleAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
+              <MultiSelectDropdown
+                options={accountFilterOptions}
+                selected={staged.accountIds}
+                onChange={(ids) => setStaged((s) => ({ ...s, accountIds: ids }))}
+                placeholder="All Accounts"
+                groups={accountGroups}
+              />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Source</label>
-              <select value={filterSource} onChange={(e) => { setFilterSource(e.target.value); setPage(1); }} className="rounded-md border border-border px-2 py-1.5 text-sm">
-                <option value="">All sources</option>
-                {Object.entries(SOURCE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Tag</label>
-              <select value={filterTagId} onChange={(e) => { setFilterTagId(e.target.value); setPage(1); }} className="rounded-md border border-border px-2 py-1.5 text-sm">
-                <option value="">All tags</option>
-                {(tags ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Category</label>
+              <select
+                value={staged.categoryId}
+                onChange={(e) => setStaged((s) => ({ ...s, categoryId: e.target.value }))}
+                className="rounded-md border border-border px-2 py-1.5 text-sm"
+              >
+                <option value="">All categories</option>
+                {[...categories].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
               </select>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">From</label>
-              <input type="date" value={filterStartDate} onChange={(e) => { setFilterStartDate(e.target.value); setPage(1); }} className="rounded-md border border-border px-2 py-1.5 text-sm" />
+              <input type="date" value={staged.startDate} onChange={(e) => setStaged((s) => ({ ...s, startDate: e.target.value }))} className="rounded-md border border-border px-2 py-1.5 text-sm" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">To</label>
-              <input type="date" value={filterEndDate} onChange={(e) => { setFilterEndDate(e.target.value); setPage(1); }} className="rounded-md border border-border px-2 py-1.5 text-sm" />
+              <input type="date" value={staged.endDate || todayStr} onChange={(e) => setStaged((s) => ({ ...s, endDate: e.target.value }))} className="rounded-md border border-border px-2 py-1.5 text-sm" />
             </div>
-            {hasActiveFilters && (
-              <button onClick={clearFilters} className="flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:text-foreground"><X className="h-3 w-3" /> Clear</button>
-            )}
+            <div>
+              <label className="mb-1 block text-xs invisible select-none" aria-hidden="true">x</label>
+              <div className="flex h-8 items-center gap-3">
+                <button onClick={resetFilters} className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+                  Reset to defaults
+                </button>
+                <Button size="sm" onClick={applyFilters}>Apply</Button>
+              </div>
+            </div>
           </div>
         </Card>
       )}
@@ -569,58 +769,52 @@ export function IncomePage() {
               <thead>
                 <tr className="border-b border-border text-left text-muted-foreground">
                   <th className="w-[70px] pb-3 pr-3 font-medium">Date</th>
-                  <th className="w-[130px] pb-3 pr-3 font-medium">Source</th>
-                  <th className="w-[170px] pb-3 pr-3 font-medium">Account</th>
-                  <th className="pb-3 pr-3 font-medium">Tags</th>
+                  <th className="pb-3 pr-3 font-medium">Source</th>
+                  <th className="w-[130px] pb-3 pr-3 font-medium">Category</th>
+                  <th className="w-[185px] pb-3 pr-3 font-medium">Account</th>
                   <th className="w-[30px] pb-3"></th>
-                  <th className="w-[100px] pb-3 text-right font-medium">Amount</th>
+                  <th className="w-[90px] pb-3 text-right font-medium">Amount</th>
                   <th className="w-[40px] pb-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {upcomingIncomes.map((income) => (
                   <tr key={income.id} className="italic opacity-60 hover:opacity-80">
-                    <td className="w-[70px] py-3 pr-3">
+                    <td className="w-[70px] py-2 pr-3">
                       <EditableCell value={income.date} type="date" onSave={(v) => handleInlineUpdate(income.id, "date", v)} />
                     </td>
-                    <td className="w-[130px] py-3 pr-3">
-                      <EditableSelectCell
-                        value={income.source}
-                        label={SOURCE_LABELS[income.source]}
-                        options={Object.entries(SOURCE_LABELS).map(([id, name]) => ({ id, name }))}
-                        onSave={(v) => handleInlineUpdate(income.id, "source", v)}
+                    <td className="py-2 pr-3">
+                      <EditableCell value={income.source ?? ""} onSave={(v) => handleInlineUpdate(income.id, "source", v)} />
+                    </td>
+                    <td className="w-[130px] py-2 pr-3">
+                      <EditableTypeaheadCell
+                        value={income.categoryId}
+                        label={income.category?.name ?? ""}
+                        items={categories}
+                        onSave={(v) => handleInlineUpdate(income.id, "categoryId", v)}
                       />
                     </td>
-                    <td className="w-[170px] py-3 pr-3">
-                      <EditableAccountCell
+                    <td className="w-[185px] py-2 pr-3">
+                      <EditableTypeaheadCell
                         value={income.accountId}
                         label={income.account.name}
-                        accounts={eligibleAccounts}
+                        items={eligibleAccounts}
                         onSave={(v) => handleInlineUpdate(income.id, "accountId", v)}
                       />
                     </td>
-                    <td className="py-3 pr-3">
-                      <div className="flex flex-wrap gap-1">
-                        {income.tags.map(({ tag }) => (
-                          <span key={tag.id} className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: tag.color ? `${tag.color}20` : "hsl(var(--muted))", color: tag.color ?? "inherit" }}>
-                            {tag.name}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="w-[30px] py-3 text-center">
+                    <td className="w-[30px] py-2 text-center">
                       <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${income.account.isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
                         {income.account.isJoint ? "J" : "P"}
                       </span>
                     </td>
-                    <td className="w-[100px] py-3 text-right font-semibold text-green-600">
+                    <td className="w-[90px] py-2 text-right font-semibold text-green-600">
                       <EditableAmountCell
                         value={income.amount}
                         positive
                         onSave={(v) => handleInlineUpdate(income.id, "amount", v)}
                       />
                     </td>
-                    <td className="w-[40px] py-3 text-right">
+                    <td className="w-[40px] py-2 text-right">
                       <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent">
                         <Pencil className="h-4 w-4" />
                       </button>
@@ -635,7 +829,7 @@ export function IncomePage() {
             {upcomingIncomes.map((income) => (
               <div key={income.id} className="flex items-center justify-between py-3 italic opacity-60">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{SOURCE_LABELS[income.source]}</p>
+                  <p className="truncate font-medium">{income.category?.name ?? "—"}{income.source ? ` · ${income.source}` : ""}</p>
                   <p className="text-sm text-muted-foreground">{income.account.name} &middot; {formatDate(income.date)}</p>
                 </div>
                 <div className="ml-4 flex items-center gap-2">
@@ -656,58 +850,53 @@ export function IncomePage() {
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
                     <th className="w-[70px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
-                    <th className="w-[130px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("source")}>Source <SortIcon field="source" /></th>
-                    <th className="w-[170px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
-                    <th className="pb-3 pr-3 font-medium">Tags</th>
+                    <th className="pb-3 pr-3 font-medium">Source</th>
+                    <th className="w-[130px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("category")}>Category <SortIcon field="category" /></th>
+                    <th className="w-[185px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
                     <th className="w-[30px] pb-3"></th>
-                    <th className="w-[100px] cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
+                    <th className="w-[90px] cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
                     <th className="w-[40px] pb-3"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {incomes.map((income) => (
                     <tr key={income.id} className="hover:bg-muted/50">
-                      <td className="w-[70px] py-3 pr-3">
+                      <td className="w-[70px] py-2 pr-3">
                         <EditableCell value={income.date} type="date" onSave={(v) => handleInlineUpdate(income.id, "date", v)} />
                       </td>
-                      <td className="w-[130px] py-3 pr-3">
-                        <EditableSelectCell
-                          value={income.source}
-                          label={SOURCE_LABELS[income.source]}
-                          options={Object.entries(SOURCE_LABELS).map(([id, name]) => ({ id, name }))}
-                          onSave={(v) => handleInlineUpdate(income.id, "source", v)}
+                      <td className="py-2 pr-3">
+                        <EditableCell value={income.source ?? ""} onSave={(v) => handleInlineUpdate(income.id, "source", v)} />
+                      </td>
+                      <td className="w-[130px] py-2 pr-3">
+                        <EditableTypeaheadCell
+                          value={income.categoryId}
+                          label={income.category?.name ?? ""}
+                          items={categories}
+                          onSave={(v) => handleInlineUpdate(income.id, "categoryId", v)}
                         />
                       </td>
-                      <td className="w-[170px] py-3 pr-3">
-                        <EditableSelectCell
+                      <td className="w-[185px] py-2 pr-3">
+                        <EditableTypeaheadCell
                           value={income.accountId}
                           label={income.account.name}
-                          options={eligibleAccounts.map((a) => ({ id: a.id, name: a.name }))}
+                          color={income.account.color}
+                          items={eligibleAccounts}
                           onSave={(v) => handleInlineUpdate(income.id, "accountId", v)}
                         />
                       </td>
-                      <td className="py-3 pr-3">
-                        <div className="flex flex-wrap gap-1">
-                          {income.tags.map(({ tag }) => (
-                            <span key={tag.id} className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium" style={{ backgroundColor: tag.color ? `${tag.color}20` : "hsl(var(--muted))", color: tag.color ?? "inherit" }}>
-                              {tag.name}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="w-[30px] py-3 text-center">
+                      <td className="w-[30px] py-2 text-center">
                         <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${income.account.isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
                           {income.account.isJoint ? "J" : "P"}
                         </span>
                       </td>
-                      <td className="w-[100px] py-3 text-right font-semibold text-green-600">
+                      <td className="w-[90px] py-2 text-right font-semibold text-green-600">
                         <EditableAmountCell
                           value={income.amount}
                           positive
                           onSave={(v) => handleInlineUpdate(income.id, "amount", v)}
                         />
                       </td>
-                      <td className="w-[40px] py-3 text-right">
+                      <td className="w-[40px] py-2 text-right">
                         <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent">
                           <Pencil className="h-4 w-4" />
                         </button>
@@ -722,7 +911,7 @@ export function IncomePage() {
               {incomes.map((income) => (
                 <div key={income.id} className="flex items-center justify-between py-3">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{SOURCE_LABELS[income.source]}</p>
+                    <p className="truncate font-medium">{income.category?.name ?? "—"}{income.source ? ` · ${income.source}` : ""}</p>
                     <p className="text-sm text-muted-foreground">{income.account.name} &middot; {formatDate(income.date)}</p>
                   </div>
                   <div className="ml-4 flex items-center gap-2">
@@ -733,25 +922,19 @@ export function IncomePage() {
               ))}
             </div>
 
-            {pagination && pagination.totalPages > 1 && (
-              <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
-                <p className="text-sm text-muted-foreground">{pagination.total} entr{pagination.total !== 1 ? "ies" : "y"}</p>
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" disabled={page === 1} onClick={() => setPage(page - 1)}><ChevronLeft className="h-4 w-4" /></Button>
-                  <span className="text-sm">Page {page} of {pagination.totalPages}</span>
-                  <Button variant="ghost" size="sm" disabled={page === pagination.totalPages} onClick={() => setPage(page + 1)}><ChevronRight className="h-4 w-4" /></Button>
-                </div>
-              </div>
+            {loading && currentPage > 1 && (
+              <div className="py-4 text-center text-sm text-muted-foreground">Loading more...</div>
             )}
+            <div ref={sentinelRef} className="h-1" />
           </>
         ) : (
           <EmptyState
             icon={TrendingUp}
             title="No income recorded"
-            description={hasActiveFilters ? "No income entries match your current filters." : "Track dividends, interest, capital gains, and other passive income."}
+            description={hasActiveFilters ? "No income entries match your current filters." : "Track your income by adding entries and organizing them with categories."}
             action={
               hasActiveFilters
-                ? <Button variant="secondary" onClick={clearFilters}>Clear Filters</Button>
+                ? <Button variant="secondary" onClick={resetFilters}>Reset Filters</Button>
                 : <Button onClick={() => { setEditing(null); setModalOpen(true); }}><Plus className="h-4 w-4" /> Add Income</Button>
             }
           />
@@ -765,8 +948,27 @@ export function IncomePage() {
         onDelete={handleDelete}
         income={editing}
         accounts={eligibleAccounts}
-        tags={tags ?? []}
+        categories={categories}
       />
+
+      <ImportModal
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onComplete={() => { setImportModalOpen(false); refetchAll(); }}
+        accounts={eligibleAccounts}
+        categories={categories}
+      />
+
+      {showBackToTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg transition-opacity hover:opacity-90"
+          aria-label="Back to top"
+        >
+          <ArrowUp className="h-4 w-4" />
+          <span>Back to Top</span>
+        </button>
+      )}
     </div>
   );
 }
@@ -779,39 +981,37 @@ interface IncomeModalProps {
   onDelete: (id: string) => Promise<void>;
   income: Income | null;
   accounts: Account[];
-  tags: Tag[];
+  categories: Category[];
 }
 
-function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, tags }: IncomeModalProps) {
+function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, categories }: IncomeModalProps) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showOptional, setShowOptional] = useState(false);
+  const categoryTriggerRef = useRef<HTMLButtonElement>(null);
+  const accountTriggerRef = useRef<HTMLButtonElement>(null);
+  const submitBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (open) {
-      setSelectedTagIds(income?.tags.map((t) => t.tagId) ?? []);
       setConfirmDelete(false);
       setShowOptional(!!income?.notes);
     }
   }, [open, income]);
 
-  const toggleTag = (tagId: string) => {
-    setSelectedTagIds((prev) => prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]);
-  };
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
     const form = new FormData(e.currentTarget);
+    const categoryId = form.get("categoryId") as string;
     await onSave({
       amount: parseFloat(form.get("amount") as string),
-      source: form.get("source") as string,
+      categoryId: categoryId || undefined,
+      source: (form.get("source") as string) || undefined,
       date: form.get("date") as string,
       accountId: form.get("accountId") as string,
       notes: (form.get("notes") as string) || undefined,
-      tagIds: selectedTagIds,
     });
     setSaving(false);
   };
@@ -829,51 +1029,55 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, tags }
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="mb-1 block text-sm font-medium">Amount</label>
-          <CurrencyInput name="amount" defaultValue={income?.amount} required />
+          <CurrencyInput name="amount" defaultValue={income?.amount} required autoFocus />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium">Source</label>
-            <select name="source" required defaultValue={income?.source ?? "DIVIDENDS"} className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
-              {Object.entries(SOURCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium">Date</label>
-            <input name="date" type="date" required defaultValue={toDateInputValue(income?.date)} className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
-          </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">Source</label>
+          <input
+            name="source"
+            type="text"
+            defaultValue={income?.source ?? ""}
+            placeholder="e.g. ACME Corp dividends, Chase savings interest..."
+            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">Date</label>
+          <input name="date" type="date" required defaultValue={toDateInputValue(income?.date)} className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
+          {/* Relay: captures focus as it exits the date field and forwards to Category, but not on Shift+Tab backwards from Category */}
+          <span tabIndex={0} className="sr-only" onFocus={(e) => { if (e.relatedTarget !== categoryTriggerRef.current) categoryTriggerRef.current?.focus(); }} />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">Category</label>
+          <ItemTypeahead
+            name="categoryId"
+            defaultValue={income?.categoryId ?? ""}
+            items={categories}
+            placeholder="Select category"
+            triggerRef={categoryTriggerRef}
+            onTabFromSearch={() => accountTriggerRef.current?.focus()}
+          />
         </div>
 
         <div>
           <label className="mb-1 block text-sm font-medium">Account</label>
-          <AccountTypeahead
+          <ItemTypeahead
             name="accountId"
             required
             defaultValue={income?.accountId ?? ""}
-            accounts={accounts}
+            items={accounts}
+            placeholder="Select account"
+            triggerRef={accountTriggerRef}
+            onTabFromSearch={() => submitBtnRef.current?.focus()}
           />
         </div>
 
-        {tags.length > 0 && (
-          <div>
-            <label className="mb-2 block text-sm font-medium">Tags</label>
-            <div className="flex flex-wrap gap-2">
-              {tags.map((tag) => {
-                const selected = selectedTagIds.includes(tag.id);
-                return (
-                  <button key={tag.id} type="button" onClick={() => toggleTag(tag.id)} className="rounded-full border px-3 py-1 text-xs font-medium transition-colors" style={selected && tag.color ? { backgroundColor: tag.color, borderColor: tag.color, color: "#fff" } : selected ? { backgroundColor: "hsl(var(--primary))", borderColor: "hsl(var(--primary))", color: "#fff" } : {}}>
-                    {tag.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {/* Collapsible optional section */}
         <div className="border-t border-border pt-3">
-          <button type="button" onClick={() => setShowOptional(!showOptional)} className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
+          <button type="button" tabIndex={-1} onClick={() => setShowOptional(!showOptional)} className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
             {showOptional ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
             More options
           </button>
@@ -888,18 +1092,334 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, tags }
         <div className="flex items-center justify-between pt-2">
           <div>
             {income && (
-              <button type="button" onClick={handleDeleteClick} disabled={deleting} className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors">
+              <button type="button" tabIndex={-1} onClick={handleDeleteClick} disabled={deleting} className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors">
                 <Trash2 className="h-4 w-4" />
                 {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}
               </button>
             )}
           </div>
           <div className="flex gap-2">
-            <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Saving..." : income ? "Update" : "Add Income"}</Button>
+            <Button type="button" variant="secondary" tabIndex={-1} onClick={onClose}>Cancel</Button>
+            <Button ref={submitBtnRef} type="submit" disabled={saving}>{saving ? "Saving..." : income ? "Update" : "Add Income"}</Button>
           </div>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+// ── Import Modal ──
+
+interface ParsedIncomeRow {
+  raw: string[];
+  date: string;
+  source: string;
+  categoryName: string;
+  accountName: string;
+  amount: number;
+  categoryId: string | null;
+  accountId: string | null;
+  errors: string[];
+}
+
+function parseDate(s: string): string | null {
+  s = s.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+  return null;
+}
+
+function parseCSVLine(line: string, delimiter: string): string[] {
+  const fields: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
+      else if (ch === '"') { inQuotes = false; }
+      else { current += ch; }
+    } else {
+      if (ch === '"') { inQuotes = true; }
+      else if (ch === delimiter) { fields.push(current.trim()); current = ""; }
+      else { current += ch; }
+    }
+  }
+  fields.push(current.trim());
+  return fields;
+}
+
+function ImportModal({
+  open, onClose, onComplete, accounts, categories,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onComplete: () => void;
+  accounts: Account[];
+  categories: Category[];
+}) {
+  const [step, setStep] = useState<"upload" | "preview" | "result">("upload");
+  const [rows, setRows] = useState<ParsedIncomeRow[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<{ imported: number; errors: Array<{ row: number; message: string }> } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      setStep("upload");
+      setRows([]);
+      setResult(null);
+      setImporting(false);
+    }
+  }, [open]);
+
+  const accountMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of accounts) map.set(a.name.toLowerCase(), a.id);
+    return map;
+  }, [accounts]);
+
+  const categoryMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of categories) map.set(c.name.toLowerCase(), c.id);
+    return map;
+  }, [categories]);
+
+  const categoryNames = useMemo(() =>
+    [...categories].sort((a, b) => a.name.localeCompare(b.name)).map((c) => c.name),
+    [categories],
+  );
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = reader.result as string;
+      const lines = text.split(/\r?\n/).filter((l) => l.trim());
+      if (lines.length < 2) return;
+
+      const delimiter = lines[0].includes("\t") ? "\t" : ",";
+      const parsed: ParsedIncomeRow[] = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const fields = parseCSVLine(lines[i], delimiter);
+        if (fields.length < 5) continue;
+
+        // Columns: Date, Source, Category, Account, Amount
+        const [rawDate, src, rawCategory, acctName, rawAmt] = fields;
+        const errors: string[] = [];
+
+        const date = parseDate(rawDate);
+        if (!date) errors.push("Invalid date");
+
+        const source = src?.trim() || "";
+
+        const categoryName = rawCategory?.trim() || "";
+        let categoryId: string | null = null;
+        if (!categoryName) {
+          errors.push("Missing category");
+        } else {
+          categoryId = categoryMap.get(categoryName.toLowerCase()) ?? null;
+          if (!categoryId) errors.push(`Unknown category "${categoryName}"`);
+        }
+
+        const accountName = acctName?.trim() || "";
+        let accountId: string | null = null;
+        if (!accountName) {
+          errors.push("Missing account");
+        } else {
+          accountId = accountMap.get(accountName.toLowerCase()) ?? null;
+          if (!accountId) errors.push(`Unknown account "${accountName}"`);
+        }
+
+        const cleanAmt = rawAmt?.replace(/[$,]/g, "") ?? "";
+        const amount = parseFloat(cleanAmt);
+        if (isNaN(amount)) errors.push("Invalid amount");
+        else if (amount <= 0) errors.push("Amount must be positive");
+
+        parsed.push({
+          raw: fields,
+          date: date || rawDate,
+          source,
+          categoryName,
+          accountName,
+          amount: isNaN(amount) ? 0 : amount,
+          categoryId,
+          accountId,
+          errors,
+        });
+      }
+      setRows(parsed);
+      setStep("preview");
+    };
+    reader.readAsText(file);
+  };
+
+  const validRows = rows.filter((r) => r.errors.length === 0);
+
+  const handleImport = async () => {
+    setImporting(true);
+    try {
+      const payload = validRows.map((r) => ({
+        amount: r.amount,
+        categoryId: r.categoryId ?? undefined,
+        source: r.source || undefined,
+        date: r.date,
+        accountId: r.accountId,
+      }));
+      const res = await importIncome(payload);
+      setResult(res);
+      setStep("result");
+    } catch {
+      setResult({ imported: 0, errors: [{ row: 0, message: "Import request failed" }] });
+      setStep("result");
+    }
+    setImporting(false);
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Import Income">
+      {step === "upload" && (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Upload a CSV or TSV file with these columns in order:
+          </p>
+          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono">
+            Date, Source, Category, Account, Amount
+          </div>
+          <p className="text-xs text-muted-foreground">
+            First row should be a header (it will be skipped). Dates can be YYYY-MM-DD or M/D/YYYY.
+            {categoryNames.length > 0
+              ? ` Category must match one of your income categories (e.g. ${categoryNames.slice(0, 3).join(", ")}${categoryNames.length > 3 ? "…" : ""}).`
+              : " Category must match an existing income category."
+            }
+            {" "}Account name must match an existing Checking, Savings, or Investment account.
+            Source is optional.
+          </p>
+          <div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,.tsv,.txt"
+              onChange={handleFile}
+              className="hidden"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => fileRef.current?.click()}
+              className="w-full justify-center"
+            >
+              <FileText className="h-4 w-4" /> Choose File
+            </Button>
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {step === "preview" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">
+              {validRows.length} of {rows.length} rows valid
+            </p>
+            {rows.length > validRows.length && (
+              <p className="text-xs text-destructive">
+                {rows.length - validRows.length} row{rows.length - validRows.length !== 1 ? "s" : ""} with errors
+              </p>
+            )}
+          </div>
+
+          <div className="max-h-[50vh] overflow-auto rounded-md border border-border">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-background">
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="px-2 py-1.5 font-medium">#</th>
+                  <th className="px-2 py-1.5 font-medium">Date</th>
+                  <th className="px-2 py-1.5 font-medium">Source</th>
+                  <th className="px-2 py-1.5 font-medium">Category</th>
+                  <th className="px-2 py-1.5 font-medium">Account</th>
+                  <th className="px-2 py-1.5 font-medium text-right">Amount</th>
+                  <th className="px-2 py-1.5 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, i) => (
+                  <tr key={i} className={`border-b border-border ${row.errors.length > 0 ? "bg-destructive/5" : ""}`}>
+                    <td className="px-2 py-1.5 text-muted-foreground">{i + 1}</td>
+                    <td className="px-2 py-1.5">{row.date}</td>
+                    <td className="px-2 py-1.5 max-w-[120px] truncate">{row.source || "—"}</td>
+                    <td className="px-2 py-1.5">{row.categoryId ? (categories.find((c) => c.id === row.categoryId)?.name ?? row.categoryName) : row.categoryName}</td>
+                    <td className="px-2 py-1.5 max-w-[100px] truncate">{row.accountName}</td>
+                    <td className="px-2 py-1.5 text-right font-medium text-green-600">
+                      {row.amount === 0 ? "—" : `+${formatCurrency(row.amount)}`}
+                    </td>
+                    <td className="px-2 py-1.5">
+                      {row.errors.length > 0 ? (
+                        <span className="text-destructive" title={row.errors.join("; ")}>
+                          <AlertCircle className="inline h-3 w-3" /> {row.errors[0]}
+                        </span>
+                      ) : (
+                        <span className="text-green-600"><Check className="inline h-3 w-3" /></span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex items-center justify-between pt-2">
+            <Button type="button" variant="secondary" onClick={() => { setStep("upload"); setRows([]); if (fileRef.current) fileRef.current.value = ""; }}>
+              Back
+            </Button>
+            <div className="flex gap-2">
+              <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+              <Button
+                type="button"
+                disabled={validRows.length === 0 || importing}
+                onClick={handleImport}
+              >
+                {importing ? "Importing..." : `Import ${validRows.length} Income${validRows.length !== 1 ? "s" : ""}`}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === "result" && result && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-4">
+            <CheckCircle2 className="h-6 w-6 text-green-600 shrink-0" />
+            <div>
+              <p className="text-sm font-medium">
+                {result.imported} income{result.imported !== 1 ? "s" : ""} imported successfully
+              </p>
+              {result.errors.length > 0 && (
+                <p className="text-xs text-destructive mt-1">
+                  {result.errors.length} row{result.errors.length !== 1 ? "s" : ""} failed on server
+                </p>
+              )}
+            </div>
+          </div>
+
+          {result.errors.length > 0 && (
+            <div className="max-h-[150px] overflow-auto rounded-md border border-border p-2 text-xs text-destructive">
+              {result.errors.map((e, i) => (
+                <div key={i}>Row {e.row}: {e.message}</div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex justify-end pt-2">
+            <Button type="button" onClick={onComplete}>Done</Button>
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }

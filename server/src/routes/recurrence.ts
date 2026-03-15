@@ -7,8 +7,8 @@ export const recurrenceRoutes = Router();
 const recurrenceSchema = z.object({
   description: z.string().min(1),
   vendor: z.string().optional().default(""),
-  amount: z.number().positive(),
-  frequency: z.enum(["DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY", "QUARTERLY", "YEARLY"]),
+  amount: z.number().refine((v) => v !== 0, "Amount cannot be zero"),
+  frequency: z.enum(["DAILY", "WEEKLY", "MONTHLY", "YEARLY"]),
   interval: z.number().int().positive().default(1),
   startDate: z.string().transform((s) => new Date(s)),
   endDate: z.string().transform((s) => new Date(s)).optional(),
@@ -31,20 +31,11 @@ export function computeNextOccurrence(current: Date, frequency: string, interval
       return new Date(Date.UTC(y, m, d + interval));
     case "WEEKLY":
       return new Date(Date.UTC(y, m, d + 7 * interval));
-    case "BIWEEKLY":
-      return new Date(Date.UTC(y, m, d + 14 * interval));
     case "MONTHLY": {
       const target = new Date(Date.UTC(y, m + interval, d));
       // Handle month overflow (e.g. Jan 31 + 1 month → Feb has no 31st)
       if (target.getUTCDate() !== d) {
         return new Date(Date.UTC(y, m + interval + 1, 0)); // last day of target month
-      }
-      return target;
-    }
-    case "QUARTERLY": {
-      const target = new Date(Date.UTC(y, m + 3 * interval, d));
-      if (target.getUTCDate() !== d) {
-        return new Date(Date.UTC(y, m + 3 * interval + 1, 0));
       }
       return target;
     }
@@ -73,11 +64,10 @@ export async function generateUpcomingExpenses() {
   const now = new Date();
   const endOfNextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 2, 0, 23, 59, 59));
 
+  // Fetch ALL active rules so that rules with distant next occurrences still get
+  // at least one pending instance created (handled below the main window loop).
   const rules = await prisma.recurrenceRule.findMany({
-    where: {
-      isActive: true,
-      nextOccurrence: { lte: endOfNextMonth },
-    },
+    where: { isActive: true },
   });
 
   const created = [];
@@ -99,6 +89,34 @@ export async function generateUpcomingExpenses() {
 
     let current = new Date(rule.nextOccurrence);
     let lastAdvanced = current;
+
+    if (current > endOfNextMonth) {
+      // Next occurrence is beyond the normal window — create just one pending
+      // instance so the upcoming section always has something to show.
+      // Don't advance nextOccurrence so the normal loop picks it up later.
+      const existing = await prisma.expense.findFirst({
+        where: { recurrenceRuleId: rule.id, date: current },
+      });
+      if (!existing) {
+        try {
+          const expense = await prisma.expense.create({
+            data: {
+              amount: rule.amount,
+              description: rule.description,
+              vendor: rule.vendor,
+              date: current,
+              categoryId: rule.categoryId,
+              accountId: rule.accountId,
+              recurrenceRuleId: rule.id,
+            },
+          });
+          created.push(expense);
+        } catch (err) {
+          console.error(`Failed to create recurring expense for rule ${rule.id}:`, err);
+        }
+      }
+      continue;
+    }
 
     while (current <= endOfNextMonth) {
       // Check if past end date

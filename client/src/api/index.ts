@@ -20,8 +20,9 @@ export const updateAccount = (id: string, data: Partial<Account>) => api.put<Acc
 export const deleteAccount = (id: string) => api.delete(`/accounts/${id}`);
 
 // Categories
-export const getCategories = () => api.get<Category[]>("/categories");
-export const getFlatCategories = () => api.get<Category[]>("/categories/flat");
+const kindParam = (kind?: string) => (kind ? `?kind=${kind}` : "");
+export const getCategories = (kind?: string) => api.get<Category[]>(`/categories${kindParam(kind)}`);
+export const getFlatCategories = (kind?: string) => api.get<Category[]>(`/categories/flat${kindParam(kind)}`);
 export const createCategory = (data: Partial<Category>) => api.post<Category>("/categories", data);
 export const updateCategory = (id: string, data: Partial<Category>) => api.put<Category>(`/categories/${id}`, data);
 export const deleteCategory = (id: string, reassignTo?: string) => {
@@ -47,6 +48,10 @@ export const getVendorCategory = (vendor: string) =>
 export const getUncategorizedCount = () => api.get<{ count: number }>("/expenses/uncategorized-count");
 export const importExpenses = (expenses: Record<string, unknown>[]) =>
   api.post<{ imported: number; errors: Array<{ row: number; message: string }> }>("/expenses/import", { expenses });
+export const bulkUpdateExpenses = (ids: string[], patch: Record<string, unknown>) =>
+  api.patch<{ updated: number }>("/expenses/bulk", { ids, ...patch });
+export const updateExpenseParent = (id: string, parentExpenseId: string | null) =>
+  api.put<Expense>(`/expenses/${id}`, { parentExpenseId });
 
 // Income
 export const getIncome = (params?: Record<string, string>) => {
@@ -56,6 +61,8 @@ export const getIncome = (params?: Record<string, string>) => {
 export const createIncome = (data: Record<string, unknown>) => api.post<Income>("/income", data);
 export const updateIncome = (id: string, data: Record<string, unknown>) => api.put<Income>(`/income/${id}`, data);
 export const deleteIncome = (id: string) => api.delete(`/income/${id}`);
+export const importIncome = (incomes: Record<string, unknown>[]) =>
+  api.post<{ imported: number; errors: Array<{ row: number; message: string }> }>("/income/import", { incomes });
 
 // Tags
 export const getTags = () => api.get<Tag[]>("/tags");
@@ -65,13 +72,12 @@ export const deleteTag = (id: string) => api.delete(`/tags/${id}`);
 
 // Transaction Groups
 export const getTransactionGroups = () => api.get<TransactionGroup[]>("/transaction-groups");
-export const getTransactionGroup = (id: string) => api.get<TransactionGroup>(`/transaction-groups/${id}`);
-export const createTransactionGroup = (data: Record<string, unknown>) =>
+export const createTransactionGroup = (data: { expenseIds: string[] }) =>
   api.post<TransactionGroup>("/transaction-groups", data);
-export const updateTransactionGroup = (id: string, data: Record<string, unknown>) =>
-  api.put<TransactionGroup>(`/transaction-groups/${id}`, data);
-export const updateTransactionGroupMembers = (id: string, data: Record<string, unknown>) =>
-  api.patch<TransactionGroup>(`/transaction-groups/${id}/members`, data);
+export const updateTransactionGroup = (
+  id: string,
+  data: { primaryExpenseId?: string; addExpenseIds?: string[]; removeExpenseIds?: string[] },
+) => api.patch<TransactionGroup | null>(`/transaction-groups/${id}`, data);
 export const deleteTransactionGroup = (id: string) => api.delete(`/transaction-groups/${id}`);
 
 // Budgets

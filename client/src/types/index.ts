@@ -1,9 +1,10 @@
 export interface Account {
   id: string;
   name: string;
-  type: "CHECKING" | "SAVINGS" | "CREDIT_CARD" | "CASH" | "INVESTMENT";
+  type: "CHECKING" | "SAVINGS" | "CREDIT_CARD" | "INVESTMENT";
   balance: string;
   currency: string;
+  color: string | null;
   isJoint: boolean;
   isActive: boolean;
   createdAt: string;
@@ -15,6 +16,7 @@ export interface Category {
   name: string;
   icon: string | null;
   color: string | null;
+  kind: "EXPENSE" | "INCOME";
   isDefault: boolean;
   parentId: string | null;
   parent?: Category | null;
@@ -45,10 +47,8 @@ export interface IncomeTag {
 
 export interface TransactionGroup {
   id: string;
-  name: string;
+  primaryExpenseId: string | null;
   notes: string | null;
-  expenses?: Expense[];
-  incomes?: Income[];
   createdAt: string;
   updatedAt: string;
 }
@@ -76,12 +76,12 @@ export interface Expense {
   updatedAt: string;
 }
 
-export type IncomeSource = "DIVIDENDS" | "INTEREST" | "CAPITAL_GAINS" | "GIFTS" | "OTHER";
-
 export interface Income {
   id: string;
   amount: string;
-  source: IncomeSource;
+  categoryId: string | null;
+  category: Category | null;
+  source: string | null;
   date: string;
   notes: string | null;
   accountId: string;
@@ -97,7 +97,7 @@ export interface RecurrenceRule {
   id: string;
   description: string;
   amount: string;
-  frequency: "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY";
+  frequency: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
   interval: number;
   startDate: string;
   endDate: string | null;

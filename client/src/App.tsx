@@ -8,7 +8,6 @@ import { Categories } from "@/pages/Categories";
 import { Recurring } from "@/pages/Recurring";
 import { IncomePage } from "@/pages/Income";
 import { TagsPage } from "@/pages/Tags";
-import { TransactionGroupsPage } from "@/pages/TransactionGroups";
 import { ReimbursementsPage } from "@/pages/Reimbursements";
 
 function App() {
@@ -24,7 +23,6 @@ function App() {
           <Route path="/categories" element={<Categories />} />
           <Route path="/tags" element={<TagsPage />} />
           <Route path="/recurring" element={<Recurring />} />
-          <Route path="/transaction-groups" element={<TransactionGroupsPage />} />
           <Route path="/reimbursements" element={<ReimbursementsPage />} />
         </Route>
       </Routes>
