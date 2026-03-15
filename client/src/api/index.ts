@@ -3,6 +3,7 @@ import type {
   Account,
   Budget,
   BudgetDetail,
+  BudgetOverview,
   Category,
   DashboardData,
   Expense,
@@ -81,15 +82,33 @@ export const updateTransactionGroup = (
 export const deleteTransactionGroup = (id: string) => api.delete(`/transaction-groups/${id}`);
 
 // Budgets
-export const getBudgets = (year?: number) => {
-  const query = year ? `?year=${year}` : "";
-  return api.get<Budget[]>(`/budgets${query}`);
-};
-export const getBudgetDetail = (year: number, month: number) =>
-  api.get<BudgetDetail>(`/budgets/${year}/${month}`);
-export const saveBudget = (data: { amount: number; month: number; year: number }) =>
-  api.post<Budget>("/budgets", data);
-export const deleteBudget = (id: string) => api.delete(`/budgets/${id}`);
+export const getBudgetOverview = (year: number) =>
+  api.get<BudgetOverview>(`/budgets/${year}`);
+
+export const setAnnualBudget = (
+  year: number,
+  type: "personal" | "joint",
+  annualAmount: number,
+) => api.put(`/budgets/${year}/${type}`, { annualAmount });
+
+export const setMonthlyBudgetOverride = (
+  year: number,
+  type: "personal" | "joint",
+  month: number,
+  amount: number,
+) => api.put(`/budgets/${year}/${type}/monthly/${month}`, { amount });
+
+export const deleteMonthlyBudgetOverride = (
+  year: number,
+  type: "personal" | "joint",
+  month: number,
+) => api.delete(`/budgets/${year}/${type}/monthly/${month}`);
+
+export const getBudgetSettings = () =>
+  api.get<{ jointSplitRatio: number }>("/budgets/settings");
+
+export const updateBudgetSettings = (jointSplitRatio: number) =>
+  api.put<{ jointSplitRatio: number }>("/budgets/settings", { jointSplitRatio });
 
 // Dashboard
 export const getDashboard = (year?: number, month?: number) => {

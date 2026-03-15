@@ -193,14 +193,53 @@ model RecurrenceRule {
   @@map("recurrence_rules")
 }
 
-model Budget {
-  id        String   @id @default(cuid())
-  amount    Decimal  @db.Decimal(12, 2)
-  month     Int
-  year      Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// ── Budget models ──────────────────────────────────────────────────────────────
+// Personal and Joint budgets are set separately; Total is always derived as
+// personal + (joint × jointSplitRatio).  Monthly overrides allow per-month
+// amounts on top of the annual default (annualAmount / 12).
 
-  @@unique([month, year])
-  @@map("budgets")
+enum BudgetType {
+  PERSONAL
+  JOINT
+}
+
+model AnnualBudget {
+  id           String    @id @default(cuid())
+  type         BudgetType
+  year         Int
+  // Nullable: users who prefer month-by-month control may leave this unset,
+  // in which case effectiveAnnual = sum of all MonthlyBudget overrides.
+  annualAmount Decimal?  @db.Decimal(12, 2)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  monthlyOverrides MonthlyBudget[]
+
+  @@unique([type, year])
+  @@map("annual_budgets")
+}
+
+model MonthlyBudget {
+  id             String       @id @default(cuid())
+  annualBudgetId String
+  month          Int          // 1–12
+  amount         Decimal      @db.Decimal(12, 2)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  annualBudget AnnualBudget @relation(fields: [annualBudgetId], references: [id], onDelete: Cascade)
+
+  @@unique([annualBudgetId, month])
+  @@map("monthly_budgets")
+}
+
+model BudgetSettings {
+  id              String   @id @default(cuid())
+  // Fraction of joint expenses counted toward the user's Total budget (default 50/50).
+  // Stored as a decimal (0.5 = 50%).  Future UI will expose this as editable.
+  jointSplitRatio Decimal  @default(0.5) @db.Decimal(4, 3)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("budget_settings")
 }

@@ -107,6 +107,52 @@ export interface RecurrenceRule {
   isActive: boolean;
 }
 
+// ── Budget types ──────────────────────────────────────────────────────────────
+
+export interface MonthlyBudgetEntry {
+  month: number;
+  amount: number;
+  isOverride: boolean;
+}
+
+export interface ChartDay {
+  day: number;
+  cumulative: number;
+}
+
+export interface BudgetChart {
+  current: ChartDay[];
+  previous: ChartDay[];
+  priorYear: ChartDay[];
+}
+
+/** Metrics and display values for a single budget panel (Personal, Joint, or Total). */
+export interface BudgetPanel {
+  annualBudget: number | null;       // null for Total (always derived)
+  effectiveAnnualBudget: number;     // sum of effective monthly amounts
+  monthlyBudgets?: MonthlyBudgetEntry[]; // resolved monthly amounts (not on Total)
+  ytdCompletedMonths: number;        // actual spend in months before current
+  mtdTotal: number;                  // actual spend in current month incl. pending
+  normalizedYTD: number;             // timing-adjusted figure for run-rate
+  projectedAnnual: number;           // expected full-year spend
+  remaining: number;                 // effectiveAnnual - projectedAnnual (can be negative)
+  percentAboveBelow: number;         // run-rate ratio minus 1 (e.g. 0.032 = 3.2% over)
+  chart: BudgetChart;
+}
+
+/** Full budget overview response for a given year. */
+export interface BudgetOverview {
+  year: number;
+  daysElapsed: number;
+  daysInYear: number;
+  pctElapsed: number;
+  settings: { jointSplitRatio: number };
+  personal: BudgetPanel;
+  joint: BudgetPanel;
+  total: BudgetPanel;
+}
+
+// Legacy — kept for backwards compatibility during transition
 export interface Budget {
   id: string;
   amount: string;
