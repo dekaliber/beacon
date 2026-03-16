@@ -1,9 +1,10 @@
 export interface Account {
   id: string;
   name: string;
-  type: "CHECKING" | "SAVINGS" | "CREDIT_CARD" | "CASH" | "INVESTMENT";
+  type: "CHECKING" | "SAVINGS" | "CREDIT_CARD" | "INVESTMENT";
   balance: string;
   currency: string;
+  color: string | null;
   isJoint: boolean;
   isActive: boolean;
   createdAt: string;
@@ -15,7 +16,9 @@ export interface Category {
   name: string;
   icon: string | null;
   color: string | null;
+  kind: "EXPENSE" | "INCOME";
   isDefault: boolean;
+  ignoreInBudget: boolean;
   parentId: string | null;
   parent?: Category | null;
   children?: Category[];
@@ -45,10 +48,8 @@ export interface IncomeTag {
 
 export interface TransactionGroup {
   id: string;
-  name: string;
+  primaryExpenseId: string | null;
   notes: string | null;
-  expenses?: Expense[];
-  incomes?: Income[];
   createdAt: string;
   updatedAt: string;
 }
@@ -64,6 +65,7 @@ export interface Expense {
   accountId: string;
   isReimbursementExpected: boolean;
   reimbursementNote: string | null;
+  ignoreInBudget: boolean;
   transactionGroupId: string | null;
   parentExpenseId: string | null;
   category: Category | null;
@@ -76,12 +78,12 @@ export interface Expense {
   updatedAt: string;
 }
 
-export type IncomeSource = "DIVIDENDS" | "INTEREST" | "CAPITAL_GAINS" | "GIFTS" | "OTHER";
-
 export interface Income {
   id: string;
   amount: string;
-  source: IncomeSource;
+  categoryId: string | null;
+  category: Category | null;
+  source: string | null;
   date: string;
   notes: string | null;
   accountId: string;
@@ -97,7 +99,7 @@ export interface RecurrenceRule {
   id: string;
   description: string;
   amount: string;
-  frequency: "DAILY" | "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY";
+  frequency: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
   interval: number;
   startDate: string;
   endDate: string | null;
@@ -107,6 +109,71 @@ export interface RecurrenceRule {
   isActive: boolean;
 }
 
+// ── Budget types ──────────────────────────────────────────────────────────────
+
+export interface MonthlyBudgetEntry {
+  month: number;
+  amount: number;
+  isOverride: boolean;
+}
+
+export interface ChartDay {
+  day: number;
+  cumulative: number;
+}
+
+export interface BudgetChart {
+  current: ChartDay[];
+  previous: ChartDay[];
+  priorYear: ChartDay[];
+}
+
+/** Metrics and display values for a single budget panel (Personal, Joint, or Total). */
+export interface BudgetPanel {
+  annualBudget: number | null;       // null for Total (always derived)
+  effectiveAnnualBudget: number;     // sum of effective monthly amounts
+  monthlyBudgets?: MonthlyBudgetEntry[]; // resolved monthly amounts (not on Total)
+  ytdCompletedMonths: number;        // actual spend in months before current
+  mtdTotal: number;                  // actual spend in current month incl. pending
+  normalizedYTD: number;             // timing-adjusted figure for run-rate
+  projectedAnnual: number;           // expected full-year spend
+  remaining: number;                 // effectiveAnnual - projectedAnnual (can be negative)
+  percentAboveBelow: number;         // run-rate ratio minus 1 (e.g. 0.032 = 3.2% over)
+  chart: BudgetChart;
+}
+
+export interface CategoryOutlier {
+  categoryId: string | null;
+  categoryName: string;
+  color: string | null;
+  currentAmount: number;
+  previousAmount: number;
+  delta: number; // positive = more spending this month, negative = less
+}
+
+export interface CategoryOutliersData {
+  outliers: CategoryOutlier[];
+  currentMonthLabel: string;
+  previousMonthLabel: string;
+  comparisonNote: string;
+  /** 20% of effective monthly total budget. Null if no budget is set — chart falls back to max value. */
+  scaleCap: number | null;
+}
+
+/** Full budget overview response for a given year. */
+export interface BudgetOverview {
+  year: number;
+  daysElapsed: number;
+  daysInYear: number;
+  pctElapsed: number;
+  completedMonths: number;           // calendar months fully elapsed within the year
+  settings: { jointSplitRatio: number };
+  personal: BudgetPanel;
+  joint: BudgetPanel;
+  total: BudgetPanel;
+}
+
+// Legacy — kept for backwards compatibility during transition
 export interface Budget {
   id: string;
   amount: string;

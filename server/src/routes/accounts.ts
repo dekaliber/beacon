@@ -6,11 +6,14 @@ export const accountRoutes = Router();
 
 const accountSchema = z.object({
   name: z.string().min(1),
-  type: z.enum(["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH", "INVESTMENT"]),
+  type: z.enum(["CHECKING", "SAVINGS", "CREDIT_CARD", "INVESTMENT"]),
   balance: z.number().default(0),
   currency: z.string().default("USD"),
+  color: z.string().optional(),
   isJoint: z.boolean().optional(),
 });
+
+// ── Account routes ──
 
 // List all accounts
 accountRoutes.get("/", async (_req, res) => {

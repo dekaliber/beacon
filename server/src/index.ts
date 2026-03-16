@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import { prisma } from "./db/client.js";
 import { accountRoutes } from "./routes/accounts.js";
 import { categoryRoutes } from "./routes/categories.js";
 import { expenseRoutes } from "./routes/expenses.js";
@@ -14,7 +15,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 // Routes
 app.use("/api/accounts", accountRoutes);
@@ -32,6 +33,15 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+const shutdown = async () => {
+  server.closeAllConnections();
+  await prisma.$disconnect();
+  process.exit(0);
+};
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

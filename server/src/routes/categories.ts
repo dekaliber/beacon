@@ -8,13 +8,18 @@ const categorySchema = z.object({
   name: z.string().min(1),
   icon: z.string().optional(),
   color: z.string().optional(),
+  kind: z.enum(["EXPENSE", "INCOME"]).optional().default("EXPENSE"),
   parentId: z.string().nullable().optional(),
+  ignoreInBudget: z.boolean().optional(),
 });
 
 // List all categories (tree structure)
-categoryRoutes.get("/", async (_req, res) => {
+categoryRoutes.get("/", async (req, res) => {
+  const where: Record<string, unknown> = { parentId: null };
+  if (req.query.kind) where.kind = req.query.kind;
+
   const categories = await prisma.category.findMany({
-    where: { parentId: null },
+    where,
     include: { children: true },
     orderBy: { name: "asc" },
   });
@@ -22,15 +27,19 @@ categoryRoutes.get("/", async (_req, res) => {
 });
 
 // List flat categories (for dropdowns)
-categoryRoutes.get("/flat", async (_req, res) => {
+categoryRoutes.get("/flat", async (req, res) => {
+  const where: Record<string, unknown> = {};
+  if (req.query.kind) where.kind = req.query.kind;
+
   const categories = await prisma.category.findMany({
+    where,
     include: { parent: true },
     orderBy: { name: "asc" },
   });
   res.json(categories);
 });
 
-// Get usage count for a category (how many expenses reference it)
+// Get usage count for a category (how many expenses/incomes reference it)
 categoryRoutes.get("/:id/usage", async (req, res) => {
   const category = await prisma.category.findUnique({
     where: { id: req.params.id },
@@ -38,13 +47,15 @@ categoryRoutes.get("/:id/usage", async (req, res) => {
   });
   if (!category) return res.status(404).json({ error: "Category not found" });
 
-  // Count expenses for this category and all its children
+  // Count records for this category and all its children
   const categoryIds = [category.id, ...(category.children?.map((c) => c.id) ?? [])];
-  const count = await prisma.expense.count({
-    where: { categoryId: { in: categoryIds } },
-  });
 
-  res.json({ count, categoryIds });
+  const [expenseCount, incomeCount] = await Promise.all([
+    prisma.expense.count({ where: { categoryId: { in: categoryIds } } }),
+    prisma.income.count({ where: { categoryId: { in: categoryIds } } }),
+  ]);
+
+  res.json({ count: expenseCount + incomeCount, categoryIds });
 });
 
 // Bulk sync categories to match a desired structure
@@ -58,9 +69,9 @@ categoryRoutes.post("/sync", async (req, res) => {
 
   const desired = parsed.data.categories; // { "ParentName": ["Sub1", "Sub2", ...] }
 
-  // Get all existing categories
+  // Get all existing expense categories
   const existingParents = await prisma.category.findMany({
-    where: { parentId: null },
+    where: { parentId: null, kind: "EXPENSE" },
     include: { children: true },
   });
 
@@ -72,9 +83,9 @@ categoryRoutes.post("/sync", async (req, res) => {
     let parent = parentMap.get(parentName);
     if (!parent) {
       parent = await prisma.category.create({
-        data: { name: parentName },
+        data: { name: parentName, kind: "EXPENSE" },
+        include: { children: true },
       });
-      parent = { ...parent, children: [] };
     }
     keptCategoryIds.add(parent.id);
 
@@ -84,7 +95,7 @@ categoryRoutes.post("/sync", async (req, res) => {
       let child = childMap.get(subName);
       if (!child) {
         child = await prisma.category.create({
-          data: { name: subName, parentId: parent.id },
+          data: { name: subName, parentId: parent.id, kind: "EXPENSE" },
         });
       } else if (child.parentId !== parent.id) {
         child = await prisma.category.update({
@@ -125,7 +136,7 @@ categoryRoutes.post("/sync", async (req, res) => {
 
   // Return the updated tree
   const updated = await prisma.category.findMany({
-    where: { parentId: null },
+    where: { parentId: null, kind: "EXPENSE" },
     include: { children: true },
     orderBy: { name: "asc" },
   });
@@ -168,18 +179,18 @@ categoryRoutes.delete("/:id", async (req, res) => {
   // Collect all category IDs to delete (this category + its children)
   const categoryIds = [category.id, ...(category.children?.map((c) => c.id) ?? [])];
 
-  // Reassign or nullify expenses
-  if (reassignTo) {
-    await prisma.expense.updateMany({
+  // Reassign or nullify expenses and incomes in parallel
+  const newCategoryId = reassignTo ?? null;
+  await Promise.all([
+    prisma.expense.updateMany({
       where: { categoryId: { in: categoryIds } },
-      data: { categoryId: reassignTo },
-    });
-  } else {
-    await prisma.expense.updateMany({
+      data: { categoryId: newCategoryId },
+    }),
+    prisma.income.updateMany({
       where: { categoryId: { in: categoryIds } },
-      data: { categoryId: null },
-    });
-  }
+      data: { categoryId: newCategoryId },
+    }),
+  ]);
 
   // Delete children first, then the parent
   if (category.children.length > 0) {

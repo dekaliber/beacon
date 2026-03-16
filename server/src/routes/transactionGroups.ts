@@ -4,115 +4,193 @@ import { z } from "zod";
 
 export const transactionGroupRoutes = Router();
 
-const groupSchema = z.object({
-  name: z.string().min(1),
-  notes: z.string().optional(),
-});
+// Shared include for returning a group with its expense members
+const groupInclude = {
+  expenses: {
+    where: { parentExpenseId: null },
+    include: { category: true, account: true, tags: { include: { tag: true } } },
+  },
+};
 
-const memberSchema = z.object({
-  expenseIds: z.array(z.string()).optional(),
-  incomeIds: z.array(z.string()).optional(),
-});
+// Helper: auto-delete a group if it has 0 or 1 remaining members
+async function cleanupGroup(groupId: string): Promise<void> {
+  const count = await prisma.expense.count({
+    where: { transactionGroupId: groupId, parentExpenseId: null },
+  });
+  if (count <= 1) {
+    await prisma.transactionGroup.delete({ where: { id: groupId } });
+  }
+}
 
-// List all transaction groups with their members
+// GET / — lightweight list used by the client for group metadata
 transactionGroupRoutes.get("/", async (_req, res) => {
   const groups = await prisma.transactionGroup.findMany({
-    include: {
-      expenses: { include: { category: true, account: true } },
-      incomes: { include: { account: true } },
-    },
+    select: { id: true, primaryExpenseId: true, notes: true, createdAt: true, updatedAt: true },
     orderBy: { createdAt: "desc" },
   });
   res.json(groups);
 });
 
-// Get single group
-transactionGroupRoutes.get("/:id", async (req, res) => {
-  const group = await prisma.transactionGroup.findUnique({
-    where: { id: req.params.id },
-    include: {
-      expenses: { include: { category: true, account: true } },
-      incomes: { include: { account: true } },
-    },
-  });
-  if (!group) return res.status(404).json({ error: "Transaction group not found" });
-  res.json(group);
-});
-
-// Create group (optionally with initial member IDs)
+// POST / — create a new group from a set of expense IDs
+// Body: { expenseIds: string[] }
+// • Removes each expense from any pre-existing group first
+// • Defaults primaryExpenseId to the oldest expense in the set
 transactionGroupRoutes.post("/", async (req, res) => {
-  const parsedMeta = groupSchema.safeParse(req.body);
-  if (!parsedMeta.success) return res.status(400).json({ error: parsedMeta.error.flatten() });
-
-  const parsedMembers = memberSchema.safeParse(req.body);
-  const { expenseIds = [], incomeIds = [] } = parsedMembers.success ? parsedMembers.data : {};
-
-  const group = await prisma.transactionGroup.create({
-    data: {
-      ...parsedMeta.data,
-      ...(expenseIds.length ? { expenses: { connect: expenseIds.map((id) => ({ id })) } } : {}),
-      ...(incomeIds.length ? { incomes: { connect: incomeIds.map((id) => ({ id })) } } : {}),
-    },
-    include: {
-      expenses: { include: { category: true, account: true } },
-      incomes: { include: { account: true } },
-    },
+  const schema = z.object({
+    expenseIds: z.array(z.string()).min(2, "A group requires at least 2 expenses"),
   });
-  res.status(201).json(group);
-});
-
-// Update group name/notes
-transactionGroupRoutes.put("/:id", async (req, res) => {
-  const parsed = groupSchema.partial().safeParse(req.body);
+  const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const group = await prisma.transactionGroup.update({
-    where: { id: req.params.id },
-    data: parsed.data,
-    include: {
-      expenses: { include: { category: true, account: true } },
-      incomes: { include: { account: true } },
-    },
+  const { expenseIds } = parsed.data;
+
+  // Fetch the expenses to find the oldest (default primary) and check existing groups
+  const expenses = await prisma.expense.findMany({
+    where: { id: { in: expenseIds }, parentExpenseId: null },
+    select: { id: true, date: true, transactionGroupId: true },
+    orderBy: { date: "asc" },
   });
-  res.json(group);
+
+  if (expenses.length < 2) {
+    return res.status(400).json({ error: "At least 2 valid (non-offset) expenses are required" });
+  }
+
+  const oldestExpense = expenses[0]; // already sorted asc by date
+
+  // Collect existing group IDs that will be vacated
+  const existingGroupIds = new Set(
+    expenses.map((e) => e.transactionGroupId).filter(Boolean) as string[]
+  );
+
+  await prisma.$transaction(async (tx) => {
+    // Detach expenses from their current groups
+    if (existingGroupIds.size > 0) {
+      await tx.expense.updateMany({
+        where: { transactionGroupId: { in: [...existingGroupIds] } },
+        data: { transactionGroupId: null },
+      });
+      // Delete now-empty groups
+      await tx.transactionGroup.deleteMany({
+        where: { id: { in: [...existingGroupIds] } },
+      });
+    }
+
+    // Create the new group, connecting all expenses
+    const group = await tx.transactionGroup.create({
+      data: {
+        primaryExpenseId: oldestExpense.id,
+        expenses: {
+          connect: expenses.map((e) => ({ id: e.id })),
+        },
+      },
+      include: groupInclude,
+    });
+
+    res.status(201).json(group);
+  });
 });
 
-// Add/remove members from a group
-transactionGroupRoutes.patch("/:id/members", async (req, res) => {
+// PATCH /:id — update the group: change primary, add members, or remove members
+// Body: { primaryExpenseId?: string, addExpenseIds?: string[], removeExpenseIds?: string[] }
+// • Adding expenses removes them from their existing groups first
+// • After removals, auto-deletes the group if ≤ 1 member remains
+transactionGroupRoutes.patch("/:id", async (req, res) => {
   const schema = z.object({
+    primaryExpenseId: z.string().optional(),
     addExpenseIds: z.array(z.string()).optional(),
     removeExpenseIds: z.array(z.string()).optional(),
-    addIncomeIds: z.array(z.string()).optional(),
-    removeIncomeIds: z.array(z.string()).optional(),
   });
 
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const { addExpenseIds = [], removeExpenseIds = [], addIncomeIds = [], removeIncomeIds = [] } = parsed.data;
+  const { primaryExpenseId, addExpenseIds = [], removeExpenseIds = [] } = parsed.data;
+  const groupId = req.params.id;
 
-  const group = await prisma.transactionGroup.update({
-    where: { id: req.params.id },
-    data: {
-      expenses: {
-        connect: addExpenseIds.map((id) => ({ id })),
-        disconnect: removeExpenseIds.map((id) => ({ id })),
+  const group = await prisma.transactionGroup.findUnique({ where: { id: groupId } });
+  if (!group) return res.status(404).json({ error: "Transaction group not found" });
+
+  await prisma.$transaction(async (tx) => {
+    // If adding expenses, detach them from any existing groups first
+    if (addExpenseIds.length > 0) {
+      const toAdd = await tx.expense.findMany({
+        where: { id: { in: addExpenseIds }, parentExpenseId: null },
+        select: { id: true, transactionGroupId: true },
+      });
+      const oldGroupIds = new Set(
+        toAdd.map((e) => e.transactionGroupId).filter(Boolean) as string[]
+      );
+      if (oldGroupIds.size > 0) {
+        // Nullify their group memberships
+        await tx.expense.updateMany({
+          where: { id: { in: toAdd.map((e) => e.id) } },
+          data: { transactionGroupId: null },
+        });
+        // Clean up any of the old groups that are now undersized
+        for (const oldId of oldGroupIds) {
+          if (oldId !== groupId) {
+            const remaining = await tx.expense.count({
+              where: { transactionGroupId: oldId, parentExpenseId: null },
+            });
+            if (remaining <= 1) {
+              await tx.transactionGroup.delete({ where: { id: oldId } });
+            }
+          }
+        }
+      }
+    }
+
+    // Apply updates
+    const updated = await tx.transactionGroup.update({
+      where: { id: groupId },
+      data: {
+        ...(primaryExpenseId !== undefined ? { primaryExpenseId } : {}),
+        ...(addExpenseIds.length > 0
+          ? { expenses: { connect: addExpenseIds.map((id) => ({ id })) } }
+          : {}),
+        ...(removeExpenseIds.length > 0
+          ? { expenses: { disconnect: removeExpenseIds.map((id) => ({ id })) } }
+          : {}),
       },
-      incomes: {
-        connect: addIncomeIds.map((id) => ({ id })),
-        disconnect: removeIncomeIds.map((id) => ({ id })),
-      },
-    },
-    include: {
-      expenses: { include: { category: true, account: true } },
-      incomes: { include: { account: true } },
-    },
+      include: groupInclude,
+    });
+
+    // Auto-cleanup: if the group now has 0 or 1 members, dissolve it
+    const memberCount = await tx.expense.count({
+      where: { transactionGroupId: groupId, parentExpenseId: null },
+    });
+    if (memberCount <= 1) {
+      await tx.transactionGroup.delete({ where: { id: groupId } });
+      return res.json(null); // group dissolved
+    }
+
+    // If the removed expenses included the current primary, reset to oldest remaining
+    if (
+      removeExpenseIds.includes(updated.primaryExpenseId ?? "") ||
+      !updated.primaryExpenseId
+    ) {
+      const oldest = await tx.expense.findFirst({
+        where: { transactionGroupId: groupId, parentExpenseId: null },
+        orderBy: { date: "asc" },
+        select: { id: true },
+      });
+      if (oldest) {
+        await tx.transactionGroup.update({
+          where: { id: groupId },
+          data: { primaryExpenseId: oldest.id },
+        });
+      }
+    }
+
+    res.json(updated);
   });
-  res.json(group);
 });
 
-// Delete group (unlinks members, does not delete them)
+// DELETE /:id — dissolve a group entirely; member expenses are kept, just unlinked
 transactionGroupRoutes.delete("/:id", async (req, res) => {
+  const group = await prisma.transactionGroup.findUnique({ where: { id: req.params.id } });
+  if (!group) return res.status(404).json({ error: "Transaction group not found" });
+  // Deleting the group cascades transactionGroupId → null on all member expenses (SET NULL FK)
   await prisma.transactionGroup.delete({ where: { id: req.params.id } });
   res.status(204).send();
 });

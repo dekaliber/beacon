@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Pencil, Landmark, CreditCard, Banknote, PiggyBank, TrendingUp } from "lucide-react";
+import { Plus, Pencil, Trash2, Landmark, CreditCard, TrendingUp } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
@@ -13,17 +13,31 @@ const accountTypeLabels: Record<string, string> = {
   CHECKING: "Checking",
   SAVINGS: "Savings",
   CREDIT_CARD: "Credit Card",
-  CASH: "Cash",
   INVESTMENT: "Investment",
 };
 
-const accountTypeIcons: Record<string, React.ComponentType<{ className?: string }>> = {
-  CHECKING: Landmark,
-  SAVINGS: PiggyBank,
-  CREDIT_CARD: CreditCard,
-  CASH: Banknote,
-  INVESTMENT: TrendingUp,
-};
+interface GroupDef {
+  key: string;
+  label: string;
+  types: Account["type"][];
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+const ASSET_GROUPS: GroupDef[] = [
+  { key: "banking", label: "Banking", types: ["CHECKING", "SAVINGS"], icon: Landmark },
+  { key: "investments", label: "Investments", types: ["INVESTMENT"], icon: TrendingUp },
+];
+
+const LIABILITY_GROUPS: GroupDef[] = [
+  { key: "credit_cards", label: "Credit Cards", types: ["CREDIT_CARD"], icon: CreditCard },
+];
+
+const ASSET_TYPES = new Set(ASSET_GROUPS.flatMap((g) => g.types));
+const LIABILITY_TYPES = new Set(LIABILITY_GROUPS.flatMap((g) => g.types));
+
+function sumAccounts(accounts: Account[]) {
+  return accounts.reduce((sum, a) => sum + parseFloat(a.balance), 0);
+}
 
 export function Accounts() {
   const [modalOpen, setModalOpen] = useState(false);
@@ -42,10 +56,81 @@ export function Accounts() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Delete this account?")) {
-      await deleteAccount(id);
-      refetch();
-    }
+    await deleteAccount(id);
+    setModalOpen(false);
+    setEditing(null);
+    refetch();
+  };
+
+  const openEdit = (account: Account) => {
+    setEditing(account);
+    setModalOpen(true);
+  };
+
+  if (!accounts) return null;
+
+  const totalAssets = sumAccounts(accounts.filter((a) => ASSET_TYPES.has(a.type)));
+  const totalLiabilities = sumAccounts(accounts.filter((a) => LIABILITY_TYPES.has(a.type)));
+  const netWorth = totalAssets - totalLiabilities;
+
+  const renderGroup = (group: GroupDef, isJoint: boolean) => {
+    const groupAccounts = accounts.filter(
+      (a) => (group.types as string[]).includes(a.type) && a.isJoint === isJoint
+    );
+    if (groupAccounts.length === 0) return null;
+    const Icon = group.icon;
+    const total = sumAccounts(groupAccounts);
+    return (
+      <div key={`${group.key}-${isJoint}`} className="space-y-2">
+        <div className="flex items-center justify-between py-1">
+          <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            <Icon className="h-4 w-4" />
+            <span>{group.label}</span>
+          </div>
+          <span className="text-sm font-semibold">{formatCurrency(total)}</span>
+        </div>
+        <div className="space-y-1.5">
+          {groupAccounts.map((account) => (
+            <Card key={account.id} className="py-3 px-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div
+                  className="h-7 w-7 flex-shrink-0 rounded-md"
+                  style={account.color ? { backgroundColor: account.color } : undefined}
+                />
+                <span className="font-medium text-sm">{account.name}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="font-bold tabular-nums">{formatCurrency(account.balance)}</span>
+                <button onClick={() => openEdit(account)} className="rounded p-1 hover:bg-accent">
+                  <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderOwnershipBlock = (ownership: "Personal" | "Joint") => {
+    const isJoint = ownership === "Joint";
+    const assetGroups = ASSET_GROUPS.map((g) => renderGroup(g, isJoint)).filter(Boolean);
+    const liabilityGroups = LIABILITY_GROUPS.map((g) => renderGroup(g, isJoint)).filter(Boolean);
+    if (assetGroups.length === 0 && liabilityGroups.length === 0) return null;
+    return (
+      <div key={ownership} className="space-y-4">
+        <div className="flex items-center gap-2">
+          <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
+            {isJoint ? "J" : "P"}
+          </span>
+          <span className="text-sm font-semibold uppercase tracking-wider">{ownership}</span>
+        </div>
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+          <div className="space-y-5">{assetGroups}</div>
+          <div className="space-y-5">{liabilityGroups}</div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -57,48 +142,46 @@ export function Accounts() {
         </Button>
       </div>
 
-      {accounts && accounts.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {accounts.map((account) => {
-            const Icon = accountTypeIcons[account.type] || Landmark;
-            return (
-              <Card key={account.id} className="flex items-start justify-between">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-primary/10 p-2">
-                    <Icon className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold">{account.name}</p>
-                      <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${account.isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
-                        {account.isJoint ? "J" : "P"}
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{accountTypeLabels[account.type]}</p>
-                    <p className="mt-1 text-lg font-bold">{formatCurrency(account.balance)}</p>
-                  </div>
-                </div>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => { setEditing(account); setModalOpen(true); }}
-                    className="rounded p-1 hover:bg-accent"
-                  >
-                    <Pencil className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                  <button onClick={() => handleDelete(account.id)} className="rounded p-1 hover:bg-accent">
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </button>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+      {accounts.length > 0 ? (
+        <>
+          {/* Net Worth Summary */}
+          <Card className="p-4">
+            <div className="grid grid-cols-3 divide-x divide-border text-center">
+              <div className="px-4">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total Assets</p>
+                <p className="text-xl font-bold text-green-600">{formatCurrency(totalAssets)}</p>
+              </div>
+              <div className="px-4">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total Liabilities</p>
+                <p className="text-xl font-bold text-red-500">{formatCurrency(totalLiabilities)}</p>
+              </div>
+              <div className="px-4">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Net Worth</p>
+                <p className={`text-xl font-bold ${netWorth >= 0 ? "text-green-600" : "text-red-500"}`}>
+                  {formatCurrency(netWorth)}
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          {/* Column headers */}
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+            <h3 className="text-base font-semibold border-b border-border pb-2">Assets</h3>
+            <h3 className="text-base font-semibold border-b border-border pb-2">Liabilities</h3>
+          </div>
+
+          {/* Personal & Joint blocks */}
+          <div className="space-y-8">
+            {renderOwnershipBlock("Personal")}
+            {renderOwnershipBlock("Joint")}
+          </div>
+        </>
       ) : (
         <Card>
           <EmptyState
             icon={Landmark}
             title="No accounts"
-            description="Add your bank accounts, credit cards, and cash wallets."
+            description="Add your bank accounts, credit cards, and investments."
             action={
               <Button onClick={() => { setEditing(null); setModalOpen(true); }}>
                 <Plus className="h-4 w-4" /> Add Account
@@ -112,26 +195,43 @@ export function Accounts() {
         open={modalOpen}
         onClose={() => { setModalOpen(false); setEditing(null); }}
         onSave={handleSave}
+        onDelete={handleDelete}
         account={editing}
       />
     </div>
   );
 }
 
+// ── Account color palette ──
+
+const ACCOUNT_COLORS = [
+  "#e2e2df", "#d2d2cf", "#e2cfc4", "#f7d9c4", "#faedcb",
+  "#c9e4de", "#c6def1", "#dbcdf0", "#f2c6de", "#f9c6c9",
+];
+
 interface AccountModalProps {
   open: boolean;
   onClose: () => void;
   onSave: (data: Partial<Account>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
   account: Account | null;
 }
 
-function AccountModal({ open, onClose, onSave, account }: AccountModalProps) {
+function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModalProps) {
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [isJoint, setIsJoint] = useState(false);
+  const [selectedColor, setSelectedColor] = useState(account?.color ?? ACCOUNT_COLORS[0]);
 
   useEffect(() => {
-    if (open) setIsJoint(account?.isJoint ?? false);
-  }, [open, account]);
+    if (open) {
+      setIsJoint(account?.isJoint ?? false);
+      setSelectedColor(account?.color ?? ACCOUNT_COLORS[0]);
+      setConfirmDelete(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -141,9 +241,18 @@ function AccountModal({ open, onClose, onSave, account }: AccountModalProps) {
       name: form.get("name") as string,
       type: form.get("type") as Account["type"],
       balance: parseFloat(form.get("balance") as string) || 0,
+      color: selectedColor,
       isJoint,
     } as Partial<Account>);
     setSaving(false);
+  };
+
+  const handleDeleteClick = async () => {
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    if (!account) return;
+    setDeleting(true);
+    await onDelete(account.id);
+    setDeleting(false);
   };
 
   return (
@@ -186,6 +295,26 @@ function AccountModal({ open, onClose, onSave, account }: AccountModalProps) {
           />
         </div>
 
+        <div>
+          <label className="mb-1 block text-sm font-medium">Color</label>
+          <input type="hidden" name="color" value={selectedColor} />
+          <div className="grid w-fit grid-cols-10 gap-2">
+            {ACCOUNT_COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                onClick={() => setSelectedColor(color)}
+                style={{ backgroundColor: color }}
+                className={`h-7 w-7 rounded-md transition-transform hover:scale-110 ${
+                  selectedColor === color
+                    ? "scale-110 ring-2 ring-border ring-offset-1"
+                    : ""
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+
         <div className="rounded-md border border-border p-3">
           <label className="flex cursor-pointer items-center gap-2">
             <input
@@ -201,11 +330,26 @@ function AccountModal({ open, onClose, onSave, account }: AccountModalProps) {
           </p>
         </div>
 
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={saving}>
-            {saving ? "Saving..." : account ? "Update" : "Add Account"}
-          </Button>
+        <div className="flex items-center justify-between pt-2">
+          <div>
+            {account && (
+              <button
+                type="button"
+                onClick={handleDeleteClick}
+                disabled={deleting}
+                className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving..." : account ? "Update" : "Add Account"}
+            </Button>
+          </div>
         </div>
       </form>
     </Modal>

@@ -6,9 +6,17 @@ export const incomeRoutes = Router();
 
 const INCOME_ALLOWED_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "INVESTMENT"];
 
+const INCOME_INCLUDE = {
+  account: true,
+  category: true,
+  tags: { include: { tag: true } },
+  transactionGroup: true,
+} as const;
+
 const incomeSchema = z.object({
   amount: z.number().positive(),
-  source: z.enum(["DIVIDENDS", "INTEREST", "CAPITAL_GAINS", "GIFTS", "OTHER"]),
+  categoryId: z.string().optional(),
+  source: z.string().optional(),
   date: z.string().transform((s) => new Date(s)),
   notes: z.string().optional(),
   accountId: z.string(),
@@ -23,9 +31,19 @@ incomeRoutes.get("/", async (req, res) => {
   const skip = (page - 1) * limit;
 
   const where: Record<string, unknown> = {};
-  if (req.query.accountId) where.accountId = req.query.accountId;
-  if (req.query.source) where.source = req.query.source;
-  if (req.query.tagId) where.tags = { some: { tagId: req.query.tagId } };
+  if (req.query.accountIds) {
+    const ids = (req.query.accountIds as string).split(",").filter(Boolean);
+    where.accountId = ids.length === 1 ? ids[0] : { in: ids };
+  } else if (req.query.accountId) {
+    where.accountId = req.query.accountId;
+  }
+  if (req.query.categoryId) where.categoryId = req.query.categoryId;
+  if (req.query.tagIds) {
+    const ids = (req.query.tagIds as string).split(",").filter(Boolean);
+    where.tags = { some: { tagId: ids.length === 1 ? ids[0] : { in: ids } } };
+  } else if (req.query.tagId) {
+    where.tags = { some: { tagId: req.query.tagId } };
+  }
   if (req.query.startDate || req.query.endDate) {
     where.date = {
       ...(req.query.startDate ? { gte: new Date(req.query.startDate as string) } : {}),
@@ -42,6 +60,8 @@ incomeRoutes.get("/", async (req, res) => {
     orderBy = [{ date: sortOrder }, { createdAt: "asc" }];
   } else if (sortBy === "account") {
     orderBy = [{ account: { name: sortOrder } }, { date: "desc" }];
+  } else if (sortBy === "category") {
+    orderBy = [{ category: { name: sortOrder } }, { date: "desc" }];
   } else {
     orderBy = [{ [sortBy]: sortOrder }, { date: "desc" }];
   }
@@ -49,7 +69,7 @@ incomeRoutes.get("/", async (req, res) => {
   const [incomes, total] = await Promise.all([
     prisma.income.findMany({
       where,
-      include: { account: true, tags: { include: { tag: true } }, transactionGroup: true },
+      include: INCOME_INCLUDE,
       orderBy,
       skip,
       take: limit,
@@ -67,7 +87,7 @@ incomeRoutes.get("/", async (req, res) => {
 incomeRoutes.get("/:id", async (req, res) => {
   const income = await prisma.income.findUnique({
     where: { id: req.params.id },
-    include: { account: true, tags: { include: { tag: true } }, transactionGroup: true },
+    include: INCOME_INCLUDE,
   });
   if (!income) return res.status(404).json({ error: "Income not found" });
   res.json(income);
@@ -94,7 +114,7 @@ incomeRoutes.post("/", async (req, res) => {
       ...data,
       ...(tagIds?.length ? { tags: { create: tagIds.map((id) => ({ tagId: id })) } } : {}),
     },
-    include: { account: true, tags: { include: { tag: true } }, transactionGroup: true },
+    include: INCOME_INCLUDE,
   });
   res.status(201).json(income);
 });
@@ -130,7 +150,7 @@ incomeRoutes.put("/:id", async (req, res) => {
           }
         : {}),
     },
-    include: { account: true, tags: { include: { tag: true } }, transactionGroup: true },
+    include: INCOME_INCLUDE,
   });
   res.json(income);
 });
@@ -139,4 +159,51 @@ incomeRoutes.put("/:id", async (req, res) => {
 incomeRoutes.delete("/:id", async (req, res) => {
   await prisma.income.delete({ where: { id: req.params.id } });
   res.status(204).send();
+});
+
+// Bulk import income
+const importRowSchema = z.object({
+  amount: z.number().positive("Amount must be positive"),
+  categoryId: z.string().optional(),
+  source: z.string().optional(),
+  date: z.string().transform((s) => new Date(s)),
+  accountId: z.string(),
+});
+
+const importSchema = z.object({
+  incomes: z.array(importRowSchema),
+});
+
+incomeRoutes.post("/import", async (req, res) => {
+  const parsed = importSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const rows = parsed.data.incomes;
+  let imported = 0;
+  const errors: Array<{ row: number; message: string }> = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    try {
+      const row = rows[i];
+      const account = await prisma.account.findUnique({ where: { id: row.accountId } });
+      if (!account || !INCOME_ALLOWED_ACCOUNT_TYPES.includes(account.type)) {
+        errors.push({ row: i + 1, message: `Invalid account` });
+        continue;
+      }
+      // Validate category is an income category if provided
+      if (row.categoryId) {
+        const category = await prisma.category.findUnique({ where: { id: row.categoryId } });
+        if (!category || category.kind !== "INCOME") {
+          errors.push({ row: i + 1, message: `Invalid income category` });
+          continue;
+        }
+      }
+      await prisma.income.create({ data: row });
+      imported++;
+    } catch (err) {
+      errors.push({ row: i + 1, message: err instanceof Error ? err.message : "Unknown error" });
+    }
+  }
+
+  res.json({ imported, errors });
 });

@@ -6,14 +6,20 @@ import { useApi } from "@/hooks/useApi";
 import { getRecurrenceRules, deleteRecurrenceRule } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
-const frequencyLabels: Record<string, string> = {
-  DAILY: "Daily",
-  WEEKLY: "Weekly",
-  BIWEEKLY: "Biweekly",
-  MONTHLY: "Monthly",
-  QUARTERLY: "Quarterly",
-  YEARLY: "Yearly",
+const frequencyUnit: Record<string, { singular: string; plural: string }> = {
+  DAILY:   { singular: "day",   plural: "days"   },
+  WEEKLY:  { singular: "week",  plural: "weeks"  },
+  MONTHLY: { singular: "month", plural: "months" },
+  YEARLY:  { singular: "year",  plural: "years"  },
 };
+
+function formatFrequency(frequency: string, interval: number): string {
+  const unit = frequencyUnit[frequency];
+  if (!unit) return frequency.toLowerCase();
+  return interval === 1
+    ? `every ${unit.singular}`
+    : `every ${interval} ${unit.plural}`;
+}
 
 export function Recurring() {
   const { data: rules, refetch } = useApi(() => getRecurrenceRules(), []);
@@ -61,8 +67,7 @@ export function Recurring() {
                       <div>
                         <p className="font-medium">{rule.description}</p>
                         <p className="text-sm text-muted-foreground">
-                          {formatCurrency(rule.amount)} &middot; {frequencyLabels[rule.frequency]}
-                          {rule.interval > 1 ? ` (every ${rule.interval})` : ""}
+                          {parseFloat(rule.amount) < 0 ? `+${formatCurrency(Math.abs(parseFloat(rule.amount)))}` : formatCurrency(rule.amount)} &middot; {formatFrequency(rule.frequency, rule.interval)}
                         </p>
                       </div>
                     </div>

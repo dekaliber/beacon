@@ -11,25 +11,19 @@ enum AccountType {
   CHECKING
   SAVINGS
   CREDIT_CARD
-  CASH
   INVESTMENT
 }
 
 enum Frequency {
   DAILY
   WEEKLY
-  BIWEEKLY
   MONTHLY
-  QUARTERLY
   YEARLY
 }
 
-enum IncomeSource {
-  DIVIDENDS
-  INTEREST
-  CAPITAL_GAINS
-  GIFTS
-  OTHER
+enum CategoryKind {
+  EXPENSE
+  INCOME
 }
 
 model Account {
@@ -38,6 +32,7 @@ model Account {
   type      AccountType
   balance   Decimal     @default(0) @db.Decimal(12, 2)
   currency  String      @default("USD")
+  color     String?
   isJoint   Boolean     @default(false)
   isActive  Boolean     @default(true)
   createdAt DateTime    @default(now())
@@ -50,19 +45,22 @@ model Account {
 }
 
 model Category {
-  id        String   @id @default(cuid())
+  id        String       @id @default(cuid())
   name      String
   icon      String?
   color     String?
-  isDefault Boolean  @default(false)
-  parentId  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  kind      CategoryKind @default(EXPENSE)
+  isDefault      Boolean      @default(false)
+  ignoreInBudget Boolean      @default(false)
+  parentId       String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   parent   Category?  @relation("CategoryToSubcategory", fields: [parentId], references: [id])
   children Category[] @relation("CategoryToSubcategory")
 
   expenses Expense[]
+  incomes  Income[]
 
   @@map("categories")
 }
@@ -81,13 +79,15 @@ model Expense {
 
   isReimbursementExpected Boolean @default(false)
   reimbursementNote       String?
+  ignoreInBudget          Boolean @default(false)
 
   recurrenceRuleId   String?
   transactionGroupId String?
   parentExpenseId    String?
 
   recurrenceRule   RecurrenceRule?   @relation(fields: [recurrenceRuleId], references: [id])
-  transactionGroup TransactionGroup? @relation(fields: [transactionGroupId], references: [id])
+  transactionGroup TransactionGroup? @relation("GroupExpenses", fields: [transactionGroupId], references: [id])
+  primaryForGroups TransactionGroup[] @relation("GroupPrimary")
   category         Category?         @relation(fields: [categoryId], references: [id])
   account          Account           @relation(fields: [accountId], references: [id])
   parentExpense    Expense?          @relation("ExpenseOffsets", fields: [parentExpenseId], references: [id], onDelete: Cascade)
@@ -102,23 +102,26 @@ model Expense {
 }
 
 model Income {
-  id        String       @id @default(cuid())
-  amount    Decimal      @db.Decimal(12, 2)
-  source    IncomeSource
-  date      DateTime
-  notes     String?
-  accountId String
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id         String   @id @default(cuid())
+  amount     Decimal  @db.Decimal(12, 2)
+  categoryId String?
+  source     String?
+  date       DateTime
+  notes      String?
+  accountId  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   transactionGroupId String?
 
+  category         Category?         @relation(fields: [categoryId], references: [id])
   transactionGroup TransactionGroup? @relation(fields: [transactionGroupId], references: [id])
   account          Account           @relation(fields: [accountId], references: [id])
   tags             IncomeTag[]
 
   @@index([date])
   @@index([accountId])
+  @@index([categoryId])
   @@map("incomes")
 }
 
@@ -158,14 +161,15 @@ model IncomeTag {
 }
 
 model TransactionGroup {
-  id        String   @id @default(cuid())
-  name      String
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String   @id @default(cuid())
+  notes            String?
+  primaryExpenseId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  expenses Expense[]
-  incomes  Income[]
+  expenses       Expense[] @relation("GroupExpenses")
+  primaryExpense Expense?  @relation("GroupPrimary", fields: [primaryExpenseId], references: [id], onDelete: SetNull)
+  incomes        Income[]
 
   @@map("transaction_groups")
 }
@@ -191,14 +195,53 @@ model RecurrenceRule {
   @@map("recurrence_rules")
 }
 
-model Budget {
-  id        String   @id @default(cuid())
-  amount    Decimal  @db.Decimal(12, 2)
-  month     Int
-  year      Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// ── Budget models ──────────────────────────────────────────────────────────────
+// Personal and Joint budgets are set separately; Total is always derived as
+// personal + (joint × jointSplitRatio).  Monthly overrides allow per-month
+// amounts on top of the annual default (annualAmount / 12).
 
-  @@unique([month, year])
-  @@map("budgets")
+enum BudgetType {
+  PERSONAL
+  JOINT
+}
+
+model AnnualBudget {
+  id           String    @id @default(cuid())
+  type         BudgetType
+  year         Int
+  // Nullable: users who prefer month-by-month control may leave this unset,
+  // in which case effectiveAnnual = sum of all MonthlyBudget overrides.
+  annualAmount Decimal?  @db.Decimal(12, 2)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  monthlyOverrides MonthlyBudget[]
+
+  @@unique([type, year])
+  @@map("annual_budgets")
+}
+
+model MonthlyBudget {
+  id             String       @id @default(cuid())
+  annualBudgetId String
+  month          Int          // 1–12
+  amount         Decimal      @db.Decimal(12, 2)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  annualBudget AnnualBudget @relation(fields: [annualBudgetId], references: [id], onDelete: Cascade)
+
+  @@unique([annualBudgetId, month])
+  @@map("monthly_budgets")
+}
+
+model BudgetSettings {
+  id              String   @id @default(cuid())
+  // Fraction of joint expenses counted toward the user's Total budget (default 50/50).
+  // Stored as a decimal (0.5 = 50%).  Future UI will expose this as editable.
+  jointSplitRatio Decimal  @default(0.5) @db.Decimal(4, 3)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("budget_settings")
 }
