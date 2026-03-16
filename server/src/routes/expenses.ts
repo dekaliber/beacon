@@ -372,7 +372,10 @@ const importSchema = z.object({
 
 expenseRoutes.post("/import", async (req, res) => {
   const parsed = importSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  if (!parsed.success) {
+    console.error("[import] Zod validation failed:", JSON.stringify(parsed.error.flatten()));
+    return res.status(400).json({ error: "Invalid import data: " + JSON.stringify(parsed.error.flatten().fieldErrors) });
+  }
 
   const rows = parsed.data.expenses;
   let imported = 0;

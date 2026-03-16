@@ -2548,6 +2548,7 @@ function ImportModal({
 }) {
   const [step, setStep] = useState<"upload" | "preview" | "result">("upload");
   const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [showErrorsOnly, setShowErrorsOnly] = useState(false);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{ imported: number; errors: Array<{ row: number; message: string }> } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -2558,6 +2559,7 @@ function ImportModal({
       setRows([]);
       setResult(null);
       setImporting(false);
+      setShowErrorsOnly(false);
     }
   }, [open]);
 
@@ -2652,6 +2654,8 @@ function ImportModal({
   };
 
   const validRows = rows.filter((r) => r.errors.length === 0);
+  const errorRows = rows.filter((r) => r.errors.length > 0);
+  const visibleRows = showErrorsOnly ? errorRows : rows;
 
   const handleImport = async () => {
     setImporting(true);
@@ -2667,8 +2671,9 @@ function ImportModal({
       const res = await importExpenses(payload);
       setResult(res);
       setStep("result");
-    } catch {
-      setResult({ imported: 0, errors: [{ row: 0, message: "Import request failed" }] });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Import request failed";
+      setResult({ imported: 0, errors: [{ row: 0, message }] });
       setStep("result");
     }
     setImporting(false);
@@ -2718,10 +2723,20 @@ function ImportModal({
             <p className="text-sm font-medium">
               {validRows.length} of {rows.length} rows valid
             </p>
-            {rows.length > validRows.length && (
-              <p className="text-xs text-destructive">
-                {rows.length - validRows.length} row{rows.length - validRows.length !== 1 ? "s" : ""} with errors
-              </p>
+            {errorRows.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowErrorsOnly((v) => !v)}
+                className={`flex items-center gap-1.5 rounded px-2 py-0.5 text-xs transition-colors ${
+                  showErrorsOnly
+                    ? "bg-destructive/15 text-destructive font-medium"
+                    : "text-destructive hover:bg-destructive/10"
+                }`}
+              >
+                <AlertCircle className="h-3 w-3" />
+                {errorRows.length} error{errorRows.length !== 1 ? "s" : ""}
+                {showErrorsOnly ? " — show all" : " — show only"}
+              </button>
             )}
           </div>
 
@@ -2740,7 +2755,9 @@ function ImportModal({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, i) => (
+                {visibleRows.map((row) => {
+                  const i = rows.indexOf(row);
+                  return (
                   <tr key={i} className={`border-b border-border ${row.errors.length > 0 ? "bg-destructive/5" : ""}`}>
                     <td className="px-2 py-1.5 text-muted-foreground">{i + 1}</td>
                     <td className="px-2 py-1.5">{row.date}</td>
@@ -2761,7 +2778,8 @@ function ImportModal({
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
