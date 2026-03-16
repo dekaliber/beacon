@@ -4,6 +4,7 @@ import type {
   Budget,
   BudgetDetail,
   BudgetOverview,
+  CategoryOutliersData,
   Category,
   DashboardData,
   Expense,
@@ -103,6 +104,9 @@ export const deleteMonthlyBudgetOverride = (
   type: "personal" | "joint",
   month: number,
 ) => api.delete(`/budgets/${year}/${type}/monthly/${month}`);
+
+export const getCategoryOutliers = (year: number) =>
+  api.get<CategoryOutliersData>(`/budgets/${year}/category-outliers`);
 
 export const getBudgetSettings = () =>
   api.get<{ jointSplitRatio: number }>("/budgets/settings");

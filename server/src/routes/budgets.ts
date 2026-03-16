@@ -435,10 +435,13 @@ budgetRoutes.get("/:year", async (req, res) => {
     month: o.month, amount: Number(o.amount),
   }));
 
-  const effPersonal    = effectiveAnnual(personalAnnualRaw, personalOverrides);
-  const effJoint       = effectiveAnnual(jointAnnualRaw,    jointOverrides);
-  const effJointScaled = effJoint * splitRatio;           // user's share of joint budget
-  const effTotal       = effPersonal + effJointScaled;
+  const effPersonal = effectiveAnnual(personalAnnualRaw, personalOverrides);
+  const effJoint    = effectiveAnnual(jointAnnualRaw,    jointOverrides);
+  // The joint budget the user enters is already their intended share (e.g. they
+  // set $24 000 meaning "I want to spend at most $24 000 on my half of joint
+  // expenses"). splitRatio is applied only to the raw spend figures so the
+  // dollar amounts displayed match what the user is actually responsible for.
+  const effTotal    = effPersonal + effJoint;
 
   // Compute spend metrics for both account sets in parallel
   const [personalMetrics, jointMetrics] = await Promise.all([
@@ -545,19 +548,146 @@ budgetRoutes.get("/:year", async (req, res) => {
       chart: personalChart,
     },
     joint: {
-      annualBudget: jointAnnualRaw,          // full joint budget — kept unscaled for the editor
-      effectiveAnnualBudget: Math.round(effJointScaled * 100) / 100,
-      monthlyBudgets: resolveMonthlyAmounts(jointAnnualRaw, jointOverrides)
-        .map((m) => ({ ...m, amount: Math.round(m.amount * splitRatio * 100) / 100 })),
-      ...panelStats(scaledJoint, effJointScaled),
+      annualBudget: jointAnnualRaw,   // what the user entered (already their share)
+      effectiveAnnualBudget: Math.round(effJoint * 100) / 100,
+      monthlyBudgets: resolveMonthlyAmounts(jointAnnualRaw, jointOverrides),
+      ...panelStats(scaledJoint, effJoint),  // spend is scaled; budget is not
       chart: jointChart,                     // chart was already scaled by splitRatio
     },
     total: {
-      annualBudget: null, // always derived: personal + joint × splitRatio
+      annualBudget: null, // always derived: personal + joint (joint already reflects user's share)
       effectiveAnnualBudget: Math.round(effTotal * 100) / 100,
       ...panelStats(totalMetrics, effTotal),
       chart: totalChart,
     },
+  });
+});
+
+// GET /api/budgets/:year/category-outliers
+// Returns the top-10 categories by absolute month-over-month spend change,
+// comparing current-month-to-date vs the same day range in the prior month.
+// Applies the same joint split-ratio and ignoreInBudget filters as the main route.
+budgetRoutes.get("/:year/category-outliers", async (req, res) => {
+  const year = parseInt(req.params.year);
+  if (isNaN(year)) return res.status(400).json({ error: "Invalid year" });
+
+  const today = new Date();
+  const effectiveToday =
+    year < today.getUTCFullYear()
+      ? new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999))
+      : year > today.getUTCFullYear()
+        ? new Date(Date.UTC(year, 0, 1))
+        : today;
+
+  const [accounts, ignoredCategories, settings, annualBudgets] = await Promise.all([
+    prisma.account.findMany({ where: { isActive: true }, select: { id: true, isJoint: true } }),
+    prisma.category.findMany({ where: { ignoreInBudget: true }, select: { id: true } }),
+    getOrCreateSettings(),
+    prisma.annualBudget.findMany({ where: { year }, include: { monthlyOverrides: true } }),
+  ]);
+
+  const splitRatio        = Number(settings.jointSplitRatio);
+  const personalIds       = accounts.filter((a) => !a.isJoint).map((a) => a.id);
+  const jointIds          = accounts.filter((a) =>  a.isJoint).map((a) => a.id);
+  const ignoredCategoryIds = ignoredCategories.map((c) => c.id);
+
+  // Compute scale cap = 20% of effective monthly total budget
+  const pBudget = annualBudgets.find((b) => b.type === "PERSONAL") ?? null;
+  const jBudget = annualBudgets.find((b) => b.type === "JOINT")    ?? null;
+  const toOverrides = (b: typeof pBudget) =>
+    (b?.monthlyOverrides ?? []).map((o) => ({ month: o.month, amount: Number(o.amount) }));
+  const effTotal = effectiveAnnual(
+    pBudget ? Number(pBudget.annualAmount) : null, toOverrides(pBudget),
+  ) + effectiveAnnual(
+    jBudget ? Number(jBudget.annualAmount) : null, toOverrides(jBudget),
+  );
+  const scaleCap: number | null = effTotal > 0 ? Math.round(effTotal / 12 * 0.20) : null;
+
+  const curYear  = effectiveToday.getUTCFullYear();
+  const curMonth = effectiveToday.getUTCMonth() + 1; // 1-indexed
+  const curDay   = effectiveToday.getUTCDate();
+
+  const prevMonth     = curMonth === 1 ? 12 : curMonth - 1;
+  const prevMonthYear = curMonth === 1 ? curYear - 1 : curYear;
+  // Cap comparison day at the number of days in the previous month
+  const daysInPrevMonth = new Date(Date.UTC(prevMonthYear, prevMonth, 0)).getUTCDate();
+  const prevDay = Math.min(curDay, daysInPrevMonth);
+
+  const curStart  = new Date(Date.UTC(curYear,       curMonth - 1, 1));
+  const curEnd    = new Date(Date.UTC(curYear,       curMonth - 1, curDay, 23, 59, 59, 999));
+  const prevStart = new Date(Date.UTC(prevMonthYear, prevMonth - 1, 1));
+  const prevEnd   = new Date(Date.UTC(prevMonthYear, prevMonth - 1, prevDay, 23, 59, 59, 999));
+
+  const expFilter = ignoredExpenseFilter(ignoredCategoryIds);
+  const sel = {
+    amount: true,
+    categoryId: true,
+    category: { select: { name: true, color: true } },
+  } as const;
+
+  const [curPersonal, curJoint, prevPersonal, prevJoint] = await Promise.all([
+    personalIds.length > 0
+      ? prisma.expense.findMany({ where: { accountId: { in: personalIds }, date: { gte: curStart,  lte: curEnd  }, ...expFilter }, select: sel })
+      : Promise.resolve([]),
+    jointIds.length > 0
+      ? prisma.expense.findMany({ where: { accountId: { in: jointIds  }, date: { gte: curStart,  lte: curEnd  }, ...expFilter }, select: sel })
+      : Promise.resolve([]),
+    personalIds.length > 0
+      ? prisma.expense.findMany({ where: { accountId: { in: personalIds }, date: { gte: prevStart, lte: prevEnd }, ...expFilter }, select: sel })
+      : Promise.resolve([]),
+    jointIds.length > 0
+      ? prisma.expense.findMany({ where: { accountId: { in: jointIds  }, date: { gte: prevStart, lte: prevEnd }, ...expFilter }, select: sel })
+      : Promise.resolve([]),
+  ]);
+
+  type Row = typeof curPersonal[number];
+
+  const categoryInfo = new Map<string, { name: string; color: string | null }>();
+  const curMap  = new Map<string, number>();
+  const prevMap = new Map<string, number>();
+
+  function accumulate(rows: Row[], scale: number, target: Map<string, number>) {
+    for (const row of rows) {
+      const key = row.categoryId ?? "__uncategorized__";
+      if (!categoryInfo.has(key)) {
+        categoryInfo.set(key, { name: row.category?.name ?? "Uncategorized", color: row.category?.color ?? null });
+      }
+      target.set(key, (target.get(key) ?? 0) + Number(row.amount) * scale);
+    }
+  }
+
+  accumulate(curPersonal,  1,          curMap);
+  accumulate(curJoint,     splitRatio, curMap);
+  accumulate(prevPersonal, 1,          prevMap);
+  accumulate(prevJoint,    splitRatio, prevMap);
+
+  const SRV_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const allKeys = new Set([...curMap.keys(), ...prevMap.keys()]);
+
+  const outliers = Array.from(allKeys)
+    .map((key) => {
+      const cur   = curMap.get(key)  ?? 0;
+      const prev  = prevMap.get(key) ?? 0;
+      const delta = cur - prev;
+      const info  = categoryInfo.get(key)!;
+      return {
+        categoryId:     key === "__uncategorized__" ? null : key,
+        categoryName:   info.name,
+        color:          info.color,
+        currentAmount:  Math.round(cur  * 100) / 100,
+        previousAmount: Math.round(prev * 100) / 100,
+        delta:          Math.round(delta * 100) / 100,
+      };
+    })
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .slice(0, 10);
+
+  res.json({
+    outliers,
+    currentMonthLabel:  `${SRV_MONTHS[curMonth - 1]} ${curYear}`,
+    previousMonthLabel: `${SRV_MONTHS[prevMonth - 1]} ${prevMonthYear}`,
+    comparisonNote: `Day 1–${curDay}`,
+    scaleCap,
   });
 });
 

@@ -142,6 +142,24 @@ export interface BudgetPanel {
   chart: BudgetChart;
 }
 
+export interface CategoryOutlier {
+  categoryId: string | null;
+  categoryName: string;
+  color: string | null;
+  currentAmount: number;
+  previousAmount: number;
+  delta: number; // positive = more spending this month, negative = less
+}
+
+export interface CategoryOutliersData {
+  outliers: CategoryOutlier[];
+  currentMonthLabel: string;
+  previousMonthLabel: string;
+  comparisonNote: string;
+  /** 20% of effective monthly total budget. Null if no budget is set — chart falls back to max value. */
+  scaleCap: number | null;
+}
+
 /** Full budget overview response for a given year. */
 export interface BudgetOverview {
   year: number;
