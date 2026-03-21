@@ -237,13 +237,17 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
     e.preventDefault();
     setSaving(true);
     const form = new FormData(e.currentTarget);
-    await onSave({
+    const data: Partial<Account> = {
       name: form.get("name") as string,
       type: form.get("type") as Account["type"],
-      balance: parseFloat(form.get("balance") as string) || 0,
       color: selectedColor,
       isJoint,
-    } as Partial<Account>);
+    };
+    // Balance only editable when creating a new account
+    if (!account) {
+      data.balance = parseFloat(form.get("balance") as string) || 0;
+    }
+    await onSave(data);
     setSaving(false);
   };
 
@@ -284,16 +288,18 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
           </select>
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium">Balance</label>
-          <input
-            name="balance"
-            type="number"
-            step="0.01"
-            defaultValue={account?.balance ?? "0"}
-            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
+        {!account && (
+          <div>
+            <label className="mb-1 block text-sm font-medium">Balance</label>
+            <input
+              name="balance"
+              type="number"
+              step="0.01"
+              defaultValue="0"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+        )}
 
         <div>
           <label className="mb-1 block text-sm font-medium">Color</label>

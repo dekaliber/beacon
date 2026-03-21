@@ -8,9 +8,11 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   className?: string;
+  /** Override classes on the scrollable content wrapper (default: "overflow-y-auto px-6 pb-6") */
+  contentClassName?: string;
 }
 
-export function Modal({ open, onClose, title, children, className }: ModalProps) {
+export function Modal({ open, onClose, title, children, className, contentClassName }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -36,7 +38,7 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="overflow-y-auto px-6 pb-6">
+        <div className={contentClassName ?? "overflow-y-auto px-6 pb-6"}>
           {children}
         </div>
       </div>

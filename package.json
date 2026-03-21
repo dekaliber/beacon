@@ -4,9 +4,10 @@
   "private": true,
   "description": "Personal financial management application",
   "scripts": {
+    "predev": "kill $(lsof -ti:3001) 2>/dev/null || true",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "cd server && npm run dev",
-    "dev:client": "cd client && npm run dev",
+    "dev:client": "wait-on tcp:3001 && cd client && npm run dev",
     "build": "npm run build:server && npm run build:client",
     "build:server": "cd server && npm run build",
     "build:client": "cd client && npm run build",
@@ -15,6 +16,7 @@
     "db:reset": "cd server && npx prisma migrate reset"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "wait-on": "^9.0.4"
   }
 }

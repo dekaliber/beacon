@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { X, Link2, Unlink, Star } from "lucide-react";
-import { MultiSelectDropdown } from "@/components/MultiSelectDropdown";
-import type { MultiSelectOption } from "@/components/MultiSelectDropdown";
-import { bulkUpdateExpenses } from "@/api";
+import { X, Link2, Unlink, Star, Check, Trash2 } from "lucide-react";
+import { bulkUpdateExpenses, bulkDeleteExpenses } from "@/api";
 import type { Category, Tag } from "@/types";
 
 // The action to show depends on which groups the selected expenses belong to:
@@ -14,12 +12,14 @@ interface BulkEditBarProps {
   ids: string[];
   categories: Category[];
   tags: Tag[];
+  initialTagIds?: string[];
   groupAction: GroupAction;
   setAsPrimaryTarget?: { expenseId: string; groupId: string } | null;
   onClear: () => void;
   onSuccess: () => void;
   onGroupAction: () => Promise<void>;
   onSetAsPrimary?: () => Promise<void>;
+  onCreateTag?: (name: string) => Promise<Tag>;
 }
 
 type ActivePopover = "description" | "category" | "tags" | null;
@@ -28,12 +28,14 @@ export function BulkEditBar({
   ids,
   categories,
   tags,
+  initialTagIds,
   groupAction,
   setAsPrimaryTarget,
   onClear,
   onSuccess,
   onGroupAction,
   onSetAsPrimary,
+  onCreateTag,
 }: BulkEditBarProps) {
   const [active, setActive] = useState<ActivePopover>(null);
   const [groupLoading, setGroupLoading] = useState(false);
@@ -45,9 +47,14 @@ export function BulkEditBar({
   const [categoryId, setCategoryId] = useState<string | null | undefined>(undefined);
   const [categorySearch, setCategorySearch] = useState("");
   const [tagIds, setTagIds] = useState<string[]>([]);
+  const [tagSearch, setTagSearch] = useState("");
+  const [tagCreating, setTagCreating] = useState(false);
+  const [localTags, setLocalTags] = useState<Tag[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const barRef = useRef<HTMLDivElement>(null);
 
@@ -68,7 +75,10 @@ export function BulkEditBar({
     setDescription("");
     setCategoryId(undefined);
     setCategorySearch("");
-    setTagIds([]);
+    setTagIds(type === "tags" ? (initialTagIds ?? []) : []);
+    setTagSearch("");
+    setTagCreating(false);
+    setLocalTags([]);
     setError(null);
     setLoading(false);
   };
@@ -145,11 +155,51 @@ export function BulkEditBar({
     return opt ? (opt.parentLabel ? `${opt.parentLabel} > ${opt.label}` : opt.label) : null;
   }, [categoryId, flatCategoryOptions]);
 
-  // Tag options
-  const tagOptions = useMemo<MultiSelectOption[]>(
-    () => tags.map((t) => ({ id: t.id, label: t.name })),
-    [tags],
-  );
+  // Tag options (merge backend tags with any locally-created ones)
+  const allTags = useMemo(() => {
+    const ids = new Set(tags.map((t) => t.id));
+    return [...tags, ...localTags.filter((t) => !ids.has(t.id))].sort((a, b) => a.name.localeCompare(b.name));
+  }, [tags, localTags]);
+
+  const filteredTags = useMemo(() => {
+    if (!tagSearch.trim()) return allTags;
+    const terms = tagSearch.toLowerCase().split(/\s+/);
+    return allTags.filter((t) => {
+      const words = t.name.toLowerCase().split(/\s+/);
+      return terms.every((term) => words.some((w) => w.startsWith(term)));
+    });
+  }, [tagSearch, allTags]);
+
+  const showTagCreate = !!tagSearch.trim() && filteredTags.length === 0 && !!onCreateTag;
+
+  const handleCreateTag = async () => {
+    const name = tagSearch.trim();
+    if (!name || tagCreating || !onCreateTag) return;
+    setTagCreating(true);
+    try {
+      const newTag = await onCreateTag(name);
+      setLocalTags((prev) => [...prev, newTag]);
+      setTagIds((prev) => [...prev, newTag.id]);
+      setTagSearch("");
+    } finally {
+      setTagCreating(false);
+    }
+  };
+
+  const toggleTagId = (id: string) => {
+    setTagIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+
+  const handleDelete = async () => {
+    setDeleteLoading(true);
+    try {
+      await bulkDeleteExpenses(ids);
+      setShowDeleteConfirm(false);
+      onSuccess();
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const applyLabel = loading
     ? "Applying..."
@@ -169,6 +219,7 @@ export function BulkEditBar({
     }`;
 
   return (
+    <>
     <div
       ref={barRef}
       className="fixed top-[60px] left-1/2 z-40 -translate-x-1/2 flex items-stretch rounded-full bg-primary text-primary-foreground shadow-lg text-sm font-medium select-none"
@@ -288,12 +339,51 @@ export function BulkEditBar({
         </button>
         {active === "tags" && (
           <div className={popoverCls}>
-            <MultiSelectDropdown
-              options={tagOptions}
-              selected={tagIds}
-              onChange={setTagIds}
-              placeholder="None (clears all tags)"
+            <input
+              type="text"
+              value={tagSearch}
+              onChange={(e) => setTagSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  if (showTagCreate) handleCreateTag();
+                  else if (filteredTags[0]) toggleTagId(filteredTags[0].id);
+                }
+              }}
+              placeholder={onCreateTag ? "Filter or create tag..." : "Filter tags..."}
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              // eslint-disable-next-line jsx-a11y/no-autofocus
+              autoFocus
             />
+            <div className="mt-1 max-h-44 overflow-auto rounded-md border border-border">
+              {showTagCreate ? (
+                <button
+                  type="button"
+                  className="block w-full px-3 py-1.5 text-left text-sm hover:bg-muted/50"
+                  onMouseDown={handleCreateTag}
+                  disabled={tagCreating}
+                >
+                  {tagCreating ? "Creating..." : `Create tag: "${tagSearch.trim()}"`}
+                </button>
+              ) : filteredTags.length === 0 ? (
+                <p className="px-3 py-2 text-sm text-muted-foreground">No tags yet</p>
+              ) : (
+                filteredTags.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onMouseDown={() => toggleTagId(t.id)}
+                    className={`flex items-center gap-2 w-full px-3 py-1.5 text-left text-sm transition-colors ${
+                      tagIds.includes(t.id) ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted/50"
+                    }`}
+                  >
+                    <span className={`h-4 w-4 flex-shrink-0 rounded border flex items-center justify-center ${tagIds.includes(t.id) ? "bg-primary border-primary" : "border-border"}`}>
+                      {tagIds.includes(t.id) && <Check className="h-3 w-3 text-white" />}
+                    </span>
+                    {t.name}
+                  </button>
+                ))
+              )}
+            </div>
             {tagIds.length === 0 && (
               <p className="mt-1 text-xs text-amber-600">All tags will be removed from the selected expenses.</p>
             )}
@@ -326,21 +416,38 @@ export function BulkEditBar({
         </>
       )}
 
+      {ids.length > 1 && (
+        <>
+          <span className={sepCls} />
+
+          {/* Group / Ungroup */}
+          <button
+            type="button"
+            onClick={handleGroupAction}
+            disabled={groupLoading}
+            className="flex items-center gap-1.5 px-4 py-2.5 transition-colors whitespace-nowrap hover:bg-white/10 disabled:opacity-50"
+            title={groupAction === "group" ? "Group selected transactions" : "Remove from group"}
+          >
+            {groupAction === "group" ? (
+              <><Link2 className="h-3.5 w-3.5" />{groupLoading ? "Grouping…" : "Group Transactions"}</>
+            ) : (
+              <><Unlink className="h-3.5 w-3.5" />{groupLoading ? "Ungrouping…" : "Remove from Group"}</>
+            )}
+          </button>
+        </>
+      )}
+
       <span className={sepCls} />
 
-      {/* Group / Ungroup */}
+      {/* Delete */}
       <button
         type="button"
-        onClick={handleGroupAction}
-        disabled={groupLoading}
-        className="flex items-center gap-1.5 px-4 py-2.5 transition-colors whitespace-nowrap hover:bg-white/10 disabled:opacity-50"
-        title={groupAction === "group" ? "Group selected transactions" : "Remove from group"}
+        onClick={() => { setActive(null); setShowDeleteConfirm(true); }}
+        className="flex items-center gap-1.5 px-4 py-2.5 transition-colors whitespace-nowrap hover:bg-white/10"
+        title="Delete selected transactions"
       >
-        {groupAction === "group" ? (
-          <><Link2 className="h-3.5 w-3.5" />{groupLoading ? "Grouping…" : "Group Transactions"}</>
-        ) : (
-          <><Unlink className="h-3.5 w-3.5" />{groupLoading ? "Ungrouping…" : "Remove from Group"}</>
-        )}
+        <Trash2 className="h-3.5 w-3.5" />
+        Delete
       </button>
 
       <span className={sepCls} />
@@ -355,5 +462,37 @@ export function BulkEditBar({
         <X className="h-4 w-4" />
       </button>
     </div>
+
+    {/* Delete confirmation modal — rendered outside the transformed bar div so fixed positioning works correctly */}
+    {showDeleteConfirm && (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+        <div className="w-full max-w-sm rounded-lg bg-background text-foreground p-6 shadow-xl">
+          <h3 className="text-base font-semibold">Delete {ids.length} transaction{ids.length !== 1 ? "s" : ""}?</h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Are you sure you want to delete {ids.length === 1 ? "this transaction" : `these ${ids.length} transactions`}? This action cannot be undone.
+          </p>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={deleteLoading}
+              className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleteLoading}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {deleteLoading ? "Deleting..." : "Confirm Delete"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
