@@ -44,6 +44,17 @@ incomeRoutes.get("/", async (req, res) => {
   } else if (req.query.tagId) {
     where.tags = { some: { tagId: req.query.tagId } };
   }
+  if (req.query.search) {
+    const searchStr = req.query.search as string;
+    const asNumber = parseFloat(searchStr);
+    const orConditions: Record<string, unknown>[] = [
+      { source: { contains: searchStr, mode: "insensitive" } },
+    ];
+    if (!isNaN(asNumber) && asNumber > 0) {
+      orConditions.push({ amount: { equals: asNumber } });
+    }
+    where.OR = orConditions;
+  }
   if (req.query.startDate || req.query.endDate) {
     where.date = {
       ...(req.query.startDate ? { gte: new Date(req.query.startDate as string) } : {}),

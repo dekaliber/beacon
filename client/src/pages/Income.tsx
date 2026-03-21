@@ -418,6 +418,7 @@ interface IncomeFilterState {
   categoryId: string;
   startDate: string;
   endDate: string;
+  datePreset: string;
 }
 
 const INCOME_DEFAULT_FILTERS: IncomeFilterState = {
@@ -425,6 +426,7 @@ const INCOME_DEFAULT_FILTERS: IncomeFilterState = {
   categoryId: "",
   startDate: `${new Date().getFullYear()}-01-01`,
   endDate: "",
+  datePreset: "This year",
 };
 
 function loadIncomeFilters(): IncomeFilterState {
@@ -438,6 +440,7 @@ function loadIncomeFilters(): IncomeFilterState {
       categoryId: get("categoryId") ?? INCOME_DEFAULT_FILTERS.categoryId,
       startDate: get("startDate") ?? INCOME_DEFAULT_FILTERS.startDate,
       endDate: get("endDate") ?? INCOME_DEFAULT_FILTERS.endDate,
+      datePreset: get("datePreset") ?? INCOME_DEFAULT_FILTERS.datePreset,
     };
   } catch {
     return { ...INCOME_DEFAULT_FILTERS };
@@ -449,6 +452,7 @@ function saveIncomeFilters(filters: IncomeFilterState) {
   localStorage.setItem("beacon-income-categoryId", JSON.stringify(filters.categoryId));
   localStorage.setItem("beacon-income-startDate", JSON.stringify(filters.startDate));
   localStorage.setItem("beacon-income-endDate", JSON.stringify(filters.endDate));
+  localStorage.setItem("beacon-income-datePreset", JSON.stringify(filters.datePreset));
 }
 
 export function IncomePage() {
@@ -463,12 +467,32 @@ export function IncomePage() {
   const [editing, setEditing] = useState<Income | null>(null);
   const [sort, setSort] = useState<SortState>({ field: "date", order: "desc" });
   const [filterOpen, setFilterOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(""); // raw input value
+  const [appliedSearch, setAppliedSearch] = useState(""); // committed on Enter, drives API
 
   const [staged, setStaged] = useState<IncomeFilterState>(loadIncomeFilters);
   const [applied, setApplied] = useState<IncomeFilterState>(loadIncomeFilters);
 
   const todayStr = useMemo(() => localToday(), []);
+
+  const dateRangePresets = useMemo(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const pastYear = new Date(today); pastYear.setFullYear(pastYear.getFullYear() - 1); pastYear.setDate(pastYear.getDate() + 1);
+    const past90 = new Date(today); past90.setDate(past90.getDate() - 90);
+    const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+    return [
+      { label: "This year", start: `${year}-01-01`, end: "" },
+      { label: String(year - 1), start: `${year - 1}-01-01`, end: `${year - 1}-12-31` },
+      { label: "Past year", start: fmt(pastYear), end: "" },
+      { label: "Past 90 days", start: fmt(past90), end: "" },
+      { label: "This month", start: `${year}-${pad(today.getMonth() + 1)}-01`, end: "" },
+      { label: "Last month", start: fmt(lastMonthStart), end: fmt(lastMonthEnd) },
+    ];
+  }, []);
   const tomorrowStr = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
@@ -483,11 +507,21 @@ export function IncomePage() {
     }
     if (applied.accountIds.length > 0) params.accountIds = applied.accountIds.join(",");
     if (applied.categoryId) params.categoryId = applied.categoryId;
-    params.startDate = applied.startDate || INCOME_DEFAULT_FILTERS.startDate;
-    const endDate = applied.endDate || todayStr;
-    params.endDate = endDate > todayStr ? todayStr : endDate;
+    if (appliedSearch.trim()) params.search = appliedSearch.trim();
+    const isDefaultDateFilter = (
+      applied.startDate === INCOME_DEFAULT_FILTERS.startDate &&
+      applied.endDate === INCOME_DEFAULT_FILTERS.endDate
+    );
+    if (appliedSearch.trim() && isDefaultDateFilter) {
+      // Search overrides default date range — return all matching transactions
+      params.endDate = todayStr;
+    } else {
+      params.startDate = applied.startDate || INCOME_DEFAULT_FILTERS.startDate;
+      const endDate = applied.endDate || todayStr;
+      params.endDate = endDate > todayStr ? todayStr : endDate;
+    }
     return params;
-  }, [sort, applied, todayStr]);
+  }, [sort, applied, todayStr, appliedSearch]);
 
   const queryParams = useMemo(() => ({
     ...filterParams,
@@ -634,6 +668,7 @@ export function IncomePage() {
     saveIncomeFilters(staged);
   };
 
+
   const resetFilters = () => {
     setStaged({ ...INCOME_DEFAULT_FILTERS });
     setApplied({ ...INCOME_DEFAULT_FILTERS });
@@ -646,25 +681,25 @@ export function IncomePage() {
   };
 
   const incomes = useMemo(() => {
-    if (!searchQuery.trim()) return allIncomes;
-    const q = searchQuery.toLowerCase();
+    if (!appliedSearch.trim()) return allIncomes;
+    const q = appliedSearch.toLowerCase();
     return allIncomes.filter((inc) =>
       (inc.category?.name ?? "").toLowerCase().includes(q) ||
       (inc.source ?? "").toLowerCase().includes(q) ||
       parseFloat(inc.amount).toFixed(2).includes(q)
     );
-  }, [allIncomes, searchQuery]);
+  }, [allIncomes, appliedSearch]);
 
   const upcomingIncomes = useMemo(() => {
     const all = upcomingData?.data ?? [];
-    if (!searchQuery.trim()) return all;
-    const q = searchQuery.toLowerCase();
+    if (!appliedSearch.trim()) return all;
+    const q = appliedSearch.toLowerCase();
     return all.filter((inc) =>
       (inc.category?.name ?? "").toLowerCase().includes(q) ||
       (inc.source ?? "").toLowerCase().includes(q) ||
       parseFloat(inc.amount).toFixed(2).includes(q)
     );
-  }, [upcomingData, searchQuery]);
+  }, [upcomingData, appliedSearch]);
 
   const accountFilterOptions = useMemo<MultiSelectOption[]>(() => {
     const personal = eligibleAccounts
@@ -695,7 +730,11 @@ export function IncomePage() {
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => { setSearchQuery(e.target.value); if (!e.target.value.trim()) setAppliedSearch(""); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") setAppliedSearch(searchQuery);
+                if (e.key === "Escape") { setSearchQuery(""); setAppliedSearch(""); }
+              }}
               placeholder="Search..."
               className="h-9 w-44 rounded-md border border-border bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
@@ -740,12 +779,31 @@ export function IncomePage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">From</label>
-              <input type="date" value={staged.startDate} onChange={(e) => setStaged((s) => ({ ...s, startDate: e.target.value }))} className="rounded-md border border-border px-2 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">To</label>
-              <input type="date" value={staged.endDate || todayStr} onChange={(e) => setStaged((s) => ({ ...s, endDate: e.target.value }))} className="rounded-md border border-border px-2 py-1.5 text-sm" />
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Date Range</label>
+              <div className="flex items-center gap-1.5">
+                <div className="relative">
+                  <select
+                    value={staged.datePreset}
+                    onChange={(e) => {
+                      const label = e.target.value;
+                      if (label === "Custom") {
+                        setStaged((s) => ({ ...s, datePreset: "Custom" }));
+                      } else {
+                        const preset = dateRangePresets.find((p) => p.label === label);
+                        if (preset) setStaged((s) => ({ ...s, datePreset: label, startDate: preset.start, endDate: preset.end }));
+                      }
+                    }}
+                    className="appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                  >
+                    {dateRangePresets.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}
+                    <option value="Custom">Custom</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+                </div>
+                <input type="date" value={staged.startDate} onChange={(e) => setStaged((s) => ({ ...s, startDate: e.target.value, datePreset: "Custom" }))} className="rounded-md border border-border px-2 py-1.5 text-sm" />
+                <span className="text-xs text-muted-foreground">→</span>
+                <input type="date" value={staged.endDate || todayStr} onChange={(e) => setStaged((s) => ({ ...s, endDate: e.target.value, datePreset: "Custom" }))} className="rounded-md border border-border px-2 py-1.5 text-sm" />
+              </div>
             </div>
             <div>
               <label className="mb-1 block text-xs invisible select-none" aria-hidden="true">x</label>

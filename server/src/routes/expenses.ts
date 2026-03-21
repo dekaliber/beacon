@@ -571,6 +571,16 @@ expenseRoutes.put("/:id", async (req, res) => {
   res.json(expense);
 });
 
+// Bulk delete expenses
+expenseRoutes.delete("/bulk", async (req, res) => {
+  const parsed = z.object({ ids: z.array(z.string()).min(1) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const { ids } = parsed.data;
+  await prisma.expense.deleteMany({ where: { id: { in: ids } } });
+  res.json({ deleted: ids.length });
+});
+
 // Delete expense
 expenseRoutes.delete("/:id", async (req, res) => {
   const expense = await prisma.expense.findUnique({ where: { id: req.params.id } });

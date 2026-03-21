@@ -38,8 +38,7 @@ function fmt(n: number) {
 }
 
 function pctLabel(v: number): string {
-  const sign = v >= 0 ? "+" : "−";
-  return `${sign}${Math.abs(Math.round(v * 1000) / 10).toFixed(1)}%`;
+  return `${Math.abs(Math.round(v * 1000) / 10).toFixed(1)}%`;
 }
 
 /** Merge current/previous/priorYear series into a single recharts data array. */
@@ -395,15 +394,15 @@ function ComparisonChart({
             strokeOpacity={0.6}
             name="previous"
           />
-          {/* Same month prior year — muted solid */}
+          {/* Same month prior year — primary at 30% opacity */}
           <Line
             type="monotone"
             dataKey="priorYear"
-            stroke={colorMuted}
+            stroke={colorPrimary}
             strokeWidth={1.5}
             dot={false}
             connectNulls
-            strokeOpacity={0.35}
+            strokeOpacity={0.3}
             name="priorYear"
           />
           <ReferenceLine y={0} stroke="var(--color-border)" />
@@ -424,7 +423,7 @@ function ComparisonChart({
           {prevMonthName}
         </span>
         <span className="flex items-center gap-1.5">
-          <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke={colorMuted} strokeWidth="1.5" strokeOpacity="0.35" /></svg>
+          <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke={colorPrimary} strokeWidth="1.5" strokeOpacity="0.3" /></svg>
           {priorYearMonthName}
         </span>
       </div>
@@ -905,7 +904,7 @@ function BudgetPanelCard({
               : "bg-success/10 text-success"
           }`}
         >
-          {pctLabel(panel.percentAboveBelow)} vs pace
+          {pctLabel(panel.percentAboveBelow)} {isOverPace ? "over" : "under"} budget
         </div>
       )}
     </div>

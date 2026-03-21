@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
   Plus, Pencil, Receipt, AlertCircle,
@@ -10,6 +11,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
+import { ToastContainer, useToast } from "@/components/Toast";
 import { MultiSelectDropdown } from "@/components/MultiSelectDropdown";
 import type { MultiSelectOption, MultiSelectGroup } from "@/components/MultiSelectDropdown";
 import { BulkEditBar } from "@/components/BulkEditBar";
@@ -1170,6 +1172,7 @@ interface ExpenseFilterState {
   tagIds: string[];
   startDate: string;
   endDate: string;
+  datePreset: string;
 }
 
 const EXPENSE_DEFAULT_FILTERS: ExpenseFilterState = {
@@ -1178,6 +1181,7 @@ const EXPENSE_DEFAULT_FILTERS: ExpenseFilterState = {
   tagIds: [],
   startDate: `${new Date().getFullYear()}-01-01`,
   endDate: "",
+  datePreset: "This year",
 };
 
 function loadExpenseFilters(): ExpenseFilterState {
@@ -1192,6 +1196,7 @@ function loadExpenseFilters(): ExpenseFilterState {
       tagIds: get("tagIds") ?? EXPENSE_DEFAULT_FILTERS.tagIds,
       startDate: get("startDate") ?? EXPENSE_DEFAULT_FILTERS.startDate,
       endDate: get("endDate") ?? EXPENSE_DEFAULT_FILTERS.endDate,
+      datePreset: get("datePreset") ?? EXPENSE_DEFAULT_FILTERS.datePreset,
     };
   } catch {
     return { ...EXPENSE_DEFAULT_FILTERS };
@@ -1204,9 +1209,18 @@ function saveExpenseFilters(filters: ExpenseFilterState) {
   localStorage.setItem("beacon-expenses-tagIds", JSON.stringify(filters.tagIds));
   localStorage.setItem("beacon-expenses-startDate", JSON.stringify(filters.startDate));
   localStorage.setItem("beacon-expenses-endDate", JSON.stringify(filters.endDate));
+  localStorage.setItem("beacon-expenses-datePreset", JSON.stringify(filters.datePreset));
 }
 
 export function Expenses() {
+  const location = useLocation();
+  const { toasts, addToast, dismissToast } = useToast();
+  // Expenses awaiting optimistic deletion (hidden in UI; API call deferred 8 s)
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
+  const pendingDeleteTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // Clear all pending delete timers on unmount to avoid state updates on an unmounted component
+  useEffect(() => () => { pendingDeleteTimers.current.forEach(clearTimeout); }, []);
+
   const [currentPage, setCurrentPage] = useState(1);
   const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -1230,11 +1244,37 @@ export function Expenses() {
 
   // Staged = what the filter panel shows (being edited by user)
   // Applied = what actually drives the API query (committed on Apply click)
-  const [staged, setStaged] = useState<ExpenseFilterState>(loadExpenseFilters);
-  const [applied, setApplied] = useState<ExpenseFilterState>(loadExpenseFilters);
+  // If navigation state carries tempFilters (set by chart deep-links), use those for this
+  // session only — they are never written to localStorage, so a page refresh reverts to
+  // whatever the user last explicitly saved.
+  const [staged, setStaged] = useState<ExpenseFilterState>(
+    () => (location.state as any)?.tempFilters ?? loadExpenseFilters()
+  );
+  const [applied, setApplied] = useState<ExpenseFilterState>(
+    () => (location.state as any)?.tempFilters ?? loadExpenseFilters()
+  );
 
   // Today's date string for splitting upcoming vs regular (local timezone)
   const todayStr = useMemo(() => localToday(), []);
+
+  const dateRangePresets = useMemo(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const pastYear = new Date(today); pastYear.setFullYear(pastYear.getFullYear() - 1); pastYear.setDate(pastYear.getDate() + 1);
+    const past90 = new Date(today); past90.setDate(past90.getDate() - 90);
+    const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+    return [
+      { label: "This year", start: `${year}-01-01`, end: "" },
+      { label: String(year - 1), start: `${year - 1}-01-01`, end: `${year - 1}-12-31` },
+      { label: "Past year", start: fmt(pastYear), end: "" },
+      { label: "Past 90 days", start: fmt(past90), end: "" },
+      { label: "This month", start: `${year}-${pad(today.getMonth() + 1)}-01`, end: "" },
+      { label: "Last month", start: fmt(lastMonthStart), end: fmt(lastMonthEnd) },
+    ];
+  }, []);
   const tomorrowStr = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
@@ -1255,10 +1295,20 @@ export function Expenses() {
     if (applied.accountIds.length > 0) params.accountIds = applied.accountIds.join(",");
     if (applied.tagIds.length > 0) params.tagIds = applied.tagIds.join(",");
     if (appliedSearch.trim()) params.search = appliedSearch.trim();
-    params.startDate = applied.startDate || EXPENSE_DEFAULT_FILTERS.startDate;
-    // Cap main table at today to exclude future-dated (upcoming) expenses
-    const endDate = applied.endDate || todayStr;
-    params.endDate = endDate > todayStr ? todayStr : endDate;
+    const isDefaultDateFilter = (
+      applied.startDate === EXPENSE_DEFAULT_FILTERS.startDate &&
+      applied.endDate === EXPENSE_DEFAULT_FILTERS.endDate
+    );
+    if (appliedSearch.trim() && isDefaultDateFilter) {
+      // Search overrides default date range — return all matching transactions
+      // Still cap at today so upcoming (future) expenses stay in their own section
+      params.endDate = todayStr;
+    } else {
+      params.startDate = applied.startDate || EXPENSE_DEFAULT_FILTERS.startDate;
+      // Cap main table at today to exclude future-dated (upcoming) expenses
+      const endDate = applied.endDate || todayStr;
+      params.endDate = endDate > todayStr ? todayStr : endDate;
+    }
     return params;
   }, [sort, applied, showUncategorized, todayStr, appliedSearch]);
 
@@ -1341,22 +1391,6 @@ export function Expenses() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // "a" keyboard shortcut to open Add Expense modal
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (modalOpen || importModalOpen) return;
-      const target = e.target as HTMLElement;
-      if (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable) return;
-      if (e.key === "a" || e.key === "A") {
-        setEditing(null);
-        setOffsetParent(null);
-        setModalOpen(true);
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [modalOpen, importModalOpen]);
-
   const eligibleAccounts = (accounts ?? []).filter((a) => EXPENSE_ACCOUNT_TYPES.includes(a.type));
   const hasActiveFilters = !!(
     applied.accountIds.length > 0 ||
@@ -1433,12 +1467,41 @@ export function Expenses() {
   };
 
   const handleDelete = async (id: string, deleteFuture?: boolean) => {
-    await deleteExpense(id, deleteFuture);
     setModalOpen(false);
     setEditing(null);
     setOffsetParent(null);
-    refetchAll();
-    refetchUncat();
+
+    if (deleteFuture) {
+      // Deleting all future recurring instances — too complex to undo, do it immediately.
+      await deleteExpense(id, true);
+      refetchAll();
+      refetchUncat();
+      return;
+    }
+
+    // Optimistic single deletion: hide the expense immediately, then actually
+    // delete after 8 seconds unless the user hits Undo.
+    setPendingDeleteIds((prev) => new Set([...prev, id]));
+
+    const timerId = setTimeout(async () => {
+      await deleteExpense(id);
+      setPendingDeleteIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
+      pendingDeleteTimers.current.delete(id);
+      refetchAll();
+      refetchUncat();
+    }, 8000);
+
+    pendingDeleteTimers.current.set(id, timerId);
+
+    addToast({
+      message: "Expense deleted",
+      onUndo: () => {
+        clearTimeout(timerId);
+        pendingDeleteTimers.current.delete(id);
+        setPendingDeleteIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
+      },
+      duration: 8000,
+    });
   };
 
   const handleCreateOffset = (expense: Expense) => {
@@ -1540,12 +1603,7 @@ export function Expenses() {
       if (field === "vendor") refetchVendors();
       if (field === "categoryId") refetchUncat();
     } else if (mode === "delete") {
-      await deleteExpense(expenseId, updateFuture);
-      setModalOpen(false);
-      setEditing(null);
-      setOffsetParent(null);
-      refetchAll();
-      refetchUncat();
+      await handleDelete(expenseId, updateFuture);
     }
   };
 
@@ -1572,6 +1630,7 @@ export function Expenses() {
     clearSelection();
   };
 
+
   const resetFilters = () => {
     setStaged({ ...EXPENSE_DEFAULT_FILTERS });
     setApplied({ ...EXPENSE_DEFAULT_FILTERS });
@@ -1587,20 +1646,23 @@ export function Expenses() {
       : <ArrowDown className="ml-1 inline h-3 w-3" />;
   };
 
-  const expenses = allExpenses;
+  const expenses = allExpenses.filter((e) => !pendingDeleteIds.has(e.id));
 
   // Upcoming expenses are a small fixed set (future-dated), so client-side filtering
   // is fine here. Mirror the server logic: text contains OR exact amount match.
   const upcomingExpenses = useMemo(() => {
     // For recurring expenses, show only the next (earliest) instance per rule.
     // Data is sorted ascending by date, so the first seen per ruleId is the nearest.
+    // Also hide any expenses that are awaiting optimistic deletion.
     const seenRuleIds = new Set<string>();
-    const all = (upcomingData?.data ?? []).filter((e) => {
-      if (!e.recurrenceRuleId) return true;
-      if (seenRuleIds.has(e.recurrenceRuleId)) return false;
-      seenRuleIds.add(e.recurrenceRuleId);
-      return true;
-    });
+    const all = (upcomingData?.data ?? [])
+      .filter((e) => !pendingDeleteIds.has(e.id))
+      .filter((e) => {
+        if (!e.recurrenceRuleId) return true;
+        if (seenRuleIds.has(e.recurrenceRuleId)) return false;
+        seenRuleIds.add(e.recurrenceRuleId);
+        return true;
+      });
     if (!appliedSearch.trim()) return all;
     const q = appliedSearch.trim().toLowerCase();
     const asNumber = parseFloat(appliedSearch.trim());
@@ -1609,7 +1671,7 @@ export function Expenses() {
       e.vendor.toLowerCase().includes(q) ||
       (!isNaN(asNumber) && asNumber > 0 && Math.abs(parseFloat(e.amount)) === asNumber)
     );
-  }, [upcomingData, appliedSearch]);
+  }, [upcomingData, appliedSearch, pendingDeleteIds]);
 
   // ── Group action derivation ─────────────────────────────────────────────
   // Determines whether the bulk-edit bar should show "Group Transactions" or
@@ -1688,6 +1750,31 @@ export function Expenses() {
     await handleSetGroupPrimary(setAsPrimaryTarget.groupId, setAsPrimaryTarget.expenseId);
     clearSelection();
   }, [setAsPrimaryTarget, handleSetGroupPrimary, clearSelection]);
+
+  // Keyboard shortcuts (placed after handleGroupAction, setAsPrimaryTarget, handleSetAsPrimary)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (modalOpen || importModalOpen) return;
+      const target = e.target as HTMLElement;
+      const inputType = (target as HTMLInputElement).type;
+      const isTextInput = (target.tagName === "INPUT" && inputType !== "checkbox" && inputType !== "radio")
+        || target.tagName === "TEXTAREA"
+        || target.tagName === "SELECT"
+        || target.isContentEditable;
+      if (isTextInput) return;
+      if (e.key === "a" || e.key === "A") {
+        setEditing(null);
+        setOffsetParent(null);
+        setModalOpen(true);
+      } else if (e.key === "g" || e.key === "G") {
+        if (selectedIds.size > 1) handleGroupAction();
+      } else if (e.key === "p" || e.key === "P") {
+        if (setAsPrimaryTarget) handleSetAsPrimary();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [modalOpen, importModalOpen, selectedIds, setAsPrimaryTarget, handleGroupAction, handleSetAsPrimary]);
 
   const dragSource = useMemo(() => {
     if (!dragState) return null;
@@ -1891,12 +1978,31 @@ export function Expenses() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">From</label>
-              <input type="date" value={staged.startDate} onChange={(e) => setStaged((s) => ({ ...s, startDate: e.target.value }))} className="rounded-md border border-border px-2 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">To</label>
-              <input type="date" value={staged.endDate || todayStr} onChange={(e) => setStaged((s) => ({ ...s, endDate: e.target.value }))} className="rounded-md border border-border px-2 py-1.5 text-sm" />
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Date Range</label>
+              <div className="flex items-center gap-1.5">
+                <div className="relative">
+                  <select
+                    value={staged.datePreset}
+                    onChange={(e) => {
+                      const label = e.target.value;
+                      if (label === "Custom") {
+                        setStaged((s) => ({ ...s, datePreset: "Custom" }));
+                      } else {
+                        const preset = dateRangePresets.find((p) => p.label === label);
+                        if (preset) setStaged((s) => ({ ...s, datePreset: label, startDate: preset.start, endDate: preset.end }));
+                      }
+                    }}
+                    className="appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                  >
+                    {dateRangePresets.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}
+                    <option value="Custom">Custom</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+                </div>
+                <input type="date" value={staged.startDate} onChange={(e) => setStaged((s) => ({ ...s, startDate: e.target.value, datePreset: "Custom" }))} className="rounded-md border border-border px-2 py-1.5 text-sm" />
+                <span className="text-xs text-muted-foreground">→</span>
+                <input type="date" value={staged.endDate || todayStr} onChange={(e) => setStaged((s) => ({ ...s, endDate: e.target.value, datePreset: "Custom" }))} className="rounded-md border border-border px-2 py-1.5 text-sm" />
+              </div>
             </div>
             {/* Invisible label spacer keeps Reset + Apply vertically aligned with the filter fields */}
             <div>
@@ -2155,6 +2261,11 @@ export function Expenses() {
           ids={[...selectedIds]}
           categories={categories ?? []}
           tags={tags ?? []}
+          initialTagIds={[...new Set(
+            expenses
+              .filter((e) => selectedIds.has(e.id))
+              .flatMap((e) => e.tags.map((et) => et.tagId))
+          )]}
           groupAction={groupAction}
           setAsPrimaryTarget={setAsPrimaryTarget}
           onClear={clearSelection}
@@ -2165,6 +2276,7 @@ export function Expenses() {
           }}
           onGroupAction={handleGroupAction}
           onSetAsPrimary={handleSetAsPrimary}
+          onCreateTag={async (name) => { const t = await createTag({ name }); refetchTags(); return t; }}
         />
       )}
 
@@ -2218,6 +2330,8 @@ export function Expenses() {
           <span>Back to Top</span>
         </button>
       )}
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       {/* Floating drag follower */}
       {dragState?.started && dragSource && (
@@ -3013,7 +3127,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
 
         <div>
           <label className="mb-1 block text-sm font-medium">Amount</label>
-          <CurrencyInput name="amount" defaultValue={isOffsetMode ? offsetParent.amount : expense?.amount} required autoFocus onChange={(v) => !isOffsetMode && setAmountIsNegative(v < 0)} />
+          <CurrencyInput name="amount" defaultValue={isOffsetMode ? -Math.abs(parseFloat(offsetParent.amount)) : expense?.amount} required autoFocus onChange={(v) => !isOffsetMode && setAmountIsNegative(v < 0)} />
         </div>
 
         <div>
