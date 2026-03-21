@@ -95,6 +95,20 @@ export interface Income {
   updatedAt: string;
 }
 
+export interface RecurringHistoryMonth {
+  month: string;    // "Jan" … "Dec"
+  thisYear: number;
+  lastYear: number;
+}
+
+export interface UpcomingExpenseItem {
+  id: string;
+  date: string;
+  amount: string;
+  vendor: string;
+  description: string;
+}
+
 export interface RecurrenceRule {
   id: string;
   description: string;
@@ -104,6 +118,10 @@ export interface RecurrenceRule {
   startDate: string;
   endDate: string | null;
   nextOccurrence: string;
+  // Earliest already-generated pending expense date. Present on active rules only.
+  // Prefer this over nextOccurrence for display — nextOccurrence is advanced past
+  // the generation window and would skip already-generated upcoming instances.
+  nextExpenseDate?: string | null;
   categoryId: string;
   accountId: string;
   isActive: boolean;
@@ -173,6 +191,67 @@ export interface BudgetOverview {
   total: BudgetPanel;
 }
 
+// ── Investment types ──────────────────────────────────────────────────────────
+
+export interface InvestmentLot {
+  id: string;
+  holdingId: string;
+  quantity: string;
+  costPerShare: string;
+  acquiredDate: string;
+}
+
+export interface InvestmentHolding {
+  id: string;
+  accountId: string;
+  ticker: string;
+  name: string;
+  type: string | null;
+  currentPrice: number | null;
+  priceDate: string | null;
+  priceUpdatedAt: string | null;
+  lots: InvestmentLot[];
+  // computed
+  totalQuantity: number;
+  totalCost: number;
+  marketValue: number | null;
+  totalGain: number | null;
+  totalGainPct: number | null;
+  shortTermGain: number;
+  longTermGain: number;
+  lotCount?: number;
+}
+
+export interface InvestmentAccountSummary {
+  id: string;
+  name: string;
+  type: "CHECKING" | "SAVINGS" | "CREDIT_CARD" | "INVESTMENT";
+  balance: string;
+  color: string | null;
+  isJoint: boolean;
+  holdings: InvestmentHolding[];
+  manualCount: number;
+  totalMarketValue: number;
+  totalCost: number;
+  totalGain: number;
+  totalGainPct: number;
+}
+
+export interface ManualInvestment {
+  id: string;
+  accountId: string;
+  name: string;
+  totalCost: number | null;
+  marketValue: number;
+}
+
+export interface TickerSearchResult {
+  ticker: string;
+  name: string;
+  type: string; // "Equity", "ETF", "Mutual Fund"
+  exchange: string;
+}
+
 // Legacy — kept for backwards compatibility during transition
 export interface Budget {
   id: string;
@@ -216,6 +295,19 @@ export interface DashboardData {
   monthlyTrend: MonthlyTrend[];
   recentTransactions: Expense[];
   upcomingRecurring: RecurrenceRule[];
+}
+
+export interface CategoryTrendSeries {
+  categoryId: string;
+  name: string;
+  color: string;
+  hasChildren: boolean;
+  values: number[];
+}
+
+export interface CategoryTrendData {
+  months: string[];
+  series: CategoryTrendSeries[];
 }
 
 export interface BudgetDetail {

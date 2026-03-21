@@ -9,6 +9,8 @@ import { Recurring } from "@/pages/Recurring";
 import { IncomePage } from "@/pages/Income";
 import { TagsPage } from "@/pages/Tags";
 import { ReimbursementsPage } from "@/pages/Reimbursements";
+import { Investments } from "@/pages/Investments";
+import { InvestmentAccount } from "@/pages/InvestmentAccount";
 
 function App() {
   return (
@@ -24,6 +26,8 @@ function App() {
           <Route path="/tags" element={<TagsPage />} />
           <Route path="/recurring" element={<Recurring />} />
           <Route path="/reimbursements" element={<ReimbursementsPage />} />
+          <Route path="/investments" element={<Investments />} />
+          <Route path="/investments/:accountId" element={<InvestmentAccount />} />
         </Route>
       </Routes>
     </BrowserRouter>

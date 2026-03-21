@@ -5,14 +5,22 @@ import type {
   BudgetDetail,
   BudgetOverview,
   CategoryOutliersData,
+  CategoryTrendData,
   Category,
   DashboardData,
   Expense,
   Income,
+  InvestmentAccountSummary,
+  InvestmentHolding,
+  InvestmentLot,
+  ManualInvestment,
+  TickerSearchResult,
   PaginatedResponse,
   RecurrenceRule,
+  RecurringHistoryMonth,
   Tag,
   TransactionGroup,
+  UpcomingExpenseItem,
 } from "../types";
 
 // Accounts
@@ -52,6 +60,8 @@ export const importExpenses = (expenses: Record<string, unknown>[]) =>
   api.post<{ imported: number; errors: Array<{ row: number; message: string }> }>("/expenses/import", { expenses });
 export const bulkUpdateExpenses = (ids: string[], patch: Record<string, unknown>) =>
   api.patch<{ updated: number }>("/expenses/bulk", { ids, ...patch });
+export const bulkDeleteExpenses = (ids: string[]) =>
+  api.delete<{ deleted: number }>("/expenses/bulk", { ids });
 export const updateExpenseParent = (id: string, parentExpenseId: string | null) =>
   api.put<Expense>(`/expenses/${id}`, { parentExpenseId });
 
@@ -123,9 +133,75 @@ export const getDashboard = (year?: number, month?: number) => {
   return api.get<DashboardData>(`/dashboard${query}`);
 };
 
+export const getCategoryTrend = (year?: number, month?: number, parentCategoryId?: string) => {
+  const params = new URLSearchParams();
+  if (year) params.set("year", year.toString());
+  if (month) params.set("month", month.toString());
+  if (parentCategoryId) params.set("parentCategoryId", parentCategoryId);
+  const query = params.toString() ? `?${params}` : "";
+  return api.get<CategoryTrendData>(`/dashboard/category-trend${query}`);
+};
+
 // Recurrence Rules
-export const getRecurrenceRules = () => api.get<RecurrenceRule[]>("/recurrence-rules");
+export interface LinkedExpense {
+  id: string;
+  date: string;
+  amount: string;
+  description: string;
+  account: { id: string; name: string };
+}
+
+export const getUpcomingRecurring = (days = 14) =>
+  api.get<UpcomingExpenseItem[]>(`/recurrence-rules/upcoming?days=${days}`);
+export const getRecurringHistory = (months = 6) =>
+  api.get<RecurringHistoryMonth[]>(`/recurrence-rules/history?months=${months}`);
+
+export const getRecurrenceRules = (params?: { includeInactive?: boolean }) => {
+  const query = params?.includeInactive ? "?includeInactive=true" : "";
+  return api.get<RecurrenceRule[]>(`/recurrence-rules${query}`);
+};
+export const getRecurrenceRuleExpenses = (id: string) =>
+  api.get<LinkedExpense[]>(`/recurrence-rules/${id}/expenses`);
 export const createRecurrenceRule = (data: Record<string, unknown>) =>
   api.post<RecurrenceRule>("/recurrence-rules", data);
+export const updateRecurrenceRule = (id: string, data: Record<string, unknown>) =>
+  api.put<RecurrenceRule>(`/recurrence-rules/${id}`, data);
+export const archiveRecurrenceRule = (id: string) => api.post(`/recurrence-rules/${id}/archive`, {});
 export const deleteRecurrenceRule = (id: string) => api.delete(`/recurrence-rules/${id}`);
 export const processRecurringExpenses = () => api.post<{ processed: number }>("/recurrence-rules/process", {});
+
+// Investments
+export const getInvestmentAccounts = () =>
+  api.get<InvestmentAccountSummary[]>("/investments/accounts");
+export const getInvestmentHoldings = (accountId: string) =>
+  api.get<InvestmentHolding[]>(`/investments/holdings/${accountId}`);
+export const createHolding = (data: { accountId: string; ticker: string; name: string; type?: string | null }) =>
+  api.post<InvestmentHolding>("/investments/holdings", data);
+export const deleteHolding = (id: string) => api.delete(`/investments/holdings/${id}`);
+export const createLot = (data: { holdingId: string; quantity: number; costPerShare: number; acquiredDate: string }) =>
+  api.post<InvestmentLot>("/investments/lots", data);
+export const updateLot = (id: string, data: { quantity?: number; costPerShare?: number; acquiredDate?: string }) =>
+  api.put<InvestmentLot>(`/investments/lots/${id}`, data);
+export const deleteLot = (id: string) => api.delete(`/investments/lots/${id}`);
+export const searchTickers = (q: string) =>
+  api.get<TickerSearchResult[]>(`/investments/search?q=${encodeURIComponent(q)}`);
+export const refreshPrices = () => api.post<{ updated: number; tickers: string[] }>("/investments/prices/refresh", {});
+export const getTickerPrice = (ticker: string) =>
+  api.get<{ ticker: string; price: number; priceDate: string }>(`/investments/prices/${encodeURIComponent(ticker)}`);
+export const importInvestments = (
+  accountId: string,
+  rows: Array<{ symbol: string; purchaseDate: string; price: number; quantity: number }>
+) =>
+  api.post<{ imported: number; errors: Array<{ row: number; message: string }> }>(
+    "/investments/import",
+    { accountId, rows }
+  );
+export const getManualInvestments = (accountId: string) =>
+  api.get<ManualInvestment[]>(`/investments/manual/${accountId}`);
+export const createManualInvestment = (data: {
+  accountId: string; name: string; totalCost?: number | null; marketValue: number;
+}) => api.post<ManualInvestment>("/investments/manual", data);
+export const updateManualInvestment = (id: string, data: {
+  name?: string; totalCost?: number | null; marketValue?: number;
+}) => api.put<ManualInvestment>(`/investments/manual/${id}`, data);
+export const deleteManualInvestment = (id: string) => api.delete(`/investments/manual/${id}`);
