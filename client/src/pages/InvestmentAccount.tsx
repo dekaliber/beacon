@@ -2,6 +2,17 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import {
+  ResponsiveContainer,
+  ComposedChart,
+  Area,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ReferenceLine,
+} from "recharts";
+import {
   ArrowLeft,
   Plus,
   Trash2,
@@ -18,6 +29,7 @@ import {
   FileText,
   AlertCircle,
   CheckCircle2,
+  Tag,
 } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -45,10 +57,12 @@ import {
   getGainSnapshot,
   upsertGainSnapshot,
   deleteGainSnapshot,
+  getInvestmentGrowth,
 } from "@/api";
 import type { SellPreviewResult, SellRequest } from "@/api";
+import { ApiError } from "@/api/client";
 import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/utils";
-import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity } from "@/types";
+import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity, GrowthPoint, GrowthEvent } from "@/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -98,14 +112,19 @@ function GainCell({
   const Icon = pos ? TrendingUp : TrendingDown;
   const cell = (
     <span
-      className={`inline-flex items-center gap-1 font-medium tabular-nums ${
+      className={`inline-flex font-medium tabular-nums ${
         pos ? "text-green-600" : "text-red-500"
-      } text-${size}`}
+      } text-${size} ${size === "base" && pct != null ? "flex-col items-start" : "flex-row items-center gap-1"}`}
     >
-      <Icon className="h-3 w-3 flex-shrink-0" />
-      {formatCurrency(Math.abs(value))}
-      {pct != null && (
-        <span className="text-xs opacity-60">({Math.abs(pct).toFixed(2)}%)</span>
+      <span className="inline-flex items-center gap-1">
+        <Icon className="h-3 w-3 flex-shrink-0" />
+        {formatCurrency(Math.abs(value))}
+        {pct != null && size !== "base" && (
+          <span className="text-xs opacity-60">({Math.abs(pct).toFixed(2)}%)</span>
+        )}
+      </span>
+      {pct != null && size === "base" && (
+        <span className="text-xs opacity-60 pl-4">({Math.abs(pct).toFixed(2)}%)</span>
       )}
     </span>
   );
@@ -193,7 +212,7 @@ function DollarInput({
         type="number"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        step="0.0001"
+        step="0.000001"
         min="0"
         placeholder={placeholder ?? "0.00"}
         required={required}
@@ -643,6 +662,7 @@ function LotRow({
   const [date, setDate] = useState(lot.acquiredDate ? toDateInputValue(lot.acquiredDate) : "");
   const [saving, setSaving] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteWarning, setDeleteWarning] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const handleSave = async () => {
@@ -658,14 +678,24 @@ function LotRow({
     } finally { setSaving(false); }
   };
 
-  const handleDeleteConfirm = async () => {
+  const handleDeleteRequest = () => {
+    setDeleteWarning(null);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = async (force = false) => {
     setDeleting(true);
     try {
-      await deleteLot(lot.id);
+      await deleteLot(lot.id, force);
       onDeleted();
+    } catch (e: unknown) {
+      if (e instanceof ApiError && e.status === 409 && (e.data as any)?.code === "HAS_SALES") {
+        setDeleteWarning((e.data as any).message ?? "This lot has associated sales.");
+      } else {
+        setDeleteWarning(e instanceof Error ? e.message : "Failed to delete lot.");
+      }
     } finally {
       setDeleting(false);
-      setShowDeleteModal(false);
     }
   };
 
@@ -691,7 +721,7 @@ function LotRow({
             <input
               type="number"
               value={cps}
-              step="0.0001"
+              step="0.000001"
               onChange={(e) => setCps(e.target.value)}
               className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
             />
@@ -746,7 +776,7 @@ function LotRow({
             <button onClick={() => setEditing(true)} className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
               <Pencil className="h-3.5 w-3.5" />
             </button>
-            <button onClick={() => setShowDeleteModal(true)} className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+            <button onClick={handleDeleteRequest} className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -756,28 +786,58 @@ function LotRow({
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-lg bg-background text-foreground p-6 shadow-xl">
             <h3 className="text-base font-semibold">Delete {lot.acquiredDate ? formatDate(lot.acquiredDate) : "managed"} lot?</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Are you sure you want to delete this lot? This action cannot be undone.
-            </p>
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowDeleteModal(false)}
-                disabled={deleting}
-                className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteConfirm}
-                disabled={deleting}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                {deleting ? "Deleting..." : "Confirm Delete"}
-              </button>
-            </div>
+            {deleteWarning ? (
+              <>
+                <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">{deleteWarning}</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  If you recorded this purchase by mistake, you can force-delete. Otherwise, use the <strong>Sell</strong> function to properly record a sale.
+                </p>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowDeleteModal(false); setDeleteWarning(null); }}
+                    disabled={deleting}
+                    className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteConfirm(true)}
+                    disabled={deleting}
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {deleting ? "Deleting..." : "Delete Anyway"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Are you sure you want to delete this lot? This action cannot be undone.
+                </p>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteModal(false)}
+                    disabled={deleting}
+                    className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteConfirm(false)}
+                    disabled={deleting}
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {deleting ? "Deleting..." : "Confirm Delete"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>,
         document.body
@@ -901,7 +961,7 @@ function AddLotRow({
           <input
             type="number"
             value={cps}
-            step="0.0001"
+            step="0.000001"
             min="0"
             placeholder="0.00"
             onChange={(e) => setCps(e.target.value)}
@@ -959,6 +1019,7 @@ function HoldingRow({
 }) {
   const [addingLot, setAddingLot] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteWarning, setDeleteWarning] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [editingAssetClass, setEditingAssetClass] = useState(false);
   const [assetClassDraft, setAssetClassDraft] = useState(holding.assetClass ?? "");
@@ -973,14 +1034,24 @@ function HoldingRow({
     } finally { setSavingAssetClass(false); }
   };
 
-  const handleDeleteConfirm = async () => {
+  const handleDeleteRequest = () => {
+    setDeleteWarning(null);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = async (force = false) => {
     setDeleting(true);
     try {
-      await deleteHolding(holding.id);
+      await deleteHolding(holding.id, force);
       onDeleted();
+    } catch (e: unknown) {
+      if (e instanceof ApiError && e.status === 409 && (e.data as any)?.code === "HAS_SALES") {
+        setDeleteWarning((e.data as any).message ?? "This holding has associated sales.");
+      } else {
+        setDeleteWarning(e instanceof Error ? e.message : "Failed to delete holding.");
+      }
     } finally {
       setDeleting(false);
-      setShowDeleteModal(false);
     }
   };
 
@@ -1026,27 +1097,31 @@ function HoldingRow({
         <td className="py-3 pr-3" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-1 justify-end">
             {holding.totalQuantity > 0 && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onSell(); }}
-                className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors text-[11px] font-medium"
-                title="Record a sale"
-              >
-                Sell
-              </button>
+              <Tooltip content="Record a sale">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onSell(); }}
+                  className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Tag className="h-3.5 w-3.5" />
+                </button>
+              </Tooltip>
             )}
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowDeleteModal(true); }}
-              className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-              title="Delete holding"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); onToggle(); }}
-              className="p-1.5 rounded text-muted-foreground hover:bg-accent transition-colors"
-            >
-              {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            </button>
+            <Tooltip content="Delete this investment">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDeleteRequest(); }}
+                className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </Tooltip>
+            <Tooltip content="See lot details">
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggle(); }}
+                className="p-1.5 rounded text-muted-foreground hover:bg-accent transition-colors"
+              >
+                {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </button>
+            </Tooltip>
           </div>
         </td>
       </tr>
@@ -1201,28 +1276,58 @@ function HoldingRow({
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-lg bg-background text-foreground p-6 shadow-xl">
             <h3 className="text-base font-semibold">Delete {holding.ticker}?</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Are you sure you want to delete this investment? This action cannot be undone.
-            </p>
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowDeleteModal(false)}
-                disabled={deleting}
-                className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteConfirm}
-                disabled={deleting}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                {deleting ? "Deleting..." : "Confirm Delete"}
-              </button>
-            </div>
+            {deleteWarning ? (
+              <>
+                <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">{deleteWarning}</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Deleting this holding will orphan its sale history (the records will be preserved but unlinked). If you still want to proceed, confirm below.
+                </p>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowDeleteModal(false); setDeleteWarning(null); }}
+                    disabled={deleting}
+                    className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteConfirm(true)}
+                    disabled={deleting}
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {deleting ? "Deleting..." : "Delete Anyway"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Are you sure you want to delete this investment? This action cannot be undone.
+                </p>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteModal(false)}
+                    disabled={deleting}
+                    className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteConfirm(false)}
+                    disabled={deleting}
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {deleting ? "Deleting..." : "Confirm Delete"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>,
         document.body
@@ -1924,6 +2029,7 @@ function SellModal({
   onSold: () => void;
 }) {
   const [step, setStep] = useState<"input" | "preview">("input");
+  const [selectionMode, setSelectionMode] = useState<"method" | "lots">("method");
   const [shares, setShares] = useState("");
   const [price, setPrice] = useState(
     holding.currentPrice != null ? holding.currentPrice.toFixed(4) : ""
@@ -1931,6 +2037,7 @@ function SellModal({
   const [saleDate, setSaleDate] = useState(localToday());
   const [fees, setFees] = useState("");
   const [method, setMethod] = useState<"FIFO" | "LIFO" | "MIN_TAX" | "MAX_GAIN">("MIN_TAX");
+  const [lotInputs, setLotInputs] = useState<Record<string, string>>({});
   const [destAccountId, setDestAccountId] = useState("");
   const [preview, setPreview] = useState<SellPreviewResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1941,25 +2048,56 @@ function SellModal({
   const maxShares = holding.totalQuantity;
   const methodInfo = COST_BASIS_METHODS.find((m) => m.value === method)!;
 
+  // Sorted lots for the lot-level UI
+  const sortedLots = [...holding.lots].sort((a, b) => {
+    if (!a.acquiredDate) return 1;
+    if (!b.acquiredDate) return -1;
+    return a.acquiredDate < b.acquiredDate ? -1 : 1;
+  });
+
+  // Compute lot allocations from lotInputs
+  const lotAllocations = sortedLots
+    .map((lot) => ({ lotId: lot.id, shares: parseFloat(lotInputs[lot.id] || "0") || 0 }))
+    .filter((a) => a.shares > 0);
+  const lotTotalShares = lotAllocations.reduce((s, a) => s + a.shares, 0);
+
   const handlePreview = async () => {
     setError(null);
-    const sharesToSell = parseFloat(shares);
     const pricePerShare = parseFloat(price);
-    if (isNaN(sharesToSell) || sharesToSell <= 0) return setError("Enter a valid number of shares.");
     if (isNaN(pricePerShare) || pricePerShare <= 0) return setError("Enter a valid sale price.");
-    if (sharesToSell > maxShares + 0.000001) return setError(`Cannot sell more than ${maxShares.toLocaleString(undefined, { maximumFractionDigits: 6 })} shares.`);
     if (!destAccountId) return setError("Select a destination account.");
+
+    if (selectionMode === "method") {
+      const sharesToSell = parseFloat(shares);
+      if (isNaN(sharesToSell) || sharesToSell <= 0) return setError("Enter a valid number of shares.");
+      if (sharesToSell > maxShares + 0.000001) return setError(`Cannot sell more than ${maxShares.toLocaleString(undefined, { maximumFractionDigits: 6 })} shares.`);
+    } else {
+      if (lotAllocations.length === 0) return setError("Enter shares to sell for at least one lot.");
+      if (lotTotalShares > maxShares + 0.000001) return setError(`Total shares (${lotTotalShares.toLocaleString(undefined, { maximumFractionDigits: 6 })}) exceeds available ${maxShares.toLocaleString(undefined, { maximumFractionDigits: 6 })}.`);
+      // Validate each lot doesn't exceed its available quantity
+      for (const lot of sortedLots) {
+        const requested = parseFloat(lotInputs[lot.id] || "0") || 0;
+        const available = parseFloat(lot.quantity);
+        if (requested > available + 0.000001) {
+          return setError(`Lot ${lot.acquiredDate ? formatDate(lot.acquiredDate) : "unknown"}: cannot sell ${requested} shares, only ${available} available.`);
+        }
+      }
+    }
 
     setLoading(true);
     try {
-      const result = await previewSell({
+      const baseRequest = {
         holdingId: holding.id,
-        sharesToSell,
+        sharesToSell: selectionMode === "method" ? parseFloat(shares) : lotTotalShares,
         pricePerShare,
         saleDate,
         fees: parseFloat(fees) || 0,
-        costBasisMethod: method,
-      });
+      };
+      const result = await previewSell(
+        selectionMode === "method"
+          ? { ...baseRequest, costBasisMethod: method }
+          : { ...baseRequest, lotAllocations }
+      );
       setPreview(result);
       setStep("preview");
     } catch (e: any) {
@@ -1974,15 +2112,19 @@ function SellModal({
     setSubmitting(true);
     setError(null);
     try {
-      await executeSell({
+      const baseRequest = {
         holdingId: holding.id,
-        sharesToSell: parseFloat(shares),
+        sharesToSell: selectionMode === "method" ? parseFloat(shares) : lotTotalShares,
         pricePerShare: parseFloat(price),
         saleDate,
         fees: parseFloat(fees) || 0,
-        costBasisMethod: method,
         destinationAccountId: destAccountId,
-      });
+      };
+      await executeSell(
+        selectionMode === "method"
+          ? { ...baseRequest, costBasisMethod: method }
+          : { ...baseRequest, lotAllocations }
+      );
       onSold();
       onClose();
     } catch (e: any) {
@@ -2009,36 +2151,160 @@ function SellModal({
             Available: <span className="font-medium text-foreground">{maxShares.toLocaleString(undefined, { maximumFractionDigits: 6 })} shares</span>
           </p>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium mb-1">Shares to Sell</label>
-              <input
-                type="number"
-                value={shares}
-                step="0.000001"
-                min="0.000001"
-                max={maxShares}
-                placeholder="0.000000"
-                onChange={(e) => setShares(e.target.value)}
-                className="w-full rounded border border-border px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Sale Price / Share</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
-                <input
-                  type="number"
-                  value={price}
-                  step="0.0001"
-                  min="0"
-                  placeholder="0.00"
-                  onChange={(e) => setPrice(e.target.value)}
-                  className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-            </div>
+          {/* Selection mode toggle */}
+          <div className="flex rounded border border-border overflow-hidden text-xs font-medium">
+            <button
+              type="button"
+              onClick={() => setSelectionMode("method")}
+              className={`flex-1 py-2 transition-colors ${selectionMode === "method" ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-muted/60"}`}
+            >
+              By cost basis method
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectionMode("lots")}
+              className={`flex-1 py-2 transition-colors border-l border-border ${selectionMode === "lots" ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-muted/60"}`}
+            >
+              Specific lots
+            </button>
           </div>
+
+          {selectionMode === "method" ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium mb-1">Shares to Sell</label>
+                  <input
+                    type="number"
+                    value={shares}
+                    step="0.000001"
+                    min="0.000001"
+                    max={maxShares}
+                    placeholder="0.000000"
+                    onChange={(e) => setShares(e.target.value)}
+                    className="w-full rounded border border-border px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1">Sale Price / Share</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
+                    <input
+                      type="number"
+                      value={price}
+                      step="0.000001"
+                      min="0"
+                      placeholder="0.00"
+                      onChange={(e) => setPrice(e.target.value)}
+                      className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1">Cost Basis Method</label>
+                <select
+                  value={method}
+                  onChange={(e) => setMethod(e.target.value as typeof method)}
+                  className="w-full rounded border border-border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary bg-background"
+                >
+                  {COST_BASIS_METHODS.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">{methodInfo.description}</p>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Lot selection table */}
+              <div>
+                <div className="mb-1">
+                  <label className="text-xs font-medium">Lots — enter shares to sell from each</label>
+                </div>
+                <div className="max-h-52 overflow-y-auto rounded border border-border">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-gray-100 dark:bg-gray-800 z-10">
+                      <tr className="text-muted-foreground uppercase tracking-wide">
+                        <th className="py-2 px-3 text-left font-medium">Acquired</th>
+                        <th className="py-2 px-3 text-right font-medium">Available</th>
+                        <th className="py-2 px-3 text-right font-medium">Cost/Share</th>
+                        <th className="py-2 px-3 text-right font-medium" style={{ width: "130px" }}>Shares</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedLots.map((lot) => {
+                        const available = parseFloat(lot.quantity);
+                        return (
+                          <tr key={lot.id} className="border-t border-border hover:bg-muted/20">
+                            <td className="py-2 px-3 tabular-nums">
+                              {lot.acquiredDate ? formatDate(lot.acquiredDate) : "—"}
+                            </td>
+                            <td className="py-2 px-3 text-right tabular-nums">
+                              {available.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                            </td>
+                            <td className="py-2 px-3 text-right tabular-nums">
+                              {formatCurrency(parseFloat(lot.costPerShare))}
+                            </td>
+                            <td className="py-2 px-3">
+                              <div className="flex items-center justify-end gap-1">
+                                <input
+                                  type="number"
+                                  value={lotInputs[lot.id] ?? ""}
+                                  step="1"
+                                  min="0"
+                                  max={available}
+                                  placeholder="0"
+                                  onChange={(e) => setLotInputs((prev) => ({ ...prev, [lot.id]: e.target.value }))}
+                                  className="w-14 rounded border border-border px-2 py-1 text-left tabular-nums focus:outline-none focus:ring-1 focus:ring-primary text-xs"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setLotInputs((prev) => ({ ...prev, [lot.id]: String(available) }))}
+                                  className="shrink-0 rounded border border-border px-2 py-1 text-xs bg-background hover:bg-muted transition-colors"
+                                >
+                                  all
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Price row for lot mode */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium mb-1">Total Shares</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={lotTotalShares > 0 ? lotTotalShares.toLocaleString(undefined, { maximumFractionDigits: 6 }) : ""}
+                    placeholder="0"
+                    className="w-full rounded border border-border px-3 py-2 text-sm tabular-nums bg-muted text-muted-foreground cursor-default"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1">Sale Price / Share</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
+                    <input
+                      type="number"
+                      value={price}
+                      step="0.000001"
+                      min="0"
+                      placeholder="0.00"
+                      onChange={(e) => setPrice(e.target.value)}
+                      className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -2065,20 +2331,6 @@ function SellModal({
                 />
               </div>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium mb-1">Cost Basis Method</label>
-            <select
-              value={method}
-              onChange={(e) => setMethod(e.target.value as typeof method)}
-              className="w-full rounded border border-border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary bg-background"
-            >
-              {COST_BASIS_METHODS.map((m) => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-muted-foreground">{methodInfo.description}</p>
           </div>
 
           <div>
@@ -2230,7 +2482,7 @@ function ActivityTab({ accountId }: { accountId: string }) {
       <Card className="p-8 text-center">
         <p className="text-sm font-medium text-muted-foreground">No activity yet</p>
         <p className="text-xs text-muted-foreground mt-1">
-          Sales and dividends will appear here once recorded.
+          Purchases, sales, and dividends will appear here once recorded.
         </p>
       </Card>
     );
@@ -2263,17 +2515,22 @@ function ActivityTab({ accountId }: { accountId: string }) {
               const net = a.amount - fees;
               const gain = (a.shortTermGain ?? 0) + (a.longTermGain ?? 0);
               const isGainPositive = gain >= 0;
+              const isPurchase = a.type === "PURCHASE";
+              const isSale = a.type === "SALE";
+
+              const badgeClass = isSale
+                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                : isPurchase
+                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                : "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400";
+              const badgeLabel = isSale ? "Sale" : isPurchase ? "Purchase" : "Dividend";
 
               return (
                 <tr key={a.id} className="border-b border-border hover:bg-muted/20">
                   <td className="py-3 pl-4 pr-2 tabular-nums">{formatDate(a.date)}</td>
                   <td className="py-3 px-2">
-                    <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                      a.type === "SALE"
-                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                        : "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
-                    }`}>
-                      {a.type === "SALE" ? "Sale" : "Dividend"}
+                    <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${badgeClass}`}>
+                      {badgeLabel}
                     </span>
                   </td>
                   <td className="py-3 px-2 font-mono font-bold text-xs">{a.ticker}</td>
@@ -2285,19 +2542,25 @@ function ActivityTab({ accountId }: { accountId: string }) {
                   <td className="py-3 px-2 text-right tabular-nums">
                     {a.pricePerShare != null ? formatCurrency(a.pricePerShare) : "—"}
                   </td>
+                  {/* Gross / total cost */}
                   <td className="py-3 px-2 text-right tabular-nums">{formatCurrency(a.amount)}</td>
+                  {/* Fees — not applicable for purchases */}
                   <td className="py-3 px-2 text-right tabular-nums text-muted-foreground">
-                    {fees > 0 ? `(${formatCurrency(fees)})` : "—"}
+                    {!isPurchase && fees > 0 ? `(${formatCurrency(fees)})` : "—"}
                   </td>
-                  <td className="py-3 px-2 text-right tabular-nums font-medium">{formatCurrency(net)}</td>
+                  {/* Net proceeds — show for sales; show cost for purchases */}
+                  <td className="py-3 px-2 text-right tabular-nums font-medium">
+                    {isPurchase ? formatCurrency(a.amount) : formatCurrency(net)}
+                  </td>
+                  {/* Gain / loss — only for sales */}
                   <td className={`py-3 px-2 text-right tabular-nums font-medium ${
-                    a.type === "SALE"
+                    isSale
                       ? isGainPositive
                         ? "text-emerald-600 dark:text-emerald-400"
                         : "text-red-500 dark:text-red-400"
                       : "text-muted-foreground"
                   }`}>
-                    {a.type === "SALE"
+                    {isSale
                       ? `${isGainPositive ? "+" : ""}${formatCurrency(gain)}`
                       : "—"}
                   </td>
@@ -2514,6 +2777,293 @@ function RealizedGainSnapshotPanel({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+// ── Growth chart ──────────────────────────────────────────────────────────────
+
+function formatAxisDate(dateStr: string) {
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+type ChartDuration = "WTD" | "MTD" | "YTD";
+
+function durationStartDate(duration: ChartDuration): string {
+  const now = new Date();
+  if (duration === "WTD") {
+    const diff = (now.getDay() + 6) % 7; // days since Monday
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - diff);
+    return monday.toISOString().split("T")[0];
+  } else if (duration === "MTD") {
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  } else {
+    return `${now.getFullYear()}-01-01`;
+  }
+}
+
+function easternTZAbbr(dateStr: string): string {
+  try {
+    // Use the browser's IANA timezone database — always returns "EST" or "EDT" correctly
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      timeZoneName: "short",
+    }).formatToParts(new Date(dateStr + "T17:00:00Z")); // ~noon Eastern; avoids DST boundary
+    return parts.find(p => p.type === "timeZoneName")?.value ?? "ET";
+  } catch {
+    return "ET";
+  }
+}
+
+function eventDotColor(events: GrowthEvent[]) {
+  const hasBuy = events.some((e) => e.type === "BUY");
+  const hasSell = events.some((e) => e.type === "SELL");
+  if (hasBuy && hasSell) return "#6366f1"; // indigo — mixed date
+  if (hasSell) return "#f59e0b";           // amber — sell
+  return "#22c55e";                        // green — buy
+}
+
+function GrowthChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload as GrowthPoint;
+  const pos = d.unrealizedGain >= 0;
+  return (
+    <div className="rounded-lg border border-border bg-background shadow-md px-3 py-2 text-xs space-y-1 min-w-[210px]">
+      <p className="font-semibold text-foreground mb-1">{formatAxisDate(label)}</p>
+      <div className="flex justify-between gap-4">
+        <span className="text-muted-foreground">Market value</span>
+        <span className="font-medium tabular-nums">{formatCurrency(d.marketValue)}</span>
+      </div>
+      <div className="flex justify-between gap-4">
+        <span className="text-muted-foreground">Cost basis</span>
+        <span className="font-medium tabular-nums">{formatCurrency(d.costBasis)}</span>
+      </div>
+      <div className="flex justify-between gap-4 pt-1 border-t border-border">
+        <span className="text-muted-foreground">Unrealized gain</span>
+        <span className={`font-medium tabular-nums ${pos ? "text-green-600" : "text-red-500"}`}>
+          {pos ? "+" : ""}{formatCurrency(d.unrealizedGain)} ({pos ? "+" : ""}{d.unrealizedGainPct.toFixed(2)}%)
+        </span>
+      </div>
+      {d.events?.length ? (
+        <div className="pt-1 border-t border-border space-y-0.5">
+          {d.events.map((ev, i) => {
+            const isSell = ev.type === "SELL";
+            const sharesStr = ev.shares.toLocaleString(undefined, { maximumFractionDigits: 4 });
+            return (
+              <div key={i} className="flex justify-between gap-4">
+                <span className="text-muted-foreground">
+                  {isSell ? "Sold" : "Bought"} {sharesStr} {ev.ticker}
+                </span>
+                <span className={`font-medium tabular-nums ${isSell ? "text-amber-600" : "text-green-600"}`}>
+                  {isSell ? "-" : "+"}{formatCurrency(ev.netAmount)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// Defined outside GrowthChart so the component reference is stable (no remount churn).
+// Captures the bottom panel's active tooltip state via useEffect to avoid setState-during-render,
+// then renders nothing — the actual tooltip is drawn as an overlay on the top panel.
+
+function GrowthChart({ accountId, onDayGain }: { accountId: string; onDayGain?: (gain: number | null) => void }) {
+  const [duration, setDuration] = useState<ChartDuration>("YTD");
+  const { data, loading, error } = useApi(() => getInvestmentGrowth(accountId), [accountId]);
+  const allPoints = data?.points ?? [];
+
+  // Filter to the selected duration window
+  const points = useMemo(() => {
+    if (!allPoints.length) return allPoints;
+    const start = durationStartDate(duration);
+    const idx = allPoints.findIndex(p => p.date >= start);
+    if (idx === -1) return [];
+    if (idx === 0) return allPoints;
+    return allPoints.slice(idx);
+  }, [allPoints, duration]);
+
+  // Notify parent of day-over-day gain (always from full dataset's last two points)
+  useEffect(() => {
+    if (!onDayGain) return;
+    const gain = allPoints.length >= 2
+      ? allPoints[allPoints.length - 1].marketValue - allPoints[allPoints.length - 2].marketValue
+      : null;
+    onDayGain(gain);
+  }, [allPoints, onDayGain]);
+
+  // Period gain over the selected duration
+  const periodGain = points.length >= 2
+    ? points[points.length - 1].marketValue - points[0].marketValue
+    : null;
+  const periodGainPct = periodGain != null && points[0]?.marketValue > 0
+    ? (periodGain / points[0].marketValue) * 100
+    : null;
+
+  const header = (
+    <div className="flex items-center justify-between mb-3">
+      <div className="flex gap-1">
+        {(["WTD", "MTD", "YTD"] as ChartDuration[]).map(d => (
+          <button
+            key={d}
+            onClick={() => setDuration(d)}
+            className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+              d === duration
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+            }`}
+          >
+            {d}
+          </button>
+        ))}
+      </div>
+      {periodGain != null && (
+        <div className={`text-right text-sm font-semibold tabular-nums ${periodGain >= 0 ? "text-green-600" : "text-red-500"}`}>
+          <div>{periodGain >= 0 ? "+" : "−"}{formatCurrency(Math.abs(periodGain))}
+            {periodGainPct != null && (
+              <span className="text-xs ml-1 opacity-70">({Math.abs(periodGainPct).toFixed(2)}%)</span>
+            )}
+          </div>
+          {points[0] && (
+            <div className="text-[11px] font-normal text-muted-foreground">since {formatDate(points[0].date)}</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <>
+        {header}
+        <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground">Loading growth data…</div>
+      </>
+    );
+  }
+
+  if (error || allPoints.length === 0) {
+    return (
+      <>
+        {header}
+        <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground text-center px-4">
+          {error ? "Failed to load growth data." : "No data yet. Add dated lots to track growth over time."}
+        </div>
+      </>
+    );
+  }
+
+  if (points.length === 0) {
+    return (
+      <>
+        {header}
+        <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground text-center px-4">
+          No data for this period.
+        </div>
+      </>
+    );
+  }
+
+  const tickEvery = Math.max(1, Math.floor(points.length / 6));
+  const ticks = points.filter((_, i) => i % tickEvery === 0 || i === points.length - 1).map(p => p.date);
+
+  const mvMin = Math.min(...points.map(p => p.marketValue));
+  const mvMax = Math.max(...points.map(p => p.marketValue));
+  const cbMin = Math.min(...points.map(p => p.costBasis));
+  const cbMax = Math.max(...points.map(p => p.costBasis));
+  const mvPad = Math.max((mvMax - mvMin) * 0.08, 100);
+  const cbPad = Math.max((cbMax - cbMin) * 0.08, 100);
+
+  // Shared axis config
+  const MARGIN_TOP = { top: 4, right: 8, bottom: 0, left: 8 };
+  const MARGIN_BTM = { top: 0, right: 8, bottom: 0, left: 8 };
+  const Y_WIDTH = 52;
+  const yAxisProps = { tick: { fontSize: 11 }, axisLine: false, tickLine: false, width: Y_WIDTH,
+    tickFormatter: (v: number) => `$${(v / 1000).toFixed(0)}k` };
+
+  const legend = (
+    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+      <span className="flex items-center gap-1.5">
+        <span className="inline-block w-6 h-0.5 bg-indigo-600" />
+        Market value
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className="inline-block w-6 border-t border-dashed border-slate-400" />
+        Cost basis
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
+        Buy
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500" />
+        Sell
+      </span>
+    </div>
+  );
+
+  const gradDefs = (
+    <defs>
+      <linearGradient id="growthGradient" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.18} />
+        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
+      </linearGradient>
+    </defs>
+  );
+
+  const mvDots = (props: any) => {
+    const events: GrowthEvent[] | undefined = props.payload?.events;
+    if (!events?.length) return <g key={props.key} />;
+    return (
+      <circle key={props.key} cx={props.cx} cy={props.cy} r={5}
+        fill={eventDotColor(events)} stroke="white" strokeWidth={1.5} />
+    );
+  };
+
+  return (
+    <>
+      {header}
+
+      {/* Top panel — market value, tight domain. z-10 ensures its tooltip floats above the bottom panel. */}
+      <div className="relative z-10">
+      <ResponsiveContainer width="100%" height={130}>
+        <ComposedChart data={points} margin={MARGIN_TOP} syncId="growth">
+          {gradDefs}
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+          <XAxis dataKey="date" hide />
+          <YAxis {...yAxisProps} domain={[mvMin - mvPad, mvMax + mvPad]} />
+          <RechartsTooltip content={<GrowthChartTooltip />} cursor={{ stroke: "#e2e8f0", strokeWidth: 1 }} />
+          <Area type="monotone" dataKey="marketValue" stroke="#4f46e5" strokeWidth={2}
+            fill="url(#growthGradient)" dot={mvDots} activeDot={{ r: 4, fill: "#4f46e5" }} />
+        </ComposedChart>
+      </ResponsiveContainer>
+      </div>
+
+      {/* Scale break indicator — two dashed lines offset from the Y-axis */}
+      <div className="flex flex-col gap-[5px] my-[3px]" style={{ paddingLeft: Y_WIDTH + MARGIN_TOP.left, paddingRight: MARGIN_TOP.right }}>
+        <div className="border-t border-dashed border-border" />
+        <div className="border-t border-dashed border-border" />
+      </div>
+
+      {/* Bottom panel — cost basis, tight domain */}
+      <ResponsiveContainer width="100%" height={80}>
+          <ComposedChart data={points} margin={MARGIN_BTM} syncId="growth">
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+            <XAxis dataKey="date" ticks={ticks} tickFormatter={formatAxisDate}
+              tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis {...yAxisProps} domain={[cbMin - cbPad, cbMax + cbPad]} />
+            <RechartsTooltip cursor={{ stroke: "#e2e8f0", strokeWidth: 1 }} content={() => null} />
+            <Line type="monotone" dataKey="costBasis" stroke="#94a3b8"
+              strokeWidth={1.5} strokeDasharray="5 4" dot={false} activeDot={{ r: 4, fill: "#94a3b8" }} />
+          </ComposedChart>
+        </ResponsiveContainer>
+
+      {legend}
+    </>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 export function InvestmentAccount() {
   const { accountId } = useParams<{ accountId: string }>();
   const navigate = useNavigate();
@@ -2526,6 +3076,10 @@ export function InvestmentAccount() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const holdingRowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
   const [stickyHolding, setStickyHolding] = useState<InvestmentHolding | null>(null);
+  const [dayGain, setDayGain] = useState<number | null>(null);
+  const handleDayGain = useCallback((gain: number | null) => setDayGain(gain), []);
+  const [chartKey, setChartKey] = useState(0);
+  const refreshChart = useCallback(() => setChartKey((k) => k + 1), []);
 
   const toggleHolding = useCallback((id: string) => {
     setExpandedIds(prev => {
@@ -2676,7 +3230,62 @@ export function InvestmentAccount() {
         </div>
       </div>
 
-      {/* Tab bar — investment accounts only */}
+      {/* Investment: prominent market value + chart + performance summary (shown above tab nav) */}
+      {isInvestment && (holdings.length > 0 || manuals.length > 0) && (
+        <>
+          {/* Prominent market value — no label needed */}
+          <p className="text-3xl font-bold tabular-nums">{formatCurrency(totalMarketValue)}</p>
+
+          {/* Chart + summary row */}
+          <div className="flex flex-col lg:flex-row items-start gap-6">
+            {/* Growth chart — 2/3 width, non-managed only */}
+            {!account.isManaged && (
+              <div className="min-w-0 basis-2/3 py-2 flex flex-col w-full">
+                <GrowthChart key={chartKey} accountId={accountId!} onDayGain={handleDayGain} />
+              </div>
+            )}
+            {/* Performance summary — 1/3 width (or full width if managed) */}
+            <Card className={`p-4 ${account.isManaged ? "w-full" : "min-w-0 basis-1/3 w-full"}`}>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                    1 Day {dayGain == null ? "Gain/Loss" : dayGain >= 0 ? "Gain" : "Loss"}
+                  </p>
+                  {account.isManaged
+                    ? <span className="text-muted-foreground tabular-nums">—</span>
+                    : <GainCell value={dayGain} size="base" />
+                  }
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                    Total {totalGain == null ? "Gain/Loss" : totalGain >= 0 ? "Gain" : "Loss"}
+                  </p>
+                  <GainCell value={totalGain} pct={totalGainPct} size="base" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                    Short-Term {shortTermGain == null ? "Gain/Loss" : shortTermGain >= 0 ? "Gain" : "Loss"}
+                  </p>
+                  <GainCell value={shortTermGain} size="base" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                    Long-Term {longTermGain == null ? "Gain/Loss" : longTermGain >= 0 ? "Gain" : "Loss"}
+                  </p>
+                  <GainCell value={longTermGain} size="base" />
+                </div>
+              </div>
+              {priceDate && (
+                <p className="text-[11px] text-muted-foreground pt-3 border-t border-border mt-3">
+                  Prices as of {formatDate(priceDate)} at 4:00 PM {easternTZAbbr(priceDate)}
+                </p>
+              )}
+            </Card>
+          </div>
+        </>
+      )}
+
+      {/* Tab bar — investment accounts only (below chart + summary) */}
       {isInvestment && (
         <div className="flex border-b border-border">
           {(["holdings", "activity"] as const).map((tab) => (
@@ -2725,6 +3334,7 @@ export function InvestmentAccount() {
           onClose={() => setSellModalHolding(null)}
           onSold={() => {
             refetch();
+            refreshChart();
             setActiveTab("activity");
             setSellModalHolding(null);
           }}
@@ -2734,35 +3344,6 @@ export function InvestmentAccount() {
       {/* Investment account — Holdings tab */}
       {isInvestment && activeTab === "holdings" && (
         <>
-          {/* Summary stats */}
-          {(holdings.length > 0 || manuals.length > 0) && (
-            <Card className="p-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-border text-center">
-                <div className="px-4 py-1">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Market Value</p>
-                  <p className="text-lg font-bold">{formatCurrency(totalMarketValue)}</p>
-                </div>
-                <div className="px-4 py-1">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total Gain / Loss</p>
-                  <GainCell value={totalGain} pct={totalGainPct} size="base" />
-                </div>
-                <div className="px-4 py-1">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Short-Term</p>
-                  <GainCell value={shortTermGain} size="base" />
-                </div>
-                <div className="px-4 py-1">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Long-Term</p>
-                  <GainCell value={longTermGain} size="base" />
-                </div>
-              </div>
-              {priceDate && (
-                <p className="text-[11px] text-muted-foreground text-center mt-3">
-                  Prices as of {formatDate(priceDate)}
-                </p>
-              )}
-            </Card>
-          )}
-
           {/* Add investment modal */}
           <AddInvestmentModal
             accountId={accountId!}
@@ -2770,7 +3351,7 @@ export function InvestmentAccount() {
             existingHoldings={holdings}
             open={modalOpen}
             onClose={() => setModalOpen(false)}
-            onSaved={refetch}
+            onSaved={() => { refetch(); refreshChart(); }}
             managed={account.isManaged}
           />
 
@@ -2779,7 +3360,7 @@ export function InvestmentAccount() {
             accountId={accountId!}
             open={importModalOpen}
             onClose={() => setImportModalOpen(false)}
-            onComplete={refetch}
+            onComplete={() => { refetch(); refreshChart(); }}
           />
 
           {/* Add / edit manual investment modal */}
@@ -2837,18 +3418,13 @@ export function InvestmentAccount() {
                       >
                         Symbol
                       </th>
-                      <th
-                        style={{ width: "400px" }}
-                        className="py-2 px-2 text-left font-medium"
-                      >
-                        Name
-                      </th>
+                      <th className="py-2 px-2 text-left font-medium">Name</th>
                       <th style={{ width: "100px" }} className="py-2 px-2 text-left font-medium">Price</th>
                       <th style={{ width: "110px" }} className="py-2 px-2 text-left font-medium">Quantity</th>
                       <th style={{ width: "120px" }} className="py-2 px-2 text-left font-medium">Total Cost</th>
                       <th style={{ width: "120px" }} className="py-2 px-2 text-left font-medium">Market Value</th>
-                      <th className="py-2 pl-2 pr-2 text-left font-medium">Total Gain</th>
-                      <th style={{ width: "60px" }} className="py-2 pr-3" />
+                      <th style={{ width: "190px" }} className="py-2 pl-2 pr-2 text-left font-medium">Total Gain</th>
+                      <th style={{ width: "105px" }} className="py-2 pr-3" />
                     </tr>
                   </thead>
                   <tbody>

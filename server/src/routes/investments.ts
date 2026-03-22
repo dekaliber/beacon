@@ -74,6 +74,94 @@ async function fetchYahooPrice(ticker: string): Promise<{ price: number; priceDa
   }
 }
 
+// ── Helper: fetch adjusted-close price history from Yahoo Finance ───────────
+// Returns daily (date, closePrice) pairs for the given ticker and date range.
+// Uses adjclose so that stock splits and dividends don't create artificial jumps.
+
+async function fetchYahooHistory(
+  ticker: string,
+  fromDate: Date,
+  toDate: Date = new Date()
+): Promise<Array<{ date: Date; closePrice: number }>> {
+  try {
+    const period1 = Math.floor(fromDate.getTime() / 1000);
+    const period2 = Math.floor(toDate.getTime() / 1000);
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&period1=${period1}&period2=${period2}`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
+    });
+    if (!res.ok) {
+      console.warn(`[fetchYahooHistory] ${ticker}: HTTP ${res.status}`);
+      return [];
+    }
+    const data = await res.json() as any;
+    const result = data?.chart?.result?.[0];
+    if (!result) return [];
+
+    const timestamps: number[] = result.timestamp ?? [];
+    const adjCloses: (number | null)[] = result.indicators?.adjclose?.[0]?.adjclose ?? [];
+
+    const points: Array<{ date: Date; closePrice: number }> = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      const price = adjCloses[i];
+      if (price == null || price <= 0) continue;
+      // Normalize to UTC midnight for consistent DATE storage
+      const raw = new Date(timestamps[i] * 1000);
+      const date = new Date(Date.UTC(raw.getUTCFullYear(), raw.getUTCMonth(), raw.getUTCDate()));
+      points.push({ date, closePrice: price });
+    }
+    return points;
+  } catch (err) {
+    console.warn(`[fetchYahooHistory] ${ticker}: exception`, err);
+    return [];
+  }
+}
+
+// ── Helper: returns the most recent weekday (UTC) ───────────────────────────
+
+function lastWeekday(): Date {
+  const d = new Date();
+  const day = d.getUTCDay();
+  const offset = day === 0 ? 2 : day === 6 ? 1 : 0;
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - offset));
+}
+
+// ── Helper: lazy gap-fill for TickerPriceHistory ────────────────────────────
+// Checks whether price history for the given tickers is current through the
+// most recent trading day; if not, fetches the missing range from Yahoo and
+// inserts new rows. Safe to call on every growth-chart request.
+
+async function fillPriceGaps(tickers: string[]): Promise<number> {
+  if (tickers.length === 0) return 0;
+
+  const latest = await prisma.tickerPriceHistory.findFirst({
+    where: { ticker: { in: tickers } },
+    orderBy: { date: "desc" },
+    select: { date: true },
+  });
+
+  const lastTradingDay = lastWeekday();
+  if (latest && latest.date >= lastTradingDay) return 0; // already current
+
+  // fromDate = day after latest known row (or 90 days ago if table is empty)
+  const fromDate = latest
+    ? new Date(latest.date.getTime() + 24 * 60 * 60 * 1000)
+    : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
+  let totalInserted = 0;
+  for (const ticker of tickers) {
+    const points = await fetchYahooHistory(ticker, fromDate);
+    if (points.length === 0) continue;
+    const result = await prisma.tickerPriceHistory.createMany({
+      data: points.map((p) => ({ ticker, date: p.date, closePrice: p.closePrice })),
+      skipDuplicates: true,
+    });
+    totalInserted += result.count;
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  return totalInserted;
+}
+
 // ── Helper: compute calculated fields for a holding ────────────────────────
 // Lots with a null acquiredDate are treated as managed (robo-advisor) lots:
 // quantity and cost are still accumulated, but they are excluded from the
@@ -328,10 +416,35 @@ investmentRoutes.patch("/holdings/:id", async (req, res) => {
 });
 
 // ── DELETE /api/investments/holdings/:id ──────────────────────────────────
+// ?force=true bypasses the HAS_SALES warning.
 
 investmentRoutes.delete("/holdings/:id", async (req, res) => {
   try {
-    await prisma.investmentHolding.delete({ where: { id: req.params.id } });
+    const holdingId = req.params.id;
+    const force = req.query.force === "true";
+
+    const saleCount = await prisma.investmentActivity.count({
+      where: { holdingId, type: "SALE" },
+    });
+
+    if (saleCount > 0 && !force) {
+      return res.status(409).json({
+        code: "HAS_SALES",
+        message:
+          "This holding has recorded sales. Deleting it will orphan sale history. " +
+          "Consider keeping the holding or confirm deletion with ?force=true.",
+      });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // If no sales, delete the associated purchase activities (user correcting a mistake)
+      if (saleCount === 0) {
+        await tx.investmentActivity.deleteMany({
+          where: { holdingId, type: "PURCHASE" },
+        });
+      }
+      await tx.investmentHolding.delete({ where: { id: holdingId } });
+    });
     res.status(204).send();
   } catch (err) {
     console.error(err);
@@ -352,7 +465,36 @@ const createLotSchema = z.object({
 investmentRoutes.post("/lots", async (req, res) => {
   try {
     const body = createLotSchema.parse(req.body);
-    const lot = await prisma.investmentLot.create({ data: { ...body, acquiredDate: body.acquiredDate ?? null } });
+
+    const holding = await prisma.investmentHolding.findUnique({
+      where: { id: body.holdingId },
+      select: { accountId: true, ticker: true },
+    });
+    if (!holding) return res.status(404).json({ error: { message: "Holding not found" } });
+
+    const lot = await prisma.$transaction(async (tx) => {
+      const newLot = await tx.investmentLot.create({
+        data: { ...body, acquiredDate: body.acquiredDate ?? null },
+      });
+      if (body.acquiredDate) {
+        await tx.investmentActivity.create({
+          data: {
+            accountId: holding.accountId,
+            holdingId: body.holdingId,
+            lotId: newLot.id,
+            ticker: holding.ticker,
+            type: "PURCHASE",
+            date: body.acquiredDate,
+            shares: body.quantity,
+            pricePerShare: body.costPerShare,
+            amount: Math.round(body.quantity * body.costPerShare * 100) / 100,
+            updatedAt: new Date(),
+          },
+        });
+      }
+      return newLot;
+    });
+
     res.status(201).json({
       ...lot,
       quantity: lot.quantity.toString(),
@@ -395,10 +537,37 @@ investmentRoutes.put("/lots/:id", async (req, res) => {
 });
 
 // ── DELETE /api/investments/lots/:id ─────────────────────────────────────
+// ?force=true bypasses the HAS_SALES warning.
 
 investmentRoutes.delete("/lots/:id", async (req, res) => {
   try {
-    await prisma.investmentLot.delete({ where: { id: req.params.id } });
+    const lotId = req.params.id;
+    const force = req.query.force === "true";
+
+    // Find the lot + its holding (to scope sale check to this holding)
+    const lot = await prisma.investmentLot.findUnique({
+      where: { id: lotId },
+      select: { holdingId: true },
+    });
+    if (!lot) return res.status(404).json({ error: { message: "Lot not found" } });
+
+    if (!force) {
+      const saleCount = await prisma.investmentActivity.count({
+        where: { holdingId: lot.holdingId, type: "SALE" },
+      });
+      if (saleCount > 0) {
+        return res.status(409).json({
+          code: "HAS_SALES",
+          message:
+            "This holding has recorded sales. Deleting a lot when sales exist may produce incorrect history. " +
+            "Use the sell function to reduce a position, or confirm deletion with ?force=true.",
+        });
+      }
+    }
+
+    // Delete the linked PURCHASE activity first (user-initiated deletion cleans up history)
+    await prisma.investmentActivity.deleteMany({ where: { lotId } });
+    await prisma.investmentLot.delete({ where: { id: lotId } });
     res.status(204).send();
   } catch (err) {
     console.error(err);
@@ -605,13 +774,30 @@ investmentRoutes.post("/import", async (req, res) => {
 
         for (const { row, idx } of entries) {
           try {
-            await prisma.investmentLot.create({
-              data: {
-                holdingId: holding.id,
-                quantity: row.quantity,
-                costPerShare: row.price,
-                acquiredDate: new Date(row.purchaseDate),
-              },
+            const acquiredDate = new Date(row.purchaseDate);
+            await prisma.$transaction(async (tx) => {
+              const newLot = await tx.investmentLot.create({
+                data: {
+                  holdingId: holding.id,
+                  quantity: row.quantity,
+                  costPerShare: row.price,
+                  acquiredDate,
+                },
+              });
+              await tx.investmentActivity.create({
+                data: {
+                  accountId: body.accountId,
+                  holdingId: holding.id,
+                  lotId: newLot.id,
+                  ticker: holding.ticker,
+                  type: "PURCHASE",
+                  date: acquiredDate,
+                  shares: row.quantity,
+                  pricePerShare: row.price,
+                  amount: Math.round(row.quantity * row.price * 100) / 100,
+                  updatedAt: new Date(),
+                },
+              });
             });
             imported++;
           } catch (e) {
@@ -637,6 +823,49 @@ investmentRoutes.post("/import", async (req, res) => {
       return res.status(400).json({ error: { message: err.errors[0]?.message } });
     console.error(err);
     res.status(500).json({ error: { message: "Failed to import investments" } });
+  }
+});
+
+// ── POST /api/investments/prices/backfill-history ─────────────────────────
+// One-time (re-runnable) backfill: fetches YTD adjusted-close price history
+// for every tracked ticker and upserts rows into TickerPriceHistory.
+// Safe to call multiple times; skipDuplicates prevents double-inserts.
+// NOTE: must be declared before /prices/:ticker to avoid route conflict
+
+investmentRoutes.post("/prices/backfill-history", async (_req, res) => {
+  try {
+    const year = new Date().getUTCFullYear();
+    const fromDate = new Date(Date.UTC(year, 0, 1)); // Jan 1 of current year (UTC)
+
+    const holdings = await prisma.investmentHolding.findMany({
+      select: { ticker: true },
+      distinct: ["ticker"],
+    });
+    const tickers = holdings.map((h) => h.ticker);
+    if (tickers.length === 0) return res.json({ inserted: 0, tickers: [] });
+
+    const summary: Array<{ ticker: string; inserted: number }> = [];
+    let totalInserted = 0;
+
+    for (const ticker of tickers) {
+      const points = await fetchYahooHistory(ticker, fromDate);
+      if (points.length === 0) {
+        summary.push({ ticker, inserted: 0 });
+        continue;
+      }
+      const result = await prisma.tickerPriceHistory.createMany({
+        data: points.map((p) => ({ ticker, date: p.date, closePrice: p.closePrice })),
+        skipDuplicates: true,
+      });
+      totalInserted += result.count;
+      summary.push({ ticker, inserted: result.count });
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
+    res.json({ inserted: totalInserted, tickers: summary });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: { message: "Failed to backfill price history" } });
   }
 });
 
@@ -700,6 +929,270 @@ investmentRoutes.get("/prices/:ticker", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: { message: "Failed to fetch price" } });
+  }
+});
+
+// ── GET /api/investments/growth/:accountId ────────────────────────────────
+// Returns a daily time-series of portfolio market value and cost basis for a
+// non-managed investment account, computed from lot-level purchase history and
+// TickerPriceHistory. Triggers a lazy gap-fill before computing so the series
+// always extends through the most recent trading day.
+//
+// Portfolio reconstruction: for each date D, the position in a ticker is:
+//   current remaining lots with acquiredDate ≤ D
+//   + shares from SALE activities with date > D (add back shares sold after D)
+//
+// This correctly handles partial sales (cost basis and market value drop on the
+// sale date) and fully liquidated positions (no remaining lots, reconstructed
+// entirely from sale activity history).
+
+investmentRoutes.get("/growth/:accountId", async (req, res) => {
+  try {
+    const { accountId } = req.params;
+
+    const account = await prisma.account.findFirst({
+      where: { id: accountId, isActive: true, type: "INVESTMENT" },
+    });
+    if (!account) return res.status(404).json({ error: { message: "Account not found" } });
+
+    // Load holdings with only dated lots (managed lots have null acquiredDate)
+    const holdings = await prisma.investmentHolding.findMany({
+      where: { accountId },
+      include: {
+        lots: {
+          where: { acquiredDate: { not: null } },
+          orderBy: { acquiredDate: "asc" },
+        },
+      },
+    });
+
+    // Load all SALE activities for this account
+    const saleActivities = await prisma.investmentActivity.findMany({
+      where: { accountId, type: "SALE" },
+      orderBy: { date: "asc" },
+    });
+
+    // Group sales by ticker
+    type SaleRecord = { date: Date; shares: number; costBasis: number };
+    const salesByTicker = new Map<string, SaleRecord[]>();
+    for (const act of saleActivities) {
+      if (act.shares == null) continue;
+      if (!salesByTicker.has(act.ticker)) salesByTicker.set(act.ticker, []);
+      salesByTicker.get(act.ticker)!.push({
+        date: act.date,
+        shares: parseFloat(act.shares.toString()),
+        costBasis: act.costBasis ? parseFloat(act.costBasis.toString()) : 0,
+      });
+    }
+
+    // All tickers to chart: those with remaining lots OR past sale activities
+    const holdingsWithLots = holdings.filter((h) => h.lots.length > 0);
+    const allTickers = [
+      ...new Set([
+        ...holdingsWithLots.map((h) => h.ticker),
+        ...salesByTicker.keys(),
+      ]),
+    ];
+
+    if (allTickers.length === 0) return res.json({ points: [] });
+
+    // Lazy gap-fill: bring price history current before computing
+    await fillPriceGaps(allTickers);
+
+    // Earliest date: min of first lot acquisition and first sale date
+    const allLots = holdingsWithLots.flatMap((h) => h.lots);
+    const firstLotDate = allLots.length > 0
+      ? allLots.reduce((min, l) => (l.acquiredDate! < min ? l.acquiredDate! : min), allLots[0].acquiredDate!)
+      : null;
+    const firstSaleDate = saleActivities.length > 0 ? saleActivities[0].date : null;
+    const earliestDate = firstLotDate && firstSaleDate
+      ? (firstLotDate < firstSaleDate ? firstLotDate : firstSaleDate)
+      : (firstLotDate ?? firstSaleDate);
+
+    if (!earliestDate) return res.json({ points: [] });
+
+    // Load all relevant price history from DB
+    const priceRows = await prisma.tickerPriceHistory.findMany({
+      where: { ticker: { in: allTickers }, date: { gte: earliestDate } },
+      orderBy: { date: "asc" },
+    });
+
+    if (priceRows.length === 0) return res.json({ points: [] });
+
+    // Build per-ticker sorted price series
+    const pricesByTicker = new Map<string, Array<{ date: Date; closePrice: number }>>();
+    for (const row of priceRows) {
+      if (!pricesByTicker.has(row.ticker)) pricesByTicker.set(row.ticker, []);
+      pricesByTicker.get(row.ticker)!.push({
+        date: row.date,
+        closePrice: parseFloat(row.closePrice.toString()),
+      });
+    }
+
+    // Build per-ticker current lot data
+    type LotData = { acquiredDate: Date; quantity: number; costPerShare: number };
+    const lotsByTicker = new Map<string, LotData[]>();
+    for (const holding of holdingsWithLots) {
+      lotsByTicker.set(
+        holding.ticker,
+        holding.lots.map((l) => ({
+          acquiredDate: l.acquiredDate!,
+          quantity: parseFloat(l.quantity.toString()),
+          costPerShare: parseFloat(l.costPerShare.toString()),
+        }))
+      );
+    }
+
+    // Union of all dates across all tickers, sorted ascending
+    const dateSet = new Set<string>();
+    for (const rows of pricesByTicker.values()) {
+      for (const r of rows) dateSet.add(r.date.toISOString());
+    }
+    const sortedDates = [...dateSet].sort();
+
+    // Returns the most recent known price for a ticker on or before `asOf`
+    function priceAsOf(ticker: string, asOf: Date): number | null {
+      const prices = pricesByTicker.get(ticker);
+      if (!prices) return null;
+      let best: number | null = null;
+      for (const p of prices) {
+        if (p.date <= asOf) best = p.closePrice;
+        else break;
+      }
+      return best;
+    }
+
+    // Transaction event records (buy/sell markers on the chart)
+    type EventRecord = {
+      type: "BUY" | "SELL";
+      ticker: string;
+      shares: number;
+      pricePerShare: number | null;
+      netAmount: number;
+    };
+
+    // Compute the series
+    const points: Array<{
+      date: string;
+      marketValue: number;
+      costBasis: number;
+      unrealizedGain: number;
+      unrealizedGainPct: number;
+      events?: EventRecord[];
+    }> = [];
+
+    for (const dateStr of sortedDates) {
+      const asOf = new Date(dateStr);
+      let marketValue = 0;
+      let totalCostBasis = 0;
+      let hasPrice = false;
+
+      for (const ticker of allTickers) {
+        // Current remaining lots acquired by this date
+        const lots = lotsByTicker.get(ticker) ?? [];
+        const activeLots = lots.filter((l) => l.acquiredDate <= asOf);
+
+        // Sales that happened strictly after this date — add those shares back
+        const sales = salesByTicker.get(ticker) ?? [];
+        const futureSales = sales.filter((s) => s.date > asOf);
+
+        const qty =
+          activeLots.reduce((s, l) => s + l.quantity, 0) +
+          futureSales.reduce((s, sale) => s + sale.shares, 0);
+        const basis =
+          activeLots.reduce((s, l) => s + l.quantity * l.costPerShare, 0) +
+          futureSales.reduce((s, sale) => s + sale.costBasis, 0);
+
+        if (qty <= 0) continue;
+
+        const price = priceAsOf(ticker, asOf);
+        if (price == null) continue;
+        hasPrice = true;
+
+        marketValue += qty * price;
+        totalCostBasis += basis;
+      }
+
+      if (!hasPrice) continue;
+
+      const unrealizedGain = marketValue - totalCostBasis;
+      const unrealizedGainPct = totalCostBasis > 0 ? (unrealizedGain / totalCostBasis) * 100 : 0;
+
+      points.push({
+        date: asOf.toISOString().split("T")[0],
+        marketValue: Math.round(marketValue * 100) / 100,
+        costBasis: Math.round(totalCostBasis * 100) / 100,
+        unrealizedGain: Math.round(unrealizedGain * 100) / 100,
+        unrealizedGainPct: Math.round(unrealizedGainPct * 100) / 100,
+      });
+    }
+
+    // ── Attach transaction events to chart points ─────────────────────────
+    // Buy events come from PURCHASE activities (persisted on lot creation, survive lot deletion).
+    // Sell events come from SALE activities. Events on non-trading days are snapped to the
+    // nearest preceding chart date.
+    const purchaseActivities = await prisma.investmentActivity.findMany({
+      where: { accountId, type: "PURCHASE" },
+      orderBy: { date: "asc" },
+    });
+
+    const rawEventsByDate = new Map<string, EventRecord[]>();
+
+    for (const act of purchaseActivities) {
+      if (act.shares == null) continue;
+      const dateKey = act.date.toISOString().split("T")[0];
+      if (!rawEventsByDate.has(dateKey)) rawEventsByDate.set(dateKey, []);
+      rawEventsByDate.get(dateKey)!.push({
+        type: "BUY",
+        ticker: act.ticker,
+        shares: parseFloat(act.shares.toString()),
+        pricePerShare: act.pricePerShare ? parseFloat(act.pricePerShare.toString()) : null,
+        netAmount: parseFloat(act.amount.toString()),
+      });
+    }
+
+    for (const act of saleActivities) {
+      if (act.shares == null) continue;
+      const dateKey = act.date.toISOString().split("T")[0];
+      if (!rawEventsByDate.has(dateKey)) rawEventsByDate.set(dateKey, []);
+      rawEventsByDate.get(dateKey)!.push({
+        type: "SELL",
+        ticker: act.ticker,
+        shares: parseFloat(act.shares.toString()),
+        pricePerShare: act.pricePerShare ? parseFloat(act.pricePerShare.toString()) : null,
+        netAmount: parseFloat(act.amount.toString()) - (act.fees ? parseFloat(act.fees.toString()) : 0),
+      });
+    }
+
+    // Snap off-market-day events to nearest preceding chart date
+    const chartDateList = points.map((p) => p.date).sort();
+    const chartDateSet = new Set(chartDateList);
+    const eventsByChartDate = new Map<string, EventRecord[]>();
+
+    for (const [eventDate, events] of rawEventsByDate) {
+      let snapDate: string | undefined;
+      if (chartDateSet.has(eventDate)) {
+        snapDate = eventDate;
+      } else {
+        for (const d of chartDateList) {
+          if (d <= eventDate) snapDate = d;
+          else break;
+        }
+      }
+      if (!snapDate) continue; // event predates entire chart range
+      if (!eventsByChartDate.has(snapDate)) eventsByChartDate.set(snapDate, []);
+      eventsByChartDate.get(snapDate)!.push(...events);
+    }
+
+    for (const point of points) {
+      const events = eventsByChartDate.get(point.date);
+      if (events?.length) point.events = events;
+    }
+
+    res.json({ points });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: { message: "Failed to compute growth data" } });
   }
 });
 
@@ -863,12 +1356,17 @@ const sellInputSchema = z.object({
   pricePerShare: z.number().positive(),
   saleDate: z.string().transform((s) => new Date(s)),
   fees: z.number().nonnegative().default(0),
-  costBasisMethod: z.enum(["FIFO", "LIFO", "MIN_TAX", "MAX_GAIN"]),
+  // Either costBasisMethod OR lotAllocations must be provided (validated in handler)
+  costBasisMethod: z.enum(["FIFO", "LIFO", "MIN_TAX", "MAX_GAIN"]).optional(),
+  lotAllocations: z.array(z.object({
+    lotId: z.string(),
+    shares: z.number().positive(),
+  })).optional(),
 });
 
 interface LotAllocation {
   lotId: string;
-  acquiredDate: Date;
+  acquiredDate: Date | null;
   shares: number;
   costPerShare: number;
   termType: "SHORT" | "LONG";
@@ -891,56 +1389,70 @@ interface SellCalculation {
 }
 
 function computeSell(
-  lots: { id: string; quantity: any; costPerShare: any; acquiredDate: Date }[],
+  lots: { id: string; quantity: any; costPerShare: any; acquiredDate: Date | null }[],
   sharesToSell: number,
   pricePerShare: number,
   saleDate: Date,
   fees: number,
-  costBasisMethod: "FIFO" | "LIFO" | "MIN_TAX" | "MAX_GAIN"
+  costBasisMethod: "FIFO" | "LIFO" | "MIN_TAX" | "MAX_GAIN" | undefined,
+  lotAllocations?: { lotId: string; shares: number }[]
 ): SellCalculation {
-  // Determine the one-year cutoff relative to the sale date (not today)
   const oneYearBeforeSale = new Date(
     saleDate.getFullYear() - 1,
     saleDate.getMonth(),
     saleDate.getDate()
   );
 
-  // Sort lots by chosen method
-  const sorted = [...lots].sort((a, b) => {
-    const aQty = parseFloat(a.quantity.toString());
-    const bQty = parseFloat(b.quantity.toString());
-    const aCps = parseFloat(a.costPerShare.toString());
-    const bCps = parseFloat(b.costPerShare.toString());
-    // For sort, gain per share = pricePerShare - costPerShare (direction depends on method)
-    switch (costBasisMethod) {
-      case "FIFO": return a.acquiredDate.getTime() - b.acquiredDate.getTime();
-      case "LIFO": return b.acquiredDate.getTime() - a.acquiredDate.getTime();
-      case "MIN_TAX": return bCps - aCps; // highest cost basis first → smallest gain
-      case "MAX_GAIN": return aCps - bCps; // lowest cost basis first → largest gain
+  // Build the ordered list of (lot, sharesFromLot) pairs
+  type LotShare = { lot: typeof lots[0]; shares: number };
+  let orderedAllocations: LotShare[];
+
+  if (lotAllocations) {
+    // Lot-level selection: use caller-specified allocations directly
+    const lotMap = new Map(lots.map((l) => [l.id, l]));
+    orderedAllocations = lotAllocations
+      .filter((a) => a.shares > 0 && lotMap.has(a.lotId))
+      .map((a) => ({ lot: lotMap.get(a.lotId)!, shares: a.shares }));
+  } else {
+    // Method-based: sort lots, then allocate greedily
+    const sorted = [...lots].sort((a, b) => {
+      const aCps = parseFloat(a.costPerShare.toString());
+      const bCps = parseFloat(b.costPerShare.toString());
+      switch (costBasisMethod) {
+        case "FIFO": return (a.acquiredDate?.getTime() ?? Infinity) - (b.acquiredDate?.getTime() ?? Infinity);
+        case "LIFO": return (b.acquiredDate?.getTime() ?? -Infinity) - (a.acquiredDate?.getTime() ?? -Infinity);
+        case "MIN_TAX": return bCps - aCps;
+        case "MAX_GAIN": return aCps - bCps;
+        default: return 0;
+      }
+    });
+    orderedAllocations = [];
+    let remaining = sharesToSell;
+    for (const lot of sorted) {
+      if (remaining <= 0) break;
+      const shares = Math.min(parseFloat(lot.quantity.toString()), remaining);
+      orderedAllocations.push({ lot, shares });
+      remaining -= shares;
     }
-  });
+  }
 
   const lotBreakdown: LotAllocation[] = [];
-  let sharesRemaining = sharesToSell;
   let stShares = 0;
   let ltShares = 0;
   let stCostBasis = 0;
   let ltCostBasis = 0;
 
-  for (const lot of sorted) {
-    if (sharesRemaining <= 0) break;
-    const lotQty = parseFloat(lot.quantity.toString());
+  for (const { lot, shares } of orderedAllocations) {
     const lotCps = parseFloat(lot.costPerShare.toString());
-    const sharesFromLot = Math.min(lotQty, sharesRemaining);
-    const isLongTerm = lot.acquiredDate <= oneYearBeforeSale;
-    const lotProceeds = sharesFromLot * pricePerShare;
-    const lotCostBasis = sharesFromLot * lotCps;
+    const isLongTerm = lot.acquiredDate != null && lot.acquiredDate <= oneYearBeforeSale;
+    const lotProceeds = shares * pricePerShare;
+    const lotCostBasis = shares * lotCps;
     const lotGain = lotProceeds - lotCostBasis;
 
     lotBreakdown.push({
       lotId: lot.id,
       acquiredDate: lot.acquiredDate,
-      shares: sharesFromLot,
+      shares,
       costPerShare: lotCps,
       termType: isLongTerm ? "LONG" : "SHORT",
       proceeds: lotProceeds,
@@ -949,28 +1461,28 @@ function computeSell(
     });
 
     if (isLongTerm) {
-      ltShares += sharesFromLot;
+      ltShares += shares;
       ltCostBasis += lotCostBasis;
     } else {
-      stShares += sharesFromLot;
+      stShares += shares;
       stCostBasis += lotCostBasis;
     }
-
-    sharesRemaining -= sharesFromLot;
   }
 
-  const grossProceeds = sharesToSell * pricePerShare;
+  const totalSoldShares = lotAllocations
+    ? orderedAllocations.reduce((s, a) => s + a.shares, 0)
+    : sharesToSell;
+  const grossProceeds = totalSoldShares * pricePerShare;
   const netProceeds = grossProceeds - fees;
   const totalCostBasis = stCostBasis + ltCostBasis;
 
-  // Allocate fees proportionally by shares, compute net gains per term
-  const stFees = sharesToSell > 0 ? fees * (stShares / sharesToSell) : 0;
+  const stFees = totalSoldShares > 0 ? fees * (stShares / totalSoldShares) : 0;
   const ltFees = fees - stFees;
   const stGain = stShares > 0
-    ? (stShares / sharesToSell) * grossProceeds - stCostBasis - stFees
+    ? (stShares / totalSoldShares) * grossProceeds - stCostBasis - stFees
     : 0;
   const ltGain = ltShares > 0
-    ? ltShares / sharesToSell * grossProceeds - ltCostBasis - ltFees
+    ? (ltShares / totalSoldShares) * grossProceeds - ltCostBasis - ltFees
     : 0;
   const totalGain = stGain + ltGain;
 
@@ -994,6 +1506,9 @@ function computeSell(
 investmentRoutes.post("/sell/preview", async (req, res) => {
   try {
     const body = sellInputSchema.parse(req.body);
+    if (!body.costBasisMethod && !body.lotAllocations) {
+      return res.status(400).json({ error: { message: "Either costBasisMethod or lotAllocations must be provided" } });
+    }
 
     const holding = await prisma.investmentHolding.findUnique({
       where: { id: body.holdingId },
@@ -1005,25 +1520,29 @@ investmentRoutes.post("/sell/preview", async (req, res) => {
       (sum, l) => sum + parseFloat(l.quantity.toString()),
       0
     );
-    if (body.sharesToSell > totalQty + 0.000001) {
+    const sharesToSell = body.lotAllocations
+      ? body.lotAllocations.reduce((s, a) => s + a.shares, 0)
+      : body.sharesToSell;
+    if (sharesToSell > totalQty + 0.000001) {
       return res.status(400).json({
-        error: { message: `Cannot sell ${body.sharesToSell} shares; only ${totalQty} available` },
+        error: { message: `Cannot sell ${sharesToSell} shares; only ${totalQty} available` },
       });
     }
 
     const calc = computeSell(
       holding.lots,
-      body.sharesToSell,
+      sharesToSell,
       body.pricePerShare,
       body.saleDate,
       body.fees,
-      body.costBasisMethod
+      body.costBasisMethod,
+      body.lotAllocations
     );
 
     res.json({
       lotBreakdown: calc.lotBreakdown.map((l) => ({
         ...l,
-        acquiredDate: l.acquiredDate.toISOString(),
+        acquiredDate: l.acquiredDate?.toISOString() ?? null,
       })),
       grossProceeds: Math.round(calc.grossProceeds * 100) / 100,
       fees: Math.round(calc.fees * 100) / 100,
@@ -1053,6 +1572,9 @@ const sellCommitSchema = sellInputSchema.extend({
 investmentRoutes.post("/sell", async (req, res) => {
   try {
     const body = sellCommitSchema.parse(req.body);
+    if (!body.costBasisMethod && !body.lotAllocations) {
+      return res.status(400).json({ error: { message: "Either costBasisMethod or lotAllocations must be provided" } });
+    }
 
     // Validate holding exists
     const holding = await prisma.investmentHolding.findUnique({
@@ -1070,24 +1592,28 @@ investmentRoutes.post("/sell", async (req, res) => {
     if (destAccount.type === "CREDIT_CARD")
       return res.status(400).json({ error: { message: "Destination account cannot be a credit card" } });
 
+    const sharesToSell = body.lotAllocations
+      ? body.lotAllocations.reduce((s, a) => s + a.shares, 0)
+      : body.sharesToSell;
     const totalQty = holding.lots.reduce(
       (sum, l) => sum + parseFloat(l.quantity.toString()),
       0
     );
-    if (body.sharesToSell > totalQty + 0.000001) {
+    if (sharesToSell > totalQty + 0.000001) {
       return res.status(400).json({
-        error: { message: `Cannot sell ${body.sharesToSell} shares; only ${totalQty} available` },
+        error: { message: `Cannot sell ${sharesToSell} shares; only ${totalQty} available` },
       });
     }
 
     // Compute lot breakdown (re-computed server-side, never trust client preview)
     const calc = computeSell(
       holding.lots,
-      body.sharesToSell,
+      sharesToSell,
       body.pricePerShare,
       body.saleDate,
       body.fees,
-      body.costBasisMethod
+      body.costBasisMethod,
+      body.lotAllocations
     );
 
     const grossProceeds = Math.round(calc.grossProceeds * 100) / 100;
@@ -1135,7 +1661,7 @@ investmentRoutes.post("/sell", async (req, res) => {
           ticker: holding.ticker,
           type: "SALE",
           date: body.saleDate,
-          shares: body.sharesToSell,
+          shares: sharesToSell,
           pricePerShare: body.pricePerShare,
           amount: grossProceeds,
           fees: feesStored,

@@ -35,6 +35,7 @@ enum IncomeSubtype {
 enum InvestmentActivityType {
   DIVIDEND
   SALE
+  PURCHASE
 }
 
 model Account {
@@ -307,7 +308,7 @@ model InvestmentLot {
   id           String    @id @default(cuid())
   holdingId    String
   quantity     Decimal   @db.Decimal(18, 6)
-  costPerShare Decimal   @db.Decimal(12, 4)
+  costPerShare Decimal   @db.Decimal(18, 6)
   // Null for managed/robo-advisor holdings where lot-level acquisition dates
   // are unavailable. A null date signals that short/long-term gain calculation
   // cannot be performed for this lot.
@@ -315,7 +316,8 @@ model InvestmentLot {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  holding InvestmentHolding @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  holding  InvestmentHolding   @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  activity InvestmentActivity?
 
   @@map("investment_lots")
 }
@@ -352,15 +354,31 @@ model TickerPrice {
   @@map("ticker_prices")
 }
 
+// Stores daily adjusted-close price history per ticker for growth chart rendering.
+// Populated via the backfill endpoint (YTD on first run) and lazily gap-filled
+// when a growth chart is requested and the latest row is stale.
+model TickerPriceHistory {
+  id         String   @id @default(cuid())
+  ticker     String
+  date       DateTime @db.Date
+  closePrice Decimal  @db.Decimal(12, 4)
+  createdAt  DateTime @default(now())
+
+  @@unique([ticker, date])
+  @@index([ticker])
+  @@map("ticker_price_history")
+}
+
 model InvestmentActivity {
   id            String                 @id @default(cuid())
   accountId     String
   holdingId     String?
+  lotId         String?                @unique
   ticker        String
   type          InvestmentActivityType
   date          DateTime
   shares        Decimal?               @db.Decimal(18, 6)
-  pricePerShare Decimal?               @db.Decimal(12, 4)
+  pricePerShare Decimal?               @db.Decimal(18, 6)
   amount        Decimal                @db.Decimal(12, 2)
   fees          Decimal?               @db.Decimal(12, 2)
   costBasis     Decimal?               @db.Decimal(12, 2)
@@ -372,10 +390,12 @@ model InvestmentActivity {
 
   account Account            @relation(fields: [accountId], references: [id])
   holding InvestmentHolding? @relation(fields: [holdingId], references: [id], onDelete: SetNull)
+  lot     InvestmentLot?     @relation(fields: [lotId], references: [id], onDelete: SetNull)
   incomes Income[]
 
   @@index([accountId])
   @@index([date])
   @@index([holdingId])
+  @@index([lotId])
   @@map("investment_activities")
 }

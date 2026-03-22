@@ -80,12 +80,13 @@ export interface Expense {
 }
 
 export type IncomeSubtype = "REGULAR" | "DIVIDEND" | "CAPITAL_GAIN";
-export type InvestmentActivityType = "DIVIDEND" | "SALE";
+export type InvestmentActivityType = "DIVIDEND" | "SALE" | "PURCHASE";
 
 export interface InvestmentActivity {
   id: string;
   accountId: string;
   holdingId: string | null;
+  lotId: string | null;
   ticker: string;
   type: InvestmentActivityType;
   date: string;
@@ -281,6 +282,23 @@ export interface InvestmentAccountSummary {
   totalCost: number;
   totalGain: number;
   totalGainPct: number;
+}
+
+export interface GrowthEvent {
+  type: "BUY" | "SELL";
+  ticker: string;
+  shares: number;
+  pricePerShare: number | null;
+  netAmount: number;
+}
+
+export interface GrowthPoint {
+  date: string;
+  marketValue: number;
+  costBasis: number;
+  unrealizedGain: number;
+  unrealizedGainPct: number;
+  events?: GrowthEvent[];
 }
 
 export interface ManualInvestment {

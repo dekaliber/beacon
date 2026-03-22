@@ -9,6 +9,7 @@ import type {
   Category,
   DashboardData,
   Expense,
+  GrowthPoint,
   Income,
   InvestmentAccountSummary,
   InvestmentActivity,
@@ -181,12 +182,14 @@ export const createHolding = (data: { accountId: string; ticker: string; name: s
   api.post<InvestmentHolding>("/investments/holdings", data);
 export const patchHolding = (id: string, data: { assetClass?: string | null; name?: string }) =>
   api.patch<InvestmentHolding>(`/investments/holdings/${id}`, data);
-export const deleteHolding = (id: string) => api.delete(`/investments/holdings/${id}`);
+export const deleteHolding = (id: string, force = false) =>
+  api.delete(`/investments/holdings/${id}${force ? "?force=true" : ""}`);
 export const createLot = (data: { holdingId: string; quantity: number; costPerShare: number; acquiredDate?: string | null }) =>
   api.post<InvestmentLot>("/investments/lots", data);
 export const updateLot = (id: string, data: { quantity?: number; costPerShare?: number; acquiredDate?: string | null }) =>
   api.put<InvestmentLot>(`/investments/lots/${id}`, data);
-export const deleteLot = (id: string) => api.delete(`/investments/lots/${id}`);
+export const deleteLot = (id: string, force = false) =>
+  api.delete(`/investments/lots/${id}${force ? "?force=true" : ""}`);
 export const searchTickers = (q: string) =>
   api.get<TickerSearchResult[]>(`/investments/search?q=${encodeURIComponent(q)}`);
 export const refreshPrices = () => api.post<{ updated: number; tickers: string[] }>("/investments/prices/refresh", {});
@@ -236,13 +239,19 @@ export interface SellPreviewResult {
   totalGain: number;
 }
 
+export interface LotAllocationInput {
+  lotId: string;
+  shares: number;
+}
+
 export interface SellPreviewRequest {
   holdingId: string;
   sharesToSell: number;
   pricePerShare: number;
   saleDate: string;
   fees: number;
-  costBasisMethod: "FIFO" | "LIFO" | "MIN_TAX" | "MAX_GAIN";
+  costBasisMethod?: "FIFO" | "LIFO" | "MIN_TAX" | "MAX_GAIN";
+  lotAllocations?: LotAllocationInput[];
 }
 
 export interface SellRequest extends SellPreviewRequest {
@@ -261,6 +270,9 @@ export const previewSell = (data: SellPreviewRequest) =>
 
 export const executeSell = (data: SellRequest) =>
   api.post<SellResponse>("/investments/sell", data);
+
+export const getInvestmentGrowth = (accountId: string) =>
+  api.get<{ points: GrowthPoint[] }>(`/investments/growth/${accountId}`);
 
 // ── Realized Gain Snapshots ───────────────────────────────────────────────
 export const getGainSnapshot = (accountId: string, year?: number) =>
