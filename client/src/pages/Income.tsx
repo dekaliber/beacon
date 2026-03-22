@@ -923,7 +923,15 @@ export function IncomePage() {
                         <EditableCell value={income.date} type="date" onSave={(v) => handleInlineUpdate(income.id, "date", v)} />
                       </td>
                       <td className="py-2 pr-3">
-                        <EditableCell value={income.source ?? ""} onSave={(v) => handleInlineUpdate(income.id, "source", v)} />
+                        <div className="flex items-center gap-1.5">
+                          <EditableCell value={income.source ?? ""} onSave={(v) => handleInlineUpdate(income.id, "source", v)} />
+                          {income.subtype === "DIVIDEND" && (
+                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">Div</span>
+                          )}
+                          {income.subtype === "CAPITAL_GAIN" && (
+                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Cap Gain</span>
+                          )}
+                        </div>
                       </td>
                       <td className="w-[130px] py-2 pr-3">
                         <EditableTypeaheadCell
@@ -969,7 +977,15 @@ export function IncomePage() {
               {incomes.map((income) => (
                 <div key={income.id} className="flex items-center justify-between py-3">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{income.category?.name ?? "—"}{income.source ? ` · ${income.source}` : ""}</p>
+                    <div className="flex items-center gap-1.5 truncate">
+                      <p className="truncate font-medium">{income.category?.name ?? "—"}{income.source ? ` · ${income.source}` : ""}</p>
+                      {income.subtype === "DIVIDEND" && (
+                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">Div</span>
+                      )}
+                      {income.subtype === "CAPITAL_GAIN" && (
+                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Cap Gain</span>
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground">{income.account.name} &middot; {formatDate(income.date)}</p>
                   </div>
                   <div className="ml-4 flex items-center gap-2">

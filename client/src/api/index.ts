@@ -11,9 +11,11 @@ import type {
   Expense,
   Income,
   InvestmentAccountSummary,
+  InvestmentActivity,
   InvestmentHolding,
   InvestmentLot,
   ManualInvestment,
+  RealizedGainSnapshot,
   TickerSearchResult,
   PaginatedResponse,
   RecurrenceRule,
@@ -175,12 +177,14 @@ export const getInvestmentAccounts = () =>
   api.get<InvestmentAccountSummary[]>("/investments/accounts");
 export const getInvestmentHoldings = (accountId: string) =>
   api.get<InvestmentHolding[]>(`/investments/holdings/${accountId}`);
-export const createHolding = (data: { accountId: string; ticker: string; name: string; type?: string | null }) =>
+export const createHolding = (data: { accountId: string; ticker: string; name: string; type?: string | null; assetClass?: string | null }) =>
   api.post<InvestmentHolding>("/investments/holdings", data);
+export const patchHolding = (id: string, data: { assetClass?: string | null; name?: string }) =>
+  api.patch<InvestmentHolding>(`/investments/holdings/${id}`, data);
 export const deleteHolding = (id: string) => api.delete(`/investments/holdings/${id}`);
-export const createLot = (data: { holdingId: string; quantity: number; costPerShare: number; acquiredDate: string }) =>
+export const createLot = (data: { holdingId: string; quantity: number; costPerShare: number; acquiredDate?: string | null }) =>
   api.post<InvestmentLot>("/investments/lots", data);
-export const updateLot = (id: string, data: { quantity?: number; costPerShare?: number; acquiredDate?: string }) =>
+export const updateLot = (id: string, data: { quantity?: number; costPerShare?: number; acquiredDate?: string | null }) =>
   api.put<InvestmentLot>(`/investments/lots/${id}`, data);
 export const deleteLot = (id: string) => api.delete(`/investments/lots/${id}`);
 export const searchTickers = (q: string) =>
@@ -199,9 +203,79 @@ export const importInvestments = (
 export const getManualInvestments = (accountId: string) =>
   api.get<ManualInvestment[]>(`/investments/manual/${accountId}`);
 export const createManualInvestment = (data: {
-  accountId: string; name: string; totalCost?: number | null; marketValue: number;
+  accountId: string; name: string; assetClass?: string | null; totalCost?: number | null; marketValue: number;
 }) => api.post<ManualInvestment>("/investments/manual", data);
 export const updateManualInvestment = (id: string, data: {
-  name?: string; totalCost?: number | null; marketValue?: number;
+  name?: string; assetClass?: string | null; totalCost?: number | null; marketValue?: number;
 }) => api.put<ManualInvestment>(`/investments/manual/${id}`, data);
 export const deleteManualInvestment = (id: string) => api.delete(`/investments/manual/${id}`);
+
+export const getInvestmentActivity = (accountId: string) =>
+  api.get<InvestmentActivity[]>(`/investments/activity/${accountId}`);
+
+export interface SellPreviewLot {
+  lotId: string;
+  acquiredDate: string;
+  shares: number;
+  costPerShare: number;
+  termType: "SHORT" | "LONG";
+  proceeds: number;
+  costBasis: number;
+  gain: number;
+}
+
+export interface SellPreviewResult {
+  lotBreakdown: SellPreviewLot[];
+  grossProceeds: number;
+  fees: number;
+  netProceeds: number;
+  stShares: number;
+  ltShares: number;
+  stGain: number;
+  ltGain: number;
+  totalGain: number;
+}
+
+export interface SellPreviewRequest {
+  holdingId: string;
+  sharesToSell: number;
+  pricePerShare: number;
+  saleDate: string;
+  fees: number;
+  costBasisMethod: "FIFO" | "LIFO" | "MIN_TAX" | "MAX_GAIN";
+}
+
+export interface SellRequest extends SellPreviewRequest {
+  destinationAccountId: string;
+  notes?: string;
+}
+
+export interface SellResponse {
+  activity: InvestmentActivity;
+  income: Income;
+  holding: InvestmentHolding | null;
+}
+
+export const previewSell = (data: SellPreviewRequest) =>
+  api.post<SellPreviewResult>("/investments/sell/preview", data);
+
+export const executeSell = (data: SellRequest) =>
+  api.post<SellResponse>("/investments/sell", data);
+
+// ── Realized Gain Snapshots ───────────────────────────────────────────────
+export const getGainSnapshot = (accountId: string, year?: number) =>
+  api.get<RealizedGainSnapshot | null>(
+    `/investments/gain-snapshot/${accountId}${year != null ? `?year=${year}` : ""}`
+  );
+export const upsertGainSnapshot = (data: {
+  accountId: string;
+  year: number;
+  longTermGain?: number | null;
+  shortTermGain?: number | null;
+  longTermLoss?: number | null;
+  shortTermLoss?: number | null;
+  snapshotDate: string;
+  notes?: string | null;
+}) => api.put<RealizedGainSnapshot>("/investments/gain-snapshot", data);
+export const deleteGainSnapshot = (accountId: string, year: number) =>
+  api.delete(`/investments/gain-snapshot/${accountId}/${year}`);
