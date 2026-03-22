@@ -5,7 +5,7 @@ import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
-import { getAccounts, createAccount, updateAccount, deleteAccount } from "@/api";
+import { getAccounts, createAccount, updateAccount, deleteAccount, getInvestmentHoldings } from "@/api";
 import { formatCurrency } from "@/lib/utils";
 import type { Account } from "@/types";
 
@@ -98,6 +98,11 @@ export function Accounts() {
                   style={account.color ? { backgroundColor: account.color } : undefined}
                 />
                 <span className="font-medium text-sm">{account.name}</span>
+                {account.isManaged && (
+                  <span className="rounded-full bg-blue-600 text-white text-[10px] font-semibold px-1.5 py-0.5 uppercase tracking-wide">
+                    Managed
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-bold tabular-nums">{formatCurrency(account.balance)}</span>
@@ -222,13 +227,26 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isJoint, setIsJoint] = useState(false);
+  const [isManaged, setIsManaged] = useState(false);
+  const [accountType, setAccountType] = useState<Account["type"]>(account?.type ?? "CHECKING");
   const [selectedColor, setSelectedColor] = useState(account?.color ?? ACCOUNT_COLORS[0]);
+  // True when the account already has holdings with real lot dates — managed toggle is locked off
+  const [hasTrackedHoldings, setHasTrackedHoldings] = useState(false);
 
   useEffect(() => {
     if (open) {
       setIsJoint(account?.isJoint ?? false);
+      setIsManaged(account?.isManaged ?? false);
+      setAccountType(account?.type ?? "CHECKING");
       setSelectedColor(account?.color ?? ACCOUNT_COLORS[0]);
       setConfirmDelete(false);
+      setHasTrackedHoldings(false);
+      // For existing investment accounts, check whether any holdings have real lot dates
+      if (account?.type === "INVESTMENT") {
+        getInvestmentHoldings(account.id).then((holdings) => {
+          setHasTrackedHoldings(holdings.some((h) => !h.isManaged));
+        }).catch(() => setHasTrackedHoldings(false));
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -239,9 +257,10 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
     const form = new FormData(e.currentTarget);
     const data: Partial<Account> = {
       name: form.get("name") as string,
-      type: form.get("type") as Account["type"],
+      type: accountType,
       color: selectedColor,
       isJoint,
+      isManaged: accountType === "INVESTMENT" ? isManaged : false,
     };
     // Balance only editable when creating a new account
     if (!account) {
@@ -279,7 +298,12 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
           <select
             name="type"
             required
-            defaultValue={account?.type ?? "CHECKING"}
+            value={accountType}
+            onChange={(e) => {
+              const t = e.target.value as Account["type"];
+              setAccountType(t);
+              if (t !== "INVESTMENT") setIsManaged(false);
+            }}
             className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           >
             {Object.entries(accountTypeLabels).map(([value, label]) => (
@@ -335,6 +359,26 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
             Transactions from joint accounts are shared expenses/income
           </p>
         </div>
+
+        {accountType === "INVESTMENT" && (
+          <div className={`rounded-md border border-border p-3 ${hasTrackedHoldings ? "opacity-60" : ""}`}>
+            <label className={`flex items-center gap-2 ${hasTrackedHoldings ? "cursor-not-allowed" : "cursor-pointer"}`}>
+              <input
+                type="checkbox"
+                checked={isManaged}
+                disabled={hasTrackedHoldings}
+                onChange={(e) => setIsManaged(e.target.checked)}
+                className="h-4 w-4 rounded border-border disabled:cursor-not-allowed"
+              />
+              <span className="text-sm font-medium">Managed / robo-advisor account</span>
+            </label>
+            <p className="mt-1 ml-6 text-xs text-muted-foreground">
+              {hasTrackedHoldings
+                ? "Cannot enable — this account already has holdings with lot-level purchase dates."
+                : "Lot-level acquisition dates are unavailable. Enter total shares and total cost basis per holding — cost per share is calculated automatically."}
+            </p>
+          </div>
+        )}
 
         <div className="flex items-center justify-between pt-2">
           <div>

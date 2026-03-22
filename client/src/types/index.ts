@@ -6,6 +6,7 @@ export interface Account {
   currency: string;
   color: string | null;
   isJoint: boolean;
+  isManaged: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -78,6 +79,29 @@ export interface Expense {
   updatedAt: string;
 }
 
+export type IncomeSubtype = "REGULAR" | "DIVIDEND" | "CAPITAL_GAIN";
+export type InvestmentActivityType = "DIVIDEND" | "SALE" | "PURCHASE";
+
+export interface InvestmentActivity {
+  id: string;
+  accountId: string;
+  holdingId: string | null;
+  lotId: string | null;
+  ticker: string;
+  type: InvestmentActivityType;
+  date: string;
+  shares: number | null;
+  pricePerShare: number | null;
+  amount: number;
+  fees: number | null;
+  costBasis: number | null;
+  shortTermGain: number | null;
+  longTermGain: number | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Income {
   id: string;
   amount: string;
@@ -88,9 +112,13 @@ export interface Income {
   notes: string | null;
   accountId: string;
   transactionGroupId: string | null;
+  subtype: IncomeSubtype;
+  taxableAmount: string | null;
+  activityId: string | null;
   account: Account;
   tags: IncomeTag[];
   transactionGroup: TransactionGroup | null;
+  activity?: InvestmentActivity | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -198,7 +226,8 @@ export interface InvestmentLot {
   holdingId: string;
   quantity: string;
   costPerShare: string;
-  acquiredDate: string;
+  // Null for managed/robo-advisor holdings where acquisition date is unavailable
+  acquiredDate: string | null;
 }
 
 export interface InvestmentHolding {
@@ -207,6 +236,8 @@ export interface InvestmentHolding {
   ticker: string;
   name: string;
   type: string | null;
+  /** Optional grouping label e.g. "US Stocks", "Commodities" */
+  assetClass: string | null;
   currentPrice: number | null;
   priceDate: string | null;
   priceUpdatedAt: string | null;
@@ -219,7 +250,23 @@ export interface InvestmentHolding {
   totalGainPct: number | null;
   shortTermGain: number;
   longTermGain: number;
+  /** True when all lots have no acquiredDate (robo-advisor / managed account) */
+  isManaged: boolean;
   lotCount?: number;
+}
+
+export interface RealizedGainSnapshot {
+  id: string;
+  accountId: string;
+  year: number;
+  longTermGain: number | null;
+  shortTermGain: number | null;
+  longTermLoss: number | null;
+  shortTermLoss: number | null;
+  snapshotDate: string;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface InvestmentAccountSummary {
@@ -237,10 +284,28 @@ export interface InvestmentAccountSummary {
   totalGainPct: number;
 }
 
+export interface GrowthEvent {
+  type: "BUY" | "SELL";
+  ticker: string;
+  shares: number;
+  pricePerShare: number | null;
+  netAmount: number;
+}
+
+export interface GrowthPoint {
+  date: string;
+  marketValue: number;
+  costBasis: number;
+  unrealizedGain: number;
+  unrealizedGainPct: number;
+  events?: GrowthEvent[];
+}
+
 export interface ManualInvestment {
   id: string;
   accountId: string;
   name: string;
+  assetClass: string | null;
   totalCost: number | null;
   marketValue: number;
 }

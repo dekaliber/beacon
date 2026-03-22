@@ -11,6 +11,7 @@ const INCOME_INCLUDE = {
   category: true,
   tags: { include: { tag: true } },
   transactionGroup: true,
+  activity: true,
 } as const;
 
 const incomeSchema = z.object({
