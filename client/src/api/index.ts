@@ -19,6 +19,8 @@ import type {
   RealizedGainSnapshot,
   TickerSearchResult,
   PaginatedResponse,
+  PendingDividend,
+  DividendType,
   RecurrenceRule,
   RecurringHistoryMonth,
   Tag,
@@ -78,6 +80,10 @@ export const updateIncome = (id: string, data: Record<string, unknown>) => api.p
 export const deleteIncome = (id: string) => api.delete(`/income/${id}`);
 export const importIncome = (incomes: Record<string, unknown>[]) =>
   api.post<{ imported: number; errors: Array<{ row: number; message: string }> }>("/income/import", { incomes });
+export const bulkUpdateIncome = (ids: string[], patch: Record<string, unknown>) =>
+  api.patch<{ updated: number }>("/income/bulk", { ids, ...patch });
+export const bulkDeleteIncome = (ids: string[]) =>
+  api.delete<{ deleted: number }>("/income/bulk", { ids });
 
 // Tags
 export const getTags = () => api.get<Tag[]>("/tags");
@@ -192,9 +198,13 @@ export const deleteLot = (id: string, force = false) =>
   api.delete(`/investments/lots/${id}${force ? "?force=true" : ""}`);
 export const searchTickers = (q: string) =>
   api.get<TickerSearchResult[]>(`/investments/search?q=${encodeURIComponent(q)}`);
-export const refreshPrices = () => api.post<{ updated: number; tickers: string[] }>("/investments/prices/refresh", {});
-export const getTickerPrice = (ticker: string) =>
-  api.get<{ ticker: string; price: number; priceDate: string }>(`/investments/prices/${encodeURIComponent(ticker)}`);
+export const refreshPrices = (source: string) => api.post<{ updated: number; tickers: string[] }>("/investments/prices/refresh", { source });
+export const getTickerPrice = (ticker: string, date?: string) => {
+  const query = date ? `?date=${encodeURIComponent(date)}` : "";
+  return api.get<{ ticker: string; price: number; priceDate: string }>(
+    `/investments/prices/${encodeURIComponent(ticker)}${query}`,
+  );
+};
 export const importInvestments = (
   accountId: string,
   rows: Array<{ symbol: string; purchaseDate: string; price: number; quantity: number }>
@@ -215,6 +225,9 @@ export const deleteManualInvestment = (id: string) => api.delete(`/investments/m
 
 export const getInvestmentActivity = (accountId: string) =>
   api.get<InvestmentActivity[]>(`/investments/activity/${accountId}`);
+
+export const updateSaleActivity = (id: string, data: { pricePerShare: number; fees?: number }) =>
+  api.patch<InvestmentActivity>(`/investments/activity/${id}`, data);
 
 export interface SellPreviewLot {
   lotId: string;
@@ -291,3 +304,41 @@ export const upsertGainSnapshot = (data: {
 }) => api.put<RealizedGainSnapshot>("/investments/gain-snapshot", data);
 export const deleteGainSnapshot = (accountId: string, year: number) =>
   api.delete(`/investments/gain-snapshot/${accountId}/${year}`);
+
+// Pending Dividends
+export const getPendingDividends = (accountId: string) =>
+  api.get<PendingDividend[]>(`/pending-dividends/${accountId}`);
+export const confirmPendingDividend = (id: string, data: {
+  date: string;
+  perShareAmount: number;
+  shares: number;
+  totalAmount: number;
+  categoryId?: string | null;
+  dividendType?: DividendType | null;
+  notes?: string | null;
+  source?: string | null;
+}) => api.post<{ activity: InvestmentActivity; income: Income; pendingDividend: PendingDividend }>(
+  `/pending-dividends/${id}/confirm`,
+  data,
+);
+export const dismissPendingDividend = (id: string) =>
+  api.post<PendingDividend>(`/pending-dividends/${id}/dismiss`, {});
+
+export const confirmReinvestDividend = (id: string, data: {
+  exDate: string;
+  reinvestDate: string;
+  perShareAmount: number;
+  shares: number;
+  totalAmount: number;
+  reinvestPrice: number;
+  reinvestQuantity: number;
+  dividendType?: DividendType | null;
+  notes?: string | null;
+}) => api.post<{ dividendActivity: InvestmentActivity; purchaseActivity: InvestmentActivity; pendingDividend: PendingDividend }>(
+  `/pending-dividends/${id}/confirm-reinvest`,
+  data,
+);
+
+// Notifications
+export const getNotifications = () =>
+  api.get<import("../types").NotificationData>("/notifications");

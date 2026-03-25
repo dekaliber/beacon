@@ -7,81 +7,9 @@ import { Modal } from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
 import { getInvestmentAccounts, refreshPrices, updateAccount } from "@/api";
 import { formatCurrency } from "@/lib/utils";
+import { isPriceRefreshNeeded } from "@/lib/priceUtils";
+import { useNotifications } from "@/context/NotificationContext";
 import type { InvestmentAccountSummary } from "@/types";
-
-// ── Stale-price check ───────────────────────────────────────────────────────
-// Returns true if we should refresh prices:
-// prices are considered stale if the last fetch was before 5PM Pacific today
-// (or if we have tracked tickers but no price date at all).
-
-function isPriceRefreshNeeded(accounts: InvestmentAccountSummary[]): boolean {
-  const investmentAccounts = accounts.filter((a) => a.type === "INVESTMENT");
-  if (investmentAccounts.length === 0) return false;
-
-  const allHoldings = investmentAccounts.flatMap((a) => a.holdings);
-  if (allHoldings.length === 0) return false;
-
-  const now = new Date();
-
-  // Compute 5PM Pacific in local UTC offset
-  // We use Intl to get today's date string in Pacific time and build a cutoff
-  const todayPacific = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
-
-  const [month, day, year] = todayPacific.split("/");
-  // 5PM Pacific → UTC offset depends on DST. Use a fixed approach: parse 17:00 in LA
-  const cutoffStr = `${year}-${month}-${day}T17:00:00`;
-  const cutoffPacific = new Date(
-    new Date(cutoffStr).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })
-  );
-  // Adjust cutoff to UTC
-  const cutoffUTC = new Date(cutoffStr + " America/Los_Angeles");
-
-  // Use a simpler approximation: 5PM Pacific = 1AM UTC (standard) / 0AM UTC (DST)
-  // Instead, just check if any holding's priceUpdatedAt is before today's 5PM Pacific wall-clock
-  const fivePmPacificUTC = new Date(
-    new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles" })
-      .format(now)
-      .split("/")
-      .map((n, i) => n.padStart(2, "0"))
-      .join("-") // crude, build date string
-  );
-  void cutoffUTC;
-  void cutoffPacific;
-  void fivePmPacificUTC;
-
-  // Pragmatic approach: check if any holding's priceUpdatedAt is from before today
-  // OR if it's after 5PM Pacific (current local time >= 5PM PT) and price is from before that
-  for (const holding of allHoldings) {
-    if (!holding.priceUpdatedAt) return true;
-
-    const lastUpdated = new Date(holding.priceUpdatedAt);
-    const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
-
-    // If price was last updated before today at all, refresh
-    if (lastUpdated < todayStart) return true;
-
-    // If it's past 5PM PT now, check if the price was fetched before 5PM PT today
-    // Approximate: Pacific is UTC-8 (standard) / UTC-7 (DST)
-    // 5PM PT = 01:00 UTC next day (standard) or 00:00 UTC next day (DST)
-    // Simple check: is the current hour (UTC) >= 01:00 and lastUpdated's UTC hour < 01:00?
-    const nowUTCHour = now.getUTCHours();
-    const lastUpdatedUTCHour = lastUpdated.getUTCHours();
-    const lastUpdatedDate = lastUpdated.toISOString().split("T")[0];
-    const todayUTC = now.toISOString().split("T")[0];
-
-    // If last update was today UTC, and it's now past 1AM UTC (= 5PM PT standard), check if
-    // the update happened before 1AM UTC
-    if (lastUpdatedDate === todayUTC && nowUTCHour >= 1 && lastUpdatedUTCHour < 1) return true;
-  }
-
-  return false;
-}
 
 // ── Gain badge ──────────────────────────────────────────────────────────────
 
@@ -161,16 +89,19 @@ export function Investments() {
   const { data: accounts, refetch } = useApi(() => getInvestmentAccounts(), []);
   const refreshedRef = useRef(false);
   const [editingBalance, setEditingBalance] = useState<InvestmentAccountSummary | null>(null);
+  const { notifications } = useNotifications();
+  const pendingDividendAccountIds = new Set(
+    notifications?.pendingDividends.map((g) => g.accountId) ?? []
+  );
 
   useEffect(() => {
     if (!accounts || refreshedRef.current) return;
-    if (isPriceRefreshNeeded(accounts)) {
+    const holdings = accounts.filter((a) => a.type === "INVESTMENT").flatMap((a) => a.holdings);
+    if (isPriceRefreshNeeded(holdings)) {
       refreshedRef.current = true;
-      refreshPrices()
+      refreshPrices("Investments")
         .then(() => refetch())
-        .catch(() => {
-          // Non-fatal: stale prices still shown
-        });
+        .catch(() => { /* server logs the error */ });
     }
   }, [accounts, refetch]);
 
@@ -195,10 +126,13 @@ export function Investments() {
   const renderAccountRow = (account: InvestmentAccountSummary) => {
     const isBanking = account.type === "CHECKING" || account.type === "SAVINGS";
     return (
-      <button
+      <div
         key={account.id}
+        role="button"
+        tabIndex={0}
         onClick={() => navigate(`/investments/${account.id}`)}
-        className="w-full text-left"
+        onKeyDown={(e) => e.key === "Enter" && navigate(`/investments/${account.id}`)}
+        className="w-full text-left cursor-pointer"
       >
         <Card className="px-4 py-3 hover:shadow-md transition-shadow cursor-pointer">
           <div className="flex items-center gap-3">
@@ -216,7 +150,14 @@ export function Investments() {
 
             {/* Name + meta */}
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm truncate">{account.name}</p>
+              <div className="flex items-center gap-2 min-w-0">
+                <p className="font-medium text-sm truncate">{account.name}</p>
+                {!isBanking && pendingDividendAccountIds.has(account.id) && (
+                  <span className="shrink-0 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 whitespace-nowrap">
+                    Pending dividends
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground">
                 {isBanking
                   ? account.type === "CHECKING" ? "Checking · Cash" : "Savings · Cash"
@@ -246,7 +187,7 @@ export function Investments() {
             )}
           </div>
         </Card>
-      </button>
+      </div>
     );
   };
 

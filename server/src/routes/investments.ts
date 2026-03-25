@@ -117,40 +117,130 @@ async function fetchYahooHistory(
   }
 }
 
-// ── Helper: returns the most recent weekday (UTC) ───────────────────────────
+// ── Helper: fetch closing price for a specific date from Yahoo Finance ───────
+// Looks back up to 7 calendar days to handle weekends and market holidays.
+// Prefers adjClose (split/dividend-adjusted); falls back to unadjusted close.
 
+async function fetchYahooClosingPrice(ticker: string, date: string): Promise<number | null> {
+  try {
+    // Use end-of-day UTC on the target date so the trading session is fully included,
+    // and look back 7 days to handle weekends / holiday closures.
+    const targetEnd = new Date(date + "T23:59:59Z");
+    const rangeStart = new Date(targetEnd.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const period1 = Math.floor(rangeStart.getTime() / 1000);
+    const period2 = Math.floor(targetEnd.getTime() / 1000);
+
+    const url =
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}` +
+      `?interval=1d&period1=${period1}&period2=${period2}`;
+
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+
+    const data = await res.json() as any;
+    const result = data?.chart?.result?.[0];
+    if (!result) return null;
+
+    // Prefer adjclose (accounts for splits); fall back to regular close
+    const adjCloses: (number | null)[] = result?.indicators?.adjclose?.[0]?.adjclose ?? [];
+    const closes: (number | null)[] = result?.indicators?.quote?.[0]?.close ?? [];
+
+    for (let i = adjCloses.length - 1; i >= 0; i--) {
+      if (adjCloses[i] != null) return adjCloses[i]!;
+    }
+    for (let i = closes.length - 1; i >= 0; i--) {
+      if (closes[i] != null) return closes[i]!;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Helpers: trading-day calculations (Eastern time) ────────────────────────
+
+// Returns the most recent Monday–Friday in Eastern time, with no regard for
+// whether prices are available yet. Used for gap-fill staleness checks.
 function lastWeekday(): Date {
-  const d = new Date();
-  const day = d.getUTCDay();
-  const offset = day === 0 ? 2 : day === 6 ? 1 : 0;
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - offset));
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const get = (t: string) => parseInt(parts.find((p) => p.type === t)!.value);
+  const d = new Date(Date.UTC(get("year"), get("month") - 1, get("day")));
+  const dow = d.getUTCDay();
+  const skip = dow === 0 ? 2 : dow === 6 ? 1 : 0;
+  return new Date(d.getTime() - skip * 86400000);
+}
+
+// Returns the most recent trading day whose prices are considered finalized.
+// Mutual fund NAVs and EOD prices settle by 8 PM ET, so before that cutoff
+// we use the previous trading day's close, not today's.
+//
+// Examples (Eastern time):
+//   Mon 3/23  6:30 PM → prices not yet settled → last finalized day = Fri 3/20
+//   Mon 3/23  9:00 PM → prices settled         → last finalized day = Mon 3/23
+//   Tue 3/24  3:30 AM → prices not yet settled → last finalized day = Mon 3/23
+function effectiveLastTradingDay(): Date {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hour12: false,
+  }).formatToParts(now);
+  const get = (t: string) => parseInt(parts.find((p) => p.type === t)!.value);
+  // Before 8 PM ET the current day's prices haven't settled — step back one day
+  const etHour = get("hour");
+  const d = new Date(Date.UTC(get("year"), get("month") - 1, etHour < 20 ? get("day") - 1 : get("day")));
+  const dow = d.getUTCDay();
+  const skip = dow === 0 ? 2 : dow === 6 ? 1 : 0;
+  return new Date(d.getTime() - skip * 86400000);
 }
 
 // ── Helper: lazy gap-fill for TickerPriceHistory ────────────────────────────
-// Checks whether price history for the given tickers is current through the
-// most recent trading day; if not, fetches the missing range from Yahoo and
-// inserts new rows. Safe to call on every growth-chart request.
+// Fills any missing closing-price history up to (but NOT including) today's ET
+// date. Today's data point is always owned by refreshPrices, which writes to
+// both TickerPrice and TickerPriceHistory once closing prices have settled
+// (after 8 PM ET). This ensures we never accidentally store a mid-day quote
+// as a historical closing price.
 
 async function fillPriceGaps(tickers: string[]): Promise<number> {
   if (tickers.length === 0) return 0;
 
-  const latest = await prisma.tickerPriceHistory.findFirst({
+  // Only fill up to the last finalized trading day (8 PM ET cutoff). Before
+  // that cutoff effectiveLastTradingDay() returns the previous trading day,
+  // so we naturally never write a row for a day whose prices haven't settled.
+  const targetDay = effectiveLastTradingDay();
+
+  // Cap the Yahoo history fetch to the day after targetDay so we never receive
+  // a partial/mid-day candle for an in-progress session.
+  const fetchToDate = new Date(targetDay.getTime() + 24 * 60 * 60 * 1000);
+
+  // Check the latest history date per ticker individually — a single cross-ticker
+  // max would cause tickers with stale history to be silently skipped if any other
+  // ticker is already current (e.g. a mutual fund whose NAV lags by a day).
+  const latestRows = await prisma.tickerPriceHistory.findMany({
     where: { ticker: { in: tickers } },
     orderBy: { date: "desc" },
-    select: { date: true },
+    distinct: ["ticker"],
+    select: { ticker: true, date: true },
   });
-
-  const lastTradingDay = lastWeekday();
-  if (latest && latest.date >= lastTradingDay) return 0; // already current
-
-  // fromDate = day after latest known row (or 90 days ago if table is empty)
-  const fromDate = latest
-    ? new Date(latest.date.getTime() + 24 * 60 * 60 * 1000)
-    : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const latestByTicker = new Map(latestRows.map((r) => [r.ticker, r.date]));
 
   let totalInserted = 0;
   for (const ticker of tickers) {
-    const points = await fetchYahooHistory(ticker, fromDate);
+    const latest = latestByTicker.get(ticker);
+    if (latest && latest >= targetDay) continue; // already current through the finalized day
+
+    const fromDate = latest
+      ? new Date(latest.getTime() + 24 * 60 * 60 * 1000)
+      : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
+    const points = await fetchYahooHistory(ticker, fromDate, fetchToDate);
     if (points.length === 0) continue;
     const result = await prisma.tickerPriceHistory.createMany({
       data: points.map((p) => ({ ticker, date: p.date, closePrice: p.closePrice })),
@@ -473,6 +563,14 @@ investmentRoutes.post("/lots", async (req, res) => {
     if (!holding) return res.status(404).json({ error: { message: "Holding not found" } });
 
     const lot = await prisma.$transaction(async (tx) => {
+      // For managed lots (no acquiredDate), replace any existing null-date lots
+      // so the position is updated rather than accumulated.
+      if (body.acquiredDate == null) {
+        await tx.investmentLot.deleteMany({
+          where: { holdingId: body.holdingId, acquiredDate: null },
+        });
+      }
+
       const newLot = await tx.investmentLot.create({
         data: { ...body, acquiredDate: body.acquiredDate ?? null },
       });
@@ -518,11 +616,83 @@ const updateLotSchema = z.object({
 
 investmentRoutes.put("/lots/:id", async (req, res) => {
   try {
+    const lotId = req.params.id;
     const body = updateLotSchema.parse(req.body);
-    const lot = await prisma.investmentLot.update({
-      where: { id: req.params.id },
-      data: body,
+
+    // Fetch the current lot and its holding so we can sync the activity
+    const existingLot = await prisma.investmentLot.findUnique({
+      where: { id: lotId },
+      select: {
+        holdingId: true,
+        acquiredDate: true,
+        quantity: true,
+        costPerShare: true,
+        holding: { select: { accountId: true, ticker: true } },
+      },
     });
+    if (!existingLot) return res.status(404).json({ error: { message: "Lot not found" } });
+
+    // Find any linked PURCHASE activity (created when the lot was originally added)
+    const existingActivity = await prisma.investmentActivity.findFirst({
+      where: { lotId, type: "PURCHASE" },
+      select: { id: true },
+    });
+
+    // Effective acquiredDate after the update
+    const newAcquiredDate =
+      body.acquiredDate !== undefined ? body.acquiredDate : existingLot.acquiredDate;
+
+    const lot = await prisma.$transaction(async (tx) => {
+      // 1. Update the lot itself
+      const updated = await tx.investmentLot.update({
+        where: { id: lotId },
+        data: body,
+      });
+
+      // Resolved numeric values after the update
+      const quantity = parseFloat(updated.quantity.toString());
+      const costPerShare = parseFloat(updated.costPerShare.toString());
+      const amount = Math.round(quantity * costPerShare * 100) / 100;
+
+      // 2. Sync the linked PURCHASE activity
+      if (existingActivity) {
+        if (newAcquiredDate == null) {
+          // Date was cleared — the activity no longer makes sense, remove it
+          await tx.investmentActivity.delete({ where: { id: existingActivity.id } });
+        } else {
+          // Update to match the new lot values
+          await tx.investmentActivity.update({
+            where: { id: existingActivity.id },
+            data: {
+              date: newAcquiredDate,
+              shares: quantity,
+              pricePerShare: costPerShare,
+              amount,
+            },
+          });
+        }
+      } else if (newAcquiredDate != null) {
+        // Lot now has a date but never had an activity (e.g. date added after the fact)
+        await tx.investmentActivity.create({
+          data: {
+            accountId: existingLot.holding.accountId,
+            holdingId: existingLot.holdingId,
+            lotId,
+            ticker: existingLot.holding.ticker,
+            type: "PURCHASE",
+            date: newAcquiredDate,
+            shares: quantity,
+            pricePerShare: costPerShare,
+            amount,
+            updatedAt: new Date(),
+          },
+        });
+      }
+      // else: no activity and still no date — nothing to do
+
+      return updated;
+    });
+
     res.json({
       ...lot,
       quantity: lot.quantity.toString(),
@@ -657,16 +827,25 @@ investmentRoutes.post("/holdings/backfill-meta", async (_req, res) => {
 });
 
 // ── POST /api/investments/prices/refresh ──────────────────────────────────
-// Fetch latest EOD prices for all tracked tickers and upsert TickerPrice records
+// Fetch latest prices for all tracked tickers and upsert into both TickerPrice
+// and TickerPriceHistory. TickerPrice is always kept current (live quote during
+// the day, closing price after 8 PM ET). TickerPriceHistory is also written
+// here so that the chart's most-recent data point always matches the header
+// value — both come from the same Yahoo quote fetch rather than two different
+// endpoints that can disagree slightly.
 
-investmentRoutes.post("/prices/refresh", async (_req, res) => {
+investmentRoutes.post("/prices/refresh", async (req, res) => {
   try {
+    const source: string = req.body?.source ?? "unknown";
+
     const holdings = await prisma.investmentHolding.findMany({
       select: { ticker: true },
     });
 
     const tickers = [...new Set(holdings.map((h) => h.ticker))];
     if (tickers.length === 0) return res.json({ updated: 0, tickers: [] });
+
+    console.log(`[price-refresh] triggered from ${source} — ${tickers.length} ticker(s)`);
 
     let updated = 0;
     const results: string[] = [];
@@ -675,30 +854,40 @@ investmentRoutes.post("/prices/refresh", async (_req, res) => {
     for (const ticker of tickers) {
       const priceData = await fetchYahooPrice(ticker);
       if (priceData) {
+        const dateStr = priceData.priceDate.toISOString().slice(0, 10);
+        console.log(`[price-refresh] ${ticker}: $${priceData.price} (${dateStr})`);
+
+        // Normalize the price date to UTC midnight for TickerPriceHistory
+        const raw = priceData.priceDate;
+        const historyDate = new Date(Date.UTC(raw.getUTCFullYear(), raw.getUTCMonth(), raw.getUTCDate()));
+
         await prisma.tickerPrice.upsert({
           where: { ticker },
-          create: {
-            ticker,
-            price: priceData.price,
-            priceDate: priceData.priceDate,
-            updatedAt: new Date(),
-          },
-          update: {
-            price: priceData.price,
-            priceDate: priceData.priceDate,
-            updatedAt: new Date(),
-          },
+          create: { ticker, price: priceData.price, priceDate: priceData.priceDate },
+          update: { price: priceData.price, priceDate: priceData.priceDate },
         });
+
+        // Mirror into TickerPriceHistory so the chart and header always agree.
+        // Using upsert (not skipDuplicates) so a stale mid-day row gets corrected.
+        await prisma.tickerPriceHistory.upsert({
+          where: { ticker_date: { ticker, date: historyDate } },
+          create: { ticker, date: historyDate, closePrice: priceData.price },
+          update: { closePrice: priceData.price },
+        });
+
         updated++;
         results.push(ticker);
+      } else {
+        console.warn(`[price-refresh] ${ticker}: no data returned from Yahoo Finance`);
       }
       // Small delay between requests
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
 
+    console.log(`[price-refresh] done — ${updated}/${tickers.length} updated`);
     res.json({ updated, tickers: results });
   } catch (err) {
-    console.error(err);
+    console.error("[price-refresh] ERROR:", err);
     res.status(500).json({ error: { message: "Failed to refresh prices" } });
   }
 });
@@ -827,9 +1016,11 @@ investmentRoutes.post("/import", async (req, res) => {
 });
 
 // ── POST /api/investments/prices/backfill-history ─────────────────────────
-// One-time (re-runnable) backfill: fetches YTD adjusted-close price history
-// for every tracked ticker and upserts rows into TickerPriceHistory.
-// Safe to call multiple times; skipDuplicates prevents double-inserts.
+// Re-runnable backfill: fetches YTD adjusted-close price history for every
+// tracked ticker and upserts rows into TickerPriceHistory. Uses upsert (not
+// skipDuplicates) so re-running this corrects any stale or mid-day rows that
+// were accidentally written earlier. Only fills up to effectiveLastTradingDay
+// so we never store a partial/mid-day candle for an in-progress session.
 // NOTE: must be declared before /prices/:ticker to avoid route conflict
 
 investmentRoutes.post("/prices/backfill-history", async (_req, res) => {
@@ -837,32 +1028,43 @@ investmentRoutes.post("/prices/backfill-history", async (_req, res) => {
     const year = new Date().getUTCFullYear();
     const fromDate = new Date(Date.UTC(year, 0, 1)); // Jan 1 of current year (UTC)
 
+    // Cap at the last finalized trading day — same rule as fillPriceGaps
+    const targetDay = effectiveLastTradingDay();
+    const toDate = new Date(targetDay.getTime() + 24 * 60 * 60 * 1000);
+
     const holdings = await prisma.investmentHolding.findMany({
       select: { ticker: true },
       distinct: ["ticker"],
     });
     const tickers = holdings.map((h) => h.ticker);
-    if (tickers.length === 0) return res.json({ inserted: 0, tickers: [] });
+    if (tickers.length === 0) return res.json({ upserted: 0, tickers: [] });
 
-    const summary: Array<{ ticker: string; inserted: number }> = [];
-    let totalInserted = 0;
+    const summary: Array<{ ticker: string; upserted: number }> = [];
+    let totalUpserted = 0;
 
     for (const ticker of tickers) {
-      const points = await fetchYahooHistory(ticker, fromDate);
+      const points = await fetchYahooHistory(ticker, fromDate, toDate);
       if (points.length === 0) {
-        summary.push({ ticker, inserted: 0 });
+        summary.push({ ticker, upserted: 0 });
         continue;
       }
-      const result = await prisma.tickerPriceHistory.createMany({
-        data: points.map((p) => ({ ticker, date: p.date, closePrice: p.closePrice })),
-        skipDuplicates: true,
-      });
-      totalInserted += result.count;
-      summary.push({ ticker, inserted: result.count });
+      // Upsert each point individually so existing rows are overwritten with
+      // the correct adjusted-close rather than silently skipped.
+      let count = 0;
+      for (const p of points) {
+        await prisma.tickerPriceHistory.upsert({
+          where: { ticker_date: { ticker, date: p.date } },
+          create: { ticker, date: p.date, closePrice: p.closePrice },
+          update: { closePrice: p.closePrice },
+        });
+        count++;
+      }
+      totalUpserted += count;
+      summary.push({ ticker, upserted: count });
       await new Promise((r) => setTimeout(r, 200));
     }
 
-    res.json({ inserted: totalInserted, tickers: summary });
+    res.json({ upserted: totalUpserted, tickers: summary });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: { message: "Failed to backfill price history" } });
@@ -891,10 +1093,26 @@ investmentRoutes.get("/prices/status", async (_req, res) => {
 });
 
 // ── GET /api/investments/prices/:ticker ───────────────────────────────────
-// Returns the current price for a single ticker, fetching live if not cached today.
+// Returns the current (or historical) price for a single ticker.
+// Optional ?date=YYYY-MM-DD returns the closing price for that date via Tiingo.
+// Without ?date, returns the live/cached price from Yahoo Finance.
 
 investmentRoutes.get("/prices/:ticker", async (req, res) => {
   const ticker = req.params.ticker.toUpperCase();
+  const dateParam = (req.query.date as string | undefined)?.trim();
+
+  // ── Historical price lookup (Yahoo Finance) ───────────────────────────────
+  if (dateParam) {
+    const price = await fetchYahooClosingPrice(ticker, dateParam);
+    if (price == null) {
+      return res.status(404).json({
+        error: { message: `No price data found for ${ticker} on or before ${dateParam}` },
+      });
+    }
+    return res.json({ ticker, price, priceDate: dateParam });
+  }
+
+  // ── Current price (Yahoo Finance, cached) ─────────────────────────────────
   try {
     // Return cached price if updated within the last hour
     const existing = await prisma.tickerPrice.findUnique({ where: { ticker } });
@@ -1029,6 +1247,15 @@ investmentRoutes.get("/growth/:accountId", async (req, res) => {
       });
     }
 
+    // The effective last trading day is the most recent day whose prices have
+    // settled (i.e. it's past 8 PM ET). Before that cutoff, today's prices
+    // aren't considered final, so we stop the chart at the previous trading day.
+    // TickerPriceHistory is always consistent with this: fillPriceGaps only
+    // writes up to effectiveLastTradingDay, and refreshPrices upserts today's
+    // row into TickerPriceHistory at the same time as TickerPrice, so the chart
+    // and header are always reading from the same source of truth.
+    const effectiveDate = effectiveLastTradingDay();
+
     // Build per-ticker current lot data
     type LotData = { acquiredDate: Date; quantity: number; costPerShare: number };
     const lotsByTicker = new Map<string, LotData[]>();
@@ -1043,10 +1270,13 @@ investmentRoutes.get("/growth/:accountId", async (req, res) => {
       );
     }
 
-    // Union of all dates across all tickers, sorted ascending
+    // Union of all dates across all tickers, capped at the effective last trading
+    // day so we never render data points for days whose prices haven't settled yet.
     const dateSet = new Set<string>();
     for (const rows of pricesByTicker.values()) {
-      for (const r of rows) dateSet.add(r.date.toISOString());
+      for (const r of rows) {
+        if (r.date <= effectiveDate) dateSet.add(r.date.toISOString());
+      }
     }
     const sortedDates = [...dateSet].sort();
 
@@ -1329,6 +1559,91 @@ function serializeActivity(a: any) {
     updatedAt: a.updatedAt,
   };
 }
+
+// PATCH /api/investments/activity/:id — correct pricePerShare and/or fees on a SALE activity.
+// All other fields (shares, date, cost basis) are locked because the original lot breakdown is
+// no longer available after the sale commits, making an exact re-computation impossible.
+const patchSaleActivitySchema = z.object({
+  pricePerShare: z.number().positive(),
+  fees: z.number().nonnegative().optional(),
+});
+
+investmentRoutes.patch("/activity/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = patchSaleActivitySchema.parse(req.body);
+
+    const activity = await prisma.investmentActivity.findUnique({
+      where: { id },
+      include: { incomes: true },
+    });
+    if (!activity) return res.status(404).json({ error: { message: "Activity not found" } });
+    if (activity.type !== "SALE")
+      return res.status(400).json({ error: { message: "Only SALE activities can be edited" } });
+    if (activity.shares == null)
+      return res.status(400).json({ error: { message: "Activity is missing share count" } });
+
+    const shares = parseFloat(activity.shares.toString());
+    const costBasis = activity.costBasis != null ? parseFloat(activity.costBasis.toString()) : 0;
+    const oldStGain = activity.shortTermGain != null ? parseFloat(activity.shortTermGain.toString()) : 0;
+    const oldLtGain = activity.longTermGain != null ? parseFloat(activity.longTermGain.toString()) : 0;
+
+    const newFees = body.fees ?? 0;
+    const newGrossProceeds = Math.round(shares * body.pricePerShare * 100) / 100;
+    const newNetProceeds = Math.round((newGrossProceeds - newFees) * 100) / 100;
+    const newTotalGain = Math.round((newNetProceeds - costBasis) * 100) / 100;
+
+    // Split newTotalGain into ST/LT using the same proportion as the original sale.
+    // The per-lot share breakdown is not stored, so this proportional approach is the
+    // best approximation available. For small price/fee corrections it is effectively exact.
+    const oldTotalGain = oldStGain + oldLtGain;
+    let newStGain: number;
+    let newLtGain: number;
+    if (Math.abs(oldTotalGain) < 0.005) {
+      // Original was break-even — assign entirely to short-term as a safe default
+      newStGain = newTotalGain;
+      newLtGain = 0;
+    } else {
+      newStGain = Math.round((newTotalGain * (oldStGain / oldTotalGain)) * 100) / 100;
+      newLtGain = Math.round((newTotalGain - newStGain) * 100) / 100;
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const act = await tx.investmentActivity.update({
+        where: { id },
+        data: {
+          pricePerShare: body.pricePerShare,
+          amount: newGrossProceeds,
+          fees: newFees > 0 ? newFees : null,
+          shortTermGain: newStGain,
+          longTermGain: newLtGain,
+          updatedAt: new Date(),
+        },
+      });
+
+      // Keep linked Income records in sync (typically exactly one per SALE)
+      for (const income of activity.incomes) {
+        await tx.income.update({
+          where: { id: income.id },
+          data: {
+            amount: newNetProceeds,
+            taxableAmount: newTotalGain,
+            updatedAt: new Date(),
+          },
+        });
+      }
+
+      return act;
+    });
+
+    res.json(serializeActivity(updated));
+  } catch (err) {
+    if (err instanceof z.ZodError)
+      return res.status(400).json({ error: { message: err.errors[0]?.message } });
+    console.error(err);
+    res.status(500).json({ error: { message: "Failed to update activity" } });
+  }
+});
 
 investmentRoutes.get("/activity/:accountId", async (req, res) => {
   try {

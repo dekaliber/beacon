@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/Layout";
+import { NotificationProvider } from "@/context/NotificationContext";
 import { Dashboard } from "@/pages/Dashboard";
 import { Expenses } from "@/pages/Expenses";
 import { Budgets } from "@/pages/Budgets";
@@ -15,6 +16,7 @@ import { InvestmentAccount } from "@/pages/InvestmentAccount";
 function App() {
   return (
     <BrowserRouter>
+      <NotificationProvider>
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
@@ -30,6 +32,7 @@ function App() {
           <Route path="/investments/:accountId" element={<InvestmentAccount />} />
         </Route>
       </Routes>
+      </NotificationProvider>
     </BrowserRouter>
   );
 }

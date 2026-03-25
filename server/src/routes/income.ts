@@ -173,6 +173,41 @@ incomeRoutes.delete("/:id", async (req, res) => {
   res.status(204).send();
 });
 
+// Bulk edit income (source, category)
+const bulkEditIncomeSchema = z.object({
+  ids: z.array(z.string()).min(1),
+  source: z.string().min(1).optional(),
+  categoryId: z.string().nullable().optional(),
+});
+
+incomeRoutes.patch("/bulk", async (req, res) => {
+  const parsed = bulkEditIncomeSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const { ids, source, categoryId } = parsed.data;
+
+  const scalarUpdate: Record<string, unknown> = {};
+  if (source !== undefined) scalarUpdate.source = source;
+  if (categoryId !== undefined) scalarUpdate.categoryId = categoryId;
+
+  if (Object.keys(scalarUpdate).length === 0) {
+    return res.status(400).json({ error: "No fields to update" });
+  }
+
+  await prisma.income.updateMany({ where: { id: { in: ids } }, data: scalarUpdate });
+  res.json({ updated: ids.length });
+});
+
+// Bulk delete income
+incomeRoutes.delete("/bulk", async (req, res) => {
+  const parsed = z.object({ ids: z.array(z.string()).min(1) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const { ids } = parsed.data;
+  await prisma.income.deleteMany({ where: { id: { in: ids } } });
+  res.json({ deleted: ids.length });
+});
+
 // Bulk import income
 const importRowSchema = z.object({
   amount: z.number().positive("Amount must be positive"),
