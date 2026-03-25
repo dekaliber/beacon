@@ -1,4 +1,4 @@
-import { NavLink, Link, Outlet } from "react-router-dom";
+import { NavLink, Link, Outlet, useNavigate } from "react-router-dom";
 import { useRef, useState, useEffect } from "react";
 import {
   Receipt,
@@ -11,8 +11,11 @@ import {
   AlertCircle,
   Settings,
   LineChart,
+  Bell,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useNotifications } from "@/context/NotificationContext";
 
 const navItems = [
   { to: "/expenses", icon: Receipt, label: "Expenses" },
@@ -28,6 +31,94 @@ const configItems = [
   { to: "/categories", icon: Tags, label: "Categories" },
   { to: "/tags", icon: Tag, label: "Tags" },
 ];
+
+function NotificationBell() {
+  const { notifications } = useNotifications();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+
+  const totalCount = notifications?.totalCount ?? 0;
+  const pendingDividends = notifications?.pendingDividends ?? [];
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleItemClick = (accountId: string) => {
+    setOpen(false);
+    navigate(`/investments/${accountId}?tab=activity`);
+  };
+
+  return (
+    <div className="relative ml-2" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "relative flex items-center justify-center rounded-md p-2 transition-colors",
+          open
+            ? "bg-primary text-primary-foreground"
+            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        )}
+        aria-label="Notifications"
+      >
+        <Bell className="h-4 w-4" />
+        {totalCount > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white leading-none">
+            {totalCount > 99 ? "99+" : totalCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-72 rounded-md border border-border bg-background shadow-md z-50">
+          <div className="px-3 py-2 border-b border-border">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Notifications
+            </p>
+          </div>
+
+          {totalCount === 0 ? (
+            <div className="px-3 py-4 text-center">
+              <p className="text-sm text-muted-foreground">No pending notifications</p>
+            </div>
+          ) : (
+            <div>
+              {pendingDividends.length > 0 && (
+                <div>
+                  <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                    Pending Dividends
+                  </p>
+                  {pendingDividends.map((group) => (
+                    <button
+                      key={group.accountId}
+                      onClick={() => handleItemClick(group.accountId)}
+                      className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
+                    >
+                      <div>
+                        <p className="font-medium">{group.accountName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {group.count} pending {group.count === 1 ? "dividend" : "dividends"} to review
+                        </p>
+                      </div>
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-2" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Layout() {
   const [configOpen, setConfigOpen] = useState(false);
@@ -70,6 +161,9 @@ export function Layout() {
               </NavLink>
             ))}
           </nav>
+
+          {/* Notification bell */}
+          <NotificationBell />
 
           {/* Config gear menu */}
           <div className="relative ml-2" ref={configRef}>

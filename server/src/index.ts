@@ -11,6 +11,8 @@ import { incomeRoutes } from "./routes/income.js";
 import { tagRoutes } from "./routes/tags.js";
 import { transactionGroupRoutes } from "./routes/transactionGroups.js";
 import { investmentRoutes } from "./routes/investments.js";
+import { pendingDividendRoutes } from "./routes/pendingDividends.js";
+import { notificationRoutes } from "./routes/notifications.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -29,6 +31,8 @@ app.use("/api/income", incomeRoutes);
 app.use("/api/tags", tagRoutes);
 app.use("/api/transaction-groups", transactionGroupRoutes);
 app.use("/api/investments", investmentRoutes);
+app.use("/api/pending-dividends", pendingDividendRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {

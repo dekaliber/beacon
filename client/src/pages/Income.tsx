@@ -4,6 +4,7 @@ import {
   ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, ChevronDown, Search,
   Upload, FileText, Check, CheckCircle2, AlertCircle,
 } from "lucide-react";
+import { BulkEditBar } from "@/components/BulkEditBar";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
@@ -11,7 +12,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { MultiSelectDropdown } from "@/components/MultiSelectDropdown";
 import type { MultiSelectOption, MultiSelectGroup } from "@/components/MultiSelectDropdown";
 import { useApi } from "@/hooks/useApi";
-import { getIncome, getAccounts, getFlatCategories, createIncome, updateIncome, deleteIncome, importIncome } from "@/api";
+import { getIncome, getAccounts, getFlatCategories, createIncome, updateIncome, deleteIncome, importIncome, bulkUpdateIncome, bulkDeleteIncome } from "@/api";
 import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/utils";
 import type { Account, Category, Income } from "@/types";
 
@@ -469,6 +470,7 @@ export function IncomePage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState(""); // raw input value
   const [appliedSearch, setAppliedSearch] = useState(""); // committed on Enter, drives API
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [staged, setStaged] = useState<IncomeFilterState>(loadIncomeFilters);
   const [applied, setApplied] = useState<IncomeFilterState>(loadIncomeFilters);
@@ -651,6 +653,14 @@ export function IncomePage() {
     await updateIncome(id, data);
     refetchAll();
   }, [refetchAll]);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
 
   const toggleSort = (field: SortField) => {
     setSort((prev) => {
@@ -907,6 +917,21 @@ export function IncomePage() {
               <table className="w-full table-fixed text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="w-[44px] pb-3 pr-2 text-center">
+                      <input
+                        type="checkbox"
+                        ref={(el) => { if (el) { el.indeterminate = incomes.some((i) => selectedIds.has(i.id)) && !incomes.every((i) => selectedIds.has(i.id)); } }}
+                        checked={incomes.length > 0 && incomes.every((i) => selectedIds.has(i.id))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds((prev) => new Set([...prev, ...incomes.map((i) => i.id)]));
+                          } else {
+                            setSelectedIds((prev) => { const next = new Set(prev); incomes.forEach((i) => next.delete(i.id)); return next; });
+                          }
+                        }}
+                        className="h-4 w-4 rounded border-border"
+                      />
+                    </th>
                     <th className="w-[70px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
                     <th className="pb-3 pr-3 font-medium">Source</th>
                     <th className="w-[130px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("category")}>Category <SortIcon field="category" /></th>
@@ -918,7 +943,15 @@ export function IncomePage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {incomes.map((income) => (
-                    <tr key={income.id} className="hover:bg-muted/50">
+                    <tr key={income.id} className={`hover:bg-muted/50 ${selectedIds.has(income.id) ? "bg-primary/5" : ""}`}>
+                      <td className="w-[44px] py-2 pr-2 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(income.id)}
+                          onChange={() => toggleSelect(income.id)}
+                          className="h-4 w-4 rounded border-border"
+                        />
+                      </td>
                       <td className="w-[70px] py-2 pr-3">
                         <EditableCell value={income.date} type="date" onSave={(v) => handleInlineUpdate(income.id, "date", v)} />
                       </td>
@@ -926,10 +959,10 @@ export function IncomePage() {
                         <div className="flex items-center gap-1.5">
                           <EditableCell value={income.source ?? ""} onSave={(v) => handleInlineUpdate(income.id, "source", v)} />
                           {income.subtype === "DIVIDEND" && (
-                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">Div</span>
+                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-teal-100 text-teal-700">Div</span>
                           )}
                           {income.subtype === "CAPITAL_GAIN" && (
-                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Cap Gain</span>
+                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700">Cap Gain</span>
                           )}
                         </div>
                       </td>
@@ -975,20 +1008,26 @@ export function IncomePage() {
 
             <div className="divide-y divide-border md:hidden">
               {incomes.map((income) => (
-                <div key={income.id} className="flex items-center justify-between py-3">
+                <div key={income.id} className={`flex items-center gap-2 py-3 ${selectedIds.has(income.id) ? "bg-primary/5" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(income.id)}
+                    onChange={() => toggleSelect(income.id)}
+                    className="h-4 w-4 shrink-0 rounded border-border"
+                  />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 truncate">
                       <p className="truncate font-medium">{income.category?.name ?? "—"}{income.source ? ` · ${income.source}` : ""}</p>
                       {income.subtype === "DIVIDEND" && (
-                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">Div</span>
+                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-teal-100 text-teal-700">Div</span>
                       )}
                       {income.subtype === "CAPITAL_GAIN" && (
-                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Cap Gain</span>
+                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700">Cap Gain</span>
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground">{income.account.name} &middot; {formatDate(income.date)}</p>
                   </div>
-                  <div className="ml-4 flex items-center gap-2">
+                  <div className="ml-2 flex items-center gap-2">
                     <span className="font-semibold text-green-600">+{formatCurrency(income.amount)}</span>
                     <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1 hover:bg-accent"><Pencil className="h-4 w-4 text-muted-foreground" /></button>
                   </div>
@@ -1043,6 +1082,21 @@ export function IncomePage() {
           <span>Back to Top</span>
         </button>
       )}
+
+      {selectedIds.size > 0 && (
+        <BulkEditBar
+          ids={[...selectedIds]}
+          categories={categories}
+          textFieldLabel="Edit Source"
+          textFieldKey="source"
+          onApply={(patch) => bulkUpdateIncome([...selectedIds], patch)}
+          onBulkDelete={() => bulkDeleteIncome([...selectedIds])}
+          onClear={() => setSelectedIds(new Set())}
+          onSuccess={() => { setSelectedIds(new Set()); refetchAll(); }}
+          deleteDisabled={allIncomes.some((i) => selectedIds.has(i.id) && i.activityId != null)}
+          deleteDisabledTitle="Deselect investment-linked transactions (Div / Cap Gain) to enable delete"
+        />
+      )}
     </div>
   );
 }
@@ -1090,7 +1144,10 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
     setSaving(false);
   };
 
+  const isActivityLinked = income?.activityId != null;
+
   const handleDeleteClick = async () => {
+    if (isActivityLinked) return;
     if (!confirmDelete) { setConfirmDelete(true); return; }
     if (!income) return;
     setDeleting(true);
@@ -1166,7 +1223,14 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
         <div className="flex items-center justify-between pt-2">
           <div>
             {income && (
-              <button type="button" tabIndex={-1} onClick={handleDeleteClick} disabled={deleting} className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors">
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={handleDeleteClick}
+                disabled={deleting}
+                title={isActivityLinked ? "This transaction was generated by an investment activity and cannot be manually deleted" : undefined}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${isActivityLinked ? "opacity-40 cursor-not-allowed text-destructive" : "text-destructive hover:bg-destructive/10"}`}
+              >
                 <Trash2 className="h-4 w-4" />
                 {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}
               </button>

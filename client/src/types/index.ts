@@ -79,7 +79,9 @@ export interface Expense {
   updatedAt: string;
 }
 
-export type IncomeSubtype = "REGULAR" | "DIVIDEND" | "CAPITAL_GAIN";
+export type IncomeSubtype = "REGULAR" | "DIVIDEND" | "CAPITAL_GAIN" | "RETURN_OF_CAPITAL";
+export type DividendType = "QUALIFIED" | "ORDINARY" | "TAX_EXEMPT" | "RETURN_OF_CAPITAL";
+export type PendingDividendStatus = "PENDING" | "CONFIRMED" | "DISMISSED";
 export type InvestmentActivityType = "DIVIDEND" | "SALE" | "PURCHASE";
 
 export interface InvestmentActivity {
@@ -113,6 +115,7 @@ export interface Income {
   accountId: string;
   transactionGroupId: string | null;
   subtype: IncomeSubtype;
+  dividendType: DividendType | null;
   taxableAmount: string | null;
   activityId: string | null;
   account: Account;
@@ -301,6 +304,24 @@ export interface GrowthPoint {
   events?: GrowthEvent[];
 }
 
+export interface PendingDividend {
+  id: string;
+  holdingId: string;
+  accountId: string;
+  ticker: string;
+  /** Ex-date in ISO date string format */
+  exDate: string;
+  perShareAmount: string;
+  sharesAtExDate: string;
+  estimatedTotal: string;
+  status: PendingDividendStatus;
+  dismissedAt: string | null;
+  confirmedAt: string | null;
+  activityId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ManualInvestment {
   id: string;
   accountId: string;
@@ -315,6 +336,19 @@ export interface TickerSearchResult {
   name: string;
   type: string; // "Equity", "ETF", "Mutual Fund"
   exchange: string;
+}
+
+// ── Notification types ────────────────────────────────────────────────────────
+
+export interface NotificationAccountGroup {
+  accountId: string;
+  accountName: string;
+  count: number;
+}
+
+export interface NotificationData {
+  pendingDividends: NotificationAccountGroup[];
+  totalCount: number;
 }
 
 // Legacy — kept for backwards compatibility during transition

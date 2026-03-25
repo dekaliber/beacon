@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -30,6 +30,8 @@ import {
   AlertCircle,
   CheckCircle2,
   Tag,
+  Clock,
+  ChevronRight,
 } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -58,11 +60,20 @@ import {
   upsertGainSnapshot,
   deleteGainSnapshot,
   getInvestmentGrowth,
+  updateSaleActivity,
+  refreshPrices,
+  getPendingDividends,
+  confirmPendingDividend,
+  confirmReinvestDividend,
+  dismissPendingDividend,
+  getFlatCategories,
 } from "@/api";
 import type { SellPreviewResult, SellRequest } from "@/api";
 import { ApiError } from "@/api/client";
 import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/utils";
-import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity, GrowthPoint, GrowthEvent } from "@/types";
+import { useNotifications } from "@/context/NotificationContext";
+import { isPriceRefreshNeeded } from "@/lib/priceUtils";
+import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity, GrowthPoint, GrowthEvent, PendingDividend, DividendType, Category } from "@/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -855,6 +866,8 @@ function AddLotRow({
   onCancel,
   managed = false,
   initialAssetClass = null,
+  initialQty = null,
+  initialCost = null,
 }: {
   holdingId: string;
   defaultDate: string | null;
@@ -862,9 +875,11 @@ function AddLotRow({
   onCancel: () => void;
   managed?: boolean;
   initialAssetClass?: string | null;
+  initialQty?: number | null;
+  initialCost?: number | null;
 }) {
-  const [qty, setQty] = useState("");
-  const [cps, setCps] = useState("");
+  const [qty, setQty] = useState(initialQty != null ? String(initialQty) : "");
+  const [cps, setCps] = useState(initialCost != null ? initialCost.toFixed(2) : "");
   const [date, setDate] = useState(defaultDate ?? localToday());
   const [assetClass, setAssetClass] = useState(initialAssetClass ?? "");
   const [saving, setSaving] = useState(false);
@@ -1074,7 +1089,7 @@ function HoldingRow({
           {holding.currentPrice != null ? formatCurrency(holding.currentPrice) : <span className="text-muted-foreground">—</span>}
         </td>
         <td className="py-3 px-2 text-sm tabular-nums">
-          {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+          {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 6 })}
         </td>
         <td className="py-3 px-2 text-sm tabular-nums">{formatCurrency(holding.totalCost)}</td>
         <td className="py-3 px-2 text-sm tabular-nums font-medium">
@@ -1136,7 +1151,7 @@ function HoldingRow({
                   <div>
                     <p className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Total Shares</p>
                     <p className="font-medium tabular-nums">
-                      {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                      {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 6 })}
                     </p>
                   </div>
                   <div>
@@ -1172,6 +1187,8 @@ function HoldingRow({
                       onCancel={() => setAddingLot(false)}
                       managed
                       initialAssetClass={holding.assetClass}
+                      initialQty={holding.totalQuantity > 0 ? holding.totalQuantity : null}
+                      initialCost={holding.totalCost > 0 ? holding.totalCost : null}
                     />
                   </div>
                 )}
@@ -1976,7 +1993,7 @@ function StickyHoldingRow({
                       {holding.currentPrice != null ? formatCurrency(holding.currentPrice) : <span className="text-muted-foreground">—</span>}
                     </td>
                     <td className="py-3 px-2 text-sm tabular-nums">
-                      {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                      {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 6 })}
                     </td>
                     <td className="py-3 px-2 text-sm tabular-nums">{formatCurrency(holding.totalCost)}</td>
                     <td className="py-3 px-2 text-sm tabular-nums font-medium">
@@ -2136,7 +2153,7 @@ function SellModal({
   };
 
   const gainColor = (v: number) =>
-    v >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400";
+    v >= 0 ? "text-green-600" : "text-red-500 dark:text-red-400";
 
   return (
     <Modal
@@ -2383,7 +2400,7 @@ function SellModal({
                     <td className="py-2 px-3">
                       <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
                         lot.termType === "LONG"
-                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                          ? "bg-green-100 text-green-700"
                           : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
                       }`}>
                         {lot.termType === "LONG" ? "Long-term" : "Short-term"}
@@ -2456,11 +2473,615 @@ function SellModal({
 
 // ── Activity tab ───────────────────────────────────────────────────────────────
 
+// ── Edit Sale Activity Modal ──────────────────────────────────────────────────
+
+function EditSaleActivityModal({
+  activity,
+  onClose,
+  onSaved,
+}: {
+  activity: InvestmentActivity;
+  onClose: () => void;
+  onSaved: (updated: InvestmentActivity) => void;
+}) {
+  const [price, setPrice] = useState(activity.pricePerShare?.toString() ?? "");
+  const [fees, setFees] = useState(activity.fees?.toString() ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const priceNum = parseFloat(price) || 0;
+  const feesNum = parseFloat(fees) || 0;
+  const grossProceeds = priceNum * (activity.shares ?? 0);
+  const netProceeds = grossProceeds - feesNum;
+  const gain = netProceeds - (activity.costBasis ?? 0);
+
+  const handleSave = async () => {
+    const p = parseFloat(price);
+    const f = parseFloat(fees) || 0;
+    if (!p || p <= 0) { setError("Price per share must be a positive number."); return; }
+    if (f < 0) { setError("Fees cannot be negative."); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await updateSaleActivity(activity.id, { pricePerShare: p, ...(f > 0 ? { fees: f } : {}) });
+      onSaved(updated);
+    } catch (e: any) {
+      setError(e.message ?? "Failed to save.");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Edit Sale">
+      {/* Explanation */}
+      <div className="flex gap-2.5 rounded-md bg-muted/60 border border-border p-3 mb-5">
+        <AlertCircle className="shrink-0 mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Only <strong className="text-foreground">price per share</strong> and <strong className="text-foreground">fees</strong> can be corrected here.
+          Shares, date, and cost basis are locked because the original per-lot breakdown is not
+          retained after a sale commits — editing those fields would produce incorrect gain figures.
+        </p>
+      </div>
+
+      {/* Read-only context */}
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        {[
+          { label: "Date", value: formatDate(activity.date) },
+          { label: "Symbol", value: activity.ticker, mono: true },
+          {
+            label: "Shares",
+            value: activity.shares != null
+              ? activity.shares.toLocaleString(undefined, { maximumFractionDigits: 6 })
+              : "—",
+          },
+        ].map(({ label, value, mono }) => (
+          <div key={label}>
+            <p className="text-xs text-muted-foreground mb-1">{label}</p>
+            <div className={`rounded border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground select-none ${mono ? "font-mono font-bold" : ""}`}>
+              {value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Editable fields */}
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div>
+          <label className="text-xs font-medium">Price / Share</label>
+          <input
+            type="number"
+            step="0.0001"
+            min="0.0001"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium">Fees</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={fees}
+            onChange={(e) => setFees(e.target.value)}
+            placeholder="0.00"
+            className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+      </div>
+
+      {/* Live recomputed preview */}
+      {priceNum > 0 && (
+        <div className="rounded-md border border-border bg-muted/20 px-4 py-3 mb-4 grid grid-cols-3 gap-2 text-xs">
+          <div>
+            <p className="text-muted-foreground mb-0.5">Gross</p>
+            <p className="font-medium tabular-nums">{formatCurrency(grossProceeds)}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground mb-0.5">Net</p>
+            <p className="font-medium tabular-nums">{formatCurrency(netProceeds)}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground mb-0.5">Gain / Loss</p>
+            <p className={`font-medium tabular-nums ${gain >= 0 ? "text-green-600" : "text-red-500 dark:text-red-400"}`}>
+              {gain >= 0 ? "+" : ""}{formatCurrency(gain)}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
+
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
+        <Button onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Review Dividend Modal ─────────────────────────────────────────────────────
+
+function ReviewDividendModal({
+  dividend,
+  categories,
+  onClose,
+  onConfirmed,
+  onDismissed,
+}: {
+  dividend: PendingDividend;
+  categories: Category[];
+  onClose: () => void;
+  onConfirmed: () => void;
+  onDismissed: () => void;
+}) {
+  // Normalize ex-date — Prisma serializes @db.Date as a full ISO timestamp, so
+  // we strip the time portion before parsing to avoid NaN from "15T00:00:00.000Z".
+  const exDateStr = useMemo(() => dividend.exDate.split("T")[0], [dividend.exDate]);
+
+  // Default income payment date: ex-date + 4 business days
+  const defaultPayableDate = useMemo(() => {
+    const [y, m, d] = exDateStr.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() + 4);
+    const yy = dt.getFullYear();
+    const mm = String(dt.getMonth() + 1).padStart(2, "0");
+    const dd = String(dt.getDate()).padStart(2, "0");
+    return `${yy}-${mm}-${dd}`;
+  }, [exDateStr]);
+
+  // ── Common fields ──────────────────────────────────────────────────────────
+  const [perShareAmount, setPerShareAmount] = useState(parseFloat(dividend.perShareAmount).toFixed(6));
+  const [shares, setShares] = useState(parseFloat(dividend.sharesAtExDate).toString());
+  const [totalAmount, setTotalAmount] = useState(
+    (parseFloat(dividend.perShareAmount) * parseFloat(dividend.sharesAtExDate)).toFixed(2)
+  );
+  const [dividendType, setDividendType] = useState<DividendType | "">("");
+  const [notes, setNotes] = useState("");
+
+  // ── Disposition ───────────────────────────────────────────────────────────
+  const [disposition, setDisposition] = useState<"income" | "reinvest">("income");
+
+  // ── Income-path fields ────────────────────────────────────────────────────
+  const [paymentDate, setPaymentDate] = useState(defaultPayableDate);
+  const [categoryId, setCategoryId] = useState(
+    () => categories.find(c => c.name.toLowerCase() === "dividend")?.id ?? ""
+  );
+
+  // ── Reinvest-path fields ──────────────────────────────────────────────────
+  const [reinvestDate, setReinvestDate] = useState(exDateStr);
+  const [reinvestPrice, setReinvestPrice] = useState("");
+  const [reinvestQuantity, setReinvestQuantity] = useState("");
+  const [reinvestPriceFetching, setReinvestPriceFetching] = useState(false);
+
+  // Keep a ref to totalAmount so the price-fetch effect always reads the
+  // current value without being a dep that re-triggers the fetch.
+  const totalAmountRef = useRef(totalAmount);
+  useEffect(() => { totalAmountRef.current = totalAmount; }, [totalAmount]);
+
+  // ── Auto-fetch closing price when switching to reinvest or date changes ───
+  useEffect(() => {
+    if (disposition !== "reinvest") return;
+    let cancelled = false;
+    // Clear fields immediately so the user sees the inputs update for the new date
+    setReinvestPrice("");
+    setReinvestQuantity("");
+    setReinvestPriceFetching(true);
+    getTickerPrice(dividend.ticker, reinvestDate)
+      .then((result) => {
+        if (cancelled) return;
+        const p = result.price.toFixed(4);
+        setReinvestPrice(p);
+        const total = parseFloat(totalAmountRef.current);
+        const price = parseFloat(p);
+        if (!isNaN(total) && total > 0 && !isNaN(price) && price > 0) {
+          setReinvestQuantity((total / price).toFixed(6));
+        }
+      })
+      .catch(() => { /* price stays blank; user can enter manually */ })
+      .finally(() => { if (!cancelled) setReinvestPriceFetching(false); });
+    return () => { cancelled = true; };
+  }, [disposition, reinvestDate, dividend.ticker]);
+
+  // ── Status ────────────────────────────────────────────────────────────────
+  const [saving, setSaving] = useState(false);
+  const [dismissing, setDismissing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // ── Field change handlers ─────────────────────────────────────────────────
+  const handlePerShareChange = (val: string) => {
+    setPerShareAmount(val);
+    const psa = parseFloat(val);
+    const sh = parseFloat(shares);
+    if (!isNaN(psa) && psa > 0 && !isNaN(sh) && sh > 0) {
+      setTotalAmount((psa * sh).toFixed(2));
+    }
+  };
+
+  const handleSharesChange = (val: string) => {
+    setShares(val);
+    const sh = parseFloat(val);
+    const psa = parseFloat(perShareAmount);
+    if (!isNaN(sh) && sh > 0 && !isNaN(psa) && psa > 0) {
+      setTotalAmount((psa * sh).toFixed(2));
+    }
+  };
+
+  const handleReinvestPriceChange = (val: string) => {
+    setReinvestPrice(val);
+    const p = parseFloat(val);
+    const total = parseFloat(totalAmount);
+    if (!isNaN(p) && p > 0 && !isNaN(total) && total > 0) {
+      setReinvestQuantity((total / p).toFixed(6));
+    }
+  };
+
+  // Discrepancy between price × quantity and total (for reinvest path)
+  const reinvestDiscrepancy = useMemo(() => {
+    const p = parseFloat(reinvestPrice);
+    const q = parseFloat(reinvestQuantity);
+    const total = parseFloat(totalAmount);
+    if (isNaN(p) || isNaN(q) || isNaN(total)) return 0;
+    return Math.abs(p * q - total);
+  }, [reinvestPrice, reinvestQuantity, totalAmount]);
+
+  // ── Confirm handlers ──────────────────────────────────────────────────────
+  const handleConfirm = async () => {
+    const psa = parseFloat(perShareAmount);
+    const sh = parseFloat(shares);
+    const total = parseFloat(totalAmount);
+    setError(null);
+
+    if (isNaN(psa) || psa <= 0 || isNaN(sh) || sh <= 0 || isNaN(total) || total <= 0) {
+      setError("Please fill in all required fields with valid values.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (disposition === "income") {
+        if (!paymentDate) { setError("Payment date is required."); setSaving(false); return; }
+        await confirmPendingDividend(dividend.id, {
+          date: paymentDate,
+          perShareAmount: psa,
+          shares: sh,
+          totalAmount: total,
+          categoryId: categoryId || null,
+          dividendType: (dividendType as DividendType) || null,
+          notes: notes || null,
+          source: dividend.ticker,
+        });
+      } else {
+        const rPrice = parseFloat(reinvestPrice);
+        const rQty = parseFloat(reinvestQuantity);
+        if (!reinvestDate || isNaN(rPrice) || rPrice <= 0 || isNaN(rQty) || rQty <= 0) {
+          setError("Please fill in reinvest date, price, and quantity.");
+          setSaving(false);
+          return;
+        }
+        await confirmReinvestDividend(dividend.id, {
+          exDate: exDateStr,
+          reinvestDate,
+          perShareAmount: psa,
+          shares: sh,
+          totalAmount: total,
+          reinvestPrice: rPrice,
+          reinvestQuantity: rQty,
+          dividendType: (dividendType as DividendType) || null,
+          notes: notes || null,
+        });
+      }
+      onConfirmed();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to confirm dividend");
+      setSaving(false);
+    }
+  };
+
+  const handleDismiss = async () => {
+    setDismissing(true);
+    setError(null);
+    try {
+      await dismissPendingDividend(dividend.id);
+      onDismissed();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to dismiss dividend");
+      setDismissing(false);
+    }
+  };
+
+  const inputCls = "w-full border border-border rounded-md px-3 py-2 text-sm bg-background";
+
+  return (
+    <Modal open onClose={onClose} title="Review Pending Dividend">
+      <div className="space-y-4">
+        {/* Summary row — ticker left, ex-date right */}
+        <div className="flex items-center justify-between p-3 bg-muted/40 rounded-lg">
+          <p className="text-sm font-semibold">{dividend.ticker}</p>
+          <p className="text-sm text-muted-foreground">Ex-date: {formatDate(dividend.exDate)}</p>
+        </div>
+
+        {/* Verification warning */}
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+          <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <p>Please verify all amounts against your actual payment record before confirming.</p>
+        </div>
+
+        {/* Per-share amount + shares at ex-date */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Per Share Amount</label>
+            <input
+              type="number"
+              step="0.000001"
+              min="0"
+              value={perShareAmount}
+              onChange={(e) => handlePerShareChange(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Shares at Ex-Date</label>
+            <input
+              type="number"
+              step="0.000001"
+              min="0"
+              value={shares}
+              onChange={(e) => handleSharesChange(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+        </div>
+
+        {/* Total amount */}
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">Total Amount</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={totalAmount}
+            onChange={(e) => setTotalAmount(e.target.value)}
+            className={inputCls}
+          />
+        </div>
+
+        {/* Disposition toggle */}
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-2">Disposition</label>
+          <div className="flex gap-2">
+            {(["income", "reinvest"] as const).map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDisposition(d)}
+                className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                  disposition === d
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-background text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {d === "income" ? "Received as income" : "Reinvested (DRIP)"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Income path fields ──────────────────────────────────────────── */}
+        {disposition === "income" && (
+          <>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Payment Date</label>
+              <input
+                type="date"
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                Category <span className="font-normal opacity-60">(optional)</span>
+              </label>
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className={inputCls}
+              >
+                <option value="">No category</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
+
+        {/* ── Reinvest path fields ────────────────────────────────────────── */}
+        {disposition === "reinvest" && (
+          <>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Reinvest Date</label>
+              <input
+                type="date"
+                value={reinvestDate}
+                onChange={(e) => setReinvestDate(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  Reinvest Price / Share
+                  {reinvestPriceFetching && (
+                    <span className="ml-1 font-normal opacity-60">fetching…</span>
+                  )}
+                </label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  value={reinvestPrice}
+                  onChange={(e) => handleReinvestPriceChange(e.target.value)}
+                  placeholder="0.0000"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Shares Reinvested</label>
+                <input
+                  type="number"
+                  step="0.000001"
+                  min="0"
+                  value={reinvestQuantity}
+                  onChange={(e) => setReinvestQuantity(e.target.value)}
+                  placeholder="0.000000"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+            {reinvestDiscrepancy > 0.05 && (
+              <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <p>
+                  Price × shares ({formatCurrency(parseFloat(reinvestPrice) * parseFloat(reinvestQuantity))}) differs
+                  from the total amount ({formatCurrency(parseFloat(totalAmount))}) by{" "}
+                  {formatCurrency(reinvestDiscrepancy)}. Adjust values as needed.
+                </p>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Dividend type — applies to both paths */}
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">
+            Dividend Type <span className="font-normal opacity-60">(optional)</span>
+          </label>
+          <select
+            value={dividendType}
+            onChange={(e) => setDividendType(e.target.value as DividendType | "")}
+            className={inputCls}
+          >
+            <option value="">Not specified</option>
+            <option value="QUALIFIED">Qualified</option>
+            <option value="ORDINARY">Ordinary</option>
+            <option value="TAX_EXEMPT">Tax Exempt</option>
+            <option value="RETURN_OF_CAPITAL">Return of Capital</option>
+          </select>
+        </div>
+
+        {/* Notes — applies to both paths */}
+        <div>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">
+            Notes <span className="font-normal opacity-60">(optional)</span>
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            placeholder="e.g. Q1 dividend"
+            className={`${inputCls} resize-none`}
+          />
+        </div>
+
+        {error && <p className="text-sm text-red-500">{error}</p>}
+
+        <div className="flex justify-between">
+          <Button
+            variant="ghost"
+            onClick={handleDismiss}
+            disabled={saving || dismissing}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            {dismissing ? "Dismissing…" : "Dismiss"}
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onClose} disabled={saving || dismissing}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirm} disabled={saving || dismissing}>
+              {saving
+                ? "Confirming…"
+                : disposition === "income"
+                ? "Confirm Dividend"
+                : "Confirm Reinvestment"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Activity Tab ──────────────────────────────────────────────────────────────
+
 function ActivityTab({ accountId }: { accountId: string }) {
-  const { data: activities, loading } = useApi(
+  const { data: activities, loading: activitiesLoading, refetch: refetchActivities } = useApi(
     () => getInvestmentActivity(accountId),
     [accountId]
   );
+  const { data: pendingDividends, loading: dividendsLoading, refetch: refetchDividends } = useApi(
+    () => getPendingDividends(accountId),
+    [accountId]
+  );
+  const { data: allCategories } = useApi(() => getFlatCategories("INCOME"), []);
+  const { refetch: refetchNotifications } = useNotifications();
+
+  const [editingActivity, setEditingActivity] = useState<InvestmentActivity | null>(null);
+  const [reviewingDividend, setReviewingDividend] = useState<PendingDividend | null>(null);
+
+  // Filter state — empty Set means "no filter / show all"
+  const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
+  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
+
+  const toggleTicker = useCallback((ticker: string) => {
+    setSelectedTickers(prev => {
+      const next = new Set(prev);
+      next.has(ticker) ? next.delete(ticker) : next.add(ticker);
+      return next;
+    });
+  }, []);
+
+  const toggleType = useCallback((type: string) => {
+    setSelectedTypes(prev => {
+      const next = new Set(prev);
+      next.has(type) ? next.delete(type) : next.add(type);
+      return next;
+    });
+  }, []);
+
+  const clearFilters = useCallback(() => {
+    setSelectedTickers(new Set());
+    setSelectedTypes(new Set());
+  }, []);
+
+  const hasActiveFilters = selectedTickers.size > 0 || selectedTypes.size > 0;
+
+  // Unique sorted tickers present in the activity list
+  const uniqueTickers = useMemo(
+    () => [...new Set(activities?.map(a => a.ticker) ?? [])].sort(),
+    [activities]
+  );
+
+  // Types that actually appear in the data (skip showing a type button if no rows exist)
+  const presentTypes = useMemo(
+    () => new Set(activities?.map(a => a.type) ?? []),
+    [activities]
+  );
+
+  const filteredActivities = useMemo(() => {
+    if (!activities) return [];
+    return activities.filter(a => {
+      const tickerMatch = selectedTickers.size === 0 || selectedTickers.has(a.ticker);
+      const typeMatch = selectedTypes.size === 0 || selectedTypes.has(a.type);
+      return tickerMatch && typeMatch;
+    });
+  }, [activities, selectedTickers, selectedTypes]);
+
+  const loading = activitiesLoading || dividendsLoading;
+  const hasPending = pendingDividends && pendingDividends.length > 0;
 
   if (loading) {
     return (
@@ -2477,7 +3098,7 @@ function ActivityTab({ accountId }: { accountId: string }) {
     );
   }
 
-  if (!activities || activities.length === 0) {
+  if (!hasPending && (!activities || activities.length === 0)) {
     return (
       <Card className="p-8 text-center">
         <p className="text-sm font-medium text-muted-foreground">No activity yet</p>
@@ -2489,91 +3110,266 @@ function ActivityTab({ accountId }: { accountId: string }) {
   }
 
   return (
-    <Card className="overflow-hidden">
-      <div className="px-4 py-3 border-b border-border">
-        <h3 className="font-semibold text-sm">Activity</h3>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm" style={{ tableLayout: "fixed", minWidth: "860px" }}>
-          <thead>
-            <tr className="text-[11px] text-muted-foreground uppercase tracking-wide bg-muted/30 border-b border-border">
-              <th style={{ width: "110px" }} className="py-2 pl-4 pr-2 text-left font-medium">Date</th>
-              <th style={{ width: "90px" }} className="py-2 px-2 text-left font-medium">Type</th>
-              <th style={{ width: "80px" }} className="py-2 px-2 text-left font-medium">Symbol</th>
-              <th style={{ width: "110px" }} className="py-2 px-2 text-right font-medium">Shares</th>
-              <th style={{ width: "110px" }} className="py-2 px-2 text-right font-medium">Price/Share</th>
-              <th style={{ width: "120px" }} className="py-2 px-2 text-right font-medium">Gross</th>
-              <th style={{ width: "90px" }} className="py-2 px-2 text-right font-medium">Fees</th>
-              <th style={{ width: "120px" }} className="py-2 px-2 text-right font-medium">Net</th>
-              <th className="py-2 px-2 text-right font-medium">Gain / Loss</th>
-              <th style={{ width: "120px" }} className="py-2 pl-2 pr-4 text-left font-medium">Notes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {activities.map((a) => {
-              const fees = a.fees ?? 0;
-              const net = a.amount - fees;
-              const gain = (a.shortTermGain ?? 0) + (a.longTermGain ?? 0);
-              const isGainPositive = gain >= 0;
-              const isPurchase = a.type === "PURCHASE";
-              const isSale = a.type === "SALE";
-
-              const badgeClass = isSale
-                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                : isPurchase
-                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                : "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400";
-              const badgeLabel = isSale ? "Sale" : isPurchase ? "Purchase" : "Dividend";
-
-              return (
-                <tr key={a.id} className="border-b border-border hover:bg-muted/20">
-                  <td className="py-3 pl-4 pr-2 tabular-nums">{formatDate(a.date)}</td>
-                  <td className="py-3 px-2">
-                    <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${badgeClass}`}>
-                      {badgeLabel}
+    <>
+      {/* Pending Dividends card */}
+      {hasPending && (
+        <Card className="overflow-hidden mb-4">
+          <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+            <Clock className="h-4 w-4 text-amber-500" />
+            <h3 className="font-semibold text-sm">Pending Dividends</h3>
+            <span className="ml-1 inline-flex items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5">
+              {pendingDividends.length}
+            </span>
+          </div>
+          <div className="divide-y divide-border">
+            {pendingDividends.map((pd) => (
+              <div key={pd.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-xs">{pd.ticker}</span>
+                    <span className="text-xs text-muted-foreground">Ex-date: {formatDate(pd.exDate)}</span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5">
+                    <span className="text-xs text-muted-foreground">
+                      ${parseFloat(pd.perShareAmount).toFixed(6)}/share
+                      {" × "}
+                      {parseFloat(pd.sharesAtExDate).toLocaleString(undefined, { maximumFractionDigits: 4 })} shares
                     </span>
-                  </td>
-                  <td className="py-3 px-2 font-mono font-bold text-xs">{a.ticker}</td>
-                  <td className="py-3 px-2 text-right tabular-nums">
-                    {a.shares != null
-                      ? a.shares.toLocaleString(undefined, { maximumFractionDigits: 6 })
-                      : "—"}
-                  </td>
-                  <td className="py-3 px-2 text-right tabular-nums">
-                    {a.pricePerShare != null ? formatCurrency(a.pricePerShare) : "—"}
-                  </td>
-                  {/* Gross / total cost */}
-                  <td className="py-3 px-2 text-right tabular-nums">{formatCurrency(a.amount)}</td>
-                  {/* Fees — not applicable for purchases */}
-                  <td className="py-3 px-2 text-right tabular-nums text-muted-foreground">
-                    {!isPurchase && fees > 0 ? `(${formatCurrency(fees)})` : "—"}
-                  </td>
-                  {/* Net proceeds — show for sales; show cost for purchases */}
-                  <td className="py-3 px-2 text-right tabular-nums font-medium">
-                    {isPurchase ? formatCurrency(a.amount) : formatCurrency(net)}
-                  </td>
-                  {/* Gain / loss — only for sales */}
-                  <td className={`py-3 px-2 text-right tabular-nums font-medium ${
-                    isSale
-                      ? isGainPositive
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-red-500 dark:text-red-400"
-                      : "text-muted-foreground"
-                  }`}>
-                    {isSale
-                      ? `${isGainPositive ? "+" : ""}${formatCurrency(gain)}`
-                      : "—"}
-                  </td>
-                  <td className="py-3 pl-2 pr-4 text-muted-foreground truncate">
-                    {a.notes ?? ""}
-                  </td>
+                    <span className="text-xs font-medium">
+                      ≈ {formatCurrency(parseFloat(pd.estimatedTotal))}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs h-7 px-2 text-muted-foreground"
+                    onClick={async () => {
+                      try {
+                        await dismissPendingDividend(pd.id);
+                        refetchDividends();
+                        refetchNotifications();
+                      } catch {
+                        // silently ignore
+                      }
+                    }}
+                  >
+                    Dismiss
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="text-xs h-7 px-3 flex items-center gap-1"
+                    onClick={() => setReviewingDividend(pd)}
+                  >
+                    Review
+                    <ChevronRight className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Activity table */}
+      {activities && activities.length > 0 && (
+        <Card className="overflow-hidden">
+          {/* Header + filters */}
+          <div className="px-4 pt-3 pb-3 border-b border-border space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm">Activity</h3>
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="text-xs text-muted-foreground hover:text-foreground underline"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+
+            {/* Filters: Symbol left, Type right — side-by-side when space allows, stacked on small screens */}
+            <div className="flex flex-wrap items-start gap-x-8 gap-y-2">
+              {/* Holding filter — only shown when multiple tickers are present */}
+              {uniqueTickers.length > 1 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide shrink-0 pr-1">Symbol</span>
+                  {uniqueTickers.map((ticker) => {
+                    const active = selectedTickers.has(ticker);
+                    return (
+                      <button
+                        key={ticker}
+                        onClick={() => toggleTicker(ticker)}
+                        className={`rounded-full border px-2.5 py-0.5 text-xs font-mono font-medium transition-colors ${
+                          active
+                            ? "bg-muted text-foreground border-foreground/30"
+                            : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                        }`}
+                      >
+                        {ticker}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Type filter */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide shrink-0 pr-1">Type</span>
+                {(["PURCHASE", "SALE", "DIVIDEND"] as const).filter(t => presentTypes.has(t)).map((type) => {
+                  const active = selectedTypes.has(type);
+                  const colorClass = type === "PURCHASE"
+                    ? active ? "bg-green-100 text-green-700 border-green-300" : "border-border text-muted-foreground hover:border-green-300 hover:text-green-700"
+                    : type === "SALE"
+                    ? active ? "bg-blue-100 text-blue-700 border-blue-300" : "border-border text-muted-foreground hover:border-blue-300 hover:text-blue-700"
+                    : active ? "bg-violet-100 text-violet-700 border-violet-300" : "border-border text-muted-foreground hover:border-violet-300 hover:text-violet-700";
+                  const label = type === "PURCHASE" ? "Purchase" : type === "SALE" ? "Sale" : "Dividend";
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => toggleType(type)}
+                      className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${colorClass}`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" style={{ tableLayout: "fixed", minWidth: "900px" }}>
+              <thead>
+                <tr className="text-[11px] text-muted-foreground uppercase tracking-wide bg-muted/30 border-b border-border">
+                  <th style={{ width: "110px" }} className="py-2 pl-4 pr-2 text-left font-medium">Date</th>
+                  <th style={{ width: "90px" }} className="py-2 px-2 text-left font-medium">Type</th>
+                  <th style={{ width: "80px" }} className="py-2 px-2 text-left font-medium">Symbol</th>
+                  <th style={{ width: "110px" }} className="py-2 px-2 text-right font-medium">Shares</th>
+                  <th style={{ width: "110px" }} className="py-2 px-2 text-right font-medium">Price/Share</th>
+                  <th style={{ width: "120px" }} className="py-2 px-2 text-right font-medium">Gross</th>
+                  <th style={{ width: "90px" }} className="py-2 px-2 text-right font-medium">Fees</th>
+                  <th style={{ width: "120px" }} className="py-2 px-2 text-right font-medium">Net</th>
+                  <th className="py-2 px-2 text-right font-medium">Gain / Loss</th>
+                  <th style={{ width: "120px" }} className="py-2 px-2 text-left font-medium">Notes</th>
+                  <th style={{ width: "40px" }} className="py-2 pl-2 pr-4" />
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </Card>
+              </thead>
+              <tbody>
+                {filteredActivities.length === 0 ? (
+                  <tr>
+                    <td colSpan={11} className="py-8 text-center text-sm text-muted-foreground">
+                      No activity matches the current filters.
+                    </td>
+                  </tr>
+                ) : filteredActivities.map((a) => {
+                  const fees = a.fees ?? 0;
+                  const net = a.amount - fees;
+                  const gain = (a.shortTermGain ?? 0) + (a.longTermGain ?? 0);
+                  const isGainPositive = gain >= 0;
+                  const isPurchase = a.type === "PURCHASE";
+                  const isSale = a.type === "SALE";
+
+                  const badgeClass = isSale
+                    ? "bg-blue-100 text-blue-700"
+                    : isPurchase
+                    ? "bg-green-100 text-green-700"
+                    : "bg-violet-100 text-violet-700";
+                  const badgeLabel = isSale ? "Sale" : isPurchase ? "Purchase" : "Dividend";
+
+                  return (
+                    <tr key={a.id} className="border-b border-border hover:bg-muted/20 group">
+                      <td className="py-3 pl-4 pr-2 tabular-nums">{formatDate(a.date)}</td>
+                      <td className="py-3 px-2">
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${badgeClass}`}>
+                          {badgeLabel}
+                        </span>
+                      </td>
+                      <td className="py-3 px-2 font-mono font-bold text-xs">{a.ticker}</td>
+                      <td className="py-3 px-2 text-right tabular-nums">
+                        {a.shares != null
+                          ? a.shares.toLocaleString(undefined, { maximumFractionDigits: 6 })
+                          : "—"}
+                      </td>
+                      <td className="py-3 px-2 text-right tabular-nums">
+                        {a.pricePerShare != null ? formatCurrency(a.pricePerShare) : "—"}
+                      </td>
+                      {/* Gross / total cost */}
+                      <td className="py-3 px-2 text-right tabular-nums">{formatCurrency(a.amount)}</td>
+                      {/* Fees — not applicable for purchases */}
+                      <td className="py-3 px-2 text-right tabular-nums text-muted-foreground">
+                        {!isPurchase && fees > 0 ? `(${formatCurrency(fees)})` : "—"}
+                      </td>
+                      {/* Net proceeds — show for sales; show cost for purchases */}
+                      <td className="py-3 px-2 text-right tabular-nums font-medium">
+                        {isPurchase ? formatCurrency(a.amount) : formatCurrency(net)}
+                      </td>
+                      {/* Gain / loss — only for sales */}
+                      <td className={`py-3 px-2 text-right tabular-nums font-medium ${
+                        isSale
+                          ? isGainPositive
+                            ? "text-green-600"
+                            : "text-red-500 dark:text-red-400"
+                          : "text-muted-foreground"
+                      }`}>
+                        {isSale
+                          ? `${isGainPositive ? "+" : ""}${formatCurrency(gain)}`
+                          : "—"}
+                      </td>
+                      <td className="py-3 px-2 text-muted-foreground truncate">
+                        {a.notes ?? ""}
+                      </td>
+                      <td className="py-3 pl-2 pr-4 text-right">
+                        {isSale && (
+                          <button
+                            onClick={() => setEditingActivity(a)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                            title="Edit sale"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {editingActivity && (
+        <EditSaleActivityModal
+          activity={editingActivity}
+          onClose={() => setEditingActivity(null)}
+          onSaved={() => {
+            setEditingActivity(null);
+            refetchActivities();
+          }}
+        />
+      )}
+
+      {reviewingDividend && (
+        <ReviewDividendModal
+          dividend={reviewingDividend}
+          categories={allCategories ?? []}
+          onClose={() => setReviewingDividend(null)}
+          onConfirmed={() => {
+            setReviewingDividend(null);
+            refetchDividends();
+            refetchActivities();
+            refetchNotifications();
+          }}
+          onDismissed={() => {
+            setReviewingDividend(null);
+            refetchDividends();
+            refetchNotifications();
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -3067,7 +3863,15 @@ function GrowthChart({ accountId, onDayGain }: { accountId: string; onDayGain?: 
 export function InvestmentAccount() {
   const { accountId } = useParams<{ accountId: string }>();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<"holdings" | "activity">("holdings");
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<"holdings" | "activity">(
+    searchParams.get("tab") === "activity" ? "activity" : "holdings"
+  );
+  const { notifications } = useNotifications();
+  const hasActivityNotification = notifications?.pendingDividends.some(
+    (g) => g.accountId === accountId
+  ) ?? false;
+
   const [modalOpen, setModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [manualModalOpen, setManualModalOpen] = useState(false);
@@ -3122,6 +3926,17 @@ export function InvestmentAccount() {
     Promise.allSettled(missing.map((t) => getTickerPrice(t))).then(() => {
       refetch();
     });
+  }, [holdings, refetch]);
+
+  const priceRefreshedRef = useRef(false);
+  useEffect(() => {
+    if (!holdings || priceRefreshedRef.current) return;
+    if (isPriceRefreshNeeded(holdings)) {
+      priceRefreshedRef.current = true;
+      refreshPrices("InvestmentAccount")
+        .then(() => refetch())
+        .catch(() => { /* server logs the error */ });
+    }
   }, [holdings, refetch]);
 
   // Sticky parent row: track which holding row has scrolled above the nav bar
@@ -3295,13 +4110,16 @@ export function InvestmentAccount() {
                 setActiveTab(tab);
                 if (tab === "holdings") setStickyHolding(null);
               }}
-              className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
+              className={`relative px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
                 activeTab === tab
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
               {tab}
+              {tab === "activity" && hasActivityNotification && (
+                <span className="absolute top-1.5 right-1 h-1.5 w-1.5 rounded-full bg-red-500" />
+              )}
             </button>
           ))}
         </div>

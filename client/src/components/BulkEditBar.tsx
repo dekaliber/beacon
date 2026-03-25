@@ -11,15 +11,27 @@ export type GroupAction = "group" | "ungroup";
 interface BulkEditBarProps {
   ids: string[];
   categories: Category[];
-  tags: Tag[];
+  tags?: Tag[];
   initialTagIds?: string[];
-  groupAction: GroupAction;
+  groupAction?: GroupAction;
   setAsPrimaryTarget?: { expenseId: string; groupId: string } | null;
   onClear: () => void;
   onSuccess: () => void;
-  onGroupAction: () => Promise<void>;
+  onGroupAction?: () => Promise<void>;
   onSetAsPrimary?: () => Promise<void>;
   onCreateTag?: (name: string) => Promise<Tag>;
+  /** Label for the free-text edit button (default: "Edit Description") */
+  textFieldLabel?: string;
+  /** Patch key for the free-text field (default: "description") */
+  textFieldKey?: string;
+  /** Override the bulk-update API call (default: bulkUpdateExpenses) */
+  onApply?: (patch: Record<string, unknown>) => Promise<void>;
+  /** Override the bulk-delete API call (default: bulkDeleteExpenses) */
+  onBulkDelete?: () => Promise<void>;
+  /** When true, the Delete button is shown but disabled */
+  deleteDisabled?: boolean;
+  /** Tooltip shown on the disabled Delete button */
+  deleteDisabledTitle?: string;
 }
 
 type ActivePopover = "description" | "category" | "tags" | null;
@@ -36,6 +48,12 @@ export function BulkEditBar({
   onGroupAction,
   onSetAsPrimary,
   onCreateTag,
+  textFieldLabel = "Edit Description",
+  textFieldKey = "description",
+  onApply,
+  onBulkDelete,
+  deleteDisabled = false,
+  deleteDisabledTitle,
 }: BulkEditBarProps) {
   const [active, setActive] = useState<ActivePopover>(null);
   const [groupLoading, setGroupLoading] = useState(false);
@@ -87,7 +105,7 @@ export function BulkEditBar({
     setLoading(true);
     setError(null);
     try {
-      await bulkUpdateExpenses(ids, patch);
+      await (onApply ? onApply(patch) : bulkUpdateExpenses(ids, patch));
       setActive(null);
       onSuccess();
     } catch (err) {
@@ -157,8 +175,9 @@ export function BulkEditBar({
 
   // Tag options (merge backend tags with any locally-created ones)
   const allTags = useMemo(() => {
-    const ids = new Set(tags.map((t) => t.id));
-    return [...tags, ...localTags.filter((t) => !ids.has(t.id))].sort((a, b) => a.name.localeCompare(b.name));
+    const base = tags ?? [];
+    const ids = new Set(base.map((t) => t.id));
+    return [...base, ...localTags.filter((t) => !ids.has(t.id))].sort((a, b) => a.name.localeCompare(b.name));
   }, [tags, localTags]);
 
   const filteredTags = useMemo(() => {
@@ -193,7 +212,7 @@ export function BulkEditBar({
   const handleDelete = async () => {
     setDeleteLoading(true);
     try {
-      await bulkDeleteExpenses(ids);
+      await (onBulkDelete ? onBulkDelete() : bulkDeleteExpenses(ids));
       setShowDeleteConfirm(false);
       onSuccess();
     } finally {
@@ -231,10 +250,10 @@ export function BulkEditBar({
 
       <span className={sepCls} />
 
-      {/* Edit Description */}
+      {/* Edit text field (Description / Source / etc.) */}
       <div className="relative">
         <button type="button" onClick={() => openPopover("description")} className={btnCls("description")}>
-          Edit Description
+          {textFieldLabel}
         </button>
         {active === "description" && (
           <div className={popoverCls}>
@@ -244,10 +263,10 @@ export function BulkEditBar({
               onChange={(e) => setDescription(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && description.trim() && !loading) {
-                  handleApply({ description: description.trim() });
+                  handleApply({ [textFieldKey]: description.trim() });
                 }
               }}
-              placeholder="Enter new description..."
+              placeholder={`Enter new ${textFieldLabel.replace("Edit ", "").toLowerCase()}...`}
               className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus
@@ -256,7 +275,7 @@ export function BulkEditBar({
             <button
               type="button"
               disabled={!description.trim() || loading}
-              onClick={() => handleApply({ description: description.trim() })}
+              onClick={() => handleApply({ [textFieldKey]: description.trim() })}
               className={applyBtnCls}
             >
               {applyLabel}
@@ -330,9 +349,10 @@ export function BulkEditBar({
         )}
       </div>
 
-      <span className={sepCls} />
+      {tags !== undefined && <span className={sepCls} />}
 
       {/* Edit Tags */}
+      {tags !== undefined && (
       <div className="relative">
         <button type="button" onClick={() => openPopover("tags")} className={btnCls("tags")}>
           Edit Tags
@@ -399,6 +419,7 @@ export function BulkEditBar({
           </div>
         )}
       </div>
+      )}
 
       {/* Set as primary (only when a single non-primary grouped expense is selected) */}
       {setAsPrimaryTarget && (
@@ -416,7 +437,7 @@ export function BulkEditBar({
         </>
       )}
 
-      {ids.length > 1 && (
+      {groupAction !== undefined && ids.length > 1 && (
         <>
           <span className={sepCls} />
 
@@ -442,9 +463,10 @@ export function BulkEditBar({
       {/* Delete */}
       <button
         type="button"
-        onClick={() => { setActive(null); setShowDeleteConfirm(true); }}
-        className="flex items-center gap-1.5 px-4 py-2.5 transition-colors whitespace-nowrap hover:bg-white/10"
-        title="Delete selected transactions"
+        onClick={() => { if (!deleteDisabled) { setActive(null); setShowDeleteConfirm(true); } }}
+        disabled={deleteDisabled}
+        className={`flex items-center gap-1.5 px-4 py-2.5 transition-colors whitespace-nowrap ${deleteDisabled ? "opacity-40 cursor-not-allowed" : "hover:bg-white/10"}`}
+        title={deleteDisabled ? deleteDisabledTitle : "Delete selected transactions"}
       >
         <Trash2 className="h-3.5 w-3.5" />
         Delete
