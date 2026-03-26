@@ -1,6 +1,7 @@
 import { api } from "./client";
 import type {
   Account,
+  AssetClass,
   Budget,
   BudgetDetail,
   BudgetOverview,
@@ -11,6 +12,7 @@ import type {
   Expense,
   GrowthPoint,
   Income,
+  Instrument,
   InvestmentAccountSummary,
   InvestmentActivity,
   InvestmentHolding,
@@ -342,3 +344,33 @@ export const confirmReinvestDividend = (id: string, data: {
 // Notifications
 export const getNotifications = () =>
   api.get<import("../types").NotificationData>("/notifications");
+
+// Asset Classes
+export const getAssetClasses = () => api.get<AssetClass[]>("/asset-classes");
+export const getFlatAssetClasses = () => api.get<AssetClass[]>("/asset-classes/flat");
+export const createAssetClass = (data: { name: string; parentId?: string | null; color?: string | null }) =>
+  api.post<AssetClass>("/asset-classes", data);
+export const updateAssetClass = (id: string, data: { name?: string; color?: string | null }) =>
+  api.put<AssetClass>(`/asset-classes/${id}`, data);
+export const deleteAssetClass = (id: string) => api.delete(`/asset-classes/${id}`);
+export const setAssetClassTarget = (id: string, targetPct: number) =>
+  api.put(`/asset-classes/${id}/target`, { targetPct });
+export const deleteAssetClassTarget = (id: string) =>
+  api.delete(`/asset-classes/${id}/target`);
+
+// Instruments (Securities)
+export const getInstruments = () => api.get<Instrument[]>("/instruments");
+export const getInstrument = (id: string) => api.get<Instrument>(`/instruments/${id}`);
+export const createInstrument = (data: { primaryTicker: string; name?: string | null }) =>
+  api.post<Instrument>("/instruments", data);
+export const patchInstrument = (id: string, data: { name?: string | null }) =>
+  api.patch<Instrument>(`/instruments/${id}`, data);
+export const setInstrumentWeights = (
+  id: string,
+  weights: { assetClassId: string; weight: number }[]
+) => api.put<Instrument>(`/instruments/${id}/weights`, { weights });
+export const addInstrumentTicker = (id: string, ticker: string) =>
+  api.post<Instrument>(`/instruments/${id}/tickers`, { ticker });
+export const removeInstrumentTicker = (id: string, ticker: string) =>
+  api.delete<Instrument>(`/instruments/${id}/tickers/${encodeURIComponent(ticker)}`);
+export const deleteInstrument = (id: string) => api.delete(`/instruments/${id}`);

@@ -338,6 +338,59 @@ export interface TickerSearchResult {
   exchange: string;
 }
 
+// ── Asset allocation types ────────────────────────────────────────────────────
+
+export interface AssetClassTarget {
+  id: string;
+  assetClassId: string;
+  targetPct: string; // Decimal serialized as string
+}
+
+export interface AssetClass {
+  id: string;
+  name: string;
+  slug: string | null;
+  isSystem: boolean;
+  parentId: string | null;
+  parent?: { id: string; name: string } | null;
+  displayOrder: number;
+  color: string | null;
+  target: AssetClassTarget | null;
+  children?: AssetClass[];
+}
+
+export interface InstrumentWeight {
+  id: string;
+  instrumentId: string;
+  assetClassId: string;
+  assetClass: { id: string; name: string; slug: string | null; color: string | null; parentId: string | null };
+  weight: string; // Decimal serialized as string
+}
+
+export interface InstrumentTicker {
+  id: string;
+  instrumentId: string;
+  ticker: string;
+}
+
+export interface InstrumentHoldingRef {
+  id: string;
+  ticker: string;
+  accountId: string;
+  account: { id: string; name: string; color: string | null };
+}
+
+export interface Instrument {
+  id: string;
+  primaryTicker: string;
+  name: string | null;
+  tickers: InstrumentTicker[];
+  weights: InstrumentWeight[];
+  holdings: InstrumentHoldingRef[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ── Notification types ────────────────────────────────────────────────────────
 
 export interface NotificationAccountGroup {

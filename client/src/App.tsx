@@ -12,6 +12,8 @@ import { TagsPage } from "@/pages/Tags";
 import { ReimbursementsPage } from "@/pages/Reimbursements";
 import { Investments } from "@/pages/Investments";
 import { InvestmentAccount } from "@/pages/InvestmentAccount";
+import { AssetClassesPage } from "@/pages/AssetClasses";
+import { SecuritiesPage } from "@/pages/Securities";
 
 function App() {
   return (
@@ -29,7 +31,9 @@ function App() {
           <Route path="/recurring" element={<Recurring />} />
           <Route path="/reimbursements" element={<ReimbursementsPage />} />
           <Route path="/investments" element={<Investments />} />
+          <Route path="/investments/securities" element={<SecuritiesPage />} />
           <Route path="/investments/:accountId" element={<InvestmentAccount />} />
+          <Route path="/asset-classes" element={<AssetClassesPage />} />
         </Route>
       </Routes>
       </NotificationProvider>

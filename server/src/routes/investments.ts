@@ -464,8 +464,26 @@ investmentRoutes.post("/holdings", async (req, res) => {
     });
     if (!account) return res.status(404).json({ error: { message: "Investment account not found" } });
 
+    // Auto-resolve instrument: check alias tickers first, then primary ticker, then create new
+    let instrumentId: string | null = null;
+    const aliasTicker = await (prisma as any).instrumentTicker.findUnique({
+      where: { ticker: body.ticker },
+      select: { instrumentId: true },
+    });
+    if (aliasTicker) {
+      instrumentId = aliasTicker.instrumentId;
+    } else {
+      const instrument = await (prisma as any).instrument.upsert({
+        where: { primaryTicker: body.ticker },
+        update: {},
+        create: { primaryTicker: body.ticker, name: body.name },
+        select: { id: true },
+      });
+      instrumentId = instrument.id;
+    }
+
     const holding = await prisma.investmentHolding.create({
-      data: body,
+      data: { ...body, instrumentId },
       include: { lots: true },
     });
 
