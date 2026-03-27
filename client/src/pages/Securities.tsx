@@ -118,7 +118,10 @@ export function SecuritiesPage() {
 
   const renderRow = (instrument: Instrument) => {
     const uniqueAccounts = [
-      ...new Map(instrument.holdings.map((h) => [h.account.id, h.account])).values(),
+      ...new Map([
+        ...instrument.holdings.map((h) => [h.account.id, h.account] as const),
+        ...instrument.manualInvestments.map((m) => [m.account.id, m.account] as const),
+      ]).values(),
     ];
     const total = instrument.weights.reduce((sum, w) => sum + parseFloat(w.weight), 0);
     const isComplete = total >= 99.9;
@@ -132,9 +135,11 @@ export function SecuritiesPage() {
       <tr key={instrument.id} className="hover:bg-muted/30">
 
         {/* Symbol + linked equivalents */}
-        <td className="py-2 pl-4 pr-2 align-top">
-          <span className="font-semibold text-sm">{instrument.primaryTicker}</span>
-          {instrument.tickers.length > 0 && (
+        <td className="py-2 pl-4 pr-2 align-middle">
+          {!instrument.isManual && (
+            <span className="font-semibold text-sm">{instrument.primaryTicker}</span>
+          )}
+          {!instrument.isManual && instrument.tickers.length > 0 && (
             <div className="mt-0.5 space-y-0.5">
               {instrument.tickers.map((t) => (
                 <div key={t.id} className="flex items-center gap-1">
@@ -147,14 +152,14 @@ export function SecuritiesPage() {
         </td>
 
         {/* Name */}
-        <td className="py-2 px-2 align-top overflow-hidden">
+        <td className="py-2 px-2 align-middle overflow-hidden">
           <span className="text-sm text-muted-foreground truncate block">
             {instrument.name ?? <span className="italic opacity-50">—</span>}
           </span>
         </td>
 
         {/* Accounts */}
-        <td className="py-2 px-2 align-top">
+        <td className="py-2 px-2 align-middle">
           <div className="flex flex-wrap gap-1">
             {uniqueAccounts.map((acct) => {
               const aliasTickers = instrument.holdings
@@ -177,7 +182,7 @@ export function SecuritiesPage() {
         </td>
 
         {/* Classification chips + warning */}
-        <td className="py-2 px-2 align-top">
+        <td className="py-2 px-2 align-middle">
           <div className="flex flex-wrap items-center gap-1">
             {sortedWeights.map((w) => {
               const abbrev = (w.assetClass.slug && SLUG_ABBREV[w.assetClass.slug]) || w.assetClass.name;
@@ -201,7 +206,7 @@ export function SecuritiesPage() {
         </td>
 
         {/* Actions */}
-        <td className="py-2 pr-3 align-top">
+        <td className="py-2 pr-3 align-middle">
           <div className="flex items-center justify-end">
             <button
               onClick={() => setEditModal({ open: true, instrument })}
@@ -481,7 +486,7 @@ function EditModal({ open, instrument, allInstruments, assetClasses, onClose, on
         </div>
 
         {/* ── Asset Name ── */}
-        <div>
+        {!instrument?.isManual && <div>
           <h3 className="text-sm font-semibold mb-2">Asset Name</h3>
           <input
             type="text"
@@ -490,10 +495,10 @@ function EditModal({ open, instrument, allInstruments, assetClasses, onClose, on
             placeholder="e.g. Vanguard Total Stock Market"
             className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
-        </div>
+        </div>}
 
         {/* ── Equivalents ── */}
-        <div>
+        {!instrument?.isManual && <div>
           <h3 className="text-sm font-semibold mb-1">Equivalents</h3>
           <p className="text-xs text-muted-foreground mb-3">
             Link securities that track the same portfolio (e.g. VTSAX ↔ VTI). They will share these asset class weights.
@@ -546,7 +551,7 @@ function EditModal({ open, instrument, allInstruments, assetClasses, onClose, on
             <Plus className="h-3 w-3" />
             Add equivalent
           </button>
-        </div>
+        </div>}
 
         {/* Footer */}
         <div className="flex justify-end gap-2 border-t border-border pt-4">

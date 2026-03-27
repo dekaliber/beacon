@@ -382,13 +382,22 @@ export interface InstrumentHoldingRef {
   account: { id: string; name: string; color: string | null };
 }
 
+export interface InstrumentManualRef {
+  id: string;
+  accountId: string;
+  name: string;
+  account: { id: string; name: string; color: string | null };
+}
+
 export interface Instrument {
   id: string;
   primaryTicker: string;
   name: string | null;
+  isManual: boolean;
   tickers: InstrumentTicker[];
   weights: InstrumentWeight[];
   holdings: InstrumentHoldingRef[];
+  manualInvestments: InstrumentManualRef[];
   createdAt: string;
   updatedAt: string;
 }

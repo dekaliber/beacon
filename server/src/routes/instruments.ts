@@ -19,6 +19,14 @@ const instrumentInclude = {
       account: { select: { id: true, name: true, color: true } },
     },
   },
+  manualInvestments: {
+    select: {
+      id: true,
+      accountId: true,
+      name: true,
+      account: { select: { id: true, name: true, color: true } },
+    },
+  },
 };
 
 // ── Backfill helper ────────────────────────────────────────────────────────
@@ -67,6 +75,38 @@ async function backfillUnlinkedHoldings() {
   }
 }
 
+// ── Backfill helper (manual investments) ───────────────────────────────────
+// Creates Instrument records for any manual investments not yet linked.
+// Groups by name so the same investment appearing across accounts shares one record.
+
+async function backfillUnlinkedManualInvestments() {
+  const unlinked = await prisma.manualInvestment.findMany({
+    where: { instrumentId: null },
+    select: { id: true, name: true },
+  });
+  if (unlinked.length === 0) return;
+
+  // Group by name for deduplication across accounts
+  const byName = new Map<string, string[]>();
+  for (const m of unlinked) {
+    if (!byName.has(m.name)) byName.set(m.name, []);
+    byName.get(m.name)!.push(m.id);
+  }
+
+  for (const [name, ids] of byName) {
+    const instrument = await prisma.instrument.upsert({
+      where: { primaryTicker: name },
+      update: {},
+      create: { primaryTicker: name, name, isManual: true },
+      select: { id: true },
+    });
+    await prisma.manualInvestment.updateMany({
+      where: { id: { in: ids } },
+      data: { instrumentId: instrument.id },
+    });
+  }
+}
+
 // ── GET /api/instruments ───────────────────────────────────────────────────
 // Returns all instruments. Lazily backfills any holdings that pre-date this
 // feature so the list is always complete without a separate migration step.
@@ -74,6 +114,7 @@ async function backfillUnlinkedHoldings() {
 instrumentRoutes.get("/", async (_req, res) => {
   try {
     await backfillUnlinkedHoldings();
+    await backfillUnlinkedManualInvestments();
     const instruments = await prisma.instrument.findMany({
       include: instrumentInclude,
       orderBy: { primaryTicker: "asc" },

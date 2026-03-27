@@ -314,16 +314,18 @@ model InvestmentHolding {
 }
 
 model ManualInvestment {
-  id          String   @id @default(cuid())
-  accountId   String
-  name        String
-  assetClass  String?
-  totalCost   Decimal? @db.Decimal(12, 2)
-  marketValue Decimal  @db.Decimal(12, 2)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  accountId    String
+  name         String
+  assetClass   String?
+  totalCost    Decimal? @db.Decimal(12, 2)
+  marketValue  Decimal  @db.Decimal(12, 2)
+  instrumentId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account    Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  instrument Instrument? @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
 
   @@map("manual_investments")
 }
@@ -457,14 +459,16 @@ model AssetClassTarget {
 }
 
 model Instrument {
-  id            String   @id @default(cuid())
-  primaryTicker String   @unique
-  name          String?
-  tickers       InstrumentTicker[]
-  weights       InstrumentAssetClassWeight[]
-  holdings      InvestmentHolding[]
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                String   @id @default(cuid())
+  primaryTicker     String   @unique
+  name              String?
+  isManual          Boolean  @default(false)
+  tickers           InstrumentTicker[]
+  weights           InstrumentAssetClassWeight[]
+  holdings          InvestmentHolding[]
+  manualInvestments ManualInvestment[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@map("instruments")
 }
