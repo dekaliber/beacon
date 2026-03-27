@@ -73,7 +73,7 @@ import { ApiError } from "@/api/client";
 import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/utils";
 import { useNotifications } from "@/context/NotificationContext";
 import { isPriceRefreshNeeded } from "@/lib/priceUtils";
-import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity, GrowthPoint, GrowthEvent, PendingDividend, DividendType, Category } from "@/types";
+import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity, GrowthPoint, GrowthEvent, PendingDividend, TaxClassification, Category } from "@/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -2637,7 +2637,7 @@ function ReviewDividendModal({
   const [totalAmount, setTotalAmount] = useState(
     (parseFloat(dividend.perShareAmount) * parseFloat(dividend.sharesAtExDate)).toFixed(2)
   );
-  const [dividendType, setDividendType] = useState<DividendType | "">("");
+  const [taxClassification, setTaxClassification] = useState<TaxClassification | "">("");
   const [notes, setNotes] = useState("");
 
   // ── Disposition ───────────────────────────────────────────────────────────
@@ -2748,7 +2748,7 @@ function ReviewDividendModal({
           shares: sh,
           totalAmount: total,
           categoryId: categoryId || null,
-          dividendType: (dividendType as DividendType) || null,
+          taxClassification: (taxClassification as TaxClassification) || null,
           notes: notes || null,
           source: dividend.ticker,
         });
@@ -2768,7 +2768,7 @@ function ReviewDividendModal({
           totalAmount: total,
           reinvestPrice: rPrice,
           reinvestQuantity: rQty,
-          dividendType: (dividendType as DividendType) || null,
+          taxClassification: (taxClassification as TaxClassification) || null,
           notes: notes || null,
         });
       }
@@ -2960,15 +2960,16 @@ function ReviewDividendModal({
             Dividend Type <span className="font-normal opacity-60">(optional)</span>
           </label>
           <select
-            value={dividendType}
-            onChange={(e) => setDividendType(e.target.value as DividendType | "")}
+            value={taxClassification}
+            onChange={(e) => setTaxClassification(e.target.value as TaxClassification | "")}
             className={inputCls}
           >
             <option value="">Not specified</option>
-            <option value="QUALIFIED">Qualified</option>
+            <option value="CAPITAL_GAIN">Capital Gain</option>
             <option value="ORDINARY">Ordinary</option>
-            <option value="TAX_EXEMPT">Tax Exempt</option>
+            <option value="QUALIFIED">Qualified</option>
             <option value="RETURN_OF_CAPITAL">Return of Capital</option>
+            <option value="TAX_EXEMPT">Tax-Exempt</option>
           </select>
         </div>
 
@@ -3115,9 +3116,9 @@ function ActivityTab({ accountId }: { accountId: string }) {
       {hasPending && (
         <Card className="overflow-hidden mb-4">
           <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-            <Clock className="h-4 w-4 text-amber-500" />
+            <Clock className="h-4 w-4 text-violet-500" />
             <h3 className="font-semibold text-sm">Pending Dividends</h3>
-            <span className="ml-1 inline-flex items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5">
+            <span className="ml-1 inline-flex items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-semibold px-1.5 py-0.5">
               {pendingDividends.length}
             </span>
           </div>

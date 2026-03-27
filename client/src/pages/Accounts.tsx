@@ -103,6 +103,11 @@ export function Accounts() {
                     Managed
                   </span>
                 )}
+                {account.isTaxAdvantaged && (
+                  <span className="rounded-full bg-emerald-600 text-white text-[10px] font-semibold px-1.5 py-0.5 uppercase tracking-wide">
+                    Tax-Advantaged
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-bold tabular-nums">{formatCurrency(account.balance)}</span>
@@ -228,6 +233,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isJoint, setIsJoint] = useState(false);
   const [isManaged, setIsManaged] = useState(false);
+  const [isTaxAdvantaged, setIsTaxAdvantaged] = useState(false);
   const [accountType, setAccountType] = useState<Account["type"]>(account?.type ?? "CHECKING");
   const [selectedColor, setSelectedColor] = useState(account?.color ?? ACCOUNT_COLORS[0]);
   // True when the account already has holdings with real lot dates — managed toggle is locked off
@@ -237,6 +243,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
     if (open) {
       setIsJoint(account?.isJoint ?? false);
       setIsManaged(account?.isManaged ?? false);
+      setIsTaxAdvantaged(account?.isTaxAdvantaged ?? false);
       setAccountType(account?.type ?? "CHECKING");
       setSelectedColor(account?.color ?? ACCOUNT_COLORS[0]);
       setConfirmDelete(false);
@@ -261,6 +268,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
       color: selectedColor,
       isJoint,
       isManaged: accountType === "INVESTMENT" ? isManaged : false,
+      isTaxAdvantaged: accountType !== "CREDIT_CARD" ? isTaxAdvantaged : false,
     };
     // Balance only editable when creating a new account
     if (!account) {
@@ -359,6 +367,23 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
             Transactions from joint accounts are shared expenses/income
           </p>
         </div>
+
+        {accountType !== "CREDIT_CARD" && (
+          <div className="rounded-md border border-border p-3">
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={isTaxAdvantaged}
+                onChange={(e) => setIsTaxAdvantaged(e.target.checked)}
+                className="h-4 w-4 rounded border-border"
+              />
+              <span className="text-sm font-medium">Tax-advantaged account</span>
+            </label>
+            <p className="mt-1 ml-6 text-xs text-muted-foreground">
+              IRA, 401(k), HSA, 529, or similar. Investment sales and dividends will not generate income records.
+            </p>
+          </div>
+        )}
 
         {accountType === "INVESTMENT" && (
           <div className={`rounded-md border border-border p-3 ${hasTrackedHoldings ? "opacity-60" : ""}`}>

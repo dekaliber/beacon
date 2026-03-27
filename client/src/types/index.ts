@@ -7,6 +7,7 @@ export interface Account {
   color: string | null;
   isJoint: boolean;
   isManaged: boolean;
+  isTaxAdvantaged: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -80,7 +81,7 @@ export interface Expense {
 }
 
 export type IncomeSubtype = "REGULAR" | "DIVIDEND" | "CAPITAL_GAIN" | "RETURN_OF_CAPITAL";
-export type DividendType = "QUALIFIED" | "ORDINARY" | "TAX_EXEMPT" | "RETURN_OF_CAPITAL";
+export type TaxClassification = "QUALIFIED" | "ORDINARY" | "TAX_EXEMPT" | "RETURN_OF_CAPITAL" | "CAPITAL_GAIN";
 export type PendingDividendStatus = "PENDING" | "CONFIRMED" | "DISMISSED";
 export type InvestmentActivityType = "DIVIDEND" | "SALE" | "PURCHASE";
 
@@ -115,8 +116,9 @@ export interface Income {
   accountId: string;
   transactionGroupId: string | null;
   subtype: IncomeSubtype;
-  dividendType: DividendType | null;
+  taxClassification: TaxClassification | null;
   taxableAmount: string | null;
+  isCashReceived: boolean;
   activityId: string | null;
   account: Account;
   tags: IncomeTag[];

@@ -22,7 +22,7 @@ import type {
   TickerSearchResult,
   PaginatedResponse,
   PendingDividend,
-  DividendType,
+  TaxClassification,
   RecurrenceRule,
   RecurringHistoryMonth,
   Tag,
@@ -316,7 +316,7 @@ export const confirmPendingDividend = (id: string, data: {
   shares: number;
   totalAmount: number;
   categoryId?: string | null;
-  dividendType?: DividendType | null;
+  taxClassification?: TaxClassification | null;
   notes?: string | null;
   source?: string | null;
 }) => api.post<{ activity: InvestmentActivity; income: Income; pendingDividend: PendingDividend }>(
@@ -334,7 +334,7 @@ export const confirmReinvestDividend = (id: string, data: {
   totalAmount: number;
   reinvestPrice: number;
   reinvestQuantity: number;
-  dividendType?: DividendType | null;
+  taxClassification?: TaxClassification | null;
   notes?: string | null;
 }) => api.post<{ dividendActivity: InvestmentActivity; purchaseActivity: InvestmentActivity; pendingDividend: PendingDividend }>(
   `/pending-dividends/${id}/confirm-reinvest`,
@@ -373,4 +373,6 @@ export const addInstrumentTicker = (id: string, ticker: string) =>
   api.post<Instrument>(`/instruments/${id}/tickers`, { ticker });
 export const removeInstrumentTicker = (id: string, ticker: string) =>
   api.delete<Instrument>(`/instruments/${id}/tickers/${encodeURIComponent(ticker)}`);
+export const mergeInstrument = (id: string, otherId: string) =>
+  api.post<Instrument>(`/instruments/${id}/merge`, { otherId });
 export const deleteInstrument = (id: string) => api.delete(`/instruments/${id}`);

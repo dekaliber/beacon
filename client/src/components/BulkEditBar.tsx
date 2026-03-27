@@ -28,13 +28,24 @@ interface BulkEditBarProps {
   onApply?: (patch: Record<string, unknown>) => Promise<void>;
   /** Override the bulk-delete API call (default: bulkDeleteExpenses) */
   onBulkDelete?: () => Promise<void>;
+  /** When true, shows the Edit Tax Status popover */
+  showTaxStatus?: boolean;
   /** When true, the Delete button is shown but disabled */
   deleteDisabled?: boolean;
   /** Tooltip shown on the disabled Delete button */
   deleteDisabledTitle?: string;
 }
 
-type ActivePopover = "description" | "category" | "tags" | null;
+type ActivePopover = "description" | "category" | "taxStatus" | "tags" | null;
+
+const TAX_STATUS_OPTIONS: { value: string; label: string; className: string }[] = [
+  { value: "", label: "Not specified (clear)", className: "" },
+  { value: "CAPITAL_GAIN", label: "Capital Gain", className: "bg-blue-100 text-blue-700" },
+  { value: "ORDINARY", label: "Ordinary", className: "bg-slate-100 text-slate-600" },
+  { value: "QUALIFIED", label: "Qualified", className: "bg-emerald-100 text-emerald-700" },
+  { value: "RETURN_OF_CAPITAL", label: "Return of Capital", className: "bg-amber-100 text-amber-700" },
+  { value: "TAX_EXEMPT", label: "Tax-Exempt", className: "bg-teal-100 text-teal-700" },
+];
 
 export function BulkEditBar({
   ids,
@@ -52,6 +63,7 @@ export function BulkEditBar({
   textFieldKey = "description",
   onApply,
   onBulkDelete,
+  showTaxStatus = false,
   deleteDisabled = false,
   deleteDisabledTitle,
 }: BulkEditBarProps) {
@@ -63,6 +75,8 @@ export function BulkEditBar({
   const [description, setDescription] = useState("");
   // undefined = not yet chosen (Apply disabled); null = "No category"; string = category ID
   const [categoryId, setCategoryId] = useState<string | null | undefined>(undefined);
+  // undefined = not yet chosen; null/"" = clear; string = TaxClassification value
+  const [taxStatusValue, setTaxStatusValue] = useState<string | undefined>(undefined);
   const [categorySearch, setCategorySearch] = useState("");
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [tagSearch, setTagSearch] = useState("");
@@ -93,6 +107,7 @@ export function BulkEditBar({
     setDescription("");
     setCategoryId(undefined);
     setCategorySearch("");
+    setTaxStatusValue(undefined);
     setTagIds(type === "tags" ? (initialTagIds ?? []) : []);
     setTagSearch("");
     setTagCreating(false);
@@ -348,6 +363,47 @@ export function BulkEditBar({
           </div>
         )}
       </div>
+
+      {showTaxStatus && <span className={sepCls} />}
+
+      {/* Edit Tax Status */}
+      {showTaxStatus && (
+        <div className="relative">
+          <button type="button" onClick={() => openPopover("taxStatus")} className={btnCls("taxStatus")}>
+            Edit Tax Status
+          </button>
+          {active === "taxStatus" && (
+            <div className={popoverCls}>
+              <div className="rounded-md border border-border overflow-hidden">
+                {TAX_STATUS_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onMouseDown={() => setTaxStatusValue(opt.value)}
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
+                      taxStatusValue === opt.value ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted/50"
+                    }`}
+                  >
+                    {opt.value
+                      ? <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${opt.className}`}>{opt.label}</span>
+                      : <span className="italic text-muted-foreground">{opt.label}</span>
+                    }
+                  </button>
+                ))}
+              </div>
+              {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+              <button
+                type="button"
+                disabled={taxStatusValue === undefined || loading}
+                onClick={() => handleApply({ taxClassification: taxStatusValue || null })}
+                className={applyBtnCls}
+              >
+                {applyLabel}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {tags !== undefined && <span className={sepCls} />}
 

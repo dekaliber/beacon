@@ -137,10 +137,14 @@ instrumentRoutes.patch("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const body = patchSchema.parse(req.body);
-    const instrument = await prisma.instrument.update({
-      where: { id },
-      data: body,
-      include: instrumentInclude,
+    const instrument = await prisma.$transaction(async (tx) => {
+      if (body.name !== undefined) {
+        await tx.investmentHolding.updateMany({
+          where: { instrumentId: id },
+          data: { name: body.name },
+        });
+      }
+      return tx.instrument.update({ where: { id }, data: body, include: instrumentInclude });
     });
     res.json(instrument);
   } catch (err) {
@@ -259,6 +263,75 @@ instrumentRoutes.delete("/:id/tickers/:ticker", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: { message: "Failed to remove ticker alias" } });
+  }
+});
+
+// ── POST /api/instruments/:id/merge ────────────────────────────────────────
+// Merge another instrument into this one. The other instrument's primaryTicker
+// becomes an alias, its holdings are re-linked here, and it is deleted.
+
+const mergeSchema = z.object({ otherId: z.string().min(1) });
+
+instrumentRoutes.post("/:id/merge", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { otherId } = mergeSchema.parse(req.body);
+
+    if (id === otherId) {
+      return res.status(400).json({ error: { message: "Cannot merge an instrument with itself" } });
+    }
+
+    const [target, other] = await Promise.all([
+      prisma.instrument.findUnique({ where: { id } }),
+      prisma.instrument.findUnique({ where: { id: otherId }, include: { tickers: true } }),
+    ]);
+    if (!target) return res.status(404).json({ error: { message: "Target instrument not found" } });
+    if (!other)  return res.status(404).json({ error: { message: "Source instrument not found" } });
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Re-link all of the other instrument's holdings to the target
+      await tx.investmentHolding.updateMany({
+        where: { instrumentId: otherId },
+        data: { instrumentId: id },
+      });
+
+      // 2. Move the other instrument's existing alias tickers to the target
+      //    (skip any that already exist on target to avoid unique constraint violations)
+      const existingAliases = await tx.instrumentTicker.findMany({
+        where: { instrumentId: id },
+        select: { ticker: true },
+      });
+      const existingSet = new Set(existingAliases.map((a) => a.ticker));
+      existingSet.add(target.primaryTicker); // don't re-add the target's own ticker
+
+      for (const t of other.tickers) {
+        if (!existingSet.has(t.ticker)) {
+          await tx.instrumentTicker.update({
+            where: { id: t.id },
+            data: { instrumentId: id },
+          });
+        } else {
+          await tx.instrumentTicker.delete({ where: { id: t.id } });
+        }
+      }
+
+      // 3. Add the other instrument's primaryTicker as an alias on the target
+      if (!existingSet.has(other.primaryTicker)) {
+        await tx.instrumentTicker.create({
+          data: { instrumentId: id, ticker: other.primaryTicker },
+        });
+      }
+
+      // 4. Delete the other instrument (holdings already re-linked above)
+      await tx.instrument.delete({ where: { id: otherId } });
+    });
+
+    const updated = await prisma.instrument.findUnique({ where: { id }, include: instrumentInclude });
+    res.json(updated);
+  } catch (err) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: { message: err.errors[0]?.message } });
+    console.error(err);
+    res.status(500).json({ error: { message: "Failed to merge instruments" } });
   }
 });
 

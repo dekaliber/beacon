@@ -1843,6 +1843,28 @@ export function Expenses() {
     return rows;
   }, [expenses]);
 
+  const anchorIdxRef = useRef<number | null>(null);
+  const handleCheckboxChange = useCallback((id: string, idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.nativeEvent instanceof MouseEvent && e.nativeEvent.shiftKey && anchorIdxRef.current !== null) {
+      const anchor = anchorIdxRef.current;
+      // Apply the clicked item's toggled state to the entire anchor→clicked range
+      const newState = !selectedIds.has(id);
+      const start = Math.min(anchor, idx);
+      const end = Math.max(anchor, idx);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        groupedRows.slice(start, end + 1).forEach((row) => {
+          if (newState) next.add(row.expense.id);
+          else next.delete(row.expense.id);
+        });
+        return next;
+      });
+    } else {
+      toggleSelect(id);
+    }
+    anchorIdxRef.current = idx;
+  }, [groupedRows, toggleSelect, selectedIds]);
+
   const parentCategories = (categories ?? []).filter((c) => !c.parentId);
   const childCategories = (categories ?? []).filter((c) => c.parentId);
 
@@ -2159,7 +2181,7 @@ export function Expenses() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {groupedRows.map((row) => (
+                  {groupedRows.map((row, idx) => (
                     <ExpenseRowWithOffsets
                       key={row.expense.id}
                       expense={row.expense}
@@ -2170,7 +2192,7 @@ export function Expenses() {
                       accounts={eligibleAccounts}
                       categories={categories ?? []}
                       isSelected={selectedIds.has(row.expense.id)}
-                      onToggleSelect={toggleSelect}
+                      onToggleSelect={(id, e) => handleCheckboxChange(id, idx, e)}
                       dragState={dragState}
                       onDragStart={handleDragStart}
                       groupMeta={row.groupMeta}
@@ -2448,7 +2470,7 @@ function ExpenseRowWithOffsets({
   accounts: Account[];
   categories: Category[];
   isSelected?: boolean;
-  onToggleSelect?: (id: string) => void;
+  onToggleSelect?: (id: string, e: React.ChangeEvent<HTMLInputElement>) => void;
   dragState?: DragState | null;
   onDragStart?: (e: React.MouseEvent, expense: Expense, sourceType: "negative" | "offset") => void;
   groupMeta?: GroupMeta;
@@ -2509,7 +2531,7 @@ function ExpenseRowWithOffsets({
           <input
             type="checkbox"
             checked={isSelected ?? false}
-            onChange={() => onToggleSelect?.(expense.id)}
+            onChange={(e) => onToggleSelect?.(expense.id, e)}
             onClick={(e) => e.stopPropagation()}
             className="h-4 w-4 rounded accent-primary"
           />

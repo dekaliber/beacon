@@ -23,6 +23,10 @@ const incomeSchema = z.object({
   accountId: z.string(),
   tagIds: z.array(z.string()).optional(),
   transactionGroupId: z.string().nullable().optional(),
+  taxClassification: z
+    .enum(["QUALIFIED", "ORDINARY", "TAX_EXEMPT", "RETURN_OF_CAPITAL", "CAPITAL_GAIN"])
+    .nullable()
+    .optional(),
 });
 
 // List incomes with optional filtering and pagination
@@ -32,6 +36,7 @@ incomeRoutes.get("/", async (req, res) => {
   const skip = (page - 1) * limit;
 
   const where: Record<string, unknown> = {};
+  if (req.query.showOnlyReceived !== "false") where.isCashReceived = true;
   if (req.query.accountIds) {
     const ids = (req.query.accountIds as string).split(",").filter(Boolean);
     where.accountId = ids.length === 1 ? ids[0] : { in: ids };
@@ -110,7 +115,7 @@ incomeRoutes.post("/", async (req, res) => {
   const parsed = incomeSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const { tagIds, ...data } = parsed.data;
+  const { tagIds, taxClassification, ...data } = parsed.data;
 
   // Validate account type allows income
   const account = await prisma.account.findUnique({ where: { id: data.accountId } });
@@ -121,9 +126,15 @@ incomeRoutes.post("/", async (req, res) => {
     });
   }
 
+  const taxableAmount = taxClassification === "RETURN_OF_CAPITAL" ? 0
+    : taxClassification != null ? data.amount
+    : undefined;
+
   const income = await prisma.income.create({
     data: {
       ...data,
+      taxClassification: taxClassification ?? null,
+      ...(taxableAmount !== undefined ? { taxableAmount } : {}),
       ...(tagIds?.length ? { tags: { create: tagIds.map((id) => ({ tagId: id })) } } : {}),
     },
     include: INCOME_INCLUDE,
@@ -136,7 +147,7 @@ incomeRoutes.put("/:id", async (req, res) => {
   const parsed = incomeSchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const { tagIds, ...data } = parsed.data;
+  const { tagIds, taxClassification, ...data } = parsed.data;
 
   // Validate account type if accountId is being changed
   if (data.accountId) {
@@ -149,10 +160,30 @@ incomeRoutes.put("/:id", async (req, res) => {
     }
   }
 
+  // Recompute taxableAmount when taxClassification or amount changes
+  let taxableAmount: number | null | undefined = undefined;
+  if (taxClassification !== undefined) {
+    if (taxClassification === null) {
+      taxableAmount = null;
+    } else if (taxClassification === "RETURN_OF_CAPITAL") {
+      taxableAmount = 0;
+    } else {
+      // Use provided amount if present, otherwise look up the existing record
+      if (data.amount !== undefined) {
+        taxableAmount = data.amount;
+      } else {
+        const existing = await prisma.income.findUnique({ where: { id: req.params.id }, select: { amount: true } });
+        taxableAmount = existing ? Number(existing.amount) : undefined;
+      }
+    }
+  }
+
   const income = await prisma.income.update({
     where: { id: req.params.id },
     data: {
       ...data,
+      ...(taxClassification !== undefined ? { taxClassification } : {}),
+      ...(taxableAmount !== undefined ? { taxableAmount } : {}),
       ...(tagIds !== undefined
         ? {
             tags: {
@@ -167,37 +198,6 @@ incomeRoutes.put("/:id", async (req, res) => {
   res.json(income);
 });
 
-// Delete income
-incomeRoutes.delete("/:id", async (req, res) => {
-  await prisma.income.delete({ where: { id: req.params.id } });
-  res.status(204).send();
-});
-
-// Bulk edit income (source, category)
-const bulkEditIncomeSchema = z.object({
-  ids: z.array(z.string()).min(1),
-  source: z.string().min(1).optional(),
-  categoryId: z.string().nullable().optional(),
-});
-
-incomeRoutes.patch("/bulk", async (req, res) => {
-  const parsed = bulkEditIncomeSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-
-  const { ids, source, categoryId } = parsed.data;
-
-  const scalarUpdate: Record<string, unknown> = {};
-  if (source !== undefined) scalarUpdate.source = source;
-  if (categoryId !== undefined) scalarUpdate.categoryId = categoryId;
-
-  if (Object.keys(scalarUpdate).length === 0) {
-    return res.status(400).json({ error: "No fields to update" });
-  }
-
-  await prisma.income.updateMany({ where: { id: { in: ids } }, data: scalarUpdate });
-  res.json({ updated: ids.length });
-});
-
 // Bulk delete income
 incomeRoutes.delete("/bulk", async (req, res) => {
   const parsed = z.object({ ids: z.array(z.string()).min(1) }).safeParse(req.body);
@@ -206,6 +206,74 @@ incomeRoutes.delete("/bulk", async (req, res) => {
   const { ids } = parsed.data;
   await prisma.income.deleteMany({ where: { id: { in: ids } } });
   res.json({ deleted: ids.length });
+});
+
+// Delete income
+incomeRoutes.delete("/:id", async (req, res) => {
+  await prisma.income.delete({ where: { id: req.params.id } });
+  res.status(204).send();
+});
+
+// Bulk edit income (source, category, taxClassification)
+const bulkEditIncomeSchema = z.object({
+  ids: z.array(z.string()).min(1),
+  source: z.string().min(1).optional(),
+  categoryId: z.string().nullable().optional(),
+  taxClassification: z
+    .enum(["QUALIFIED", "ORDINARY", "TAX_EXEMPT", "RETURN_OF_CAPITAL", "CAPITAL_GAIN"])
+    .nullable()
+    .optional(),
+});
+
+incomeRoutes.patch("/bulk", async (req, res) => {
+  const parsed = bulkEditIncomeSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const { ids, source, categoryId, taxClassification } = parsed.data;
+
+  const scalarUpdate: Record<string, unknown> = {};
+  if (source !== undefined) scalarUpdate.source = source;
+  if (categoryId !== undefined) scalarUpdate.categoryId = categoryId;
+  if (taxClassification !== undefined) scalarUpdate.taxClassification = taxClassification;
+
+  if (Object.keys(scalarUpdate).length === 0) {
+    return res.status(400).json({ error: "No fields to update" });
+  }
+
+  // For taxClassification updates, taxableAmount must be computed per-row since it depends on amount
+  if (taxClassification !== undefined && taxClassification !== null) {
+    // RETURN_OF_CAPITAL → taxableAmount = 0; all others → taxableAmount = amount
+    if (taxClassification === "RETURN_OF_CAPITAL") {
+      await prisma.$executeRawUnsafe(
+        `UPDATE incomes SET "taxClassification" = $1::"TaxClassification", "taxableAmount" = 0 WHERE id = ANY($2::text[])`,
+        taxClassification,
+        ids
+      );
+    } else {
+      await prisma.$executeRawUnsafe(
+        `UPDATE incomes SET "taxClassification" = $1::"TaxClassification", "taxableAmount" = amount WHERE id = ANY($2::text[])`,
+        taxClassification,
+        ids
+      );
+    }
+    // Apply any other scalar updates (source, categoryId) separately
+    const otherUpdate: Record<string, unknown> = {};
+    if (source !== undefined) otherUpdate.source = source;
+    if (categoryId !== undefined) otherUpdate.categoryId = categoryId;
+    if (Object.keys(otherUpdate).length > 0) {
+      await prisma.income.updateMany({ where: { id: { in: ids } }, data: otherUpdate });
+    }
+  } else if (taxClassification === null) {
+    // Clearing taxClassification also clears taxableAmount
+    await prisma.income.updateMany({
+      where: { id: { in: ids } },
+      data: { ...scalarUpdate, taxableAmount: null },
+    });
+  } else {
+    await prisma.income.updateMany({ where: { id: { in: ids } }, data: scalarUpdate });
+  }
+
+  res.json({ updated: ids.length });
 });
 
 // Bulk import income

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { scanForDividends } from "./pendingDividends.js";
+import type { DividendEvent } from "../services/tiingo.js";
 
 export const notificationRoutes = Router();
 
@@ -19,9 +20,12 @@ notificationRoutes.get("/", async (_req, res) => {
   });
 
   // 2. Scan each account for new dividends (errors are swallowed per-account
-  //    so a single bad ticker/account can't break the whole response)
+  //    so a single bad ticker/account can't break the whole response).
+  //    A shared tickerCache ensures each unique ticker is only fetched from
+  //    Tiingo once per session, even when the same fund appears in multiple accounts.
+  const tickerCache = new Map<string, Promise<DividendEvent[]>>();
   await Promise.allSettled(
-    accounts.map((account) => scanForDividends(account.id)),
+    accounts.map((account) => scanForDividends(account, tickerCache)),
   );
 
   // 3. Count pending dividends per account

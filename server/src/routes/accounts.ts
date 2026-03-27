@@ -12,6 +12,7 @@ const accountSchema = z.object({
   color: z.string().optional(),
   isJoint: z.boolean().optional(),
   isManaged: z.boolean().optional(),
+  isTaxAdvantaged: z.boolean().optional(),
 });
 
 // ── Account routes ──

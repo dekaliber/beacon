@@ -1912,7 +1912,7 @@ investmentRoutes.post("/sell", async (req, res) => {
     // Validate holding exists
     const holding = await prisma.investmentHolding.findUnique({
       where: { id: body.holdingId },
-      include: { lots: true },
+      include: { lots: true, account: { select: { isTaxAdvantaged: true } } },
     });
     if (!holding) return res.status(404).json({ error: { message: "Holding not found" } });
 
@@ -2006,27 +2006,31 @@ investmentRoutes.post("/sell", async (req, res) => {
         },
       });
 
-      // 4. Create one Income record (total net proceeds; taxableAmount = total net gain)
-      const income = await tx.income.create({
-        data: {
-          amount: netProceeds,
-          subtype: "CAPITAL_GAIN",
-          taxableAmount: totalGain,
-          source: holding.ticker,
-          date: body.saleDate,
-          accountId: body.destinationAccountId,
-          activityId: activity.id,
-          notes: body.notes ?? null,
-          updatedAt: new Date(),
-        },
-        include: {
-          account: true,
-          category: true,
-          tags: { include: { tag: true } },
-          transactionGroup: true,
-          activity: true,
-        },
-      });
+      // 4. Create Income record only for taxable accounts
+      let income = null;
+      if (!holding.account.isTaxAdvantaged) {
+        income = await tx.income.create({
+          data: {
+            amount: netProceeds,
+            subtype: "CAPITAL_GAIN",
+            taxClassification: "CAPITAL_GAIN",
+            taxableAmount: totalGain,
+            source: holding.ticker,
+            date: body.saleDate,
+            accountId: body.destinationAccountId,
+            activityId: activity.id,
+            notes: body.notes ?? null,
+            updatedAt: new Date(),
+          },
+          include: {
+            account: true,
+            category: true,
+            tags: { include: { tag: true } },
+            transactionGroup: true,
+            activity: true,
+          },
+        });
+      }
 
       return { activity: serializeActivity(activity), income, holdingDeleted };
     });
