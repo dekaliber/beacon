@@ -24,12 +24,34 @@ const PRESET_COLORS = [
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function totalTargetPct(classes: AssetClass[]): number {
-  // Sum targets at the top level only (children roll up automatically in display)
-  return classes.reduce((sum, c) => {
-    const pct = c.target ? parseFloat(c.target.targetPct) : 0;
-    return sum + pct;
-  }, 0);
+/**
+ * For a top-level class, the effective target is derived from its children
+ * whenever at least one child has a target set. Otherwise it falls back to
+ * the class's own directly-stored target.
+ */
+function effectiveTarget(ac: AssetClass): number | null {
+  const children = ac.children ?? [];
+  const childrenWithTargets = children.filter((c) => c.target != null);
+  if (children.length > 0 && childrenWithTargets.length > 0) {
+    return childrenWithTargets.reduce((sum, c) => sum + parseFloat(c.target!.targetPct), 0);
+  }
+  return ac.target ? parseFloat(ac.target.targetPct) : null;
+}
+
+/** True when the parent's displayed target comes from summing its children. */
+function isDerived(ac: AssetClass): boolean {
+  const children = ac.children ?? [];
+  return children.length > 0 && children.some((c) => c.target != null);
+}
+
+/** Total of all effective leaf-level targets (used for the summary banner). */
+function totalLeafTarget(classes: AssetClass[]): number {
+  return classes.reduce((sum, c) => sum + (effectiveTarget(c) ?? 0), 0);
+}
+
+/** Number of top-level classes that have any effective target. */
+function countWithTargets(classes: AssetClass[]): number {
+  return classes.filter((c) => effectiveTarget(c) != null).length;
 }
 
 // ── Main page ──────────────────────────────────────────────────────────────
@@ -107,10 +129,8 @@ export function AssetClassesPage() {
     refetch();
   };
 
-  const topLevelTotal = assetClasses ? totalTargetPct(assetClasses) : 0;
-  const totalSet = assetClasses
-    ? assetClasses.filter((c) => c.target != null).length
-    : 0;
+  const leafTotal = assetClasses ? totalLeafTarget(assetClasses) : 0;
+  const anyTargetSet = assetClasses ? countWithTargets(assetClasses) > 0 : false;
 
   return (
     <div className="space-y-6">
@@ -127,11 +147,11 @@ export function AssetClassesPage() {
       </div>
 
       {/* Target summary banner */}
-      {assetClasses && assetClasses.length > 0 && totalSet > 0 && (
+      {assetClasses && assetClasses.length > 0 && anyTargetSet && (
         <div
           className={cn(
             "flex items-center gap-3 rounded-lg border px-4 py-3 text-sm",
-            Math.abs(topLevelTotal - 100) < 0.1
+            Math.abs(leafTotal - 100) < 0.1
               ? "border-green-200 bg-green-50 text-green-800"
               : "border-amber-200 bg-amber-50 text-amber-800"
           )}
@@ -139,12 +159,12 @@ export function AssetClassesPage() {
           <Target className="h-4 w-4 shrink-0" />
           <span>
             Target allocations sum to{" "}
-            <strong>{topLevelTotal.toFixed(1)}%</strong>
-            {Math.abs(topLevelTotal - 100) < 0.1
+            <strong>{leafTotal.toFixed(1)}%</strong>
+            {Math.abs(leafTotal - 100) < 0.1
               ? " — fully allocated!"
-              : topLevelTotal < 100
-              ? ` — ${(100 - topLevelTotal).toFixed(1)}% unallocated`
-              : ` — ${(topLevelTotal - 100).toFixed(1)}% over-allocated`}
+              : leafTotal < 100
+              ? ` — ${(100 - leafTotal).toFixed(1)}% unallocated`
+              : ` — ${(leafTotal - 100).toFixed(1)}% over-allocated`}
           </span>
         </div>
       )}
@@ -155,6 +175,7 @@ export function AssetClassesPage() {
             {assetClasses.map((topClass) => {
               const expanded = expandedIds.has(topClass.id);
               const hasChildren = (topClass.children?.length ?? 0) > 0;
+              const derived = isDerived(topClass) ? effectiveTarget(topClass) : undefined;
               return (
                 <div key={topClass.id}>
                   {/* Top-level row */}
@@ -163,6 +184,7 @@ export function AssetClassesPage() {
                     isChild={false}
                     expanded={expanded}
                     hasChildren={hasChildren}
+                    derivedTarget={derived}
                     onToggle={() => toggleExpand(topClass.id)}
                     onEdit={() => openEdit(topClass)}
                     onDelete={() => handleDelete(topClass)}
@@ -227,6 +249,8 @@ interface RowProps {
   isChild: boolean;
   expanded: boolean;
   hasChildren: boolean;
+  /** When set, this parent's target is derived from children — shown read-only. */
+  derivedTarget?: number | null;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -239,13 +263,17 @@ function AssetClassRow({
   isChild,
   expanded,
   hasChildren,
+  derivedTarget,
   onToggle,
   onEdit,
   onDelete,
   onSetTarget,
   onAddChild,
 }: RowProps) {
-  const target = assetClass.target ? parseFloat(assetClass.target.targetPct) : null;
+  const ownTarget = assetClass.target ? parseFloat(assetClass.target.targetPct) : null;
+  // derivedTarget is defined (even if null) when the row is a parent with child targets
+  const isTargetDerived = derivedTarget !== undefined;
+  const displayTarget = isTargetDerived ? derivedTarget : ownTarget;
 
   return (
     <div className={cn("flex items-center gap-3 py-3", isChild ? "pl-10 pr-3" : "px-3")}>
@@ -278,19 +306,29 @@ function AssetClassRow({
         )}
       </div>
 
-      {/* Target badge */}
-      <button
-        onClick={onSetTarget}
-        className={cn(
-          "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors",
-          target != null
-            ? "bg-primary/10 text-primary hover:bg-primary/20"
-            : "border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary"
-        )}
-        title="Set target allocation"
-      >
-        {target != null ? `${target.toFixed(1)}%` : "Set target"}
-      </button>
+      {/* Target badge — read-only derived vs. editable */}
+      {isTargetDerived ? (
+        <span
+          className="shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
+          title="Derived from sub-class targets"
+        >
+          {displayTarget != null ? `${displayTarget.toFixed(1)}%` : "—"}
+          <span className="ml-1 opacity-60">∑</span>
+        </span>
+      ) : (
+        <button
+          onClick={onSetTarget}
+          className={cn(
+            "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors",
+            displayTarget != null
+              ? "bg-primary/10 text-primary hover:bg-primary/20"
+              : "border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary"
+          )}
+          title="Set target allocation"
+        >
+          {displayTarget != null ? `${displayTarget.toFixed(1)}%` : "Set target"}
+        </button>
+      )}
 
       {/* Action buttons */}
       <div className="flex shrink-0 gap-0.5">
