@@ -13,6 +13,7 @@ import {
   LineChart,
   Bell,
   ChevronRight,
+  PieChart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNotifications } from "@/context/NotificationContext";
@@ -30,6 +31,7 @@ const configItems = [
   { to: "/accounts", icon: Landmark, label: "Accounts" },
   { to: "/categories", icon: Tags, label: "Categories" },
   { to: "/tags", icon: Tag, label: "Tags" },
+  { to: "/asset-classes", icon: PieChart, label: "Asset Classes" },
 ];
 
 function NotificationBell() {

@@ -7,6 +7,7 @@ export interface Account {
   color: string | null;
   isJoint: boolean;
   isManaged: boolean;
+  isTaxAdvantaged: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -80,7 +81,7 @@ export interface Expense {
 }
 
 export type IncomeSubtype = "REGULAR" | "DIVIDEND" | "CAPITAL_GAIN" | "RETURN_OF_CAPITAL";
-export type DividendType = "QUALIFIED" | "ORDINARY" | "TAX_EXEMPT" | "RETURN_OF_CAPITAL";
+export type TaxClassification = "QUALIFIED" | "ORDINARY" | "TAX_EXEMPT" | "RETURN_OF_CAPITAL" | "CAPITAL_GAIN";
 export type PendingDividendStatus = "PENDING" | "CONFIRMED" | "DISMISSED";
 export type InvestmentActivityType = "DIVIDEND" | "SALE" | "PURCHASE";
 
@@ -115,8 +116,9 @@ export interface Income {
   accountId: string;
   transactionGroupId: string | null;
   subtype: IncomeSubtype;
-  dividendType: DividendType | null;
+  taxClassification: TaxClassification | null;
   taxableAmount: string | null;
+  isCashReceived: boolean;
   activityId: string | null;
   account: Account;
   tags: IncomeTag[];
@@ -336,6 +338,59 @@ export interface TickerSearchResult {
   name: string;
   type: string; // "Equity", "ETF", "Mutual Fund"
   exchange: string;
+}
+
+// ── Asset allocation types ────────────────────────────────────────────────────
+
+export interface AssetClassTarget {
+  id: string;
+  assetClassId: string;
+  targetPct: string; // Decimal serialized as string
+}
+
+export interface AssetClass {
+  id: string;
+  name: string;
+  slug: string | null;
+  isSystem: boolean;
+  parentId: string | null;
+  parent?: { id: string; name: string } | null;
+  displayOrder: number;
+  color: string | null;
+  target: AssetClassTarget | null;
+  children?: AssetClass[];
+}
+
+export interface InstrumentWeight {
+  id: string;
+  instrumentId: string;
+  assetClassId: string;
+  assetClass: { id: string; name: string; slug: string | null; color: string | null; parentId: string | null };
+  weight: string; // Decimal serialized as string
+}
+
+export interface InstrumentTicker {
+  id: string;
+  instrumentId: string;
+  ticker: string;
+}
+
+export interface InstrumentHoldingRef {
+  id: string;
+  ticker: string;
+  accountId: string;
+  account: { id: string; name: string; color: string | null };
+}
+
+export interface Instrument {
+  id: string;
+  primaryTicker: string;
+  name: string | null;
+  tickers: InstrumentTicker[];
+  weights: InstrumentWeight[];
+  holdings: InstrumentHoldingRef[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ── Notification types ────────────────────────────────────────────────────────

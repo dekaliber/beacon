@@ -33,11 +33,12 @@ enum IncomeSubtype {
   RETURN_OF_CAPITAL
 }
 
-enum DividendType {
+enum TaxClassification {
   QUALIFIED
   ORDINARY
   TAX_EXEMPT
   RETURN_OF_CAPITAL
+  CAPITAL_GAIN
 }
 
 enum PendingDividendStatus {
@@ -59,9 +60,10 @@ model Account {
   balance   Decimal     @default(0) @db.Decimal(12, 2)
   currency  String      @default("USD")
   color     String?
-  isJoint   Boolean     @default(false)
-  isManaged Boolean     @default(false)
-  isActive  Boolean     @default(true)
+  isJoint          Boolean     @default(false)
+  isManaged        Boolean     @default(false)
+  isTaxAdvantaged  Boolean     @default(false)
+  isActive         Boolean     @default(true)
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
@@ -146,10 +148,11 @@ model Income {
 
   transactionGroupId String?
 
-  subtype       IncomeSubtype       @default(REGULAR)
-  dividendType  DividendType?
-  taxableAmount Decimal?            @db.Decimal(12, 2)
-  activityId    String?
+  subtype         IncomeSubtype       @default(REGULAR)
+  taxClassification TaxClassification?
+  taxableAmount   Decimal?            @db.Decimal(12, 2)
+  isCashReceived  Boolean             @default(true)
+  activityId      String?
 
   category         Category?          @relation(fields: [categoryId], references: [id])
   transactionGroup TransactionGroup?  @relation(fields: [transactionGroupId], references: [id])
@@ -294,6 +297,8 @@ model InvestmentHolding {
   name       String
   type       String?
   assetClass String?
+  instrumentId String?
+  instrument   Instrument? @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
   // Set after each successful Tiingo dividend scan; used to throttle API calls.
   lastDividendScanAt DateTime?
   createdAt  DateTime @default(now())
@@ -418,6 +423,74 @@ model InvestmentActivity {
   @@index([holdingId])
   @@index([lotId])
   @@map("investment_activities")
+}
+
+// ── Asset allocation models ──────────────────────────────────────────────────
+
+model AssetClass {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String?  @unique  // set for system classes (e.g. "us-large-cap")
+  isSystem     Boolean  @default(false)
+  parentId     String?
+  displayOrder Int      @default(0)
+  color        String?
+  parent       AssetClass?  @relation("AssetClassHierarchy", fields: [parentId], references: [id])
+  children     AssetClass[] @relation("AssetClassHierarchy")
+  instrumentWeights InstrumentAssetClassWeight[]
+  target       AssetClassTarget?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("asset_classes")
+}
+
+model AssetClassTarget {
+  id           String     @id @default(cuid())
+  assetClassId String     @unique
+  assetClass   AssetClass @relation(fields: [assetClassId], references: [id], onDelete: Cascade)
+  targetPct    Decimal    @db.Decimal(5, 2)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@map("asset_class_targets")
+}
+
+model Instrument {
+  id            String   @id @default(cuid())
+  primaryTicker String   @unique
+  name          String?
+  tickers       InstrumentTicker[]
+  weights       InstrumentAssetClassWeight[]
+  holdings      InvestmentHolding[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("instruments")
+}
+
+model InstrumentTicker {
+  id           String     @id @default(cuid())
+  instrumentId String
+  instrument   Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  ticker       String     @unique
+  createdAt    DateTime   @default(now())
+
+  @@map("instrument_tickers")
+}
+
+model InstrumentAssetClassWeight {
+  id           String     @id @default(cuid())
+  instrumentId String
+  instrument   Instrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  assetClassId String
+  assetClass   AssetClass @relation(fields: [assetClassId], references: [id], onDelete: Cascade)
+  weight       Decimal    @db.Decimal(5, 2)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([instrumentId, assetClassId])
+  @@map("instrument_asset_class_weights")
 }
 
 // ── Pending dividend suggestions ────────────────────────────────────────────

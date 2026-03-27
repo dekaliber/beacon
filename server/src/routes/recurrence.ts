@@ -102,6 +102,20 @@ export async function generateUpcomingExpenses() {
     let lastAdvanced = current;
 
     if (current > endOfNextMonth) {
+      // If the next occurrence is already past the rule's end date, deactivate
+      // only if the end date has actually passed today.
+      if (rule.endDate && current > rule.endDate) {
+        const todayForEnd = new Date();
+        todayForEnd.setUTCHours(0, 0, 0, 0);
+        if (rule.endDate <= todayForEnd) {
+          await prisma.recurrenceRule.update({
+            where: { id: rule.id },
+            data: { isActive: false },
+          });
+        }
+        continue;
+      }
+
       // Next occurrence is beyond the normal window — create just one pending
       // instance so the upcoming section always has something to show.
       // Don't advance nextOccurrence so the normal loop picks it up later.
@@ -131,10 +145,18 @@ export async function generateUpcomingExpenses() {
     while (current <= endOfNextMonth) {
       // Check if past end date
       if (rule.endDate && current > rule.endDate) {
-        await prisma.recurrenceRule.update({
-          where: { id: rule.id },
-          data: { isActive: false, nextOccurrence: current },
-        });
+        // Only deactivate if the end date has actually passed today.
+        // If the end date is still in the future we've simply generated all
+        // expenses up to it — leave the rule active so it stays visible on
+        // the Recurring page until the end date arrives.
+        const todayForEnd = new Date();
+        todayForEnd.setUTCHours(0, 0, 0, 0);
+        if (rule.endDate <= todayForEnd) {
+          await prisma.recurrenceRule.update({
+            where: { id: rule.id },
+            data: { isActive: false, nextOccurrence: current },
+          });
+        }
         break;
       }
 
@@ -379,6 +401,14 @@ recurrenceRoutes.put("/:id", async (req, res) => {
   if (typeof req.body.endDate === "string") data.endDate = new Date(req.body.endDate);
   // Allow explicitly clearing the end date by passing null
   if (req.body.endDate === null) data.endDate = null;
+
+  // Sync isActive with endDate in the same write so the response reflects the correct state.
+  // - endDate in the past or today → inactive; future or cleared → active.
+  if ("endDate" in data) {
+    const now = new Date();
+    now.setUTCHours(0, 0, 0, 0);
+    data.isActive = !data.endDate || (data.endDate as Date) > now;
+  }
 
   const rule = await prisma.recurrenceRule.update({
     where: { id: req.params.id },

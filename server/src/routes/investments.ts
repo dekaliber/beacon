@@ -464,8 +464,26 @@ investmentRoutes.post("/holdings", async (req, res) => {
     });
     if (!account) return res.status(404).json({ error: { message: "Investment account not found" } });
 
+    // Auto-resolve instrument: check alias tickers first, then primary ticker, then create new
+    let instrumentId: string | null = null;
+    const aliasTicker = await (prisma as any).instrumentTicker.findUnique({
+      where: { ticker: body.ticker },
+      select: { instrumentId: true },
+    });
+    if (aliasTicker) {
+      instrumentId = aliasTicker.instrumentId;
+    } else {
+      const instrument = await (prisma as any).instrument.upsert({
+        where: { primaryTicker: body.ticker },
+        update: {},
+        create: { primaryTicker: body.ticker, name: body.name },
+        select: { id: true },
+      });
+      instrumentId = instrument.id;
+    }
+
     const holding = await prisma.investmentHolding.create({
-      data: body,
+      data: { ...body, instrumentId },
       include: { lots: true },
     });
 
@@ -1894,7 +1912,7 @@ investmentRoutes.post("/sell", async (req, res) => {
     // Validate holding exists
     const holding = await prisma.investmentHolding.findUnique({
       where: { id: body.holdingId },
-      include: { lots: true },
+      include: { lots: true, account: { select: { isTaxAdvantaged: true } } },
     });
     if (!holding) return res.status(404).json({ error: { message: "Holding not found" } });
 
@@ -1988,27 +2006,31 @@ investmentRoutes.post("/sell", async (req, res) => {
         },
       });
 
-      // 4. Create one Income record (total net proceeds; taxableAmount = total net gain)
-      const income = await tx.income.create({
-        data: {
-          amount: netProceeds,
-          subtype: "CAPITAL_GAIN",
-          taxableAmount: totalGain,
-          source: holding.ticker,
-          date: body.saleDate,
-          accountId: body.destinationAccountId,
-          activityId: activity.id,
-          notes: body.notes ?? null,
-          updatedAt: new Date(),
-        },
-        include: {
-          account: true,
-          category: true,
-          tags: { include: { tag: true } },
-          transactionGroup: true,
-          activity: true,
-        },
-      });
+      // 4. Create Income record only for taxable accounts
+      let income = null;
+      if (!holding.account.isTaxAdvantaged) {
+        income = await tx.income.create({
+          data: {
+            amount: netProceeds,
+            subtype: "CAPITAL_GAIN",
+            taxClassification: "CAPITAL_GAIN",
+            taxableAmount: totalGain,
+            source: holding.ticker,
+            date: body.saleDate,
+            accountId: body.destinationAccountId,
+            activityId: activity.id,
+            notes: body.notes ?? null,
+            updatedAt: new Date(),
+          },
+          include: {
+            account: true,
+            category: true,
+            tags: { include: { tag: true } },
+            transactionGroup: true,
+            activity: true,
+          },
+        });
+      }
 
       return { activity: serializeActivity(activity), income, holdingDeleted };
     });

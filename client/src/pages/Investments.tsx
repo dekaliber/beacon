@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { TrendingUp, TrendingDown, Landmark, LineChart, ChevronRight, Pencil } from "lucide-react";
+import { useNavigate, Link } from "react-router-dom";
+import { TrendingUp, TrendingDown, Landmark, LineChart, ChevronRight, Pencil, Layers } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
@@ -153,7 +153,7 @@ export function Investments() {
               <div className="flex items-center gap-2 min-w-0">
                 <p className="font-medium text-sm truncate">{account.name}</p>
                 {!isBanking && pendingDividendAccountIds.has(account.id) && (
-                  <span className="shrink-0 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 whitespace-nowrap">
+                  <span className="shrink-0 inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700 whitespace-nowrap">
                     Pending dividends
                   </span>
                 )}
@@ -195,6 +195,13 @@ export function Investments() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Investments</h2>
+        <Link
+          to="/investments/securities"
+          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+        >
+          <Layers className="h-4 w-4" />
+          Securities
+        </Link>
       </div>
 
       {/* Portfolio summary card */}

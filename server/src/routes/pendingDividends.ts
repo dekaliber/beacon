@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
-import { getDividendEvents } from "../services/tiingo.js";
+import { getDividendEvents, type DividendEvent } from "../services/tiingo.js";
 
 export const pendingDividendRoutes = Router();
 
@@ -73,8 +73,18 @@ const SCAN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
  * only queried once per holding per day to stay within free-tier rate limits.
  * Already-seen (holdingId, exDate) pairs are also skipped via the unique constraint.
  * Events where shares-at-ex-date = 0 are skipped.
+ *
+ * @param tickerCache  Optional shared cache (ticker → in-flight or resolved Promise)
+ *                     passed in when scanning multiple accounts in the same session.
+ *                     Ensures each unique ticker is only fetched from Tiingo once,
+ *                     even when the same fund appears in several accounts.
  */
-export async function scanForDividends(accountId: string): Promise<void> {
+export async function scanForDividends(
+  account: { id: string; name: string },
+  tickerCache?: Map<string, Promise<DividendEvent[]>>,
+): Promise<void> {
+  const { id: accountId, name: accountName } = account;
+
   const holdings = await prisma.investmentHolding.findMany({
     where: { accountId },
     select: { id: true, ticker: true, createdAt: true, lastDividendScanAt: true },
@@ -86,7 +96,7 @@ export async function scanForDividends(accountId: string): Promise<void> {
 
   await Promise.all(
     holdings.map(async (holding) => {
-      const tag = `[dividend-scan] ${holding.ticker}`;
+      const tag = `[dividend-scan] ${accountName} / ${holding.ticker}`;
 
       // Skip if scanned recently — avoids unnecessary Tiingo API calls
       if (holding.lastDividendScanAt && holding.lastDividendScanAt > cutoff) {
@@ -95,12 +105,30 @@ export async function scanForDividends(accountId: string): Promise<void> {
         return;
       }
 
-      const startDate = holding.createdAt.toISOString().slice(0, 10);
-      console.log(`${tag}: querying Tiingo (${startDate} → ${todayStr})`);
+      // Look back 14 days before the holding was created so we catch dividends
+      // whose ex-date fell just before the user added the holding but whose
+      // payable date lands after — a common pattern for mutual funds.
+      const lookbackMs = 14 * 24 * 60 * 60 * 1000;
+      const startDate = new Date(holding.createdAt.getTime() - lookbackMs)
+        .toISOString()
+        .slice(0, 10);
+
+      // Deduplicate Tiingo API calls across accounts: if another account already
+      // queued or completed a fetch for this ticker this session, reuse that
+      // Promise rather than issuing a second identical request.
+      let eventsPromise: Promise<DividendEvent[]>;
+      if (tickerCache?.has(holding.ticker)) {
+        console.log(`${tag}: skipped API call — ticker already queried this session`);
+        eventsPromise = tickerCache.get(holding.ticker)!;
+      } else {
+        console.log(`${tag}: querying Tiingo (${startDate} → ${todayStr})`);
+        eventsPromise = getDividendEvents(holding.ticker, startDate, todayStr);
+        tickerCache?.set(holding.ticker, eventsPromise);
+      }
 
       let events;
       try {
-        events = await getDividendEvents(holding.ticker, startDate, todayStr);
+        events = await eventsPromise;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         const isRateLimit = msg.includes("429");
@@ -235,7 +263,7 @@ const confirmSchema = z.object({
   shares: z.number().positive(),
   totalAmount: z.number().positive(),
   categoryId: z.string().optional().nullable(),
-  dividendType: z
+  taxClassification: z
     .enum(["QUALIFIED", "ORDINARY", "TAX_EXEMPT", "RETURN_OF_CAPITAL"])
     .optional()
     .nullable(),
@@ -254,13 +282,18 @@ pendingDividendRoutes.post("/:id/confirm", async (req, res) => {
     return res.status(400).json({ error: "Dividend has already been confirmed or dismissed" });
   }
 
+  const account = await prisma.account.findUnique({
+    where: { id: pending.accountId },
+    select: { isTaxAdvantaged: true },
+  });
+
   const {
     date,
     perShareAmount,
     shares,
     totalAmount,
     categoryId,
-    dividendType,
+    taxClassification,
     notes,
     source,
   } = parsed.data;
@@ -283,22 +316,25 @@ pendingDividendRoutes.post("/:id/confirm", async (req, res) => {
       },
     });
 
-    // 2. Create the linked Income record
-    const income = await tx.income.create({
-      data: {
-        amount: totalAmount,
-        source: source ?? pending.ticker,
-        date: payableDate,
-        accountId: pending.accountId,
-        subtype: "DIVIDEND",
-        dividendType: dividendType ?? null,
-        taxableAmount: dividendType === "RETURN_OF_CAPITAL" ? 0 : totalAmount,
-        categoryId: categoryId ?? null,
-        notes: notes ?? null,
-        activityId: activity.id,
-      },
-      include: INCOME_INCLUDE,
-    });
+    // 2. Create the linked Income record (skipped for tax-advantaged accounts)
+    let income = null;
+    if (!account?.isTaxAdvantaged) {
+      income = await tx.income.create({
+        data: {
+          amount: totalAmount,
+          source: source ?? pending.ticker,
+          date: payableDate,
+          accountId: pending.accountId,
+          subtype: "DIVIDEND",
+          taxClassification: taxClassification ?? null,
+          taxableAmount: taxClassification === "RETURN_OF_CAPITAL" ? 0 : totalAmount,
+          categoryId: categoryId ?? null,
+          notes: notes ?? null,
+          activityId: activity.id,
+        },
+        include: INCOME_INCLUDE,
+      });
+    }
 
     // 3. Mark the pending dividend as confirmed
     const confirmedPending = await tx.pendingDividend.update({
@@ -318,8 +354,8 @@ pendingDividendRoutes.post("/:id/confirm", async (req, res) => {
 
 // ── POST /:id/confirm-reinvest ────────────────────────────────────────────────
 // DRIP reinvestment path: creates a DIVIDEND activity + new InvestmentLot +
-// linked PURCHASE activity. No Income record is created — the dividend is
-// treated as a non-cash event that increases the holding's cost basis.
+// linked PURCHASE activity + an Income record with isCashReceived=false.
+// The income record captures tax liability even though no cash was received.
 
 const confirmReinvestSchema = z.object({
   exDate: z.string(),              // ISO date of the ex-dividend date
@@ -329,7 +365,7 @@ const confirmReinvestSchema = z.object({
   totalAmount: z.number().positive(),
   reinvestPrice: z.number().positive(),
   reinvestQuantity: z.number().positive(),
-  dividendType: z
+  taxClassification: z
     .enum(["QUALIFIED", "ORDINARY", "TAX_EXEMPT", "RETURN_OF_CAPITAL"])
     .optional()
     .nullable(),
@@ -347,6 +383,11 @@ pendingDividendRoutes.post("/:id/confirm-reinvest", async (req, res) => {
     return res.status(400).json({ error: "Dividend has already been confirmed or dismissed" });
   }
 
+  const account = await prisma.account.findUnique({
+    where: { id: pending.accountId },
+    select: { isTaxAdvantaged: true },
+  });
+
   const {
     exDate,
     reinvestDate,
@@ -355,6 +396,7 @@ pendingDividendRoutes.post("/:id/confirm-reinvest", async (req, res) => {
     totalAmount,
     reinvestPrice,
     reinvestQuantity,
+    taxClassification,
     notes,
   } = parsed.data;
 
@@ -406,7 +448,27 @@ pendingDividendRoutes.post("/:id/confirm-reinvest", async (req, res) => {
       },
     });
 
-    // 4. Mark the pending dividend as confirmed
+    // 4. Create Income record to capture tax liability (skipped for tax-advantaged accounts)
+    let income = null;
+    if (!account?.isTaxAdvantaged) {
+      const taxableAmount = taxClassification === "RETURN_OF_CAPITAL" ? 0 : totalAmount;
+      income = await tx.income.create({
+        data: {
+          amount: totalAmount,
+          source: pending.ticker,
+          date: exDateObj,
+          accountId: pending.accountId,
+          subtype: "DIVIDEND",
+          taxClassification: taxClassification ?? null,
+          taxableAmount,
+          isCashReceived: false,
+          activityId: dividendActivity.id,
+          notes: notes ?? null,
+        },
+      });
+    }
+
+    // 5. Mark the pending dividend as confirmed
     const confirmedPending = await tx.pendingDividend.update({
       where: { id },
       data: {
@@ -416,7 +478,7 @@ pendingDividendRoutes.post("/:id/confirm-reinvest", async (req, res) => {
       },
     });
 
-    return { dividendActivity, purchaseActivity, lot, pendingDividend: confirmedPending };
+    return { dividendActivity, purchaseActivity, lot, income, pendingDividend: confirmedPending };
   });
 
   res.status(201).json(result);

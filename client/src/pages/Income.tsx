@@ -279,6 +279,96 @@ function EditableAmountCell({ value, onSave, positive }: { value: string; onSave
   );
 }
 
+// ── Tax status badge + inline-editable cell ──
+const DIVIDEND_TYPE_LABELS: Record<string, string> = {
+  QUALIFIED: "Qualified",
+  ORDINARY: "Ordinary",
+  TAX_EXEMPT: "Tax-Exempt",
+  RETURN_OF_CAPITAL: "Return of Capital",
+  CAPITAL_GAIN: "Capital Gain",
+};
+const DIVIDEND_TYPE_CLASSES: Record<string, string> = {
+  QUALIFIED: "bg-emerald-100 text-emerald-700",
+  ORDINARY: "bg-slate-100 text-slate-600",
+  TAX_EXEMPT: "bg-teal-100 text-teal-700",
+  RETURN_OF_CAPITAL: "bg-amber-100 text-amber-700",
+  CAPITAL_GAIN: "bg-blue-100 text-blue-700",
+};
+const DIVIDEND_TYPE_OPTIONS = [
+  { value: "", label: "Not specified" },
+  { value: "CAPITAL_GAIN", label: "Capital Gain" },
+  { value: "ORDINARY", label: "Ordinary" },
+  { value: "QUALIFIED", label: "Qualified" },
+  { value: "RETURN_OF_CAPITAL", label: "Return of Capital" },
+  { value: "TAX_EXEMPT", label: "Tax-Exempt" },
+];
+
+function TaxStatusBadge({ taxClassification }: { taxClassification: string | null }) {
+  if (!taxClassification) return null;
+  return (
+    <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${DIVIDEND_TYPE_CLASSES[taxClassification] ?? "bg-slate-100 text-slate-600"}`}>
+      {DIVIDEND_TYPE_LABELS[taxClassification] ?? taxClassification}
+    </span>
+  );
+}
+
+function EditableTaxStatusCell({ value, onSave }: { value: string | null; onSave: (v: string | null) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, minWidth: 0 });
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!editing) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setEditing(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [editing]);
+
+  const startEditing = () => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left, minWidth: Math.max(rect.width, 160) });
+    }
+    setEditing(true);
+  };
+
+  const selectValue = (v: string) => {
+    setEditing(false);
+    const next = v || null;
+    if (next !== value) onSave(next);
+  };
+
+  return (
+    <div ref={ref}>
+      {editing ? (
+        <div
+          style={{ position: "fixed", top: dropdownPos.top, left: dropdownPos.left, minWidth: dropdownPos.minWidth, zIndex: 9999 }}
+          className="rounded-md border border-border bg-background shadow-lg"
+        >
+          {DIVIDEND_TYPE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-muted/50 ${opt.value === (value ?? "") ? "bg-primary/10" : ""}`}
+              onClick={() => selectValue(opt.value)}
+            >
+              {opt.value ? <TaxStatusBadge taxClassification={opt.value} /> : <span className="text-muted-foreground italic">Not specified</span>}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <span onClick={startEditing} className="cursor-pointer">
+        {value
+          ? <TaxStatusBadge taxClassification={value} />
+          : <span className="border-b border-dotted border-transparent text-muted-foreground hover:border-gray-400">—</span>
+        }
+      </span>
+    </div>
+  );
+}
+
 // ── Item typeahead (modal, shared for account, category, etc.) ──
 function ItemTypeahead({
   name, defaultValue, items, placeholder, required, triggerRef: externalTriggerRef, onTabFromSearch,
@@ -420,6 +510,7 @@ interface IncomeFilterState {
   startDate: string;
   endDate: string;
   datePreset: string;
+  showOnlyReceived: boolean;
 }
 
 const INCOME_DEFAULT_FILTERS: IncomeFilterState = {
@@ -428,6 +519,7 @@ const INCOME_DEFAULT_FILTERS: IncomeFilterState = {
   startDate: `${new Date().getFullYear()}-01-01`,
   endDate: "",
   datePreset: "This year",
+  showOnlyReceived: true,
 };
 
 function loadIncomeFilters(): IncomeFilterState {
@@ -442,6 +534,7 @@ function loadIncomeFilters(): IncomeFilterState {
       startDate: get("startDate") ?? INCOME_DEFAULT_FILTERS.startDate,
       endDate: get("endDate") ?? INCOME_DEFAULT_FILTERS.endDate,
       datePreset: get("datePreset") ?? INCOME_DEFAULT_FILTERS.datePreset,
+      showOnlyReceived: get("showOnlyReceived") ?? INCOME_DEFAULT_FILTERS.showOnlyReceived,
     };
   } catch {
     return { ...INCOME_DEFAULT_FILTERS };
@@ -454,6 +547,7 @@ function saveIncomeFilters(filters: IncomeFilterState) {
   localStorage.setItem("beacon-income-startDate", JSON.stringify(filters.startDate));
   localStorage.setItem("beacon-income-endDate", JSON.stringify(filters.endDate));
   localStorage.setItem("beacon-income-datePreset", JSON.stringify(filters.datePreset));
+  localStorage.setItem("beacon-income-showOnlyReceived", JSON.stringify(filters.showOnlyReceived));
 }
 
 export function IncomePage() {
@@ -522,6 +616,7 @@ export function IncomePage() {
       const endDate = applied.endDate || todayStr;
       params.endDate = endDate > todayStr ? todayStr : endDate;
     }
+    if (!applied.showOnlyReceived) params.showOnlyReceived = "false";
     return params;
   }, [sort, applied, todayStr, appliedSearch]);
 
@@ -645,10 +740,10 @@ export function IncomePage() {
     refetchAll();
   };
 
-  const handleInlineUpdate = useCallback(async (id: string, field: string, value: string) => {
+  const handleInlineUpdate = useCallback(async (id: string, field: string, value: string | null) => {
     const data: Record<string, unknown> = {};
     if (field === "date") data.date = value;
-    else if (field === "amount") data.amount = parseFloat(value);
+    else if (field === "amount") data.amount = parseFloat(value as string);
     else data[field] = value;
     await updateIncome(id, data);
     refetchAll();
@@ -699,6 +794,28 @@ export function IncomePage() {
       parseFloat(inc.amount).toFixed(2).includes(q)
     );
   }, [allIncomes, appliedSearch]);
+
+  const anchorIdxRef = useRef<number | null>(null);
+  const handleCheckboxChange = useCallback((id: string, idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.nativeEvent instanceof MouseEvent && e.nativeEvent.shiftKey && anchorIdxRef.current !== null) {
+      const anchor = anchorIdxRef.current;
+      // Apply the clicked item's toggled state to the entire anchor→clicked range
+      const newState = !selectedIds.has(id);
+      const start = Math.min(anchor, idx);
+      const end = Math.max(anchor, idx);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        incomes.slice(start, end + 1).forEach((item) => {
+          if (newState) next.add(item.id);
+          else next.delete(item.id);
+        });
+        return next;
+      });
+    } else {
+      toggleSelect(id);
+    }
+    anchorIdxRef.current = idx;
+  }, [incomes, toggleSelect, selectedIds]);
 
   const upcomingIncomes = useMemo(() => {
     const all = upcomingData?.data ?? [];
@@ -815,6 +932,16 @@ export function IncomePage() {
                 <input type="date" value={staged.endDate || todayStr} onChange={(e) => setStaged((s) => ({ ...s, endDate: e.target.value, datePreset: "Custom" }))} className="rounded-md border border-border px-2 py-1.5 text-sm" />
               </div>
             </div>
+            <div className="flex items-center gap-2 self-end pb-1">
+              <input
+                type="checkbox"
+                id="showOnlyReceived"
+                checked={staged.showOnlyReceived}
+                onChange={(e) => setStaged((s) => ({ ...s, showOnlyReceived: e.target.checked }))}
+                className="h-4 w-4 rounded border-border"
+              />
+              <label htmlFor="showOnlyReceived" className="text-sm select-none cursor-pointer">Show only received income</label>
+            </div>
             <div>
               <label className="mb-1 block text-xs invisible select-none" aria-hidden="true">x</label>
               <div className="flex h-8 items-center gap-3">
@@ -839,6 +966,7 @@ export function IncomePage() {
                   <th className="w-[70px] pb-3 pr-3 font-medium">Date</th>
                   <th className="pb-3 pr-3 font-medium">Source</th>
                   <th className="w-[130px] pb-3 pr-3 font-medium">Category</th>
+                  <th className="w-[115px] pb-3 pr-3 font-medium">Tax Status</th>
                   <th className="w-[185px] pb-3 pr-3 font-medium">Account</th>
                   <th className="w-[30px] pb-3"></th>
                   <th className="w-[90px] pb-3 text-right font-medium">Amount</th>
@@ -861,6 +989,9 @@ export function IncomePage() {
                         items={categories}
                         onSave={(v) => handleInlineUpdate(income.id, "categoryId", v)}
                       />
+                    </td>
+                    <td className="w-[115px] py-2 pr-3">
+                      <TaxStatusBadge taxClassification={income.taxClassification} />
                     </td>
                     <td className="w-[185px] py-2 pr-3">
                       <EditableTypeaheadCell
@@ -935,6 +1066,7 @@ export function IncomePage() {
                     <th className="w-[70px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
                     <th className="pb-3 pr-3 font-medium">Source</th>
                     <th className="w-[130px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("category")}>Category <SortIcon field="category" /></th>
+                    <th className="w-[115px] pb-3 pr-3 font-medium">Tax Status</th>
                     <th className="w-[185px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
                     <th className="w-[30px] pb-3"></th>
                     <th className="w-[90px] cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
@@ -942,13 +1074,13 @@ export function IncomePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {incomes.map((income) => (
+                  {incomes.map((income, idx) => (
                     <tr key={income.id} className={`hover:bg-muted/50 ${selectedIds.has(income.id) ? "bg-primary/5" : ""}`}>
                       <td className="w-[44px] py-2 pr-2 text-center">
                         <input
                           type="checkbox"
                           checked={selectedIds.has(income.id)}
-                          onChange={() => toggleSelect(income.id)}
+                          onChange={(e) => handleCheckboxChange(income.id, idx, e)}
                           className="h-4 w-4 rounded border-border"
                         />
                       </td>
@@ -959,10 +1091,10 @@ export function IncomePage() {
                         <div className="flex items-center gap-1.5">
                           <EditableCell value={income.source ?? ""} onSave={(v) => handleInlineUpdate(income.id, "source", v)} />
                           {income.subtype === "DIVIDEND" && (
-                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-teal-100 text-teal-700">Div</span>
+                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700">Dividend</span>
                           )}
                           {income.subtype === "CAPITAL_GAIN" && (
-                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700">Cap Gain</span>
+                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700">Sale</span>
                           )}
                         </div>
                       </td>
@@ -973,6 +1105,9 @@ export function IncomePage() {
                           items={categories}
                           onSave={(v) => handleInlineUpdate(income.id, "categoryId", v)}
                         />
+                      </td>
+                      <td className="w-[115px] py-2 pr-3">
+                        <EditableTaxStatusCell value={income.taxClassification} onSave={(v) => handleInlineUpdate(income.id, "taxClassification", v)} />
                       </td>
                       <td className="w-[185px] py-2 pr-3">
                         <EditableTypeaheadCell
@@ -1007,25 +1142,28 @@ export function IncomePage() {
             </div>
 
             <div className="divide-y divide-border md:hidden">
-              {incomes.map((income) => (
+              {incomes.map((income, idx) => (
                 <div key={income.id} className={`flex items-center gap-2 py-3 ${selectedIds.has(income.id) ? "bg-primary/5" : ""}`}>
                   <input
                     type="checkbox"
                     checked={selectedIds.has(income.id)}
-                    onChange={() => toggleSelect(income.id)}
+                    onChange={(e) => handleCheckboxChange(income.id, idx, e)}
                     className="h-4 w-4 shrink-0 rounded border-border"
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 truncate">
                       <p className="truncate font-medium">{income.category?.name ?? "—"}{income.source ? ` · ${income.source}` : ""}</p>
                       {income.subtype === "DIVIDEND" && (
-                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-teal-100 text-teal-700">Div</span>
+                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700">Dividend</span>
                       )}
                       {income.subtype === "CAPITAL_GAIN" && (
-                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-700">Cap Gain</span>
+                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700">Sale</span>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground">{income.account.name} &middot; {formatDate(income.date)}</p>
+                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <span>{income.account.name} &middot; {formatDate(income.date)}</span>
+                      {income.taxClassification && <TaxStatusBadge taxClassification={income.taxClassification} />}
+                    </div>
                   </div>
                   <div className="ml-2 flex items-center gap-2">
                     <span className="font-semibold text-green-600">+{formatCurrency(income.amount)}</span>
@@ -1094,7 +1232,8 @@ export function IncomePage() {
           onClear={() => setSelectedIds(new Set())}
           onSuccess={() => { setSelectedIds(new Set()); refetchAll(); }}
           deleteDisabled={allIncomes.some((i) => selectedIds.has(i.id) && i.activityId != null)}
-          deleteDisabledTitle="Deselect investment-linked transactions (Div / Cap Gain) to enable delete"
+          showTaxStatus
+          deleteDisabledTitle="Deselect investment-linked transactions (Div / Sale) to enable delete"
         />
       )}
     </div>
@@ -1117,6 +1256,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showOptional, setShowOptional] = useState(false);
+  const [taxClassification, setTaxClassification] = useState<string>("");
   const categoryTriggerRef = useRef<HTMLButtonElement>(null);
   const accountTriggerRef = useRef<HTMLButtonElement>(null);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
@@ -1124,7 +1264,8 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
   useEffect(() => {
     if (open) {
       setConfirmDelete(false);
-      setShowOptional(!!income?.notes);
+      setTaxClassification(income?.taxClassification ?? "");
+      setShowOptional(!!(income?.notes || income?.taxClassification));
     }
   }, [open, income]);
 
@@ -1139,6 +1280,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
       source: (form.get("source") as string) || undefined,
       date: form.get("date") as string,
       accountId: form.get("accountId") as string,
+      taxClassification: taxClassification || null,
       notes: (form.get("notes") as string) || undefined,
     });
     setSaving(false);
@@ -1213,9 +1355,26 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
             More options
           </button>
           {showOptional && (
-            <div className="mt-3">
-              <label className="mb-1 block text-sm font-medium">Notes</label>
-              <textarea name="notes" rows={2} defaultValue={income?.notes ?? ""} className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Additional notes..." />
+            <div className="mt-3 space-y-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium">Tax Status</label>
+                <select
+                  value={taxClassification}
+                  onChange={(e) => setTaxClassification(e.target.value)}
+                  className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">Not specified</option>
+                  <option value="CAPITAL_GAIN">Capital Gain</option>
+                  <option value="ORDINARY">Ordinary</option>
+                  <option value="QUALIFIED">Qualified</option>
+                  <option value="RETURN_OF_CAPITAL">Return of Capital</option>
+                  <option value="TAX_EXEMPT">Tax-Exempt</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Notes</label>
+                <textarea name="notes" rows={2} defaultValue={income?.notes ?? ""} className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Additional notes..." />
+              </div>
             </div>
           )}
         </div>
