@@ -14,7 +14,6 @@ import {
   Bell,
   ChevronRight,
   PieChart,
-  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNotifications } from "@/context/NotificationContext";
@@ -163,21 +162,6 @@ export function Layout() {
                 <span className="hidden sm:inline">{item.label}</span>
               </NavLink>
             ))}
-            {/* Securities sub-link — shown as a peer nav item */}
-            <NavLink
-              to="/investments/securities"
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap",
-                  isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                )
-              }
-            >
-              <Layers className="h-4 w-4" />
-              <span className="hidden sm:inline">Securities</span>
-            </NavLink>
           </nav>
 
           {/* Notification bell */}

@@ -78,129 +78,114 @@ export function SecuritiesPage() {
 
       <Card>
         {instruments && instruments.length > 0 ? (
-          <div className="divide-y divide-border">
-            {instruments.map((instrument) => {
-              const pct = classifiedPct(instrument);
-              const isFullyClassified = pct >= 99.9;
-              const allTickers = [instrument.primaryTicker, ...instrument.tickers.map((t) => t.ticker)];
-              const uniqueAccounts = [...new Map(instrument.holdings.map((h) => [h.account.id, h.account])).values()];
+          <div>
+            {/* Column headers */}
+            <div className="grid grid-cols-[7rem_1fr_14rem_11rem_auto] gap-x-4 border-b border-border px-4 py-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Symbol</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Name</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Accounts</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Classification</span>
+              <span />
+            </div>
 
-              return (
-                <div key={instrument.id} className="px-4 py-4">
-                  <div className="flex items-start gap-4">
-                    {/* Ticker + name */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold">{instrument.primaryTicker}</span>
-                        {/* Alias tickers */}
-                        {instrument.tickers.map((t) => (
-                          <span key={t.id} className="flex items-center gap-0.5 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                            {t.ticker}
-                            <button
-                              onClick={() => handleRemoveAlias(instrument, t.ticker)}
-                              className="ml-0.5 hover:text-destructive"
-                              title={`Remove alias ${t.ticker}`}
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                      {instrument.name && (
-                        <p className="mt-0.5 text-sm text-muted-foreground truncate">{instrument.name}</p>
-                      )}
+            <div className="divide-y divide-border">
+              {instruments.map((instrument) => {
+                const pct = classifiedPct(instrument);
+                const isFullyClassified = pct >= 99.9;
+                const uniqueAccounts = [...new Map(instrument.holdings.map((h) => [h.account.id, h.account])).values()];
 
-                      {/* Account badges */}
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {uniqueAccounts.map((acct) => {
-                          // Find ticker(s) this account uses for this instrument
-                          const holdingTickers = instrument.holdings
-                            .filter((h) => h.account.id === acct.id)
-                            .map((h) => h.ticker);
-                          const aliasNote =
-                            holdingTickers.some((t) => t !== instrument.primaryTicker)
-                              ? ` (as ${holdingTickers.filter((t) => t !== instrument.primaryTicker).join(", ")})`
-                              : "";
-                          return (
-                            <span
-                              key={acct.id}
-                              className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-white"
-                              style={{ backgroundColor: accountBadge(acct.color) }}
-                            >
-                              {acct.name}{aliasNote}
-                            </span>
-                          );
-                        })}
-                      </div>
+                return (
+                  <div key={instrument.id} className="grid grid-cols-[7rem_1fr_14rem_11rem_auto] gap-x-4 items-center px-4 py-2.5">
 
-                      {/* Classification bar */}
-                      <div className="mt-2.5 flex items-center gap-2">
-                        <div className="h-1.5 w-32 rounded-full bg-muted overflow-hidden">
-                          <div
-                            className={cn("h-full rounded-full transition-all", isFullyClassified ? "bg-green-500" : "bg-primary")}
-                            style={{ width: `${Math.min(pct, 100)}%` }}
-                          />
-                        </div>
-                        <span className={cn("text-xs", isFullyClassified ? "text-green-600 font-medium" : "text-muted-foreground")}>
-                          {isFullyClassified ? "Fully classified" : pct > 0 ? `${pct.toFixed(0)}% classified` : "Unclassified"}
-                        </span>
-                      </div>
-
-                      {/* Weight pills */}
-                      {instrument.weights.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {instrument.weights.map((w) => (
-                            <span
-                              key={w.id}
-                              className="rounded-full px-2 py-0.5 text-xs font-medium"
-                              style={{
-                                backgroundColor: w.assetClass.color ? `${w.assetClass.color}20` : undefined,
-                                color: w.assetClass.color ?? undefined,
-                                border: `1px solid ${w.assetClass.color ?? "#e2e8f0"}`,
-                              }}
-                            >
-                              {w.assetClass.name} {parseFloat(w.weight).toFixed(0)}%
+                    {/* Symbol + aliases */}
+                    <div className="min-w-0">
+                      <span className="font-semibold text-sm">{instrument.primaryTicker}</span>
+                      {instrument.tickers.length > 0 && (
+                        <div className="mt-0.5 flex flex-wrap gap-1">
+                          {instrument.tickers.map((t) => (
+                            <span key={t.id} className="flex items-center gap-0.5 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                              {t.ticker}
+                              <button
+                                onClick={() => handleRemoveAlias(instrument, t.ticker)}
+                                className="ml-0.5 hover:text-destructive"
+                                title={`Remove alias ${t.ticker}`}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
                             </span>
                           ))}
                         </div>
                       )}
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex shrink-0 gap-1">
+                    {/* Name */}
+                    <span className="truncate text-sm text-muted-foreground">
+                      {instrument.name ?? <span className="italic opacity-50">—</span>}
+                    </span>
+
+                    {/* Accounts */}
+                    <div className="flex flex-wrap gap-1">
+                      {uniqueAccounts.map((acct) => {
+                        const aliasTickers = instrument.holdings
+                          .filter((h) => h.account.id === acct.id && h.ticker !== instrument.primaryTicker)
+                          .map((h) => h.ticker);
+                        const label = aliasTickers.length > 0
+                          ? `${acct.name} (${aliasTickers.join(", ")})`
+                          : acct.name;
+                        return (
+                          <span
+                            key={acct.id}
+                            className="rounded-full px-2 py-0.5 text-xs font-medium text-white"
+                            style={{ backgroundColor: accountBadge(acct.color) }}
+                          >
+                            {label}
+                          </span>
+                        );
+                      })}
+                    </div>
+
+                    {/* Classification % + Edit weights */}
+                    <div className="flex items-center gap-2">
+                      <span className={cn("text-xs tabular-nums", isFullyClassified ? "text-green-600 font-medium" : "text-muted-foreground")}>
+                        {isFullyClassified ? "100%" : pct > 0 ? `${pct.toFixed(0)}%` : "0%"}
+                      </span>
                       <button
                         onClick={() => setWeightsModal({ open: true, instrument })}
-                        className="rounded px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
-                        title="Edit asset class weights"
+                        className="rounded px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors whitespace-nowrap"
                       >
                         Edit weights
                       </button>
+                    </div>
+
+                    {/* Row actions */}
+                    <div className="flex items-center gap-0.5">
                       <button
                         onClick={() => setAliasModal({ open: true, instrument })}
                         className="rounded p-1 hover:bg-accent"
                         title="Add equivalent ticker"
                       >
-                        <Link2 className="h-4 w-4 text-muted-foreground" />
+                        <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
                       <button
                         onClick={() => setRenameModal({ open: true, instrument })}
                         className="rounded p-1 hover:bg-accent"
                         title="Rename"
                       >
-                        <Pencil className="h-4 w-4 text-muted-foreground" />
+                        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                       </button>
                       <button
                         onClick={() => handleDelete(instrument)}
                         className="rounded p-1 hover:bg-accent"
                         title="Remove"
                       >
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
                       </button>
                     </div>
+
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         ) : (
           <EmptyState
