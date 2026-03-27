@@ -21,11 +21,59 @@ const instrumentInclude = {
   },
 };
 
+// ── Backfill helper ────────────────────────────────────────────────────────
+// Creates Instrument records for any holdings that pre-date this feature.
+// Safe to call repeatedly — upserts on primaryTicker and skips linked holdings.
+
+async function backfillUnlinkedHoldings() {
+  const unlinked = await prisma.investmentHolding.findMany({
+    where: { instrumentId: null },
+    select: { id: true, ticker: true, name: true },
+  });
+  if (unlinked.length === 0) return;
+
+  // Group by ticker so we upsert once per unique ticker
+  const byTicker = new Map<string, { ids: string[]; name: string }>();
+  for (const h of unlinked) {
+    const existing = byTicker.get(h.ticker);
+    if (existing) {
+      existing.ids.push(h.id);
+    } else {
+      byTicker.set(h.ticker, { ids: [h.id], name: h.name });
+    }
+  }
+
+  for (const [ticker, { ids, name }] of byTicker) {
+    // Check if an alias ticker already points to an existing instrument
+    const alias = await prisma.instrumentTicker.findUnique({
+      where: { ticker },
+      select: { instrumentId: true },
+    });
+    const instrumentId = alias
+      ? alias.instrumentId
+      : (
+          await prisma.instrument.upsert({
+            where: { primaryTicker: ticker },
+            update: {},
+            create: { primaryTicker: ticker, name },
+            select: { id: true },
+          })
+        ).id;
+
+    await prisma.investmentHolding.updateMany({
+      where: { id: { in: ids } },
+      data: { instrumentId },
+    });
+  }
+}
+
 // ── GET /api/instruments ───────────────────────────────────────────────────
-// Returns all instruments with their weights and which accounts hold them.
+// Returns all instruments. Lazily backfills any holdings that pre-date this
+// feature so the list is always complete without a separate migration step.
 
 instrumentRoutes.get("/", async (_req, res) => {
   try {
+    await backfillUnlinkedHoldings();
     const instruments = await prisma.instrument.findMany({
       include: instrumentInclude,
       orderBy: { primaryTicker: "asc" },
