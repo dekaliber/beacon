@@ -9,6 +9,7 @@ export interface Account {
   isManaged: boolean;
   isTaxAdvantaged: boolean;
   isActive: boolean;
+  isHidden: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -242,7 +243,7 @@ export interface InvestmentHolding {
   name: string;
   type: string | null;
   /** Optional grouping label e.g. "US Stocks", "Commodities" */
-  assetClass: string | null;
+  group: string | null;
   currentPrice: number | null;
   priceDate: string | null;
   priceUpdatedAt: string | null;
@@ -328,7 +329,7 @@ export interface ManualInvestment {
   id: string;
   accountId: string;
   name: string;
-  assetClass: string | null;
+  group: string | null;
   totalCost: number | null;
   marketValue: number;
 }
@@ -359,6 +360,25 @@ export interface AssetClass {
   color: string | null;
   target: AssetClassTarget | null;
   children?: AssetClass[];
+}
+
+export interface AllocationItem {
+  id: string;
+  name: string;
+  color: string | null;
+  targetPct: number | null;
+  actualPct: number;
+  actualValue: number;
+}
+
+export interface AllocationSummary {
+  items: AllocationItem[];
+  topLevelItems: AllocationItem[];
+  unclassifiedValue: number;
+  unclassifiedPct: number;
+  totalValue: number;
+  classifiedValue: number;
+  hasAnyTargets: boolean;
 }
 
 export interface InstrumentWeight {

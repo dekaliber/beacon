@@ -295,6 +295,248 @@ function computeHoldingFields(
   return { totalQuantity, totalCost, marketValue, totalGain, totalGainPct, shortTermGain, longTermGain, isManaged };
 }
 
+// ── GET /api/investments/allocation ─────────────────────────────────────────
+// Computes actual vs. target asset allocation across all investment accounts.
+//
+// Display-level logic: for each top-level asset class, if any children have
+// directly-set targets we show those children individually; otherwise we show
+// the parent as a single unit. Children with NO target (when siblings have
+// targets) and classes with no target at any level are treated as unclassified.
+//
+// Holdings are weighted through InstrumentAssetClassWeight. A portion of a
+// holding's value that maps to a class with no display unit is added to the
+// unclassified bucket.
+
+investmentRoutes.get("/allocation", async (req, res) => {
+  try {
+    // 1. Asset class hierarchy with targets ──────────────────────────────────
+    const topLevelClasses = await prisma.assetClass.findMany({
+      where: { parentId: null },
+      include: {
+        target: true,
+        children: { include: { target: true }, orderBy: { displayOrder: "asc" } },
+      },
+      orderBy: { displayOrder: "asc" },
+    });
+
+    // 2. Build display-unit map ───────────────────────────────────────────────
+    // displayUnitOrder preserves the render sequence.
+    // classToDisplayUnit maps every known assetClassId → its display-unit id
+    // (or "UNCLASSIFIED" when it has no target home).
+    // duToTopLevelId maps each display-unit back to its top-level ancestor,
+    // used to aggregate values for the overview stacked bars.
+    type DisplayUnit = { id: string; name: string; color: string | null; targetPct: number | null };
+    const displayUnitOrder: string[] = [];
+    const displayUnitInfo = new Map<string, DisplayUnit>();
+    const classToDisplayUnit = new Map<string, string>(); // assetClassId → duId | "UNCLASSIFIED"
+    const duToTopLevelId = new Map<string, string>();     // duId → top-level assetClassId
+
+    for (const top of topLevelClasses) {
+      const children = top.children ?? [];
+      const childrenWithTarget = children.filter((c) => c.target != null);
+
+      if (childrenWithTarget.length > 0) {
+        // Show each child that has a target as its own display unit.
+        for (const child of childrenWithTarget) {
+          const duId = child.id;
+          displayUnitOrder.push(duId);
+          displayUnitInfo.set(duId, {
+            id: duId,
+            name: child.name,
+            color: child.color ?? top.color,
+            targetPct: parseFloat(child.target!.targetPct.toString()),
+          });
+          classToDisplayUnit.set(child.id, duId);
+          duToTopLevelId.set(duId, top.id);
+        }
+        // Children without a target, and the parent itself, are unclassified.
+        for (const child of children.filter((c) => c.target == null)) {
+          classToDisplayUnit.set(child.id, "UNCLASSIFIED");
+        }
+        classToDisplayUnit.set(top.id, "UNCLASSIFIED");
+      } else if (top.target) {
+        // No children with targets → show the parent as the display unit.
+        const duId = top.id;
+        displayUnitOrder.push(duId);
+        displayUnitInfo.set(duId, {
+          id: duId,
+          name: top.name,
+          color: top.color,
+          targetPct: parseFloat(top.target.targetPct.toString()),
+        });
+        classToDisplayUnit.set(top.id, duId);
+        for (const child of children) {
+          classToDisplayUnit.set(child.id, duId);
+        }
+        duToTopLevelId.set(duId, top.id);
+      } else {
+        // No target anywhere in this branch — everything here is unclassified.
+        classToDisplayUnit.set(top.id, "UNCLASSIFIED");
+        for (const child of children) {
+          classToDisplayUnit.set(child.id, "UNCLASSIFIED");
+        }
+      }
+    }
+
+    // 3. Fetch all investment holdings ───────────────────────────────────────
+    const filter = req.query.filter as string | undefined;
+    const taxFilter =
+      filter === "taxable" ? false :
+      filter === "tax-advantaged" ? true :
+      undefined; // "all" or omitted → no filter
+
+    const investmentAccounts = await prisma.account.findMany({
+      where: {
+        type: "INVESTMENT",
+        isActive: true,
+        ...(taxFilter !== undefined && { isTaxAdvantaged: taxFilter }),
+      },
+      select: { id: true },
+    });
+    const accountIds = investmentAccounts.map((a) => a.id);
+
+    const holdings = await prisma.investmentHolding.findMany({
+      where: { accountId: { in: accountIds } },
+      include: {
+        lots: { select: { quantity: true } },
+        instrument: {
+          include: {
+            weights: { select: { assetClassId: true, weight: true } },
+          },
+        },
+      },
+    });
+
+    const manualInvestments = await prisma.manualInvestment.findMany({
+      where: { accountId: { in: accountIds } },
+      include: {
+        instrument: {
+          include: {
+            weights: { select: { assetClassId: true, weight: true } },
+          },
+        },
+      },
+    });
+
+    // Fetch prices for all tickers in one query (same pattern as /accounts route).
+    const allTickers = [...new Set(holdings.map((h) => h.ticker))];
+    const cachedPrices = await prisma.tickerPrice.findMany({
+      where: { ticker: { in: allTickers } },
+      select: { ticker: true, price: true },
+    });
+    const priceMap = new Map(cachedPrices.map((p) => [p.ticker, parseFloat(p.price.toString())]));
+
+    // 4. Accumulate values per display unit ──────────────────────────────────
+    const duValues = new Map<string, number>(); // duId → $
+    let unclassifiedValue = 0;
+    let totalValue = 0;
+
+    const creditWeight = (marketValue: number, weights: { assetClassId: string; weight: any }[]) => {
+      if (weights.length === 0) {
+        unclassifiedValue += marketValue;
+        return;
+      }
+      let credited = 0;
+      for (const w of weights) {
+        const pct = parseFloat(w.weight.toString()) / 100;
+        const portion = marketValue * pct;
+        const duId = classToDisplayUnit.get(w.assetClassId);
+        if (duId && duId !== "UNCLASSIFIED" && displayUnitInfo.has(duId)) {
+          duValues.set(duId, (duValues.get(duId) ?? 0) + portion);
+          credited += portion;
+        }
+        // Portions mapping to no display unit fall through to unclassified below.
+      }
+      unclassifiedValue += marketValue - credited;
+    };
+
+    for (const holding of holdings) {
+      const price = priceMap.get(holding.ticker) ?? null;
+      if (price == null) continue;
+
+      const qty = holding.lots.reduce(
+        (s, l) => s + parseFloat(l.quantity.toString()),
+        0
+      );
+      const mv = qty * price;
+      if (mv <= 0) continue;
+
+      totalValue += mv;
+      creditWeight(mv, holding.instrument?.weights ?? []);
+    }
+
+    for (const mi of manualInvestments) {
+      const mv = parseFloat(mi.marketValue.toString());
+      if (mv <= 0) continue;
+
+      totalValue += mv;
+      creditWeight(mv, mi.instrument?.weights ?? []);
+    }
+
+    // 5. Build ordered response ───────────────────────────────────────────────
+    // actualPct is computed relative to classifiedValue so that unclassified
+    // holdings are excluded from the denominator, making target vs. actual
+    // percentages directly comparable on the same 100% base.
+    const classifiedValue = totalValue - unclassifiedValue;
+
+    const items = displayUnitOrder.map((duId) => {
+      const du = displayUnitInfo.get(duId)!;
+      const actualValue = duValues.get(duId) ?? 0;
+      return {
+        id: du.id,
+        name: du.name,
+        color: du.color,
+        targetPct: du.targetPct,
+        actualPct: classifiedValue > 0 ? (actualValue / classifiedValue) * 100 : 0,
+        actualValue,
+      };
+    });
+
+    // Top-level rollup for the overview stacked bars.
+    // Each top-level class aggregates the actual values of all its display units,
+    // and derives its effective target from child targets (when set) or its own.
+    const topLevelActualValues = new Map<string, number>();
+    for (const [duId, value] of duValues) {
+      const topId = duToTopLevelId.get(duId);
+      if (topId) topLevelActualValues.set(topId, (topLevelActualValues.get(topId) ?? 0) + value);
+    }
+
+    const topLevelIdsWithDus = new Set(duToTopLevelId.values());
+    const topLevelItems = topLevelClasses
+      .filter((top) => topLevelIdsWithDus.has(top.id))
+      .map((top) => {
+        const children = top.children ?? [];
+        const childrenWithTarget = children.filter((c) => c.target != null);
+        const effectiveTargetPct = childrenWithTarget.length > 0
+          ? childrenWithTarget.reduce((sum, c) => sum + parseFloat(c.target!.targetPct.toString()), 0)
+          : top.target ? parseFloat(top.target.targetPct.toString()) : null;
+        const actualValue = topLevelActualValues.get(top.id) ?? 0;
+        return {
+          id: top.id,
+          name: top.name,
+          color: top.color,
+          targetPct: effectiveTargetPct,
+          actualPct: classifiedValue > 0 ? (actualValue / classifiedValue) * 100 : 0,
+          actualValue,
+        };
+      })
+      .filter((top) => top.targetPct != null || top.actualValue > 0);
+
+    res.json({
+      items,
+      topLevelItems,
+      unclassifiedValue,
+      unclassifiedPct: totalValue > 0 ? (unclassifiedValue / totalValue) * 100 : 0,
+      totalValue,
+      classifiedValue,
+      hasAnyTargets: displayUnitInfo.size > 0,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: { message: "Failed to compute allocation" } });
+  }
+});
+
 // ── GET /api/investments/accounts ──────────────────────────────────────────
 // Returns INVESTMENT, CHECKING, SAVINGS accounts with portfolio summaries
 
@@ -303,6 +545,7 @@ investmentRoutes.get("/accounts", async (_req, res) => {
     const accounts = await prisma.account.findMany({
       where: {
         isActive: true,
+        isHidden: false,
         type: { in: ["INVESTMENT", "CHECKING", "SAVINGS"] },
       },
       include: {
@@ -343,7 +586,7 @@ investmentRoutes.get("/accounts", async (_req, res) => {
           id: holding.id,
           ticker: holding.ticker,
           name: holding.name,
-          assetClass: holding.assetClass ?? null,
+          group: holding.assetClass ?? null,
           currentPrice,
           priceDate: priceRecord?.priceDate ?? null,
           priceUpdatedAt: priceRecord?.updatedAt ?? null,
@@ -423,7 +666,7 @@ investmentRoutes.get("/holdings/:accountId", async (req, res) => {
         ticker: holding.ticker,
         name: holding.name,
         type: holding.type ?? null,
-        assetClass: holding.assetClass ?? null,
+        group: holding.assetClass ?? null,
         currentPrice,
         priceDate: priceRecord?.priceDate ?? null,
         priceUpdatedAt: priceRecord?.updatedAt ?? null,
@@ -452,7 +695,7 @@ const createHoldingSchema = z.object({
   ticker: z.string().min(1).max(20).transform((s) => s.toUpperCase().trim()),
   name: z.string().min(1).max(200),
   type: z.string().max(50).nullable().optional(),
-  assetClass: z.string().max(100).nullable().optional(),
+  group: z.string().max(100).nullable().optional(),
 });
 
 investmentRoutes.post("/holdings", async (req, res) => {
@@ -483,11 +726,18 @@ investmentRoutes.post("/holdings", async (req, res) => {
     }
 
     const holding = await prisma.investmentHolding.create({
-      data: { ...body, instrumentId },
+      data: {
+        accountId: body.accountId,
+        ticker: body.ticker,
+        name: body.name,
+        type: body.type ?? null,
+        assetClass: body.group ?? null,
+        instrumentId,
+      },
       include: { lots: true },
     });
 
-    res.status(201).json(holding);
+    res.status(201).json({ ...holding, group: holding.assetClass ?? null });
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: { message: err.errors[0]?.message } });
     const e = err as any;
@@ -498,10 +748,10 @@ investmentRoutes.post("/holdings", async (req, res) => {
 });
 
 // ── PATCH /api/investments/holdings/:id ───────────────────────────────────
-// Update mutable holding fields: assetClass (and optionally name).
+// Update mutable holding fields: group label (and optionally name).
 
 const patchHoldingSchema = z.object({
-  assetClass: z.string().max(100).nullable().optional(),
+  group: z.string().max(100).nullable().optional(),
   name: z.string().min(1).max(200).optional(),
 });
 
@@ -510,10 +760,10 @@ investmentRoutes.patch("/holdings/:id", async (req, res) => {
     const body = patchHoldingSchema.parse(req.body);
     const holding = await prisma.investmentHolding.update({
       where: { id: req.params.id },
-      data: body,
+      data: { name: body.name, assetClass: body.group },
       include: { lots: true },
     });
-    res.json({ ...holding, assetClass: holding.assetClass ?? null });
+    res.json({ ...holding, group: holding.assetClass ?? null });
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: { message: err.errors[0]?.message } });
     const e = err as any;
@@ -1456,7 +1706,7 @@ function serializeManual(m: {
     id: m.id,
     accountId: m.accountId,
     name: m.name,
-    assetClass: m.assetClass ?? null,
+    group: m.assetClass ?? null,
     totalCost: m.totalCost != null ? parseFloat(m.totalCost.toString()) : null,
     marketValue: parseFloat(m.marketValue.toString()),
     createdAt: m.createdAt,
@@ -1467,14 +1717,14 @@ function serializeManual(m: {
 const createManualSchema = z.object({
   accountId: z.string(),
   name: z.string().min(1).max(200),
-  assetClass: z.string().max(100).nullable().optional(),
+  group: z.string().max(100).nullable().optional(),
   totalCost: z.number().nonnegative().nullable().optional(),
   marketValue: z.number().nonnegative(),
 });
 
 const updateManualSchema = z.object({
   name: z.string().min(1).max(200).optional(),
-  assetClass: z.string().max(100).nullable().optional(),
+  group: z.string().max(100).nullable().optional(),
   totalCost: z.number().nonnegative().nullable().optional(),
   marketValue: z.number().nonnegative().optional(),
 });
@@ -1506,7 +1756,7 @@ investmentRoutes.post("/manual", async (req, res) => {
       data: {
         accountId: body.accountId,
         name: body.name,
-        assetClass: body.assetClass ?? null,
+        assetClass: body.group ?? null,
         totalCost: body.totalCost ?? null,
         marketValue: body.marketValue,
       },
@@ -1526,7 +1776,12 @@ investmentRoutes.put("/manual/:id", async (req, res) => {
     const body = updateManualSchema.parse(req.body);
     const entry = await prisma.manualInvestment.update({
       where: { id: req.params.id },
-      data: body,
+      data: {
+        name: body.name,
+        assetClass: body.group,
+        totalCost: body.totalCost,
+        marketValue: body.marketValue,
+      },
     });
     res.json(serializeManual(entry));
   } catch (err) {

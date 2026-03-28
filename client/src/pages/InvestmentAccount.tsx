@@ -408,7 +408,7 @@ function AddInvestmentModal({
 }) {
   const [step, setStep] = useState<"search" | "lots">("search");
   const [selectedTicker, setSelectedTicker] = useState<TickerSearchResult | null>(null);
-  const [assetClass, setAssetClass] = useState("");
+  const [group, setGroup] = useState("");
   const [lots, setLots] = useState<LotFormRow[]>([
     { quantity: "", costPerShare: "", acquiredDate: localToday() },
   ]);
@@ -422,7 +422,7 @@ function AddInvestmentModal({
     if (open) {
       setStep("search");
       setSelectedTicker(null);
-      setAssetClass("");
+      setGroup("");
       setLots([{ quantity: "", costPerShare: "", acquiredDate: localToday() }]);
       setError(null);
       setFetchedPrice(null);
@@ -432,7 +432,7 @@ function AddInvestmentModal({
   const resetToSearch = () => {
     setStep("search");
     setSelectedTicker(null);
-    setAssetClass("");
+    setGroup("");
     setLots([{ quantity: "", costPerShare: "", acquiredDate: localToday() }]);
     setError(null);
     setFetchedPrice(null);
@@ -477,7 +477,7 @@ function AddInvestmentModal({
         ticker: selectedTicker.ticker,
         name: selectedTicker.name,
         type: selectedTicker.type,
-        assetClass: assetClass.trim() || null,
+        group: group.trim() || null,
       });
       for (const lot of lots) {
         const qty = parseFloat(lot.quantity);
@@ -553,13 +553,13 @@ function AddInvestmentModal({
             </div>
           </div>
 
-          {/* Asset class */}
+          {/* Group */}
           <div>
-            <label className="text-xs text-muted-foreground block mb-0.5">Asset Class <span className="italic">(optional)</span></label>
+            <label className="text-xs text-muted-foreground block mb-0.5">Group <span className="italic">(optional)</span></label>
             <input
               type="text"
-              value={assetClass}
-              onChange={(e) => setAssetClass(e.target.value)}
+              value={group}
+              onChange={(e) => setGroup(e.target.value)}
               placeholder="e.g. US Stocks, Commodities"
               className="w-full rounded border border-border px-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
@@ -881,7 +881,7 @@ function AddLotRow({
   const [qty, setQty] = useState(initialQty != null ? String(initialQty) : "");
   const [cps, setCps] = useState(initialCost != null ? initialCost.toFixed(2) : "");
   const [date, setDate] = useState(defaultDate ?? localToday());
-  const [assetClass, setAssetClass] = useState(initialAssetClass ?? "");
+  const [group, setGroup] = useState(initialAssetClass ?? "");
   const [saving, setSaving] = useState(false);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -896,9 +896,9 @@ function AddLotRow({
       await createLot({ holdingId, quantity, costPerShare, acquiredDate: managed ? null : date });
       // Also persist the asset class if it changed
       if (managed) {
-        const newClass = assetClass.trim() || null;
+        const newClass = group.trim() || null;
         if (newClass !== initialAssetClass) {
-          await patchHolding(holdingId, { assetClass: newClass });
+          await patchHolding(holdingId, { group: newClass });
         }
       }
       onSaved();
@@ -938,11 +938,11 @@ function AddLotRow({
           </div>
         </div>
         <div className="flex-1 min-w-0">
-          <label className="text-xs text-muted-foreground block mb-0.5">Asset Class <span className="italic font-normal">(optional)</span></label>
+          <label className="text-xs text-muted-foreground block mb-0.5">Group <span className="italic font-normal">(optional)</span></label>
           <input
             type="text"
-            value={assetClass}
-            onChange={(e) => setAssetClass(e.target.value)}
+            value={group}
+            onChange={(e) => setGroup(e.target.value)}
             placeholder="e.g. US Stocks"
             className="w-full rounded border border-border px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
           />
@@ -1036,17 +1036,17 @@ function HoldingRow({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteWarning, setDeleteWarning] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [editingAssetClass, setEditingAssetClass] = useState(false);
-  const [assetClassDraft, setAssetClassDraft] = useState(holding.assetClass ?? "");
-  const [savingAssetClass, setSavingAssetClass] = useState(false);
+  const [editingGroup, setEditingGroup] = useState(false);
+  const [groupDraft, setGroupDraft] = useState(holding.group ?? "");
+  const [savingGroup, setSavingGroup] = useState(false);
 
-  const handleAssetClassSave = async () => {
-    setSavingAssetClass(true);
+  const handleGroupSave = async () => {
+    setSavingGroup(true);
     try {
-      await patchHolding(holding.id, { assetClass: assetClassDraft.trim() || null });
-      setEditingAssetClass(false);
+      await patchHolding(holding.id, { group: groupDraft.trim() || null });
+      setEditingGroup(false);
       onUpdated();
-    } finally { setSavingAssetClass(false); }
+    } finally { setSavingGroup(false); }
   };
 
   const handleDeleteRequest = () => {
@@ -1161,9 +1161,9 @@ function HoldingRow({
                     </p>
                   </div>
                   <div>
-                    <p className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Asset Class</p>
+                    <p className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Group</p>
                     <p className="font-medium">
-                      {holding.assetClass ?? <span className="italic text-muted-foreground text-xs">None set</span>}
+                      {holding.group ?? <span className="italic text-muted-foreground text-xs">None set</span>}
                     </p>
                   </div>
                   <div className="ml-auto self-center">
@@ -1186,7 +1186,7 @@ function HoldingRow({
                       onSaved={() => { setAddingLot(false); onUpdated(); }}
                       onCancel={() => setAddingLot(false)}
                       managed
-                      initialAssetClass={holding.assetClass}
+                      initialAssetClass={holding.group}
                       initialQty={holding.totalQuantity > 0 ? holding.totalQuantity : null}
                       initialCost={holding.totalCost > 0 ? holding.totalCost : null}
                     />
@@ -1246,37 +1246,37 @@ function HoldingRow({
                 </tr>
               )}
 
-              {/* Asset class editor — always editable regardless of managed status */}
+              {/* Group editor — always editable regardless of managed status */}
               <tr className="border-b border-border bg-muted/5">
                 <td colSpan={8} className="py-2 pl-4 pr-4">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="uppercase tracking-wide font-medium">Asset Class</span>
+                    <span className="uppercase tracking-wide font-medium">Group</span>
                     <span className="text-border">·</span>
-                    {editingAssetClass ? (
+                    {editingGroup ? (
                       <div className="flex items-center gap-1.5">
                         <input
                           type="text"
-                          value={assetClassDraft}
-                          onChange={(e) => setAssetClassDraft(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === "Enter") handleAssetClassSave(); if (e.key === "Escape") setEditingAssetClass(false); }}
+                          value={groupDraft}
+                          onChange={(e) => setGroupDraft(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") handleGroupSave(); if (e.key === "Escape") setEditingGroup(false); }}
                           autoFocus
                           placeholder="e.g. US Stocks"
                           className="rounded border border-border px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary w-36"
                         />
-                        <button onClick={handleAssetClassSave} disabled={savingAssetClass} className="text-green-600 hover:text-green-700">
+                        <button onClick={handleGroupSave} disabled={savingGroup} className="text-green-600 hover:text-green-700">
                           <Check className="h-3.5 w-3.5" />
                         </button>
-                        <button onClick={() => setEditingAssetClass(false)} className="text-muted-foreground hover:text-foreground">
+                        <button onClick={() => setEditingGroup(false)} className="text-muted-foreground hover:text-foreground">
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     ) : (
                       <button
-                        onClick={(e) => { e.stopPropagation(); setAssetClassDraft(holding.assetClass ?? ""); setEditingAssetClass(true); }}
+                        onClick={(e) => { e.stopPropagation(); setGroupDraft(holding.group ?? ""); setEditingGroup(true); }}
                         className="flex items-center gap-1 hover:text-foreground transition-colors group"
                       >
-                        {holding.assetClass
-                          ? <span className="font-medium text-foreground">{holding.assetClass}</span>
+                        {holding.group
+                          ? <span className="font-medium text-foreground">{holding.group}</span>
                           : <span className="italic">None set</span>
                         }
                         <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity ml-0.5" />
@@ -1684,7 +1684,7 @@ function AddManualInvestmentModal({
   editing?: ManualInvestment;
 }) {
   const [name, setName] = useState("");
-  const [assetClass, setAssetClass] = useState("");
+  const [group, setGroup] = useState("");
   const [totalCost, setTotalCost] = useState("");
   const [marketValue, setMarketValue] = useState("");
   const [saving, setSaving] = useState(false);
@@ -1693,7 +1693,7 @@ function AddManualInvestmentModal({
   useEffect(() => {
     if (open) {
       setName(editing?.name ?? "");
-      setAssetClass(editing?.assetClass ?? "");
+      setGroup(editing?.group ?? "");
       setTotalCost(editing?.totalCost != null ? String(editing.totalCost) : "");
       setMarketValue(editing ? String(editing.marketValue) : "");
       setError(null);
@@ -1711,7 +1711,7 @@ function AddManualInvestmentModal({
     try {
       const data = {
         name: name.trim(),
-        assetClass: assetClass.trim() || null,
+        group: group.trim() || null,
         totalCost: parsedCost,
         marketValue: parsedMV,
       };
@@ -1751,12 +1751,12 @@ function AddManualInvestmentModal({
           </div>
           <div>
             <label className="text-sm font-medium block mb-1">
-              Asset Class <span className="text-muted-foreground font-normal text-xs">(optional)</span>
+              Group <span className="text-muted-foreground font-normal text-xs">(optional)</span>
             </label>
             <input
               type="text"
-              value={assetClass}
-              onChange={(e) => setAssetClass(e.target.value)}
+              value={group}
+              onChange={(e) => setGroup(e.target.value)}
               placeholder="e.g. Private Equity"
               className="w-full rounded border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
@@ -2613,7 +2613,7 @@ function ReviewDividendModal({
   dividend: PendingDividend;
   categories: Category[];
   onClose: () => void;
-  onConfirmed: () => void;
+  onConfirmed: (wasReinvest?: boolean) => void;
   onDismissed: () => void;
 }) {
   // Normalize ex-date — Prisma serializes @db.Date as a full ISO timestamp, so
@@ -2772,7 +2772,7 @@ function ReviewDividendModal({
           notes: notes || null,
         });
       }
-      onConfirmed();
+      onConfirmed(disposition === "reinvest");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to confirm dividend");
       setSaving(false);
@@ -3018,7 +3018,7 @@ function ReviewDividendModal({
 
 // ── Activity Tab ──────────────────────────────────────────────────────────────
 
-function ActivityTab({ accountId }: { accountId: string }) {
+function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHoldingsChanged?: () => void }) {
   const { data: activities, loading: activitiesLoading, refetch: refetchActivities } = useApi(
     () => getInvestmentActivity(accountId),
     [accountId]
@@ -3357,11 +3357,12 @@ function ActivityTab({ accountId }: { accountId: string }) {
           dividend={reviewingDividend}
           categories={allCategories ?? []}
           onClose={() => setReviewingDividend(null)}
-          onConfirmed={() => {
+          onConfirmed={(wasReinvest?: boolean) => {
             setReviewingDividend(null);
             refetchDividends();
             refetchActivities();
             refetchNotifications();
+            if (wasReinvest) onHoldingsChanged?.();
           }}
           onDismissed={() => {
             setReviewingDividend(null);
@@ -3973,22 +3974,22 @@ export function InvestmentAccount() {
     });
   }, [holdings]);
 
-  // manuals must be defined before the early return so assetClassGroups can depend on it
+  // manuals must be defined before the early return so holdingGroups can depend on it
   const manuals = useMemo(
     () => [...(manualInvestments ?? [])].sort((a, b) => b.marketValue - a.marketValue),
     [manualInvestments]
   );
 
-  // Build ordered list of groups: each unique assetClass across holdings AND manuals (null → "Other")
-  const assetClassGroups = useMemo(() => {
+  // Build ordered list of groups: each unique group across holdings AND manuals (null → "Other")
+  const holdingGroups = useMemo(() => {
     const seen = new Set<string>();
     const order: string[] = [];
     for (const h of sortedHoldings) {
-      const key = h.assetClass ?? "";
+      const key = h.group ?? "";
       if (!seen.has(key)) { seen.add(key); order.push(key); }
     }
     for (const m of manuals) {
-      const key = m.assetClass ?? "";
+      const key = m.group ?? "";
       if (!seen.has(key)) { seen.add(key); order.push(key); }
     }
     return order;
@@ -4142,7 +4143,7 @@ export function InvestmentAccount() {
 
       {/* Investment account — Activity tab */}
       {isInvestment && activeTab === "activity" && (
-        <ActivityTab accountId={accountId!} />
+        <ActivityTab accountId={accountId!} onHoldingsChanged={refetch} />
       )}
 
       {/* Sell modal */}
@@ -4247,14 +4248,14 @@ export function InvestmentAccount() {
                     </tr>
                   </thead>
                   <tbody>
-                    {assetClassGroups.length > 1
-                      ? /* Grouped view — insert a header row between asset classes */
-                        assetClassGroups.flatMap((group) => {
+                    {holdingGroups.length > 1
+                      ? /* Grouped view — insert a header row between groups */
+                        holdingGroups.flatMap((group) => {
                           const groupHoldings = sortedHoldings.filter(
-                            (h) => (h.assetClass ?? "") === group
+                            (h) => (h.group ?? "") === group
                           );
                           const groupManuals = manuals.filter(
-                            (m) => (m.assetClass ?? "") === group
+                            (m) => (m.group ?? "") === group
                           );
                           const groupMV =
                             groupHoldings.reduce((s, h) => s + (h.marketValue ?? 0), 0) +

@@ -13,14 +13,16 @@ const accountSchema = z.object({
   isJoint: z.boolean().optional(),
   isManaged: z.boolean().optional(),
   isTaxAdvantaged: z.boolean().optional(),
+  isHidden: z.boolean().optional(),
 });
 
 // ── Account routes ──
 
 // List all accounts
-accountRoutes.get("/", async (_req, res) => {
+accountRoutes.get("/", async (req, res) => {
+  const includeHidden = req.query.includeHidden === "true";
   const accounts = await prisma.account.findMany({
-    where: { isActive: true },
+    where: { isActive: true, ...(includeHidden ? {} : { isHidden: false }) },
     orderBy: { createdAt: "asc" },
   });
   res.json(accounts);

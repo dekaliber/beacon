@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { Plus, Pencil, Trash2, Landmark, CreditCard, TrendingUp } from "lucide-react";
+import { Plus, Pencil, Trash2, Landmark, CreditCard, TrendingUp, EyeOff } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
-import { getAccounts, createAccount, updateAccount, deleteAccount, getInvestmentHoldings } from "@/api";
+import { getAccounts, createAccount, updateAccount, deleteAccount, getInvestmentHoldings, getRecurrenceRules } from "@/api";
 import { formatCurrency } from "@/lib/utils";
 import type { Account } from "@/types";
 
@@ -42,7 +42,7 @@ function sumAccounts(accounts: Account[]) {
 export function Accounts() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
-  const { data: accounts, refetch } = useApi(() => getAccounts(), []);
+  const { data: accounts, refetch } = useApi(() => getAccounts({ includeHidden: true }), []);
 
   const handleSave = async (data: Partial<Account>) => {
     if (editing) {
@@ -111,6 +111,11 @@ export function Accounts() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-bold tabular-nums">{formatCurrency(account.balance)}</span>
+                {account.isHidden && (
+                  <span title="Hidden" className="inline-flex flex-shrink-0">
+                    <EyeOff className="h-3.5 w-3.5 text-gray-300" />
+                  </span>
+                )}
                 <button onClick={() => openEdit(account)} className="rounded p-1 hover:bg-accent">
                   <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                 </button>
@@ -227,6 +232,12 @@ interface AccountModalProps {
   account: Account | null;
 }
 
+interface HideWarning {
+  hasBalance: boolean;
+  activeRecurringCount: number;
+  pendingData: Partial<Account>;
+}
+
 function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModalProps) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -234,20 +245,24 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
   const [isJoint, setIsJoint] = useState(false);
   const [isManaged, setIsManaged] = useState(false);
   const [isTaxAdvantaged, setIsTaxAdvantaged] = useState(false);
+  const [isHidden, setIsHidden] = useState(false);
   const [accountType, setAccountType] = useState<Account["type"]>(account?.type ?? "CHECKING");
   const [selectedColor, setSelectedColor] = useState(account?.color ?? ACCOUNT_COLORS[0]);
   // True when the account already has holdings with real lot dates — managed toggle is locked off
   const [hasTrackedHoldings, setHasTrackedHoldings] = useState(false);
+  const [hideWarning, setHideWarning] = useState<HideWarning | null>(null);
 
   useEffect(() => {
     if (open) {
       setIsJoint(account?.isJoint ?? false);
       setIsManaged(account?.isManaged ?? false);
       setIsTaxAdvantaged(account?.isTaxAdvantaged ?? false);
+      setIsHidden(account?.isHidden ?? false);
       setAccountType(account?.type ?? "CHECKING");
       setSelectedColor(account?.color ?? ACCOUNT_COLORS[0]);
       setConfirmDelete(false);
       setHasTrackedHoldings(false);
+      setHideWarning(null);
       // For existing investment accounts, check whether any holdings have real lot dates
       if (account?.type === "INVESTMENT") {
         getInvestmentHoldings(account.id).then((holdings) => {
@@ -258,10 +273,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setSaving(true);
-    const form = new FormData(e.currentTarget);
+  const buildData = (form: FormData): Partial<Account> => {
     const data: Partial<Account> = {
       name: form.get("name") as string,
       type: accountType,
@@ -269,12 +281,44 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
       isJoint,
       isManaged: accountType === "INVESTMENT" ? isManaged : false,
       isTaxAdvantaged: accountType !== "CREDIT_CARD" ? isTaxAdvantaged : false,
+      isHidden,
     };
-    // Balance only editable when creating a new account
     if (!account) {
       data.balance = parseFloat(form.get("balance") as string) || 0;
     }
+    return data;
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const data = buildData(form);
+
+    // When hiding an existing account for the first time, check for warnings
+    if (account && isHidden && !account.isHidden) {
+      const hasBalance = parseFloat(account.balance) !== 0;
+      const rules = await getRecurrenceRules();
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      const activeRecurringCount = rules.filter(
+        (r) => r.accountId === account.id && r.isActive && (!r.endDate || new Date(r.endDate) > today)
+      ).length;
+      if (hasBalance || activeRecurringCount > 0) {
+        setHideWarning({ hasBalance, activeRecurringCount, pendingData: data });
+        return;
+      }
+    }
+
+    setSaving(true);
     await onSave(data);
+    setSaving(false);
+  };
+
+  const confirmHide = async () => {
+    if (!hideWarning) return;
+    setSaving(true);
+    setHideWarning(null);
+    await onSave(hideWarning.pendingData);
     setSaving(false);
   };
 
@@ -285,6 +329,31 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
     await onDelete(account.id);
     setDeleting(false);
   };
+
+  if (hideWarning) {
+    const messages: string[] = [];
+    if (hideWarning.hasBalance) messages.push("a non-zero balance");
+    if (hideWarning.activeRecurringCount > 0)
+      messages.push(`${hideWarning.activeRecurringCount} active recurring transaction${hideWarning.activeRecurringCount > 1 ? "s" : ""}`);
+    return (
+      <Modal open={open} onClose={() => setHideWarning(null)} title="Hide Account">
+        <div className="space-y-4">
+          <p className="text-sm">
+            This account has {messages.join(" and ")}. Are you sure you want to hide it?
+          </p>
+          <p className="text-sm text-muted-foreground">
+            The account will be hidden from dropdowns and the Investments page, but all existing data will be preserved.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setHideWarning(null)}>Cancel</Button>
+            <Button type="button" disabled={saving} onClick={confirmHide}>
+              {saving ? "Saving..." : "Hide Anyway"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal open={open} onClose={onClose} title={account ? "Edit Account" : "Add Account"}>
@@ -401,6 +470,23 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
               {hasTrackedHoldings
                 ? "Cannot enable — this account already has holdings with lot-level purchase dates."
                 : "Lot-level acquisition dates are unavailable. Enter total shares and total cost basis per holding — cost per share is calculated automatically."}
+            </p>
+          </div>
+        )}
+
+        {account && (
+          <div className="rounded-md border border-border p-3">
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={isHidden}
+                onChange={(e) => setIsHidden(e.target.checked)}
+                className="h-4 w-4 rounded border-border"
+              />
+              <span className="text-sm font-medium">Hide account</span>
+            </label>
+            <p className="mt-1 ml-6 text-xs text-muted-foreground">
+              Hidden accounts are excluded from dropdowns and the Investments page, but all data is preserved.
             </p>
           </div>
         )}

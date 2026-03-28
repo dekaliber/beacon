@@ -1,6 +1,7 @@
 import { api } from "./client";
 import type {
   Account,
+  AllocationSummary,
   AssetClass,
   Budget,
   BudgetDetail,
@@ -31,7 +32,10 @@ import type {
 } from "../types";
 
 // Accounts
-export const getAccounts = () => api.get<Account[]>("/accounts");
+export const getAccounts = (params?: { includeHidden?: boolean }) => {
+  const query = params?.includeHidden ? "?includeHidden=true" : "";
+  return api.get<Account[]>(`/accounts${query}`);
+};
 export const createAccount = (data: Partial<Account>) => api.post<Account>("/accounts", data);
 export const updateAccount = (id: string, data: Partial<Account>) => api.put<Account>(`/accounts/${id}`, data);
 export const deleteAccount = (id: string) => api.delete(`/accounts/${id}`);
@@ -184,11 +188,15 @@ export const processRecurringExpenses = () => api.post<{ processed: number }>("/
 // Investments
 export const getInvestmentAccounts = () =>
   api.get<InvestmentAccountSummary[]>("/investments/accounts");
+export const getAllocationSummary = (filter?: "all" | "taxable" | "tax-advantaged") =>
+  api.get<AllocationSummary>(
+    `/investments/allocation${filter && filter !== "all" ? `?filter=${filter}` : ""}`
+  );
 export const getInvestmentHoldings = (accountId: string) =>
   api.get<InvestmentHolding[]>(`/investments/holdings/${accountId}`);
-export const createHolding = (data: { accountId: string; ticker: string; name: string; type?: string | null; assetClass?: string | null }) =>
+export const createHolding = (data: { accountId: string; ticker: string; name: string; type?: string | null; group?: string | null }) =>
   api.post<InvestmentHolding>("/investments/holdings", data);
-export const patchHolding = (id: string, data: { assetClass?: string | null; name?: string }) =>
+export const patchHolding = (id: string, data: { group?: string | null; name?: string }) =>
   api.patch<InvestmentHolding>(`/investments/holdings/${id}`, data);
 export const deleteHolding = (id: string, force = false) =>
   api.delete(`/investments/holdings/${id}${force ? "?force=true" : ""}`);
@@ -218,10 +226,10 @@ export const importInvestments = (
 export const getManualInvestments = (accountId: string) =>
   api.get<ManualInvestment[]>(`/investments/manual/${accountId}`);
 export const createManualInvestment = (data: {
-  accountId: string; name: string; assetClass?: string | null; totalCost?: number | null; marketValue: number;
+  accountId: string; name: string; group?: string | null; totalCost?: number | null; marketValue: number;
 }) => api.post<ManualInvestment>("/investments/manual", data);
 export const updateManualInvestment = (id: string, data: {
-  name?: string; assetClass?: string | null; totalCost?: number | null; marketValue?: number;
+  name?: string; group?: string | null; totalCost?: number | null; marketValue?: number;
 }) => api.put<ManualInvestment>(`/investments/manual/${id}`, data);
 export const deleteManualInvestment = (id: string) => api.delete(`/investments/manual/${id}`);
 

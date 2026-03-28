@@ -64,6 +64,7 @@ model Account {
   isManaged        Boolean     @default(false)
   isTaxAdvantaged  Boolean     @default(false)
   isActive         Boolean     @default(true)
+  isHidden         Boolean     @default(false)
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
