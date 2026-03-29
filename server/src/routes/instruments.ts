@@ -179,7 +179,7 @@ instrumentRoutes.patch("/:id", async (req, res) => {
     const { id } = req.params;
     const body = patchSchema.parse(req.body);
     const instrument = await prisma.$transaction(async (tx) => {
-      if (body.name !== undefined) {
+      if (body.name != null) {
         await tx.investmentHolding.updateMany({
           where: { instrumentId: id },
           data: { name: body.name },

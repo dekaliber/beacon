@@ -421,6 +421,11 @@ function EditBalanceModal({
             autoFocus
             className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
+          {account?.balanceUpdatedAt && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Last updated {new Date(account.balanceUpdatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </p>
+          )}
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>

@@ -375,7 +375,7 @@ function ItemTypeahead({
 }: {
   name: string;
   defaultValue?: string;
-  items: { id: string; name: string }[];
+  items: { id: string; name: string; isHidden?: boolean }[];
   placeholder?: string;
   required?: boolean;
   triggerRef?: React.RefObject<HTMLButtonElement | null>;
@@ -399,9 +399,10 @@ function ItemTypeahead({
   );
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return sorted;
+    const visible = sorted.filter((item) => !item.isHidden);
+    if (!search.trim()) return visible;
     const terms = search.toLowerCase().split(/\s+/);
-    return sorted.filter((item) => {
+    return visible.filter((item) => {
       const words = item.name.toLowerCase().split(/\s+/);
       return terms.every((t) => words.some((w) => w.startsWith(t)));
     });
@@ -634,7 +635,7 @@ export function IncomePage() {
 
   const { data: incomeData, loading } = useApi(() => getIncome(queryParams), [queryParams]);
   const { data: upcomingData, refetch: refetchUpcoming } = useApi(() => getIncome(upcomingParams), [upcomingParams]);
-  const { data: accounts } = useApi(() => getAccounts(), []);
+  const { data: accounts } = useApi(() => getAccounts({ includeHidden: true }), []);
   const { data: incomeCategories } = useApi(() => getFlatCategories("INCOME"), []);
 
   useEffect(() => {
@@ -693,7 +694,7 @@ export function IncomePage() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [modalOpen, importModalOpen]);
 
-  const eligibleAccounts = (accounts ?? []).filter((a) => INCOME_ACCOUNT_TYPES.includes(a.type));
+  const eligibleAccounts = (accounts ?? []).filter((a) => INCOME_ACCOUNT_TYPES.includes(a.type) && !a.isHidden);
   const categories = incomeCategories ?? [];
 
   const hasActiveFilters = !!(

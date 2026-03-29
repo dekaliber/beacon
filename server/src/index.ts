@@ -15,6 +15,9 @@ import { pendingDividendRoutes } from "./routes/pendingDividends.js";
 import { notificationRoutes } from "./routes/notifications.js";
 import { assetClassRoutes } from "./routes/assetClasses.js";
 import { instrumentRoutes } from "./routes/instruments.js";
+import { transferRoutes } from "./routes/transfers.js";
+import { statementOverrideRoutes } from "./routes/statementOverrides.js";
+import { cashFlowRoutes } from "./routes/cashFlow.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -37,6 +40,9 @@ app.use("/api/pending-dividends", pendingDividendRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/asset-classes", assetClassRoutes);
 app.use("/api/instruments", instrumentRoutes);
+app.use("/api/transfers", transferRoutes);
+app.use("/api/statement-overrides", statementOverrideRoutes);
+app.use("/api/cash-flow", cashFlowRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {

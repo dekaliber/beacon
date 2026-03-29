@@ -1,3 +1,5 @@
+export type DividendElection = "REINVEST" | "CASH";
+
 export interface Account {
   id: string;
   name: string;
@@ -10,6 +12,15 @@ export interface Account {
   isTaxAdvantaged: boolean;
   isActive: boolean;
   isHidden: boolean;
+  // Balance tracking
+  balanceUpdatedAt: string | null;
+  // Credit card settings
+  closingDay: number | null;
+  dueDay: number | null;
+  linkedBankAccountId: string | null;
+  // Investment dividend settings
+  dividendElection: DividendElection | null;
+  defaultCashAccountId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -280,6 +291,7 @@ export interface InvestmentAccountSummary {
   name: string;
   type: "CHECKING" | "SAVINGS" | "CREDIT_CARD" | "INVESTMENT";
   balance: string;
+  balanceUpdatedAt: string | null;
   color: string | null;
   isJoint: boolean;
   holdings: InvestmentHolding[];
@@ -314,6 +326,8 @@ export interface PendingDividend {
   ticker: string;
   /** Ex-date in ISO date string format */
   exDate: string;
+  /** Estimated payment date: ex-date + 4 calendar days (tentative, Tiingo doesn't provide this) */
+  paymentDate: string | null;
   perShareAmount: string;
   sharesAtExDate: string;
   estimatedTotal: string;
@@ -323,6 +337,8 @@ export interface PendingDividend {
   activityId: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Most recently used taxClassification for this ticker, if any */
+  lastTaxClassification: TaxClassification | null;
 }
 
 export interface ManualInvestment {
@@ -420,6 +436,122 @@ export interface Instrument {
   manualInvestments: InstrumentManualRef[];
   createdAt: string;
   updatedAt: string;
+}
+
+// ── Cash flow types ───────────────────────────────────────────────────────────
+
+export type TransferFrequency = "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
+
+export interface TransferAccountRef {
+  id: string;
+  name: string;
+  color: string | null;
+  type: "CHECKING" | "SAVINGS" | "CREDIT_CARD" | "INVESTMENT";
+}
+
+export interface TransferRuleRef {
+  id: string;
+  description: string;
+  frequency: TransferFrequency;
+  interval: number;
+}
+
+export interface TransferRule {
+  id: string;
+  description: string;
+  amount: string;
+  frequency: TransferFrequency;
+  interval: number;
+  startDate: string;
+  endDate: string | null;
+  nextOccurrence: string;
+  fromAccountId: string;
+  toAccountId: string;
+  fromAccount: TransferAccountRef;
+  toAccount: TransferAccountRef;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Transfer {
+  id: string;
+  description: string;
+  amount: string;
+  date: string;
+  notes: string | null;
+  fromAccountId: string;
+  toAccountId: string;
+  fromAccount: TransferAccountRef;
+  toAccount: TransferAccountRef;
+  transferRuleId: string | null;
+  transferRule: TransferRuleRef | null;
+  isConfirmed: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StatementOverride {
+  id: string;
+  accountId: string;
+  periodStart: string;
+  periodEnd: string;
+  amount: string;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Cash flow projection types ────────────────────────────────────────────────
+
+export type CashFlowEventType =
+  | "EXPENSE"
+  | "CC_CHARGE"
+  | "CC_PAYMENT"
+  | "TRANSFER_IN"
+  | "TRANSFER_OUT"
+  | "DIVIDEND";
+
+export type CashFlowConfidence = "KNOWN" | "PROJECTED";
+
+export interface CashFlowEvent {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  type: CashFlowEventType;
+  confidence: CashFlowConfidence;
+  relatedAccountId?: string;
+  relatedAccountName?: string;
+  periodStart?: string;
+  periodEnd?: string;
+  overrideId?: string;
+  runningBalance: number;
+}
+
+export interface DailyBalance {
+  date: string;
+  balance: number;
+}
+
+export interface CashFlowProjection {
+  accountId: string;
+  accountName: string;
+  accountType: "CHECKING";
+  color: string | null;
+  isJoint: boolean;
+  startBalance: number;
+  endBalance: number;
+  minBalance: number;
+  events: CashFlowEvent[];
+  dailyBalances: DailyBalance[];
+}
+
+export interface CashFlowResponse {
+  windowDays: number;
+  windowStart: string;
+  windowEnd: string;
+  projections: CashFlowProjection[];
 }
 
 // ── Notification types ────────────────────────────────────────────────────────

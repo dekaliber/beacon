@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
   Plus, Pencil, Receipt, AlertCircle,
@@ -412,9 +412,10 @@ function AccountTypeahead({
   );
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return sortedAccounts;
+    const visible = sortedAccounts.filter((a) => !a.isHidden);
+    if (!search.trim()) return visible;
     const terms = search.toLowerCase().split(/\s+/);
-    return sortedAccounts.filter((a) => {
+    return visible.filter((a) => {
       const words = a.name.toLowerCase().split(/\s+/);
       return terms.every((t) => words.some((w) => w.startsWith(t)));
     });
@@ -1003,9 +1004,10 @@ function EditableAccountCell({
   );
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return sortedAccounts;
+    const visible = sortedAccounts.filter((a) => !a.isHidden);
+    if (!search.trim()) return visible;
     const terms = search.toLowerCase().split(/\s+/);
-    return sortedAccounts.filter((a) => {
+    return visible.filter((a) => {
       const words = a.name.toLowerCase().split(/\s+/);
       return terms.every((t) => words.some((w) => w.startsWith(t)));
     });
@@ -1338,7 +1340,7 @@ export function Expenses() {
   const { data: expenseData, loading } = useApi(() => getExpenses(queryParams), [queryParams]);
   const { data: upcomingData, refetch: refetchUpcoming } = useApi(() => getExpenses(upcomingParams), [upcomingParams]);
   const { data: categories } = useApi(() => getFlatCategories(), []);
-  const { data: accounts } = useApi(() => getAccounts(), []);
+  const { data: accounts } = useApi(() => getAccounts({ includeHidden: true }), []);
   const { data: tags, refetch: refetchTags } = useApi(() => getTags(), []);
   const { data: vendorList, refetch: refetchVendors } = useApi(() => getExpenseVendors(), []);
   const { data: uncatData, refetch: refetchUncat } = useApi(() => getUncategorizedCount(), []);
@@ -2475,6 +2477,7 @@ function ExpenseRowWithOffsets({
   onDragStart?: (e: React.MouseEvent, expense: Expense, sourceType: "negative" | "offset") => void;
   groupMeta?: GroupMeta;
 }) {
+  const navigate = useNavigate();
   const offsets = expense.offsets ?? [];
   const hasOffsets = offsets.length > 0;
   const offsetTotal = offsets.reduce((sum, o) => sum + Math.abs(parseFloat(o.amount)), 0);
@@ -2554,7 +2557,15 @@ function ExpenseRowWithOffsets({
         <td className="w-[60px] py-2 pr-3">
           <div className="flex items-center justify-end gap-1.5">
             <StatusIcon />
-            {isRecurring && <span title="Recurring expense" className="inline-flex flex-shrink-0"><Repeat className="h-3.5 w-3.5 text-blue-500" /></span>}
+            {isRecurring && (
+              <button
+                title="View recurring rule"
+                className="inline-flex flex-shrink-0 rounded hover:bg-blue-100 transition-colors p-0.5 -m-0.5"
+                onClick={(e) => { e.stopPropagation(); navigate(`/recurring?highlight=${expense.recurrenceRuleId}`); }}
+              >
+                <Repeat className="h-3.5 w-3.5 text-blue-500" />
+              </button>
+            )}
             {expense.ignoreInBudget && <span title="Ignored in budget" className="inline-flex flex-shrink-0"><EyeOff className="h-3.5 w-3.5 text-gray-300" /></span>}
           </div>
         </td>

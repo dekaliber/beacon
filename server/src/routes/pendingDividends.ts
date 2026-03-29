@@ -198,6 +198,11 @@ export async function scanForDividends(
           (shares * event.perShareAmount).toFixed(2),
         );
 
+        // Estimate payment date as ex-date + 4 calendar days.
+        // Tiingo's daily price endpoint does not include payment dates, so this
+        // is a best-effort estimate. The UI communicates this as tentative.
+        const paymentDate = new Date(exDate.getTime() + 4 * 24 * 60 * 60 * 1000);
+
         // Upsert — the unique constraint on (holdingId, exDate) prevents duplicates
         // but a concurrent scan could race; upsert handles that cleanly.
         await prisma.pendingDividend.upsert({
@@ -207,6 +212,7 @@ export async function scanForDividends(
             accountId,
             ticker: holding.ticker,
             exDate,
+            paymentDate,
             perShareAmount: event.perShareAmount,
             sharesAtExDate: shares,
             estimatedTotal,
@@ -236,7 +242,30 @@ pendingDividendRoutes.get("/:accountId", async (req, res) => {
     orderBy: { exDate: "desc" },
   });
 
-  res.json(pending);
+  // Enrich each pending dividend with the most recently used taxClassification
+  // for that ticker (source match on confirmed income records).
+  const tickers = [...new Set(pending.map((p) => p.ticker))];
+  const lastClassifications = await Promise.all(
+    tickers.map((ticker) =>
+      prisma.income.findFirst({
+        where: { source: { equals: ticker, mode: "insensitive" }, taxClassification: { not: null } },
+        orderBy: { date: "desc" },
+        select: { source: true, taxClassification: true },
+      })
+    )
+  );
+  const classificationByTicker = new Map(
+    lastClassifications
+      .filter((r) => r !== null)
+      .map((r) => [r!.source!.toUpperCase(), r!.taxClassification])
+  );
+
+  res.json(
+    pending.map((p) => ({
+      ...p,
+      lastTaxClassification: classificationByTicker.get(p.ticker.toUpperCase()) ?? null,
+    }))
+  );
 });
 
 // ── POST /:id/dismiss ────────────────────────────────────────────────────────
