@@ -469,11 +469,15 @@ budgetRoutes.get("/:year", async (req, res) => {
 
   /** Derive run-rate stats from raw metrics + the effective annual budget. */
   function panelStats(metrics: typeof personalMetrics, budget: number) {
-    // percentAboveBelow: positive = over pace, negative = under pace
-    //   = (normalizedYTD / budget) / (daysElapsed / daysInYear) - 1
+    // percentAboveBelow: positive = over budget, negative = under budget
+    //   = projectedAnnual / budget - 1
+    // Using the projection rather than a pace ratio (normalizedYTD / pctElapsed)
+    // ensures partial-year recurring rules are handled correctly: rules with known
+    // end dates contribute only their actual expected annual cost, not an
+    // extrapolated rate as if they ran all year.
     const percentAboveBelow =
-      budget > 0 && pctElapsed > 0
-        ? (metrics.normalizedYTD / budget) / pctElapsed - 1
+      budget > 0
+        ? metrics.projectedAnnual / budget - 1
         : 0;
     const remaining = budget - metrics.projectedAnnual;
     return {

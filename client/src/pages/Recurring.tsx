@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
-import { Trash2, Pencil, Archive, ChevronDown, ChevronRight, Repeat } from "lucide-react";
+import { Trash2, Pencil, Archive, ChevronDown, ChevronRight, Repeat, Plus, ArrowRight } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -27,11 +28,15 @@ import {
   updateRecurrenceRule,
   getAccounts,
   getFlatCategories,
+  getTransferRules,
+  createTransfer,
+  updateTransferRule,
+  archiveTransferRule,
   type LinkedExpense,
 } from "@/api";
 import type { UpcomingExpenseItem, RecurringHistoryMonth } from "@/types";
-import { formatCurrency, formatDate } from "@/lib/utils";
-import type { RecurrenceRule, Account, Category } from "@/types";
+import { formatCurrency, formatDate, toDateInputValue } from "@/lib/utils";
+import type { RecurrenceRule, Account, Category, TransferRule } from "@/types";
 
 // ── Frequency helpers ─────────────────────────────────────────────────────────
 
@@ -420,6 +425,9 @@ function RuleTable({
   onDelete,
   showNextColumn = true,
   dimmed = false,
+  highlightId,
+  highlightFading,
+  highlightRowRef,
 }: {
   rules: RecurrenceRule[];
   accountMap: Map<string, string>;
@@ -428,6 +436,9 @@ function RuleTable({
   onDelete?: (rule: RecurrenceRule) => void;
   showNextColumn?: boolean;
   dimmed?: boolean;
+  highlightId?: string | null;
+  highlightFading?: boolean;
+  highlightRowRef?: (el: HTMLTableRowElement | null) => void;
 }) {
   const hasActions = !!(onEdit || onArchive || onDelete);
   const colHdr = "pb-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground";
@@ -459,7 +470,11 @@ function RuleTable({
       </thead>
       <tbody className="divide-y divide-border">
         {rules.map((rule) => (
-          <tr key={rule.id} className={dimmed ? "opacity-60" : ""}>
+          <tr
+            key={rule.id}
+            ref={rule.id === highlightId ? highlightRowRef : undefined}
+            className={`${dimmed ? "opacity-60" : ""} ${rule.id === highlightId ? `transition-colors duration-1000${highlightFading ? "" : " bg-amber-100"}` : ""}`}
+          >
             <td className="py-3 pr-4">
               <p className="font-medium">{rule.description}</p>
               <p className="text-xs text-muted-foreground">
@@ -560,14 +575,227 @@ function ConfirmModal({
   );
 }
 
+// ── Transfer rule modal ───────────────────────────────────────────────────────
+
+interface TransferRuleFormData {
+  description?: string;
+  amount?: number;
+  fromAccountId?: string;
+  toAccountId?: string;
+  frequency?: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
+  interval?: number;
+  startDate?: string;
+  endDate?: string | null;
+}
+
+function TransferRuleModal({
+  open,
+  rule,
+  accounts,
+  onClose,
+  onSave,
+}: {
+  open: boolean;
+  rule: TransferRule | null;
+  accounts: Account[];
+  onClose: () => void;
+  onSave: (data: TransferRuleFormData) => Promise<void>;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<TransferRuleFormData>({});
+  const bankAccounts = accounts.filter((a) => a.type === "CHECKING" || a.type === "SAVINGS");
+
+  useEffect(() => {
+    if (open) {
+      setForm(
+        rule
+          ? {
+              description: rule.description,
+              amount: parseFloat(rule.amount),
+              fromAccountId: rule.fromAccountId,
+              toAccountId: rule.toAccountId,
+              frequency: rule.frequency,
+              interval: rule.interval,
+              startDate: toDateInputValue(rule.startDate),
+              endDate: rule.endDate ? toDateInputValue(rule.endDate) : "",
+            }
+          : {
+              frequency: "MONTHLY",
+              interval: 1,
+              startDate: toDateInputValue(new Date().toISOString()),
+            }
+      );
+    }
+  }, [open, rule]);
+
+  const set = (patch: Partial<TransferRuleFormData>) => setForm((f) => ({ ...f, ...patch }));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    await onSave({ ...form, endDate: form.endDate || null });
+    setSaving(false);
+  };
+
+  const inputCls = "w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
+
+  return (
+    <Modal open={open} onClose={onClose} title={rule ? "Edit Recurring Transfer" : "New Recurring Transfer"}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium">Description</label>
+          <input
+            type="text"
+            required
+            value={form.description ?? ""}
+            onChange={(e) => set({ description: e.target.value })}
+            placeholder="e.g. Monthly joint contribution"
+            className={inputCls}
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">Amount</label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              required
+              value={form.amount ?? ""}
+              onChange={(e) => set({ amount: parseFloat(e.target.value) })}
+              className={`${inputCls} pl-7`}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-sm font-medium">From</label>
+            <select
+              required
+              value={form.fromAccountId ?? ""}
+              onChange={(e) => set({ fromAccountId: e.target.value })}
+              className={inputCls}
+            >
+              <option value="">— Select account —</option>
+              {bankAccounts.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">To</label>
+            <select
+              required
+              value={form.toAccountId ?? ""}
+              onChange={(e) => set({ toAccountId: e.target.value })}
+              className={inputCls}
+            >
+              <option value="">— Select account —</option>
+              {bankAccounts.filter((a) => a.id !== form.fromAccountId).map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-sm font-medium">Frequency</label>
+            <select
+              value={form.frequency ?? "MONTHLY"}
+              onChange={(e) => set({ frequency: e.target.value as TransferRuleFormData["frequency"] })}
+              className={inputCls}
+            >
+              <option value="DAILY">Daily</option>
+              <option value="WEEKLY">Weekly</option>
+              <option value="MONTHLY">Monthly</option>
+              <option value="YEARLY">Yearly</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Every</label>
+            <input
+              type="number"
+              min={1}
+              value={form.interval ?? 1}
+              onChange={(e) => set({ interval: parseInt(e.target.value) || 1 })}
+              className={inputCls}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-sm font-medium">Start Date</label>
+            <input
+              type="date"
+              required={!rule}
+              value={form.startDate ?? ""}
+              onChange={(e) => set({ startDate: e.target.value })}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">
+              End Date <span className="font-normal text-muted-foreground">(optional)</span>
+            </label>
+            <input
+              type="date"
+              value={form.endDate ?? ""}
+              onChange={(e) => set({ endDate: e.target.value })}
+              className={inputCls}
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button type="submit" disabled={saving}>{saving ? "Saving…" : rule ? "Save Changes" : "Create Transfer"}</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function Recurring() {
+  const [activeTab, setActiveTab] = useState<"expenses" | "transfers">("expenses");
+  const [searchParams] = useSearchParams();
+  const [highlightId, setHighlightId] = useState<string | null>(
+    searchParams.get("highlight")
+  );
+  const [highlightFading, setHighlightFading] = useState(false);
+  const highlightRowRef = useRef<HTMLTableRowElement | null>(null);
+
+  // When the highlighted row mounts (after rules load), scroll it into view.
+  // After 1.5 s begin the fade by removing the colour class (transition-colors
+  // keeps the CSS transition running); after a further 1 s clean up state.
+  const setHighlightRowRef = (el: HTMLTableRowElement | null) => {
+    highlightRowRef.current = el;
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      const fadeTimer = setTimeout(() => setHighlightFading(true), 1500);
+      const clearTimer = setTimeout(() => { setHighlightId(null); setHighlightFading(false); }, 2500);
+      return () => { clearTimeout(fadeTimer); clearTimeout(clearTimer); };
+    }
+  };
+
   const { data: rules, refetch } = useApi(() => getRecurrenceRules(), []);
-  const { data: accounts } = useApi<Account[]>(() => getAccounts(), []);
+  const { data: accounts } = useApi<Account[]>(() => getAccounts({ includeHidden: true }), []);
   const { data: categories } = useApi<Category[]>(() => getFlatCategories(), []);
   const { data: upcomingExpenses } = useApi(() => getUpcomingRecurring(14), []);
   const { data: recurringHistory } = useApi(() => getRecurringHistory(6), []);
+
+  // ── Transfer rules ──
+  const { data: transferRules, refetch: refetchTransfers } = useApi<TransferRule[]>(() => getTransferRules(), []);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [editingTransferRule, setEditingTransferRule] = useState<TransferRule | null>(null);
+  const [archiveTransferTarget, setArchiveTransferTarget] = useState<TransferRule | null>(null);
+  const [transferActionLoading, setTransferActionLoading] = useState(false);
 
   // Past rules: lazy-fetched when the user expands the section.
   // Going forward only naturally-expired/archived rules appear here since
@@ -726,12 +954,27 @@ export function Recurring() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold">Recurring Expenses</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Recurring expenses are created from the Add Expense form. This page shows all active
-          recurring transactions.
-        </p>
+        <h2 className="text-2xl font-bold">Recurring</h2>
       </div>
+
+      {/* ── Tab bar ── */}
+      <div className="flex border-b border-border">
+        {(["expenses", "transfers"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
+              activeTab === tab
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "expenses" && <>
 
       {/* ── Upcoming 14-day strip ── */}
       {upcomingExpenses && upcomingExpenses.length > 0 && (
@@ -755,6 +998,9 @@ export function Recurring() {
                 accountMap={accountMap}
                 onEdit={handleEditOpen}
                 onArchive={setArchiveTarget}
+                highlightId={highlightId}
+                highlightFading={highlightFading}
+                highlightRowRef={setHighlightRowRef}
               />
             ) : (
               <EmptyState
@@ -814,6 +1060,154 @@ export function Recurring() {
         )}
 
       </div>
+
+      </> /* end expenses tab */}
+
+      {/* ── Transfers tab ── */}
+      {activeTab === "transfers" && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Recurring transfers move funds between your bank accounts on a schedule.
+            </p>
+            <Button onClick={() => { setEditingTransferRule(null); setTransferModalOpen(true); }}>
+              <Plus className="h-4 w-4" /> New Transfer
+            </Button>
+          </div>
+
+          <Card>
+            {transferRules && transferRules.length > 0 ? (
+              <table className="w-full table-fixed text-sm">
+                <thead>
+                  <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
+                    <th className="py-2 px-4 text-left font-medium w-[30%]">Description</th>
+                    <th className="py-2 px-4 text-left font-medium w-[15%]">Amount</th>
+                    <th className="py-2 px-4 text-left font-medium w-[28%]">From → To</th>
+                    <th className="py-2 px-4 text-left font-medium w-[17%]">Frequency</th>
+                    <th className="py-2 px-4 text-right font-medium w-[10%]">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {transferRules.map((rule) => (
+                    <tr key={rule.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="py-3 px-4 font-medium truncate">{rule.description}</td>
+                      <td className="py-3 px-4 tabular-nums">{formatCurrency(parseFloat(rule.amount))}</td>
+                      <td className="py-3 px-4">
+                        <span className="flex items-center gap-1.5 text-xs">
+                          <span className="truncate">{rule.fromAccount.name}</span>
+                          <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{rule.toAccount.name}</span>
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-muted-foreground capitalize">
+                        {formatFrequency(rule.frequency, rule.interval)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => { setEditingTransferRule(rule); setTransferModalOpen(true); }}
+                            className="rounded p-1 hover:bg-accent"
+                            title="Edit"
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                          </button>
+                          <button
+                            onClick={() => setArchiveTransferTarget(rule)}
+                            className="rounded p-1 hover:bg-accent"
+                            title="Archive"
+                          >
+                            <Archive className="h-3.5 w-3.5 text-muted-foreground" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <EmptyState
+                icon={Repeat}
+                title="No recurring transfers"
+                description="Set up automatic transfers between your bank accounts, like a monthly contribution to a joint account."
+                action={
+                  <Button onClick={() => { setEditingTransferRule(null); setTransferModalOpen(true); }}>
+                    <Plus className="h-4 w-4" /> New Transfer
+                  </Button>
+                }
+              />
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* ── Transfer create/edit modal ── */}
+      {transferModalOpen && (
+        <TransferRuleModal
+          open={transferModalOpen}
+          rule={editingTransferRule}
+          accounts={(accounts ?? []).filter((a) => !a.isHidden)}
+          onClose={() => { setTransferModalOpen(false); setEditingTransferRule(null); }}
+          onSave={async (data) => {
+            if (editingTransferRule) {
+              await updateTransferRule(editingTransferRule.id, data);
+            } else {
+              await createTransfer({
+                description: data.description!,
+                amount: data.amount!,
+                date: data.startDate!,
+                fromAccountId: data.fromAccountId!,
+                toAccountId: data.toAccountId!,
+                recurrence: {
+                  frequency: data.frequency!,
+                  interval: data.interval,
+                  endDate: data.endDate,
+                },
+              });
+            }
+            setTransferModalOpen(false);
+            setEditingTransferRule(null);
+            refetchTransfers();
+          }}
+        />
+      )}
+
+      {/* ── Archive transfer confirmation ── */}
+      <ConfirmModal
+        open={!!archiveTransferTarget}
+        title="Archive recurring transfer?"
+        actions={
+          <>
+            <button
+              onClick={() => setArchiveTransferTarget(null)}
+              disabled={transferActionLoading}
+              className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async () => {
+                if (!archiveTransferTarget) return;
+                setTransferActionLoading(true);
+                await archiveTransferRule(archiveTransferTarget.id);
+                setArchiveTransferTarget(null);
+                setTransferActionLoading(false);
+                refetchTransfers();
+              }}
+              disabled={transferActionLoading}
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              <Archive className="h-3.5 w-3.5" />
+              {transferActionLoading ? "Archiving…" : "Confirm Archive"}
+            </button>
+          </>
+        }
+      >
+        <p>
+          This will stop generating future transfers for{" "}
+          <span className="font-medium text-foreground">"{archiveTransferTarget?.description}"</span>.
+          Past confirmed transfers will not be affected.
+        </p>
+      </ConfirmModal>
 
       {/* ── Archive confirmation modal ── */}
       <ConfirmModal
@@ -985,7 +1379,13 @@ export function Recurring() {
               onChange={(e) => setEditForm((f) => ({ ...f, accountId: e.target.value }))}
               className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             >
-              {(accounts ?? []).map((a) => (
+              {(() => {
+                const current = (accounts ?? []).find((a) => a.id === editForm.accountId);
+                return current?.isHidden
+                  ? <option key={current.id} value={current.id} disabled>{current.name}</option>
+                  : null;
+              })()}
+              {(accounts ?? []).filter((a) => !a.isHidden).map((a) => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>

@@ -14,6 +14,15 @@ const accountSchema = z.object({
   isManaged: z.boolean().optional(),
   isTaxAdvantaged: z.boolean().optional(),
   isHidden: z.boolean().optional(),
+  // Balance tracking
+  balanceUpdatedAt: z.string().datetime({ offset: true }).optional().nullable(),
+  // Credit card settings
+  closingDay: z.number().int().min(1).max(28).optional().nullable(),
+  dueDay: z.number().int().min(1).max(31).optional().nullable(),
+  linkedBankAccountId: z.string().optional().nullable(),
+  // Investment dividend settings
+  dividendElection: z.enum(["REINVEST", "CASH"]).optional().nullable(),
+  defaultCashAccountId: z.string().optional().nullable(),
 });
 
 // ── Account routes ──
@@ -51,9 +60,16 @@ accountRoutes.put("/:id", async (req, res) => {
   const parsed = accountSchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
+  const data: Record<string, unknown> = { ...parsed.data };
+
+  // Auto-stamp balanceUpdatedAt whenever the balance field is explicitly updated
+  if (parsed.data.balance !== undefined) {
+    data.balanceUpdatedAt = new Date();
+  }
+
   const account = await prisma.account.update({
     where: { id: req.params.id },
-    data: parsed.data,
+    data,
   });
   res.json(account);
 });

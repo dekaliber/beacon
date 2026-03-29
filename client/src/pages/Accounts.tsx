@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
-import { Plus, Pencil, Trash2, Landmark, CreditCard, TrendingUp, EyeOff } from "lucide-react";
+import { Plus, Pencil, Trash2, Landmark, CreditCard, TrendingUp, EyeOff, ArrowRight } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
 import { getAccounts, createAccount, updateAccount, deleteAccount, getInvestmentHoldings, getRecurrenceRules } from "@/api";
-import { formatCurrency } from "@/lib/utils";
 import type { Account } from "@/types";
 
 const accountTypeLabels: Record<string, string> = {
@@ -35,8 +34,18 @@ const LIABILITY_GROUPS: GroupDef[] = [
 const ASSET_TYPES = new Set(ASSET_GROUPS.flatMap((g) => g.types));
 const LIABILITY_TYPES = new Set(LIABILITY_GROUPS.flatMap((g) => g.types));
 
-function sumAccounts(accounts: Account[]) {
-  return accounts.reduce((sum, a) => sum + parseFloat(a.balance), 0);
+function nextDayOfMonth(day: number): string {
+  const today = new Date();
+  const todayDay = today.getDate();
+  let month = today.getMonth(); // 0-indexed
+  let year = today.getFullYear();
+  if (day <= todayDay) {
+    month += 1;
+    if (month > 11) { month = 0; year += 1; }
+  }
+  // Use Date to handle invalid days (e.g., day=31 in a 30-day month)
+  const d = new Date(year, month, day);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
 export function Accounts() {
@@ -69,17 +78,12 @@ export function Accounts() {
 
   if (!accounts) return null;
 
-  const totalAssets = sumAccounts(accounts.filter((a) => ASSET_TYPES.has(a.type)));
-  const totalLiabilities = sumAccounts(accounts.filter((a) => LIABILITY_TYPES.has(a.type)));
-  const netWorth = totalAssets - totalLiabilities;
-
   const renderGroup = (group: GroupDef, isJoint: boolean) => {
     const groupAccounts = accounts.filter(
       (a) => (group.types as string[]).includes(a.type) && a.isJoint === isJoint
     );
     if (groupAccounts.length === 0) return null;
     const Icon = group.icon;
-    const total = sumAccounts(groupAccounts);
     return (
       <div key={`${group.key}-${isJoint}`} className="space-y-2">
         <div className="flex items-center justify-between py-1">
@@ -87,7 +91,6 @@ export function Accounts() {
             <Icon className="h-4 w-4" />
             <span>{group.label}</span>
           </div>
-          <span className="text-sm font-semibold">{formatCurrency(total)}</span>
         </div>
         <div className="space-y-1.5">
           {groupAccounts.map((account) => (
@@ -110,7 +113,38 @@ export function Accounts() {
                 )}
               </div>
               <div className="flex items-center gap-3">
-                <span className="font-bold tabular-nums">{formatCurrency(account.balance)}</span>
+                {account.type === "INVESTMENT" && (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground" title="Dividend election">
+                    {account.dividendElection === "CASH" ? (
+                      <>
+                        <span>Cash</span>
+                        <ArrowRight className="h-3 w-3" />
+                        <span>
+                          {account.defaultCashAccountId
+                            ? (accounts.find((a) => a.id === account.defaultCashAccountId)?.name ?? "Unknown")
+                            : "Unset"}
+                        </span>
+                      </>
+                    ) : account.dividendElection === "REINVEST" ? (
+                      <span>Reinvest</span>
+                    ) : (
+                      <span>Ask</span>
+                    )}
+                  </div>
+                )}
+                {account.type === "CREDIT_CARD" && (account.closingDay != null || account.dueDay != null) && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    {account.closingDay != null && (
+                      <span title="Statement closes">Closes {nextDayOfMonth(account.closingDay)}</span>
+                    )}
+                    {account.closingDay != null && account.dueDay != null && (
+                      <span className="text-border">·</span>
+                    )}
+                    {account.dueDay != null && (
+                      <span title="Payment due">Due {nextDayOfMonth(account.dueDay)}</span>
+                    )}
+                  </div>
+                )}
                 {account.isHidden && (
                   <span title="Hidden" className="inline-flex flex-shrink-0">
                     <EyeOff className="h-3.5 w-3.5 text-gray-300" />
@@ -159,32 +193,6 @@ export function Accounts() {
 
       {accounts.length > 0 ? (
         <>
-          {/* Net Worth Summary */}
-          <Card className="p-4">
-            <div className="grid grid-cols-3 divide-x divide-border text-center">
-              <div className="px-4">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total Assets</p>
-                <p className="text-xl font-bold text-green-600">{formatCurrency(totalAssets)}</p>
-              </div>
-              <div className="px-4">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total Liabilities</p>
-                <p className="text-xl font-bold text-red-500">{formatCurrency(totalLiabilities)}</p>
-              </div>
-              <div className="px-4">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Net Worth</p>
-                <p className={`text-xl font-bold ${netWorth >= 0 ? "text-green-600" : "text-red-500"}`}>
-                  {formatCurrency(netWorth)}
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          {/* Column headers */}
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-            <h3 className="text-base font-semibold border-b border-border pb-2">Assets</h3>
-            <h3 className="text-base font-semibold border-b border-border pb-2">Liabilities</h3>
-          </div>
-
           {/* Personal & Joint blocks */}
           <div className="space-y-8">
             {renderOwnershipBlock("Personal")}
@@ -212,6 +220,7 @@ export function Accounts() {
         onSave={handleSave}
         onDelete={handleDelete}
         account={editing}
+        allAccounts={accounts}
       />
     </div>
   );
@@ -230,6 +239,7 @@ interface AccountModalProps {
   onSave: (data: Partial<Account>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   account: Account | null;
+  allAccounts: Account[];
 }
 
 interface HideWarning {
@@ -238,7 +248,7 @@ interface HideWarning {
   pendingData: Partial<Account>;
 }
 
-function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModalProps) {
+function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }: AccountModalProps) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -248,9 +258,21 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
   const [isHidden, setIsHidden] = useState(false);
   const [accountType, setAccountType] = useState<Account["type"]>(account?.type ?? "CHECKING");
   const [selectedColor, setSelectedColor] = useState(account?.color ?? ACCOUNT_COLORS[0]);
+  // Credit card settings
+  const [closingDay, setClosingDay] = useState<string>(account?.closingDay?.toString() ?? "");
+  const [dueDay, setDueDay] = useState<string>(account?.dueDay?.toString() ?? "");
+  const [linkedBankAccountId, setLinkedBankAccountId] = useState<string>(account?.linkedBankAccountId ?? "");
+  // Investment dividend settings
+  const [dividendElection, setDividendElection] = useState<string>(account?.dividendElection ?? "");
+  const [defaultCashAccountId, setDefaultCashAccountId] = useState<string>(account?.defaultCashAccountId ?? "");
   // True when the account already has holdings with real lot dates — managed toggle is locked off
   const [hasTrackedHoldings, setHasTrackedHoldings] = useState(false);
   const [hideWarning, setHideWarning] = useState<HideWarning | null>(null);
+
+  // Bank accounts available as link targets for CC and investment settings
+  const bankAccounts = allAccounts.filter(
+    (a) => (a.type === "CHECKING" || a.type === "SAVINGS") && a.isActive && a.id !== account?.id
+  );
 
   useEffect(() => {
     if (open) {
@@ -260,6 +282,11 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
       setIsHidden(account?.isHidden ?? false);
       setAccountType(account?.type ?? "CHECKING");
       setSelectedColor(account?.color ?? ACCOUNT_COLORS[0]);
+      setClosingDay(account?.closingDay?.toString() ?? "");
+      setDueDay(account?.dueDay?.toString() ?? "");
+      setLinkedBankAccountId(account?.linkedBankAccountId ?? "");
+      setDividendElection(account?.dividendElection ?? "");
+      setDefaultCashAccountId(account?.defaultCashAccountId ?? "");
       setConfirmDelete(false);
       setHasTrackedHoldings(false);
       setHideWarning(null);
@@ -283,8 +310,26 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
       isTaxAdvantaged: accountType !== "CREDIT_CARD" ? isTaxAdvantaged : false,
       isHidden,
     };
-    if (!account) {
+    if (!account && (accountType === "CHECKING" || accountType === "SAVINGS")) {
       data.balance = parseFloat(form.get("balance") as string) || 0;
+    }
+    // Credit card settings
+    if (accountType === "CREDIT_CARD") {
+      data.closingDay = closingDay ? parseInt(closingDay) : null;
+      data.dueDay = dueDay ? parseInt(dueDay) : null;
+      data.linkedBankAccountId = linkedBankAccountId || null;
+    } else {
+      data.closingDay = null;
+      data.dueDay = null;
+      data.linkedBankAccountId = null;
+    }
+    // Investment dividend settings
+    if (accountType === "INVESTMENT") {
+      data.dividendElection = (dividendElection as Account["dividendElection"]) || null;
+      data.defaultCashAccountId = dividendElection === "CASH" ? (defaultCashAccountId || null) : null;
+    } else {
+      data.dividendElection = null;
+      data.defaultCashAccountId = null;
     }
     return data;
   };
@@ -389,9 +434,9 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
           </select>
         </div>
 
-        {!account && (
+        {!account && (accountType === "CHECKING" || accountType === "SAVINGS") && (
           <div>
-            <label className="mb-1 block text-sm font-medium">Balance</label>
+            <label className="mb-1 block text-sm font-medium">Starting Balance</label>
             <input
               name="balance"
               type="number"
@@ -471,6 +516,90 @@ function AccountModal({ open, onClose, onSave, onDelete, account }: AccountModal
                 ? "Cannot enable — this account already has holdings with lot-level purchase dates."
                 : "Lot-level acquisition dates are unavailable. Enter total shares and total cost basis per holding — cost per share is calculated automatically."}
             </p>
+          </div>
+        )}
+
+        {/* Credit card settings */}
+        {accountType === "CREDIT_CARD" && (
+          <div className="space-y-3 rounded-md border border-border p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Credit Card Settings</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium">Closing Day</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={28}
+                  value={closingDay}
+                  onChange={(e) => setClosingDay(e.target.value)}
+                  placeholder="e.g. 15"
+                  className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">Day of month billing cycle closes</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Due Day</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={dueDay}
+                  onChange={(e) => setDueDay(e.target.value)}
+                  placeholder="e.g. 8"
+                  className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">Day of month payment is due</p>
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">Paid from Account</label>
+              <select
+                value={linkedBankAccountId}
+                onChange={(e) => setLinkedBankAccountId(e.target.value)}
+                className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="">— None selected —</option>
+                {bankAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-muted-foreground">Which bank account pays this card</p>
+            </div>
+          </div>
+        )}
+
+        {/* Investment dividend settings */}
+        {accountType === "INVESTMENT" && (
+          <div className="space-y-3 rounded-md border border-border p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dividend Settings</p>
+            <div>
+              <label className="mb-1 block text-sm font-medium">Default Election</label>
+              <select
+                value={dividendElection}
+                onChange={(e) => setDividendElection(e.target.value)}
+                className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="">Ask each time</option>
+                <option value="REINVEST">Always reinvest (DRIP)</option>
+                <option value="CASH">Always pay as cash</option>
+              </select>
+            </div>
+            {dividendElection === "CASH" && (
+              <div>
+                <label className="mb-1 block text-sm font-medium">Deposit to Account</label>
+                <select
+                  value={defaultCashAccountId}
+                  onChange={(e) => setDefaultCashAccountId(e.target.value)}
+                  className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">— None selected —</option>
+                  {bankAccounts.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">Where cash dividends are deposited</p>
+              </div>
+            )}
           </div>
         )}
 

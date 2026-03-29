@@ -614,6 +614,7 @@ investmentRoutes.get("/accounts", async (_req, res) => {
         name: account.name,
         type: account.type,
         balance: account.balance,
+        balanceUpdatedAt: account.balanceUpdatedAt,
         color: account.color,
         isJoint: account.isJoint,
         holdings: holdingsSummary,

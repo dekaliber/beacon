@@ -2,6 +2,9 @@ import { api } from "./client";
 import type {
   Account,
   AllocationSummary,
+  StatementOverride,
+  Transfer,
+  TransferRule,
   AssetClass,
   Budget,
   BudgetDetail,
@@ -29,6 +32,7 @@ import type {
   Tag,
   TransactionGroup,
   UpcomingExpenseItem,
+  CashFlowResponse,
 } from "../types";
 
 // Accounts
@@ -384,3 +388,94 @@ export const removeInstrumentTicker = (id: string, ticker: string) =>
 export const mergeInstrument = (id: string, otherId: string) =>
   api.post<Instrument>(`/instruments/${id}/merge`, { otherId });
 export const deleteInstrument = (id: string) => api.delete(`/instruments/${id}`);
+
+// Transfers
+export const getTransfers = (params?: {
+  accountId?: string;
+  from?: string;
+  to?: string;
+  confirmed?: boolean;
+}) => {
+  const query = params ? "?" + new URLSearchParams(
+    Object.fromEntries(
+      Object.entries(params)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, String(v)])
+    )
+  ).toString() : "";
+  return api.get<Transfer[]>(`/transfers${query}`);
+};
+
+export const createTransfer = (data: {
+  description: string;
+  amount: number;
+  date: string;
+  notes?: string | null;
+  fromAccountId: string;
+  toAccountId: string;
+  isConfirmed?: boolean;
+  recurrence?: {
+    frequency: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
+    interval?: number;
+    endDate?: string | null;
+  } | null;
+}) => api.post<Transfer>("/transfers", data);
+
+export const updateTransfer = (id: string, data: Partial<{
+  description: string;
+  amount: number;
+  date: string;
+  notes: string | null;
+  fromAccountId: string;
+  toAccountId: string;
+  isConfirmed: boolean;
+}>) => api.put<Transfer>(`/transfers/${id}`, data);
+
+export const confirmTransfer = (id: string) =>
+  api.post<Transfer>(`/transfers/${id}/confirm`, {});
+
+export const deleteTransfer = (id: string, deleteFuture?: boolean) =>
+  api.delete(`/transfers/${id}${deleteFuture ? "?deleteFuture=true" : ""}`);
+
+// Transfer Rules
+export const getTransferRules = () => api.get<TransferRule[]>("/transfers/rules");
+
+export const updateTransferRule = (id: string, data: Partial<{
+  description: string;
+  amount: number;
+  frequency: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
+  interval: number;
+  startDate: string;
+  endDate: string | null;
+  fromAccountId: string;
+  toAccountId: string;
+}>) => api.put<TransferRule>(`/transfers/rules/${id}`, data);
+
+export const archiveTransferRule = (id: string) =>
+  api.post(`/transfers/rules/${id}/archive`, {});
+
+// Statement Overrides
+export const getStatementOverrides = (accountId: string) =>
+  api.get<StatementOverride[]>(`/statement-overrides/${accountId}`);
+
+export const upsertStatementOverride = (data: {
+  accountId: string;
+  periodStart: string;
+  periodEnd: string;
+  amount: number;
+  notes?: string | null;
+}) => api.post<StatementOverride>("/statement-overrides", data);
+
+export const updateStatementOverride = (id: string, data: Partial<{
+  periodStart: string;
+  periodEnd: string;
+  amount: number;
+  notes: string | null;
+}>) => api.put<StatementOverride>(`/statement-overrides/${id}`, data);
+
+export const deleteStatementOverride = (id: string) =>
+  api.delete(`/statement-overrides/${id}`);
+
+// Cash flow
+export const getCashFlow = (windowDays = 45) =>
+  api.get<CashFlowResponse>(`/cash-flow?windowDays=${windowDays}`);

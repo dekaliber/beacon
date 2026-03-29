@@ -2637,7 +2637,9 @@ function ReviewDividendModal({
   const [totalAmount, setTotalAmount] = useState(
     (parseFloat(dividend.perShareAmount) * parseFloat(dividend.sharesAtExDate)).toFixed(2)
   );
-  const [taxClassification, setTaxClassification] = useState<TaxClassification | "">("");
+  const [taxClassification, setTaxClassification] = useState<TaxClassification | "">(
+    dividend.lastTaxClassification ?? ""
+  );
   const [notes, setNotes] = useState("");
 
   // ── Disposition ───────────────────────────────────────────────────────────
@@ -3120,6 +3122,9 @@ function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHo
             <h3 className="font-semibold text-sm">Pending Dividends</h3>
             <span className="ml-1 inline-flex items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-semibold px-1.5 py-0.5">
               {pendingDividends.length}
+            </span>
+            <span className="ml-auto text-sm font-semibold text-violet-600">
+              {formatCurrency(pendingDividends.reduce((sum, pd) => sum + parseFloat(pd.estimatedTotal), 0))}
             </span>
           </div>
           <div className="divide-y divide-border">
