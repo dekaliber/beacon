@@ -479,3 +479,20 @@ export const deleteStatementOverride = (id: string) =>
 // Cash flow
 export const getCashFlow = (windowDays = 45) =>
   api.get<CashFlowResponse>(`/cash-flow?windowDays=${windowDays}`);
+
+export const createBalanceAdjustment = (data: {
+  accountId: string;
+  date: string;
+  amount: number;
+  description?: string;
+  notes?: string;
+}) => api.post<{ id: string }>("/cash-flow/adjustments", data);
+
+export const updateBalanceAdjustment = (id: string, data: {
+  date?: string;
+  amount?: number;
+  description?: string;
+}) => api.patch<{ id: string }>(`/cash-flow/adjustments/${id}`, data);
+
+export const deleteBalanceAdjustment = (id: string) =>
+  api.delete(`/cash-flow/adjustments/${id}`);

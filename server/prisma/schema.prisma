@@ -98,6 +98,7 @@ model Account {
   transfersTo           Transfer[]     @relation("TransferTo")
   transferRulesFrom     TransferRule[] @relation("TransferRuleFrom")
   transferRulesTo       TransferRule[] @relation("TransferRuleTo")
+  balanceAdjustments    BalanceAdjustment[]
 
   // Self-relations: CC → bank, investment → bank
   linkedBankAccount    Account?   @relation("CreditCardBankLink", fields: [linkedBankAccountId], references: [id])
@@ -610,6 +611,26 @@ model Transfer {
   @@index([fromAccountId])
   @@index([toAccountId])
   @@map("transfers")
+}
+
+// A user-entered balance adjustment for cash flow planning (e.g. a planned
+// cash injection from an external source). Persisted so the user can edit or
+// remove it later. Amount is positive for inflows, negative for outflows.
+model BalanceAdjustment {
+  id          String   @id @default(cuid())
+  accountId   String
+  date        DateTime @db.Date
+  amount      Decimal  @db.Decimal(12, 2)
+  description String   @default("Cash injection")
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([date])
+  @@map("balance_adjustments")
 }
 
 // Allows the user to override the calculated statement total for a specific

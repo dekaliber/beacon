@@ -106,7 +106,8 @@ type EventType =
   | "CC_PAYMENT"
   | "TRANSFER_IN"
   | "TRANSFER_OUT"
-  | "DIVIDEND";
+  | "DIVIDEND"
+  | "BALANCE_ADJUSTMENT";
 
 type Confidence = "KNOWN" | "PROJECTED";
 
@@ -123,6 +124,8 @@ interface CashFlowEvent {
   periodStart?: string;
   periodEnd?: string;
   overrideId?: string;
+  /** Present on BALANCE_ADJUSTMENT events so the UI can edit/delete */
+  adjustmentId?: string;
   runningBalance: number;  // filled in after sorting
 }
 
@@ -216,9 +219,11 @@ async function buildProjection(
 
   for (const rule of activeRules) {
     const seenDates = seenRecurrenceRuleDates.get(rule.id) ?? new Set<string>();
-    // Start from startDate; fast-forward past already-generated dates
+    // Start from nextOccurrence — the first date the rule hasn't generated yet.
+    // Using startDate would re-project already-generated occurrences whose dates
+    // were later edited (the edited date wouldn't be in seenDates, causing duplicates).
     const occurrences = generateRuleOccurrences(
-      rule.startDate,
+      rule.nextOccurrence,
       rule.endDate,
       rule.frequency as Frequency,
       rule.interval,
@@ -227,7 +232,7 @@ async function buildProjection(
     );
     for (const occ of occurrences) {
       const ds = toDateStr(occ);
-      if (seenDates.has(ds)) continue; // already have a generated record for this date
+      if (seenDates.has(ds)) continue; // safety net: skip if already generated for this date
       rawEvents.push({
         id: `rule-${rule.id}-${ds}`,
         date: ds,
@@ -378,12 +383,15 @@ async function buildProjection(
 
   for (const inv of investorRows) {
     const dividends = await prisma.pendingDividend.findMany({
+      include: { activity: { select: { date: true } } },
       where: {
         accountId: inv.id,
         status: { in: ["PENDING", "CONFIRMED"] },
-        // Exclude dividends that have already been confirmed and logged as an
-        // InvestmentActivity — those are already reflected in the account balance.
-        activityId: null,
+        // Exclude only dividends whose payment has already cleared (activity
+        // exists AND payment date is in the past — those are reflected in the
+        // stored account balance). Confirmed-but-future dividends still need
+        // to appear in the projection even though they have an activityId.
+        NOT: { activityId: { not: null }, paymentDate: { lt: windowStart } },
         // Include dividends with a known payment date inside the window,
         // AND dividends with no payment date yet (managed accounts often lack one).
         OR: [
@@ -400,7 +408,11 @@ async function buildProjection(
         div.exDate.getUTCMonth(),
         div.exDate.getUTCDate() + 4,
       ));
-      const date = div.paymentDate ? toDateStr(div.paymentDate) : toDateStr(fallback);
+      const date = div.activity?.date
+        ? toDateStr(div.activity.date)
+        : div.paymentDate
+          ? toDateStr(div.paymentDate)
+          : toDateStr(fallback);
       rawEvents.push({
         id: `div-${div.id}`,
         date,
@@ -432,6 +444,23 @@ async function buildProjection(
       );
       rawEvents.push(...ccPaymentEvents);
     }
+  }
+
+  // 6. User-entered balance adjustments (e.g. planned cash injections)
+  const adjustments = await prisma.balanceAdjustment.findMany({
+    where: { accountId: account.id, date: { gte: windowStart, lte: windowEnd } },
+    orderBy: { date: "asc" },
+  });
+  for (const adj of adjustments) {
+    rawEvents.push({
+      id: `adj-${adj.id}`,
+      date: toDateStr(adj.date),
+      description: adj.description,
+      amount: parseFloat(adj.amount.toString()),
+      type: "BALANCE_ADJUSTMENT",
+      confidence: "KNOWN",
+      adjustmentId: adj.id,
+    });
   }
 
   // Sort by date, then debits before credits (conservative ordering)
@@ -521,8 +550,8 @@ async function computeCCPaymentEvents(
       } else {
         // Sum all expenses charged to this CC during the billing period.
         // The period starts the day after the previous closing date.
-        // Confidence is KNOWN when the close date has already passed
-        // (all charges are finalized), PROJECTED when it hasn't yet.
+        // Always PROJECTED: the bank debit is a future event regardless of
+        // whether the statement has already closed.
         const prevClose = new Date(Date.UTC(
           closeDate.getUTCFullYear(),
           closeDate.getUTCMonth() - 1,
@@ -533,7 +562,7 @@ async function computeCCPaymentEvents(
           where: { accountId: cc.id, date: { gt: prevClose, lte: closeDate } },
         });
         paymentAmount = parseFloat(periodExpenses._sum.amount?.toString() ?? "0");
-        confidence = closeDate <= today ? "KNOWN" : "PROJECTED";
+        confidence = "PROJECTED";
       }
 
       // Always emit the event — a $0 amount means the balance hasn't been
@@ -542,7 +571,7 @@ async function computeCCPaymentEvents(
       events.push({
         id: `cc-pmt-${cc.id}-${toDateStr(closeDate)}`,
         date: toDateStr(dueDate),
-        description: creditSide ? `Payment applied` : `${cc.name} payment`,
+        description: creditSide ? `Payment applied` : `CC payment`,
         amount: sign * paymentAmount,
         type: "CC_PAYMENT",
         confidence,
@@ -560,7 +589,97 @@ async function computeCCPaymentEvents(
   return events;
 }
 
-// ── Route ─────────────────────────────────────────────────────────────────────
+// ── Balance adjustment CRUD ───────────────────────────────────────────────────
+
+cashFlowRoutes.post("/adjustments", async (req, res) => {
+  try {
+    const { accountId, date, amount, description, notes } = req.body as {
+      accountId: string;
+      date: string;
+      amount: number;
+      description?: string;
+      notes?: string;
+    };
+
+    if (!accountId || !date || amount == null) {
+      return res.status(400).json({ error: "accountId, date, and amount are required" });
+    }
+
+    const today = new Date(Date.UTC(
+      new Date().getUTCFullYear(),
+      new Date().getUTCMonth(),
+      new Date().getUTCDate(),
+    ));
+    const adjDate = new Date(date);
+    if (adjDate < today) {
+      return res.status(400).json({ error: "date cannot be before today" });
+    }
+
+    const adjustment = await prisma.balanceAdjustment.create({
+      data: {
+        accountId,
+        date: adjDate,
+        amount,
+        description: description ?? "Cash injection",
+        notes,
+      },
+    });
+    return res.status(201).json(adjustment);
+  } catch (err) {
+    console.error("Create balance adjustment error:", err);
+    return res.status(500).json({ error: "Failed to create balance adjustment" });
+  }
+});
+
+cashFlowRoutes.patch("/adjustments/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { date, amount, description, notes } = req.body as {
+      date?: string;
+      amount?: number;
+      description?: string;
+      notes?: string;
+    };
+
+    if (date !== undefined) {
+      const today = new Date(Date.UTC(
+        new Date().getUTCFullYear(),
+        new Date().getUTCMonth(),
+        new Date().getUTCDate(),
+      ));
+      const adjDate = new Date(date);
+      if (adjDate < today) {
+        return res.status(400).json({ error: "date cannot be before today" });
+      }
+    }
+
+    const adjustment = await prisma.balanceAdjustment.update({
+      where: { id },
+      data: {
+        ...(date !== undefined && { date: new Date(date) }),
+        ...(amount !== undefined && { amount }),
+        ...(description !== undefined && { description }),
+        ...(notes !== undefined && { notes }),
+      },
+    });
+    return res.json(adjustment);
+  } catch (err) {
+    console.error("Update balance adjustment error:", err);
+    return res.status(500).json({ error: "Failed to update balance adjustment" });
+  }
+});
+
+cashFlowRoutes.delete("/adjustments/:id", async (req, res) => {
+  try {
+    await prisma.balanceAdjustment.delete({ where: { id: req.params.id } });
+    return res.status(204).send();
+  } catch (err) {
+    console.error("Delete balance adjustment error:", err);
+    return res.status(500).json({ error: "Failed to delete balance adjustment" });
+  }
+});
+
+// ── Projection route ──────────────────────────────────────────────────────────
 
 cashFlowRoutes.get("/", async (req, res) => {
   try {

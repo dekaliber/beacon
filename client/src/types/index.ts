@@ -510,7 +510,8 @@ export type CashFlowEventType =
   | "CC_PAYMENT"
   | "TRANSFER_IN"
   | "TRANSFER_OUT"
-  | "DIVIDEND";
+  | "DIVIDEND"
+  | "BALANCE_ADJUSTMENT";
 
 export type CashFlowConfidence = "KNOWN" | "PROJECTED";
 
@@ -526,6 +527,7 @@ export interface CashFlowEvent {
   periodStart?: string;
   periodEnd?: string;
   overrideId?: string;
+  adjustmentId?: string;
   runningBalance: number;
 }
 
