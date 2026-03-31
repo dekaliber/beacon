@@ -52,6 +52,13 @@ enum DividendElection {
   CASH
 }
 
+enum TaxAdvantageType {
+  TRADITIONAL
+  ROTH
+  HSA
+  PLAN_529
+}
+
 enum InvestmentActivityType {
   DIVIDEND
   SALE
@@ -68,11 +75,16 @@ model Account {
   isJoint          Boolean     @default(false)
   isManaged        Boolean     @default(false)
   isTaxAdvantaged  Boolean     @default(false)
+  taxAdvantageType TaxAdvantageType?
   isActive         Boolean     @default(true)
   isHidden         Boolean     @default(false)
 
   // Balance tracking
   balanceUpdatedAt     DateTime?
+
+  // Settlement cash (investment accounts only)
+  cashBalance          Decimal?  @db.Decimal(12, 2)
+  cashBalanceUpdatedAt DateTime?
 
   // Credit card settings (type = CREDIT_CARD only)
   closingDay           Int?      // day of month (1–28) the billing cycle closes
@@ -98,6 +110,7 @@ model Account {
   transfersTo           Transfer[]     @relation("TransferTo")
   transferRulesFrom     TransferRule[] @relation("TransferRuleFrom")
   transferRulesTo       TransferRule[] @relation("TransferRuleTo")
+  balanceAdjustments    BalanceAdjustment[]
 
   // Self-relations: CC → bank, investment → bank
   linkedBankAccount    Account?   @relation("CreditCardBankLink", fields: [linkedBankAccountId], references: [id])
@@ -329,8 +342,11 @@ model InvestmentHolding {
   assetClass String?
   instrumentId String?
   instrument   Instrument? @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
-  // Set after each successful Tiingo dividend scan; used to throttle API calls.
-  lastDividendScanAt DateTime?
+  // Set after each successful Tiingo dividend scan; used to enforce the daily scan window.
+  lastDividendScanAt    DateTime?
+  // Set after every scan attempt (success or failure); used to enforce a 1-hour retry
+  // backoff so rate-limited holdings are not retried on every subsequent app load.
+  lastDividendAttemptAt DateTime?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -401,11 +417,12 @@ model RealizedGainSnapshot {
 }
 
 model TickerPrice {
-  id        String   @id @default(cuid())
-  ticker    String   @unique
-  price     Decimal  @db.Decimal(12, 4)
-  priceDate DateTime
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  ticker      String   @unique
+  price       Decimal  @db.Decimal(12, 4)
+  priceDate   DateTime
+  priceSource String   @default("YAHOO") // "YAHOO" | "TIINGO"
+  updatedAt   DateTime @updatedAt
 
   @@map("ticker_prices")
 }
@@ -493,6 +510,7 @@ model Instrument {
   primaryTicker     String   @unique
   name              String?
   isManual          Boolean  @default(false)
+  isActive          Boolean  @default(true)
   tickers           InstrumentTicker[]
   weights           InstrumentAssetClassWeight[]
   holdings          InvestmentHolding[]
@@ -610,6 +628,26 @@ model Transfer {
   @@index([fromAccountId])
   @@index([toAccountId])
   @@map("transfers")
+}
+
+// A user-entered balance adjustment for cash flow planning (e.g. a planned
+// cash injection from an external source). Persisted so the user can edit or
+// remove it later. Amount is positive for inflows, negative for outflows.
+model BalanceAdjustment {
+  id          String   @id @default(cuid())
+  accountId   String
+  date        DateTime @db.Date
+  amount      Decimal  @db.Decimal(12, 2)
+  description String   @default("Cash injection")
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([date])
+  @@map("balance_adjustments")
 }
 
 // Allows the user to override the calculated statement total for a specific

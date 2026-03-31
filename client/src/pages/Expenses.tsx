@@ -3323,16 +3323,19 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
                           placeholder="1"
                           className="w-14 rounded-md border border-border px-2 py-1 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                         />
-                        <select
-                          name="frequency"
-                          defaultValue="MONTHLY"
-                          className="rounded-md border border-border px-2 py-1 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                        >
-                          {FREQUENCY_OPTIONS.map(({ value, singular, plural }) => {
-                            const n = parseInt(recurringInterval) || 1;
-                            return <option key={value} value={value}>{n === 1 ? singular : plural}</option>;
-                          })}
-                        </select>
+                        <div className="relative">
+                          <select
+                            name="frequency"
+                            defaultValue="MONTHLY"
+                            className="appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                          >
+                            {FREQUENCY_OPTIONS.map(({ value, singular, plural }) => {
+                              const n = parseInt(recurringInterval) || 1;
+                              return <option key={value} value={value}>{n === 1 ? singular : plural}</option>;
+                            })}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+                        </div>
                         {!showEndDate && (
                           <button type="button" onClick={() => setShowEndDate(true)} className="text-xs text-primary hover:underline">
                             + Add end date

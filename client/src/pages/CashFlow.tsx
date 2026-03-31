@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -19,12 +19,26 @@ import {
   Check,
   X,
   PlusCircle,
+  AlertTriangle,
+  Trash2,
+  Wallet,
+  Landmark,
 } from "lucide-react";
 import { Card } from "@/components/Card";
+import { Button } from "@/components/Button";
+import { Modal } from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
-import { getCashFlow, upsertStatementOverride, deleteStatementOverride } from "@/api";
+import {
+  getCashFlow,
+  upsertStatementOverride,
+  createBalanceAdjustment,
+  updateBalanceAdjustment,
+  deleteBalanceAdjustment,
+  getInvestmentAccounts,
+  updateAccount,
+} from "@/api";
 import { formatCurrency, cn } from "@/lib/utils";
-import type { CashFlowProjection, CashFlowEvent, DailyBalance } from "@/types";
+import type { CashFlowProjection, CashFlowEvent, DailyBalance, InvestmentAccountSummary } from "@/types";
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
 
@@ -48,12 +62,13 @@ function fmtShort(iso: string): string {
 
 function eventIcon(type: CashFlowEvent["type"]) {
   switch (type) {
-    case "EXPENSE":      return <TrendingDown className="h-3.5 w-3.5" />;
-    case "CC_CHARGE":    return <CreditCard className="h-3.5 w-3.5" />;
-    case "CC_PAYMENT":   return <CreditCard className="h-3.5 w-3.5" />;
-    case "TRANSFER_IN":  return <ArrowDownLeft className="h-3.5 w-3.5" />;
-    case "TRANSFER_OUT": return <ArrowUpRight className="h-3.5 w-3.5" />;
-    case "DIVIDEND":     return <Sparkles className="h-3.5 w-3.5" />;
+    case "EXPENSE":            return <TrendingDown className="h-3.5 w-3.5" />;
+    case "CC_CHARGE":          return <CreditCard className="h-3.5 w-3.5" />;
+    case "CC_PAYMENT":         return <CreditCard className="h-3.5 w-3.5" />;
+    case "TRANSFER_IN":        return <ArrowDownLeft className="h-3.5 w-3.5" />;
+    case "TRANSFER_OUT":       return <ArrowUpRight className="h-3.5 w-3.5" />;
+    case "DIVIDEND":           return <Sparkles className="h-3.5 w-3.5" />;
+    case "BALANCE_ADJUSTMENT": return <Wallet className="h-3.5 w-3.5" />;
   }
 }
 
@@ -61,27 +76,24 @@ function eventIcon(type: CashFlowEvent["type"]) {
 
 interface BalanceChartProps {
   data: DailyBalance[];
-  bridgeDate?: string;
-  bridgeAmount?: number;
 }
 
-function BalanceChart({ data, bridgeDate, bridgeAmount }: BalanceChartProps) {
-  const chartData = useMemo(() => {
-    if (!bridgeDate || !bridgeAmount) return data;
-    let added = false;
-    let cumulative = 0;
-    return data.map((d) => {
-      if (!added && d.date >= bridgeDate) {
-        added = true;
-        cumulative += bridgeAmount;
-      }
-      return { ...d, balance: d.balance + cumulative };
-    });
-  }, [data, bridgeDate, bridgeAmount]);
+function BalanceChart({ data }: BalanceChartProps) {
+  const chartData = data;
 
   const minVal = Math.min(...chartData.map((d) => d.balance));
   const maxVal = Math.max(...chartData.map((d) => d.balance));
   const hasNegative = minVal < 0;
+
+  // Position of the zero line within the gradient (0% = top = maxVal, 100% = bottom = minVal).
+  // Recharts auto-pads the domain slightly, so we add the same proportional buffer to keep
+  // the gradient split visually aligned with the zero reference line.
+  const zeroGradientPct = useMemo(() => {
+    if (!hasNegative) return "100%";
+    if (maxVal <= 0) return "0%";
+    const span = maxVal - minVal;
+    return `${((maxVal / span) * 100).toFixed(2)}%`;
+  }, [hasNegative, minVal, maxVal]);
 
   const tickInterval = Math.ceil(chartData.length / 6);
 
@@ -97,8 +109,14 @@ function BalanceChart({ data, bridgeDate, bridgeAmount }: BalanceChartProps) {
       <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <defs>
           <linearGradient id="balGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor={hasNegative ? "#ef4444" : "#3b82f6"} stopOpacity={0.2} />
-            <stop offset="95%" stopColor={hasNegative ? "#ef4444" : "#3b82f6"} stopOpacity={0} />
+            <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.25} />
+            <stop offset={zeroGradientPct} stopColor="#3b82f6" stopOpacity={0.05} />
+            {hasNegative && (
+              <>
+                <stop offset={zeroGradientPct} stopColor="#ef4444" stopOpacity={0.05} />
+                <stop offset="100%" stopColor="#ef4444" stopOpacity={0.25} />
+              </>
+            )}
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -134,8 +152,8 @@ function BalanceChart({ data, bridgeDate, bridgeAmount }: BalanceChartProps) {
         <Area
           type="monotone"
           dataKey="balance"
-          stroke={hasNegative ? "#ef4444" : "#3b82f6"}
-          strokeWidth={2}
+          stroke="#94a3b8"
+          strokeWidth={1.5}
           fill="url(#balGrad)"
           dot={false}
           activeDot={{ r: 3 }}
@@ -179,18 +197,6 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName }: CCPaymen
     }
   };
 
-  const handleClear = async () => {
-    if (!event.overrideId) return;
-    setSaving(true);
-    try {
-      await deleteStatementOverride(event.overrideId);
-      onSaved();
-      setOpen(false);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (!open) {
     return (
       <>
@@ -200,10 +206,10 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName }: CCPaymen
           {formatCurrency(event.amount)}
         </td>
         {/* Edit cell */}
-        <td className="py-2 pr-4 w-7">
+        <td className="py-2 pr-4 w-14">
           <button
             onClick={() => { setValue(Math.abs(event.amount).toFixed(2)); setOpen(true); }}
-            className="rounded p-0.5 hover:bg-accent text-muted-foreground"
+            className="rounded p-1 hover:bg-accent text-muted-foreground"
             title="Override statement amount"
           >
             <Pencil className="h-3.5 w-3.5" />
@@ -225,14 +231,14 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName }: CCPaymen
             min="0"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            className="w-24 rounded border border-border bg-background px-1.5 py-0.5 text-xs tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-24 rounded border border-border bg-background px-1.5 py-0.5 text-xs tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             autoFocus
             onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setOpen(false); }}
           />
         </span>
       </td>
       {/* Edit cell — confirm / clear-override / cancel */}
-      <td className="py-2 pr-4 w-7">
+      <td className="py-2 pr-4 w-14">
         <span className="inline-flex items-center gap-0.5">
           <button
             onClick={handleSave}
@@ -242,16 +248,6 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName }: CCPaymen
           >
             <Check className="h-3.5 w-3.5" />
           </button>
-          {event.overrideId && (
-            <button
-              onClick={handleClear}
-              disabled={saving}
-              className="rounded p-0.5 hover:bg-accent text-amber-600"
-              title="Remove override"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
           <button
             onClick={() => setOpen(false)}
             className="rounded p-0.5 hover:bg-accent text-muted-foreground"
@@ -265,30 +261,47 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName }: CCPaymen
   );
 }
 
-// ── Bridge inject row ─────────────────────────────────────────────────────────
+// ── New adjustment row (add cash injection) ───────────────────────────────────
 
-interface BridgeInjectRowProps {
+interface NewAdjustmentRowProps {
   defaultDate: string;
-  onSimulate: (date: string, amount: number) => void;
-  onClear: () => void;
-  simulating: boolean;
+  accountId: string;
+  onSaved: () => void;
 }
 
-function BridgeInjectRow({ defaultDate, onSimulate, onClear, simulating }: BridgeInjectRowProps) {
+function NewAdjustmentRow({ defaultDate, accountId, onSaved }: NewAdjustmentRowProps) {
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(defaultDate);
+  const [description, setDescription] = useState("Cash injection");
   const [amount, setAmount] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0) return;
+    setSaving(true);
+    try {
+      await createBalanceAdjustment({ accountId, date, amount: amt, description });
+      onSaved();
+      setOpen(false);
+      setAmount("");
+      setDescription("Cash injection");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!open) {
     return (
-      <tr className="border-b border-dashed border-red-200 dark:border-red-900/40">
+      <tr className="border-b border-dashed border-red-200">
         <td colSpan={5} className="py-1.5 px-1">
           <button
             onClick={() => { setDate(defaultDate); setOpen(true); }}
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-red-600 transition-colors"
           >
             <PlusCircle className="h-3.5 w-3.5" />
-            Simulate cash injection
+            Add cash injection
           </button>
         </td>
       </tr>
@@ -296,17 +309,24 @@ function BridgeInjectRow({ defaultDate, onSimulate, onClear, simulating }: Bridg
   }
 
   return (
-    <tr className="border-b border-dashed border-red-300 dark:border-red-900/60 bg-red-50/50 dark:bg-red-950/20">
+    <tr className="border-b border-dashed border-red-300 bg-red-50/50">
       <td className="py-2 pr-4">
         <input
           type="date"
           value={date}
+          min={today}
           onChange={(e) => setDate(e.target.value)}
-          className="rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary w-32"
+          className="rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary w-[80px]"
         />
       </td>
       <td className="py-2 pr-4">
-        <span className="text-xs text-muted-foreground italic">Cash injection (simulation only)</span>
+        <input
+          type="text"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Description"
+          className="w-full rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+        />
       </td>
       <td className="py-2 pr-2 text-right">
         <input
@@ -317,35 +337,23 @@ function BridgeInjectRow({ defaultDate, onSimulate, onClear, simulating }: Bridg
           onChange={(e) => setAmount(e.target.value)}
           placeholder="0.00"
           autoFocus
-          className="w-28 rounded border border-border bg-background px-2 py-0.5 text-xs tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-primary"
+          className="w-28 rounded border border-border bg-background px-2 py-0.5 text-xs tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           onKeyDown={(e) => {
-            if (e.key === "Enter" && parseFloat(amount) > 0) {
-              onSimulate(date, parseFloat(amount));
-            }
+            if (e.key === "Enter") handleSave();
             if (e.key === "Escape") setOpen(false);
           }}
         />
       </td>
-      {/* Edit column — confirm / clear / cancel */}
-      <td className="py-2 pr-4 w-7" colSpan={2}>
+      <td className="py-2 pr-4 w-14" colSpan={2}>
         <span className="inline-flex items-center gap-0.5">
           <button
-            onClick={() => { if (parseFloat(amount) > 0) onSimulate(date, parseFloat(amount)); }}
-            disabled={!amount || parseFloat(amount) <= 0}
+            onClick={handleSave}
+            disabled={saving || !amount || parseFloat(amount) <= 0}
             className="rounded p-0.5 hover:bg-accent text-green-600 disabled:opacity-40"
-            title="Apply simulation"
+            title="Save"
           >
             <Check className="h-3.5 w-3.5" />
           </button>
-          {simulating && (
-            <button
-              onClick={() => { onClear(); setAmount(""); }}
-              className="rounded p-0.5 hover:bg-accent text-muted-foreground"
-              title="Clear simulation"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
           <button
             onClick={() => setOpen(false)}
             className="rounded p-0.5 hover:bg-accent text-muted-foreground"
@@ -358,28 +366,162 @@ function BridgeInjectRow({ defaultDate, onSimulate, onClear, simulating }: Bridg
   );
 }
 
+// ── Existing adjustment row (edit / delete) ───────────────────────────────────
+
+interface AdjustmentEventRowProps {
+  event: CashFlowEvent;
+  onSaved: () => void;
+}
+
+function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const [editing, setEditing] = useState(false);
+  const [date, setDate] = useState(event.date);
+  const [description, setDescription] = useState(event.description);
+  const [amount, setAmount] = useState(Math.abs(event.amount).toFixed(2));
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!event.adjustmentId) return;
+    setSaving(true);
+    try {
+      await updateBalanceAdjustment(event.adjustmentId, {
+        date,
+        amount: parseFloat(amount),
+        description,
+      });
+      onSaved();
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!event.adjustmentId) return;
+    setSaving(true);
+    try {
+      await deleteBalanceAdjustment(event.adjustmentId);
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!editing) {
+    return (
+      <tr className="group border-b border-border/50 hover:bg-muted/30 transition-colors">
+        <td className="py-2 pr-4 text-muted-foreground whitespace-nowrap">{fmtDate(event.date)}</td>
+        <td className="py-2 pr-4">
+          <div className="flex items-center gap-2">
+            <span className="text-green-600 shrink-0">{eventIcon(event.type)}</span>
+            <span className="font-medium">{event.description}</span>
+          </div>
+        </td>
+        <td className="py-2 pr-2 text-right tabular-nums font-medium text-green-600">
+          +{formatCurrency(event.amount)}
+        </td>
+        <td className="py-2 pr-4">
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={() => setEditing(true)}
+              className="rounded p-1 hover:bg-accent text-muted-foreground"
+              title="Edit"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={saving}
+              className="rounded p-1 hover:bg-accent text-muted-foreground disabled:opacity-40"
+              title="Delete"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </td>
+        <td className={cn(
+          "py-2 text-right tabular-nums font-semibold",
+          event.runningBalance < 0 ? "text-red-600" : "text-foreground",
+        )}>
+          {formatCurrency(event.runningBalance)}
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr className="border-b border-border/50 bg-muted/20">
+      <td className="py-2 pr-4">
+        <input
+          type="date"
+          value={date}
+          min={today}
+          onChange={(e) => setDate(e.target.value)}
+          className="rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary w-[80px]"
+        />
+      </td>
+      <td className="py-2 pr-4">
+        <input
+          type="text"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          autoFocus
+          className="w-full rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+          onKeyDown={(e) => { if (e.key === "Escape") setEditing(false); }}
+        />
+      </td>
+      <td className="py-2 pr-2 text-right">
+        <span className="inline-flex items-center justify-end gap-1">
+          <span className="text-xs text-muted-foreground">$</span>
+          <input
+            type="number"
+            step="100"
+            min="0"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-24 rounded border border-border bg-background px-1.5 py-0.5 text-xs tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setEditing(false); }}
+          />
+        </span>
+      </td>
+      <td className="py-2 pr-4 w-14">
+        <span className="inline-flex items-center gap-0.5">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded p-0.5 hover:bg-accent text-green-600 disabled:opacity-40"
+            title="Save"
+          >
+            <Check className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => setEditing(false)}
+            className="rounded p-0.5 hover:bg-accent text-muted-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </span>
+      </td>
+      <td className={cn(
+        "py-2 text-right tabular-nums font-semibold",
+        event.runningBalance < 0 ? "text-red-600" : "text-foreground",
+      )}>
+        {formatCurrency(event.runningBalance)}
+      </td>
+    </tr>
+  );
+}
+
 // ── Events ledger ─────────────────────────────────────────────────────────────
 
 interface LedgerProps {
   events: CashFlowEvent[];
   accountId: string;
-  onOverrideSaved: () => void;
-  bridgeDate?: string;
-  bridgeAmount?: number;
-  onSimulate: (date: string, amount: number) => void;
-  onClear: () => void;
-  simulating: boolean;
+  onRefetch: () => void;
 }
 
-function EventsLedger({
-  events,
-  accountId,
-  onOverrideSaved,
-  onSimulate,
-  onClear,
-  simulating,
-}: LedgerProps) {
-  // Index of the first event where running balance goes negative
+function EventsLedger({ events, accountId, onRefetch }: LedgerProps) {
   const firstNegativeIdx = events.findIndex((e) => e.runningBalance < 0);
 
   if (events.length === 0) {
@@ -398,76 +540,82 @@ function EventsLedger({
             <th className="py-2 pr-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide w-24">Date</th>
             <th className="py-2 pr-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Description</th>
             <th className="py-2 pr-2 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide w-36">Amount</th>
-            <th className="py-2 pr-4 w-7" />
-            <th className="py-2 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide w-32">Balance</th>
+            <th className="py-2 pr-4 w-14" />
+            <th className="py-2 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide w-24">Balance</th>
           </tr>
         </thead>
         <tbody>
           {events.map((event, idx) => (
             <>
-              {/* Bridge inject row appears just before the first negative-balance event */}
               {idx === firstNegativeIdx && (
-                <BridgeInjectRow
-                  key={`bridge-${event.id}`}
+                <NewAdjustmentRow
+                  key={`new-adj-${event.id}`}
                   defaultDate={event.date}
-                  onSimulate={onSimulate}
-                  onClear={onClear}
-                  simulating={simulating}
+                  accountId={accountId}
+                  onSaved={onRefetch}
                 />
               )}
-              <tr key={event.id} className="group border-b border-border/50 hover:bg-muted/30 transition-colors">
-                <td className="py-2 pr-4 text-muted-foreground whitespace-nowrap">{fmtDate(event.date)}</td>
-                <td className="py-2 pr-4">
-                  <div className="flex items-center gap-2">
-                    <span className={cn("shrink-0", event.amount >= 0 ? "text-green-600" : "text-red-500")}>
-                      {eventIcon(event.type)}
-                    </span>
-                    <span className="font-medium">{event.description}</span>
-                    {event.relatedAccountName && event.type !== "CC_CHARGE" && (
-                      <span className="text-xs text-muted-foreground">
-                        {event.type === "TRANSFER_IN" ? "from" : event.type === "TRANSFER_OUT" ? "to" : "·"}{" "}
-                        {event.relatedAccountName}
+              {event.type === "BALANCE_ADJUSTMENT" ? (
+                <AdjustmentEventRow key={event.id} event={event} onSaved={onRefetch} />
+              ) : (
+                <tr key={event.id} className="group border-b border-border/50 hover:bg-muted/30 transition-colors">
+                  <td className="py-2 pr-4 text-muted-foreground whitespace-nowrap">{fmtDate(event.date)}</td>
+                  <td className="py-2 pr-4">
+                    <div className="flex items-center gap-2">
+                      <span className={cn("shrink-0", event.amount >= 0 ? "text-green-600" : "text-red-500")}>
+                        {eventIcon(event.type)}
                       </span>
-                    )}
-                    {event.confidence === "PROJECTED" && (
-                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                        Projected
-                      </span>
-                    )}
-                    {event.overrideId && (
-                      <span className="rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
-                        Override
-                      </span>
-                    )}
-                  </div>
-                </td>
-                {/* Amount + edit columns */}
-                {event.type === "CC_PAYMENT" ? (
-                  <CCPaymentCells
-                    event={event}
-                    accountId={event.relatedAccountId ?? accountId}
-                    onSaved={onOverrideSaved}
-                    amountClassName={event.amount >= 0 ? "text-green-600" : "text-red-500"}
-                  />
-                ) : (
-                  <>
-                    <td className={cn(
-                      "py-2 pr-2 text-right tabular-nums font-medium",
-                      event.amount >= 0 ? "text-green-600" : "text-red-500",
-                    )}>
-                      {event.amount >= 0 ? "+" : ""}
-                      {formatCurrency(event.amount)}
-                    </td>
-                    <td className="py-2 pr-4 w-7" />
-                  </>
-                )}
-                <td className={cn(
-                  "py-2 text-right tabular-nums font-semibold",
-                  event.runningBalance < 0 ? "text-red-600" : "text-foreground"
-                )}>
-                  {formatCurrency(event.runningBalance)}
-                </td>
-              </tr>
+                      <span className="font-medium">{event.description}</span>
+                      {event.relatedAccountName && event.type !== "CC_CHARGE" && (
+                        <span className="text-xs text-muted-foreground">
+                          {event.type === "TRANSFER_IN" ? "from" : event.type === "TRANSFER_OUT" ? "to" : "·"}{" "}
+                          {event.relatedAccountName}
+                        </span>
+                      )}
+                      {event.confidence === "KNOWN" && event.type !== "CC_PAYMENT" && (
+                        <span className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                          Confirmed
+                        </span>
+                      )}
+                      {event.type === "CC_PAYMENT" && !event.overrideId && (
+                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                          Estimated
+                        </span>
+                      )}
+                      {event.overrideId && (
+                        <span className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                          Confirmed
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  {event.type === "CC_PAYMENT" ? (
+                    <CCPaymentCells
+                      event={event}
+                      accountId={event.relatedAccountId ?? accountId}
+                      onSaved={onRefetch}
+                      amountClassName={event.amount >= 0 ? "text-green-600" : "text-red-500"}
+                    />
+                  ) : (
+                    <>
+                      <td className={cn(
+                        "py-2 pr-2 text-right tabular-nums font-medium",
+                        event.amount >= 0 ? "text-green-600" : "text-red-500",
+                      )}>
+                        {event.amount >= 0 ? "+" : ""}
+                        {formatCurrency(event.amount)}
+                      </td>
+                      <td className="py-2 pr-4 w-14" />
+                    </>
+                  )}
+                  <td className={cn(
+                    "py-2 text-right tabular-nums font-semibold",
+                    event.runningBalance < 0 ? "text-red-600" : "text-foreground",
+                  )}>
+                    {formatCurrency(event.runningBalance)}
+                  </td>
+                </tr>
+              )}
             </>
           ))}
         </tbody>
@@ -485,9 +633,6 @@ interface AccountPanelProps {
 }
 
 function AccountPanel({ projection, windowEnd, onRefetch }: AccountPanelProps) {
-  const [bridgeDate, setBridgeDate] = useState<string | undefined>();
-  const [bridgeAmount, setBridgeAmount] = useState<number | undefined>();
-
   const firstNegativeEntry = projection.dailyBalances.find((d) => d.balance < 0);
   const firstNegativeDate = firstNegativeEntry?.date;
   const shortfall = firstNegativeEntry ? Math.abs(firstNegativeEntry.balance) : 0;
@@ -495,25 +640,27 @@ function AccountPanel({ projection, windowEnd, onRefetch }: AccountPanelProps) {
   return (
     <div className="space-y-4">
       {/* Balance summary row */}
-      <div className="flex items-center gap-6">
-        <div>
-          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Today</p>
-          <p className="text-xl font-bold tabular-nums">{formatCurrency(projection.startBalance)}</p>
-        </div>
-        <div className="text-muted-foreground">→</div>
-        <div>
-          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">
-            {fmtDate(windowEnd)}
-          </p>
-          <p className={cn(
-            "text-xl font-bold tabular-nums",
-            projection.endBalance < 0 ? "text-red-600" : "text-foreground"
-          )}>
-            {formatCurrency(projection.endBalance)}
-          </p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Today</p>
+            <p className="text-xl font-bold tabular-nums">{formatCurrency(projection.startBalance)}</p>
+          </div>
+          <div className="text-muted-foreground">→</div>
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">
+              {fmtDate(windowEnd)}
+            </p>
+            <p className={cn(
+              "text-xl font-bold tabular-nums",
+              projection.endBalance < 0 ? "text-red-600" : "text-foreground"
+            )}>
+              {formatCurrency(projection.endBalance)}
+            </p>
+          </div>
         </div>
         {firstNegativeDate && (
-          <div className="ml-2 flex items-center gap-1.5 text-sm text-red-600">
+          <div className="flex items-center gap-1.5 text-sm text-red-600">
             <TrendingDown className="h-4 w-4 shrink-0" />
             <span>
               Projected shortfall of {formatCurrency(shortfall)} starting {fmtDate(firstNegativeDate)}
@@ -524,25 +671,72 @@ function AccountPanel({ projection, windowEnd, onRefetch }: AccountPanelProps) {
 
       {/* Chart */}
       <Card className="p-3">
-        <BalanceChart
-          data={projection.dailyBalances}
-          bridgeDate={bridgeDate}
-          bridgeAmount={bridgeAmount}
-        />
+        <BalanceChart data={projection.dailyBalances} />
       </Card>
 
       {/* Events ledger */}
       <EventsLedger
         events={projection.events}
         accountId={projection.accountId}
-        onOverrideSaved={onRefetch}
-        bridgeDate={bridgeDate}
-        bridgeAmount={bridgeAmount}
-        onSimulate={(d, a) => { setBridgeDate(d); setBridgeAmount(a); }}
-        onClear={() => { setBridgeDate(undefined); setBridgeAmount(undefined); }}
-        simulating={bridgeDate != null}
+        onRefetch={onRefetch}
       />
     </div>
+  );
+}
+
+// ── Edit balance modal ────────────────────────────────────────────────────────
+
+function EditBalanceModal({
+  account,
+  onClose,
+  onSave,
+}: {
+  account: InvestmentAccountSummary | null;
+  onClose: () => void;
+  onSave: (id: string, balance: number) => Promise<void>;
+}) {
+  const [value, setValue] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (account) setValue(String(parseFloat(account.balance) || 0));
+  }, [account]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!account) return;
+    setSaving(true);
+    await onSave(account.id, parseFloat(value) || 0);
+    setSaving(false);
+  };
+
+  return (
+    <Modal open={!!account} onClose={onClose} title="Edit Balance">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium">
+            Current Balance — {account?.name}
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            autoFocus
+            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          {account?.balanceUpdatedAt && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Last updated {new Date(account.balanceUpdatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </p>
+          )}
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -550,15 +744,60 @@ function AccountPanel({ projection, windowEnd, onRefetch }: AccountPanelProps) {
 
 export function CashFlow() {
   const { data, refetch } = useApi(() => getCashFlow(45), []);
+  const { data: accounts, refetch: refetchAccounts } = useApi(() => getInvestmentAccounts(), []);
   const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [editingBalance, setEditingBalance] = useState<InvestmentAccountSummary | null>(null);
+
+  const bankingAccounts = (accounts ?? []).filter(
+    (a) => a.type === "CHECKING" || a.type === "SAVINGS"
+  );
+
+  const handleSaveBalance = async (id: string, balance: number) => {
+    await updateAccount(id, { balance });
+    setEditingBalance(null);
+    refetchAccounts();
+  };
+
+  const renderBankingTile = (account: InvestmentAccountSummary) => (
+    <div key={account.id}>
+      <Card className="px-4 py-3">
+        <div className="flex items-center gap-3">
+          <div
+            className="h-8 w-8 flex-shrink-0 rounded-md flex items-center justify-center"
+            style={account.color ? { backgroundColor: account.color } : { backgroundColor: "#e2e2df" }}
+          >
+            <Landmark className="h-4 w-4 text-gray-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-sm truncate">{account.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {account.type === "CHECKING" ? "Checking · Cash" : "Savings · Cash"}
+            </p>
+          </div>
+          <div className="text-right flex-shrink-0 mr-2">
+            <p className="font-bold tabular-nums text-sm">
+              {formatCurrency(account.totalMarketValue)}
+            </p>
+          </div>
+          <button
+            onClick={() => setEditingBalance(account)}
+            className="rounded p-1 hover:bg-accent flex-shrink-0"
+          >
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+        </div>
+      </Card>
+    </div>
+  );
 
   const projections = data?.projections ?? [];
 
-  const selectedId = activeTab ?? projections[0]?.accountId ?? null;
-  const selectedProjection = projections.find((p) => p.accountId === selectedId) ?? null;
+  const personal = projections.filter((p) => !p.isJoint).sort((a, b) => b.startBalance - a.startBalance);
+  const joint = projections.filter((p) => p.isJoint).sort((a, b) => b.startBalance - a.startBalance);
+  const sortedProjections = [...personal, ...joint];
 
-  const personal = projections.filter((p) => !p.isJoint);
-  const joint = projections.filter((p) => p.isJoint);
+  const selectedId = activeTab ?? sortedProjections[0]?.accountId ?? null;
+  const selectedProjection = projections.find((p) => p.accountId === selectedId) ?? null;
 
   function TabButton({ p }: { p: CashFlowProjection }) {
     const isActive = p.accountId === selectedId;
@@ -573,12 +812,9 @@ export function CashFlow() {
             : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
         )}
       >
-        {p.color && (
-          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
-        )}
         <span>{p.accountName}</span>
         {hasNegative && (
-          <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" title="Projected negative balance" />
+          <AlertTriangle className="h-3 w-3 text-red-500 shrink-0" title="Projected negative balance" />
         )}
       </button>
     );
@@ -608,44 +844,68 @@ export function CashFlow() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Cash Flow</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {fmtDate(data.windowStart)} – {fmtDate(data.windowEnd)} · {data.windowDays}-day projection
-          </p>
-        </div>
+      <div>
+        <h2 className="text-2xl font-bold">Cash Flow</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {fmtDate(data.windowStart)} – {fmtDate(data.windowEnd)} · {data.windowDays}-day projection
+        </p>
       </div>
 
-      {/* Tab bar */}
-      <div className="border-b border-border">
-        <div className="flex items-center gap-0 overflow-x-auto">
-          {personal.length > 0 && joint.length > 0 && (
-            <span className="mr-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
-              Personal
-            </span>
+      <div className="flex flex-col lg:flex-row items-start gap-6">
+        {/* Left 2/3: tab bar + account panel */}
+        <div className="min-w-0 basis-2/3 w-full space-y-4">
+          {/* Tab bar */}
+          <div className="border-b border-border">
+            <div className="flex items-center gap-0 overflow-x-auto">
+              {personal.length > 0 && joint.length > 0 && (
+                <span className="mr-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                  Personal
+                </span>
+              )}
+              {personal.map((p) => <TabButton key={p.accountId} p={p} />)}
+              {joint.length > 0 && (
+                <>
+                  <span className="mx-3 text-border">|</span>
+                  <span className="mr-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                    Joint
+                  </span>
+                  {joint.map((p) => <TabButton key={p.accountId} p={p} />)}
+                </>
+              )}
+            </div>
+          </div>
+
+          {selectedProjection && (
+            <AccountPanel
+              key={selectedProjection.accountId}
+              projection={selectedProjection}
+              windowEnd={data.windowEnd}
+              onRefetch={refetch}
+            />
           )}
-          {personal.map((p) => <TabButton key={p.accountId} p={p} />)}
-          {joint.length > 0 && (
-            <>
-              <span className="mx-3 text-border">|</span>
-              <span className="mr-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                Joint
+        </div>
+
+        {/* Right 1/3: banking accounts */}
+        {bankingAccounts.length > 0 && (
+          <div className="min-w-0 basis-1/3 w-full space-y-2">
+            <div className="flex items-center gap-2 py-1">
+              <Landmark className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Banking (Cash)
               </span>
-              {joint.map((p) => <TabButton key={p.accountId} p={p} />)}
-            </>
-          )}
-        </div>
+            </div>
+            <div className="space-y-1.5">
+              {bankingAccounts.map(renderBankingTile)}
+            </div>
+          </div>
+        )}
       </div>
 
-      {selectedProjection && (
-        <AccountPanel
-          key={selectedProjection.accountId}
-          projection={selectedProjection}
-          windowEnd={data.windowEnd}
-          onRefetch={refetch}
-        />
-      )}
+      <EditBalanceModal
+        account={editingBalance}
+        onClose={() => setEditingBalance(null)}
+        onSave={handleSaveBalance}
+      />
     </div>
   );
 }

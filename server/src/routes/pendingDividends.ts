@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
-import { getDividendEvents, type DividendEvent } from "../services/tiingo.js";
+import { getDividendScanResult, type DividendScanResult } from "../services/tiingo.js";
 
 export const pendingDividendRoutes = Router();
 
@@ -62,15 +62,48 @@ async function getSharesAtDate(holdingId: string, date: Date): Promise<number> {
   return Math.max(0, lotTotal);
 }
 
-// How long to wait before re-querying Tiingo for a holding that was already scanned.
-const SCAN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+// How long to wait before retrying a holding whose last attempt was rate-limited or errored.
+const ATTEMPT_RETRY_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Returns the most recent 8 PM Eastern cutoff as a UTC Date.
+ * If it is currently past 8 PM ET today, returns today's 8 PM ET.
+ * If it is before 8 PM ET today, returns yesterday's 8 PM ET.
+ *
+ * This mirrors the logic in client/src/lib/priceUtils.ts so dividend scans
+ * trigger on the same daily schedule as price refreshes.
+ */
+function lastCutoff8pmET(now: Date): Date {
+  // Resolve today's date in ET and the current ET UTC offset (handles DST).
+  const dateParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const get = (type: string) => dateParts.find((p) => p.type === type)!.value;
+
+  const tzPart = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    timeZoneName: "shortOffset",
+  }).formatToParts(now).find((p) => p.type === "timeZoneName")!.value;
+  const offsetMatch = tzPart.match(/GMT([+-])(\d+)/)!;
+  const offsetStr = `${offsetMatch[1]}${offsetMatch[2].padStart(2, "0")}:00`;
+
+  const todayCutoff = new Date(`${get("year")}-${get("month")}-${get("day")}T20:00:00${offsetStr}`);
+
+  // If we haven't reached tonight's cutoff yet, use yesterday's.
+  return now >= todayCutoff
+    ? todayCutoff
+    : new Date(todayCutoff.getTime() - 24 * 60 * 60 * 1000);
+}
 
 /**
  * Scan all active holdings for an account and create PendingDividend records
  * for any new dividend events found in Tiingo's daily price data.
  *
- * Holdings scanned within the last 24 hours are skipped entirely — Tiingo is
- * only queried once per holding per day to stay within free-tier rate limits.
+ * Scan timing mirrors price refreshes: a holding is eligible once per day,
+ * starting from the first app load after 8 PM ET (when mutual fund NAVs have
+ * settled). Holdings that were rate-limited or errored are retried no sooner
+ * than 1 hour after the last attempt (tracked via lastDividendAttemptAt).
  * Already-seen (holdingId, exDate) pairs are also skipped via the unique constraint.
  * Events where shares-at-ex-date = 0 are skipped.
  *
@@ -81,27 +114,35 @@ const SCAN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
  */
 export async function scanForDividends(
   account: { id: string; name: string },
-  tickerCache?: Map<string, Promise<DividendEvent[]>>,
+  tickerCache?: Map<string, Promise<DividendScanResult>>,
 ): Promise<void> {
   const { id: accountId, name: accountName } = account;
 
   const holdings = await prisma.investmentHolding.findMany({
     where: { accountId },
-    select: { id: true, ticker: true, createdAt: true, lastDividendScanAt: true },
+    select: { id: true, ticker: true, createdAt: true, lastDividendScanAt: true, lastDividendAttemptAt: true },
   });
-
-  const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
-  const cutoff = new Date(today.getTime() - SCAN_TTL_MS);
 
   await Promise.all(
     holdings.map(async (holding) => {
       const tag = `[dividend-scan] ${accountName} / ${holding.ticker}`;
 
-      // Skip if scanned recently — avoids unnecessary Tiingo API calls
-      if (holding.lastDividendScanAt && holding.lastDividendScanAt > cutoff) {
-        const nextAt = new Date(holding.lastDividendScanAt.getTime() + SCAN_TTL_MS);
-        console.log(`${tag}: skipped (TTL — next scan after ${nextAt.toLocaleString()})`);
+      const now = new Date();
+      const todayStr = now.toISOString().slice(0, 10);
+      const cutoff = lastCutoff8pmET(now);
+
+      // Skip if already successfully scanned since the last 8 PM ET cutoff.
+      if (holding.lastDividendScanAt && holding.lastDividendScanAt >= cutoff) {
+        console.log(`${tag}: skipped (already scanned since last 8 PM ET cutoff)`);
+        return;
+      }
+
+      // Skip if the last attempt (success or failure) was within the past hour —
+      // prevents hammering Tiingo when rate-limited during a multi-load session.
+      if (holding.lastDividendAttemptAt &&
+          now.getTime() - holding.lastDividendAttemptAt.getTime() < ATTEMPT_RETRY_MS) {
+        const nextAt = new Date(holding.lastDividendAttemptAt.getTime() + ATTEMPT_RETRY_MS);
+        console.log(`${tag}: skipped (rate-limit backoff — next attempt after ${nextAt.toLocaleString()})`);
         return;
       }
 
@@ -113,22 +154,29 @@ export async function scanForDividends(
         .toISOString()
         .slice(0, 10);
 
+      // Stamp the attempt time before calling Tiingo so that even a failure is
+      // recorded and the 1-hour retry backoff applies.
+      await prisma.investmentHolding.update({
+        where: { id: holding.id },
+        data: { lastDividendAttemptAt: now },
+      });
+
       // Deduplicate Tiingo API calls across accounts: if another account already
       // queued or completed a fetch for this ticker this session, reuse that
       // Promise rather than issuing a second identical request.
-      let eventsPromise: Promise<DividendEvent[]>;
+      let scanPromise: Promise<DividendScanResult>;
       if (tickerCache?.has(holding.ticker)) {
         console.log(`${tag}: skipped API call — ticker already queried this session`);
-        eventsPromise = tickerCache.get(holding.ticker)!;
+        scanPromise = tickerCache.get(holding.ticker)!;
       } else {
         console.log(`${tag}: querying Tiingo (${startDate} → ${todayStr})`);
-        eventsPromise = getDividendEvents(holding.ticker, startDate, todayStr);
-        tickerCache?.set(holding.ticker, eventsPromise);
+        scanPromise = getDividendScanResult(holding.ticker, startDate, todayStr);
+        tickerCache?.set(holding.ticker, scanPromise);
       }
 
-      let events;
+      let scanResult: DividendScanResult;
       try {
-        events = await eventsPromise;
+        scanResult = await scanPromise;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         const isRateLimit = msg.includes("429");
@@ -139,6 +187,8 @@ export async function scanForDividends(
         }
         return;
       }
+
+      const { dividends: events, latestClose, latestCloseDate } = scanResult;
 
       // Log the raw API response before any business logic is applied
       if (events.length === 0) {
@@ -152,11 +202,35 @@ export async function scanForDividends(
         );
       }
 
-      // Stamp the holding as scanned regardless of whether new dividends were found
+      // Stamp the holding as successfully scanned so it is skipped until the
+      // next 8 PM ET daily cutoff.
       await prisma.investmentHolding.update({
         where: { id: holding.id },
-        data: { lastDividendScanAt: today },
+        data: { lastDividendScanAt: now },
       });
+
+      // Piggyback: update TickerPrice with the latest close from this response.
+      // Avoids a redundant Tiingo call during price refresh for Tiingo-sourced tickers.
+      // Only write if this is the first call for this ticker (not a cache hit) so we
+      // don't redundantly upsert for every account that holds the same fund.
+      if (latestClose != null && latestCloseDate != null && !tickerCache?.has(holding.ticker + "__written")) {
+        tickerCache?.set(holding.ticker + "__written", Promise.resolve(scanResult));
+        const priceDate = new Date(latestCloseDate + "T00:00:00Z");
+        const historyDate = new Date(Date.UTC(
+          priceDate.getUTCFullYear(), priceDate.getUTCMonth(), priceDate.getUTCDate(),
+        ));
+        await prisma.tickerPrice.upsert({
+          where: { ticker: holding.ticker },
+          create: { ticker: holding.ticker, price: latestClose, priceDate, priceSource: "TIINGO" },
+          update: { price: latestClose, priceDate, priceSource: "TIINGO" },
+        });
+        await prisma.tickerPriceHistory.upsert({
+          where: { ticker_date: { ticker: holding.ticker, date: historyDate } },
+          create: { ticker: holding.ticker, date: historyDate, closePrice: latestClose },
+          update: { closePrice: latestClose },
+        });
+        console.log(`${tag}: piggybacked price update — $${latestClose} (${latestCloseDate})`);
+      }
 
       for (const event of events) {
         const exDate = new Date(event.exDate);

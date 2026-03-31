@@ -9,8 +9,9 @@ import { ArrowRight, TrendingUp, Receipt, Calendar, ChevronLeft, ChevronRight } 
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
+import { CategoryOutliersChart } from "@/components/CategoryOutliersChart";
 import { useApi } from "@/hooks/useApi";
-import { getDashboard, getFlatCategories, getCategoryTrend } from "@/api";
+import { getDashboard, getFlatCategories, getCategoryTrend, getCategoryOutliers } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Category } from "@/types";
 
@@ -167,6 +168,7 @@ export function Dashboard() {
 
   const { data, loading } = useApi(() => getDashboard(year, month), [year, month]);
   const { data: allCategories } = useApi(() => getFlatCategories(), []);
+  const { data: dashboardOutliers } = useApi(() => getCategoryOutliers(year, month), [year, month]);
 
   const prevMonth = () => {
     if (month === 1) { setMonth(12); setYear(year - 1); }
@@ -366,7 +368,7 @@ export function Dashboard() {
       </div>
 
       {/* Charts row */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Spending by category - horizontal ranked bar chart */}
         <Card>
           <CardHeader>
@@ -426,67 +428,77 @@ export function Dashboard() {
           )}
         </Card>
 
-        {/* Monthly trend - stacked personal/joint bars with budget reference line */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Monthly Trend</CardTitle>
-          </CardHeader>
-          {trendData.some((t) => t.personalSpent > 0 || t.jointSpent > 0) ? (
-            <div className="cursor-pointer">
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart
-                data={trendData}
-                margin={{ top: 4, right: 48, left: 0, bottom: 4 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
-                <XAxis dataKey="label" fontSize={12} axisLine={false} tickLine={false} />
-                <YAxis
-                  fontSize={12}
-                  tickFormatter={(v) => `$${Math.round(v / 1000)}k`}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip formatter={(value: number, name: string) => [formatCurrency(value), name]} cursor={{ fill: "#F8FAFC" }} />
-                <Legend
-                  align="center"
-                  wrapperStyle={{ paddingTop: 12 }}
-                  formatter={(value: string) => <span style={{ paddingLeft: 2, paddingRight: 16, color: "#0F172A" }}>{value}</span>}
-                />
-                <Bar
-                  dataKey="personalSpent"
-                  name="Personal"
-                  stackId="a"
-                  fill="#9CA3AF"
-                  onClick={(data) => { if (data?.year && data?.month) goToExpenses({ y: data.year, m: data.month }); }}
-                />
-                <Bar
-                  dataKey="jointSpent"
-                  name="Joint"
-                  stackId="a"
-                  fill="#3B82F6"
-                  radius={[4, 4, 0, 0]}
-                  onClick={(data) => { if (data?.year && data?.month) goToExpenses({ y: data.year, m: data.month }); }}
-                />
-                {budgetAmount !== null && (
-                  <ReferenceLine
-                    y={budgetAmount}
-                    stroke="#EF4444"
-                    strokeDasharray="5 5"
-                    strokeWidth={2}
-                    label={{ value: "Budget", position: "right", fontSize: 11, fill: "#EF4444" }}
-                  />
-                )}
-              </BarChart>
-            </ResponsiveContainer>
-            </div>
-          ) : (
-            <EmptyState
-              icon={TrendingUp}
-              title="No trend data"
-              description="Spending trends will appear as you add expenses."
-            />
+        {/* Right column: largest changes + monthly trend stacked */}
+        <div className="flex flex-col gap-4">
+          {/* Largest Changes by Category — month-over-month */}
+          {dashboardOutliers && (
+            <Card>
+              <CategoryOutliersChart data={dashboardOutliers} compact />
+            </Card>
           )}
-        </Card>
+
+          {/* Monthly trend - stacked personal/joint bars with budget reference line */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Monthly Trend</CardTitle>
+            </CardHeader>
+            {trendData.some((t) => t.personalSpent > 0 || t.jointSpent > 0) ? (
+              <div className="cursor-pointer">
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart
+                  data={trendData}
+                  margin={{ top: 4, right: 48, left: 0, bottom: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                  <XAxis dataKey="label" fontSize={12} axisLine={false} tickLine={false} />
+                  <YAxis
+                    fontSize={12}
+                    tickFormatter={(v) => `$${Math.round(v / 1000)}k`}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip formatter={(value: number, name: string) => [formatCurrency(value), name]} cursor={{ fill: "#F8FAFC" }} />
+                  <Legend
+                    align="center"
+                    wrapperStyle={{ paddingTop: 12 }}
+                    formatter={(value: string) => <span style={{ paddingLeft: 2, paddingRight: 16, color: "#0F172A" }}>{value}</span>}
+                  />
+                  <Bar
+                    dataKey="personalSpent"
+                    name="Personal"
+                    stackId="a"
+                    fill="#9CA3AF"
+                    onClick={(data) => { if (data?.year && data?.month) goToExpenses({ y: data.year, m: data.month }); }}
+                  />
+                  <Bar
+                    dataKey="jointSpent"
+                    name="Joint"
+                    stackId="a"
+                    fill="#3B82F6"
+                    radius={[4, 4, 0, 0]}
+                    onClick={(data) => { if (data?.year && data?.month) goToExpenses({ y: data.year, m: data.month }); }}
+                  />
+                  {budgetAmount !== null && (
+                    <ReferenceLine
+                      y={budgetAmount}
+                      stroke="#EF4444"
+                      strokeDasharray="5 5"
+                      strokeWidth={2}
+                      label={{ value: "Budget", position: "right", fontSize: 11, fill: "#EF4444" }}
+                    />
+                  )}
+                </BarChart>
+              </ResponsiveContainer>
+              </div>
+            ) : (
+              <EmptyState
+                icon={TrendingUp}
+                title="No trend data"
+                description="Spending trends will appear as you add expenses."
+              />
+            )}
+          </Card>
+        </div>
       </div>
 
       {/* Spending by Category over time — spaghetti chart */}

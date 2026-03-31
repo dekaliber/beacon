@@ -338,10 +338,10 @@ function AllocationCard({
           <div className="grid items-center gap-x-3 pt-1 border-t border-border"
             style={{ gridTemplateColumns: "10px 160px 1fr 44px 48px 60px 90px" }}>
             <span className="h-2 w-2 rounded-sm bg-muted-foreground/30 flex-shrink-0" />
-            <span className="text-sm text-muted-foreground col-span-2 min-w-0">
-              <span className="mr-1">Unclassified / Not Included</span>
+            <span className="text-sm text-muted-foreground col-span-6 min-w-0 flex items-center gap-x-1 flex-wrap">
+              <span>Unclassified / Not Included</span>
               <span className="text-xs">({formatCurrency(unclassifiedValue)})</span>
-              <span className="mx-1 text-muted-foreground/40">·</span>
+              <span className="text-muted-foreground/40">·</span>
               <Link
                 to="/investments/securities"
                 className="text-xs text-primary underline underline-offset-2 whitespace-nowrap"
@@ -349,14 +349,35 @@ function AllocationCard({
                 Classify in Securities
               </Link>
             </span>
-            <span />
-            <span />
-            <span />
-            <span />
           </div>
         )}
       </div>
     </Card>
+  );
+}
+
+// ── Summary row ─────────────────────────────────────────────────────────────
+
+function SummaryRow({
+  label,
+  value,
+  total,
+  muted = false,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  muted?: boolean;
+}) {
+  const pct = total > 0 ? (value / total) * 100 : 0;
+  return (
+    <div className={`flex items-center justify-between gap-3 ${muted ? "text-muted-foreground" : ""}`}>
+      <span className="text-sm">{label}</span>
+      <div className="flex items-center gap-2 tabular-nums">
+        <span className="text-sm font-medium">{formatCurrency(value)}</span>
+        <span className="text-xs text-muted-foreground w-8 text-right">{pct.toFixed(0)}%</span>
+      </div>
+    </div>
   );
 }
 
@@ -475,14 +496,47 @@ export function Investments() {
   if (!accounts) return null;
 
   const investmentAccounts = accounts.filter((a) => a.type === "INVESTMENT");
-  const bankingAccounts = accounts.filter(
-    (a) => a.type === "CHECKING" || a.type === "SAVINGS"
-  );
 
   const totalPortfolioValue = accounts.reduce((sum, a) => sum + a.totalMarketValue, 0);
-  const totalGain = investmentAccounts.reduce((sum, a) => sum + a.totalGain, 0);
-  const totalCost = investmentAccounts.reduce((sum, a) => sum + a.totalCost, 0);
-  const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
+
+  // ── Asset Composition breakdown ──────────────────────────────────────────
+  // Settlement cash + banking balances + holdings classified as Cash via instrument weights
+  const settlementCash = investmentAccounts.reduce((sum, a) => sum + (a.cashBalance ?? 0), 0);
+  const bankingBalance = accounts
+    .filter((a) => a.type === "CHECKING" || a.type === "SAVINGS")
+    .reduce((sum, a) => sum + a.totalMarketValue, 0);
+  const classifiedCashHoldings = investmentAccounts.reduce((sum, a) => sum + a.classifiedCashValue, 0);
+  const totalCashValue = settlementCash + bankingBalance + classifiedCashHoldings;
+
+  // Untracked = holdings with no instrument weights assigned in the Securities page
+  const untrackedValue = investmentAccounts.reduce((sum, a) => sum + a.untrackedValue, 0);
+
+  // Invested = classified non-cash only, so Invested + Cash + Untracked === Total Portfolio
+  const investedValue = totalPortfolioValue - totalCashValue - untrackedValue;
+
+  // ── Tax Buckets breakdown (investment accounts only, excluding cash + untracked) ──
+  // Subtracts settlement cash, cash-classified holdings, AND untracked so that
+  // Taxable + Traditional + Roth (+ HSA + 529) === Invested.
+  const nonCashValue = (a: InvestmentAccountSummary) =>
+    a.totalMarketValue - (a.cashBalance ?? 0) - a.classifiedCashValue - a.untrackedValue;
+
+  const taxableAccounts = investmentAccounts.filter((a) => !a.isTaxAdvantaged);
+  const taxableValue = taxableAccounts.reduce((sum, a) => sum + nonCashValue(a), 0);
+  const taxableCostBasis = taxableAccounts.reduce((sum, a) => sum + a.totalCost, 0);
+  const taxableCostBasisPct = taxableValue > 0 ? (taxableCostBasis / taxableValue) * 100 : null;
+
+  const traditionalValue = investmentAccounts
+    .filter((a) => a.taxAdvantageType === "TRADITIONAL")
+    .reduce((sum, a) => sum + nonCashValue(a), 0);
+  const rothValue = investmentAccounts
+    .filter((a) => a.taxAdvantageType === "ROTH")
+    .reduce((sum, a) => sum + nonCashValue(a), 0);
+  const hsaValue = investmentAccounts
+    .filter((a) => a.taxAdvantageType === "HSA")
+    .reduce((sum, a) => sum + nonCashValue(a), 0);
+  const plan529Value = investmentAccounts
+    .filter((a) => a.taxAdvantageType === "PLAN_529")
+    .reduce((sum, a) => sum + nonCashValue(a), 0);
 
   const renderAccountRow = (account: InvestmentAccountSummary) => {
     const isBanking = account.type === "CHECKING" || account.type === "SAVINGS";
@@ -565,59 +619,94 @@ export function Investments() {
         </Link>
       </div>
 
-      {/* Top row: allocation (2/3) + portfolio summary (1/3) */}
-      {(allocation || accounts.length > 0) && (
-        <div className="flex flex-col lg:flex-row items-start gap-6">
-          {allocation && (
-            <div className="min-w-0 basis-2/3 w-full">
-              <AllocationCard
-                data={allocation}
-                filter={allocationFilter}
-                onFilterChange={setAllocationFilter}
-              />
+      {/* Portfolio summary */}
+      {accounts.length > 0 && (
+        <Card className="p-5">
+          {/*
+            Outer grid: Total Portfolio | divider | [Asset Composition + connector + Tax Buckets]
+            The two right sections share one outer cell so we can place a dotted connector
+            line between them using a dedicated middle column with absolute positioning.
+          */}
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-[1fr_1px_2fr]">
+            {/* Total Portfolio */}
+            <div className="flex flex-col gap-0.5 md:pr-5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Total Portfolio
+              </p>
+              <p className="text-3xl font-bold tabular-nums">{formatCurrency(totalPortfolioValue)}</p>
             </div>
-          )}
-          {accounts.length > 0 && (
-            <div className={`min-w-0 w-full ${allocation ? "basis-1/3" : ""}`}>
-              <Card className="p-4">
-                <div className="divide-y divide-border">
-                  <div className="pb-3">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-                      Total Portfolio
-                    </p>
-                    <p className="text-xl font-bold">{formatCurrency(totalPortfolioValue)}</p>
-                  </div>
-                  <div className="py-3">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-                      Total Gain / Loss
-                    </p>
-                    {totalCost > 0 ? (
-                      <GainBadge value={totalGain} pct={totalGainPct} className="text-xl" />
-                    ) : (
-                      <p className="text-xl font-bold text-muted-foreground">—</p>
+
+            {/* Divider */}
+            <div className="hidden md:block bg-border" />
+
+            {/*
+              Inner grid: Asset Composition | connector column | Tax Buckets
+              The connector column is `relative` so we can absolutely-position a dotted
+              line at the vertical midpoint of the first data row (header ≈ 26px + half
+              of a text-sm row ≈ 10px → top: 36px).
+            */}
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-[1fr_2rem_1fr] md:gap-0 md:pl-5">
+              {/* Asset Composition */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">
+                  Asset Composition
+                </p>
+                <div className="space-y-1.5">
+                  <SummaryRow label="Invested" value={investedValue} total={totalPortfolioValue} />
+                  <SummaryRow label="Cash" value={totalCashValue} total={totalPortfolioValue} />
+                  {untrackedValue > 1 && (
+                    <SummaryRow label="Untracked" value={untrackedValue} total={totalPortfolioValue} muted />
+                  )}
+                </div>
+              </div>
+
+              {/* Connector column — dotted line sits at the Invested row's vertical center */}
+              <div className="hidden md:block relative">
+                <div className="absolute inset-x-1.5 top-[36px] border-t border-dashed border-border" />
+              </div>
+
+              {/* Tax Buckets */}
+              <div>
+                <div className="flex items-baseline gap-1.5 mb-2.5">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Tax Buckets
+                  </p>
+                  <p className="text-xs text-muted-foreground/60 italic">of Invested</p>
+                </div>
+                <div className="space-y-1.5">
+                  <div>
+                    <SummaryRow label="Taxable" value={taxableValue} total={investedValue} />
+                    {taxableCostBasisPct != null && taxableCostBasisPct > 0 && (
+                      <p className="text-xs text-muted-foreground mt-0.5 text-right pr-10">
+                        {taxableCostBasisPct.toFixed(0)}% cost basis
+                      </p>
                     )}
                   </div>
-                  <div className="pt-3">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-                      Cash
-                    </p>
-                    <p className="text-xl font-bold">
-                      {formatCurrency(bankingAccounts.reduce((s, a) => s + a.totalMarketValue, 0))}
-                    </p>
-                  </div>
+                  {traditionalValue > 0 && (
+                    <SummaryRow label="Traditional" value={traditionalValue} total={investedValue} />
+                  )}
+                  {rothValue > 0 && (
+                    <SummaryRow label="Roth" value={rothValue} total={investedValue} />
+                  )}
+                  {hsaValue > 0 && (
+                    <SummaryRow label="HSA" value={hsaValue} total={investedValue} />
+                  )}
+                  {plan529Value > 0 && (
+                    <SummaryRow label="529" value={plan529Value} total={investedValue} />
+                  )}
                 </div>
-              </Card>
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        </Card>
       )}
 
-      {/* Two-column layout: investment accounts left, banking right */}
-      {(investmentAccounts.length > 0 || bankingAccounts.length > 0) && (
-        <div className="flex flex-col lg:flex-row items-start gap-6">
-          {/* Investment accounts */}
+      {/* Two-column: accounts list (left) + asset allocation (right) */}
+      {(investmentAccounts.length > 0 || allocation) && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Left: Investment accounts */}
           {investmentAccounts.length > 0 && (
-            <div className="min-w-0 basis-2/3 space-y-2">
+            <div className="space-y-2">
               <div className="flex items-center gap-2 py-1">
                 <LineChart className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
@@ -630,19 +719,13 @@ export function Investments() {
             </div>
           )}
 
-          {/* Banking accounts */}
-          {bankingAccounts.length > 0 && (
-            <div className="min-w-0 basis-1/3 space-y-2">
-              <div className="flex items-center gap-2 py-1">
-                <Landmark className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                  Banking (Cash)
-                </span>
-              </div>
-              <div className="space-y-1.5">
-                {bankingAccounts.map(renderAccountRow)}
-              </div>
-            </div>
+          {/* Right: Asset Allocation */}
+          {allocation && (
+            <AllocationCard
+              data={allocation}
+              filter={allocationFilter}
+              onFilterChange={setAllocationFilter}
+            />
           )}
         </div>
       )}

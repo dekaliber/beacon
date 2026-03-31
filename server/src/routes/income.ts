@@ -43,7 +43,12 @@ incomeRoutes.get("/", async (req, res) => {
   } else if (req.query.accountId) {
     where.accountId = req.query.accountId;
   }
-  if (req.query.categoryId) where.categoryId = req.query.categoryId;
+  if (req.query.categoryIds) {
+    const ids = (req.query.categoryIds as string).split(",").filter(Boolean);
+    where.categoryId = ids.length === 1 ? ids[0] : { in: ids };
+  } else if (req.query.categoryId) {
+    where.categoryId = req.query.categoryId;
+  }
   if (req.query.tagIds) {
     const ids = (req.query.tagIds as string).split(",").filter(Boolean);
     where.tags = { some: { tagId: ids.length === 1 ? ids[0] : { in: ids } } };

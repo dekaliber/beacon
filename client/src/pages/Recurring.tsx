@@ -673,47 +673,56 @@ function TransferRuleModal({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-sm font-medium">From</label>
-            <select
-              required
-              value={form.fromAccountId ?? ""}
-              onChange={(e) => set({ fromAccountId: e.target.value })}
-              className={inputCls}
-            >
-              <option value="">— Select account —</option>
-              {bankAccounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                required
+                value={form.fromAccountId ?? ""}
+                onChange={(e) => set({ fromAccountId: e.target.value })}
+                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+              >
+                <option value="">— Select account —</option>
+                {bankAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+            </div>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">To</label>
-            <select
-              required
-              value={form.toAccountId ?? ""}
-              onChange={(e) => set({ toAccountId: e.target.value })}
-              className={inputCls}
-            >
-              <option value="">— Select account —</option>
-              {bankAccounts.filter((a) => a.id !== form.fromAccountId).map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                required
+                value={form.toAccountId ?? ""}
+                onChange={(e) => set({ toAccountId: e.target.value })}
+                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+              >
+                <option value="">— Select account —</option>
+                {bankAccounts.filter((a) => a.id !== form.fromAccountId).map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+            </div>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-sm font-medium">Frequency</label>
-            <select
-              value={form.frequency ?? "MONTHLY"}
-              onChange={(e) => set({ frequency: e.target.value as TransferRuleFormData["frequency"] })}
-              className={inputCls}
-            >
-              <option value="DAILY">Daily</option>
-              <option value="WEEKLY">Weekly</option>
-              <option value="MONTHLY">Monthly</option>
-              <option value="YEARLY">Yearly</option>
-            </select>
+            <div className="relative">
+              <select
+                value={form.frequency ?? "MONTHLY"}
+                onChange={(e) => set({ frequency: e.target.value as TransferRuleFormData["frequency"] })}
+                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+              >
+                <option value="DAILY">Daily</option>
+                <option value="WEEKLY">Weekly</option>
+                <option value="MONTHLY">Monthly</option>
+                <option value="YEARLY">Yearly</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+            </div>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Every</label>
@@ -1374,35 +1383,41 @@ export function Recurring() {
           {/* Account */}
           <div>
             <label className="mb-1 block text-sm font-medium">Account</label>
-            <select
-              value={editForm.accountId}
-              onChange={(e) => setEditForm((f) => ({ ...f, accountId: e.target.value }))}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              {(() => {
-                const current = (accounts ?? []).find((a) => a.id === editForm.accountId);
-                return current?.isHidden
-                  ? <option key={current.id} value={current.id} disabled>{current.name}</option>
-                  : null;
-              })()}
-              {(accounts ?? []).filter((a) => !a.isHidden).map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={editForm.accountId}
+                onChange={(e) => setEditForm((f) => ({ ...f, accountId: e.target.value }))}
+                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+              >
+                {(() => {
+                  const current = (accounts ?? []).find((a) => a.id === editForm.accountId);
+                  return current?.isHidden
+                    ? <option key={current.id} value={current.id} disabled>{current.name}</option>
+                    : null;
+                })()}
+                {(accounts ?? []).filter((a) => !a.isHidden).map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+            </div>
           </div>
 
           {/* Category */}
           <div>
             <label className="mb-1 block text-sm font-medium">Category</label>
-            <select
-              value={editForm.categoryId}
-              onChange={(e) => setEditForm((f) => ({ ...f, categoryId: e.target.value }))}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              {categoryOptions.map((o) => (
-                <option key={o.id} value={o.id}>{o.label}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={editForm.categoryId}
+                onChange={(e) => setEditForm((f) => ({ ...f, categoryId: e.target.value }))}
+                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+              >
+                {categoryOptions.map((o) => (
+                  <option key={o.id} value={o.id}>{o.label}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+            </div>
           </div>
 
           {/* End date */}

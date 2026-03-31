@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Repeat } from "lucide-react";
+import { Repeat, ChevronDown } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { Button } from "@/components/Button";
 import { MultiSelectDropdown } from "@/components/MultiSelectDropdown";
@@ -157,17 +157,20 @@ export function BulkEditModal({
             <span className="text-sm font-medium">Category</span>
           </label>
           {categoryEnabled && (
-            <select
-              value={categorySelectValue}
-              onChange={(e) => handleCategoryChange(e.target.value)}
-              className="ml-6 w-[calc(100%-1.5rem)] rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="" disabled>Select a category...</option>
-              <option value="__null__">No category (clear)</option>
-              {flatCategoryOptions.map((o) => (
-                <option key={o.id} value={o.id}>{o.label}</option>
-              ))}
-            </select>
+            <div className="relative ml-6 w-[calc(100%-1.5rem)]">
+              <select
+                value={categorySelectValue}
+                onChange={(e) => handleCategoryChange(e.target.value)}
+                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+              >
+                <option value="" disabled>Select a category...</option>
+                <option value="__null__">No category (clear)</option>
+                {flatCategoryOptions.map((o) => (
+                  <option key={o.id} value={o.id}>{o.label}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+            </div>
           )}
         </div>
 
