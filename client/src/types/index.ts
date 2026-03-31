@@ -1,4 +1,5 @@
 export type DividendElection = "REINVEST" | "CASH";
+export type TaxAdvantageType = "TRADITIONAL" | "ROTH" | "HSA" | "PLAN_529";
 
 export interface Account {
   id: string;
@@ -10,10 +11,14 @@ export interface Account {
   isJoint: boolean;
   isManaged: boolean;
   isTaxAdvantaged: boolean;
+  taxAdvantageType: TaxAdvantageType | null;
   isActive: boolean;
   isHidden: boolean;
   // Balance tracking
   balanceUpdatedAt: string | null;
+  // Settlement cash (investment accounts only)
+  cashBalance: string | null;
+  cashBalanceUpdatedAt: string | null;
   // Credit card settings
   closingDay: number | null;
   dueDay: number | null;
@@ -300,6 +305,13 @@ export interface InvestmentAccountSummary {
   totalCost: number;
   totalGain: number;
   totalGainPct: number;
+  cashBalance: number | null;
+  cashBalanceUpdatedAt: string | null;
+  isTaxAdvantaged: boolean;
+  taxAdvantageType: TaxAdvantageType | null;
+  // Composition helpers: cash-classified holding value and untracked (no instrument weights) value
+  classifiedCashValue: number;
+  untrackedValue: number;
 }
 
 export interface GrowthEvent {

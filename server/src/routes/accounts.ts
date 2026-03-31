@@ -13,6 +13,7 @@ const accountSchema = z.object({
   isJoint: z.boolean().optional(),
   isManaged: z.boolean().optional(),
   isTaxAdvantaged: z.boolean().optional(),
+  taxAdvantageType: z.enum(["TRADITIONAL", "ROTH", "HSA", "PLAN_529"]).optional().nullable(),
   isHidden: z.boolean().optional(),
   // Balance tracking
   balanceUpdatedAt: z.string().datetime({ offset: true }).optional().nullable(),
@@ -23,6 +24,8 @@ const accountSchema = z.object({
   // Investment dividend settings
   dividendElection: z.enum(["REINVEST", "CASH"]).optional().nullable(),
   defaultCashAccountId: z.string().optional().nullable(),
+  // Settlement cash (investment accounts only)
+  cashBalance: z.number().nonnegative().optional().nullable(),
 });
 
 // ── Account routes ──
@@ -65,6 +68,11 @@ accountRoutes.put("/:id", async (req, res) => {
   // Auto-stamp balanceUpdatedAt whenever the balance field is explicitly updated
   if (parsed.data.balance !== undefined) {
     data.balanceUpdatedAt = new Date();
+  }
+
+  // Auto-stamp cashBalanceUpdatedAt whenever cashBalance is explicitly updated
+  if (parsed.data.cashBalance !== undefined) {
+    data.cashBalanceUpdatedAt = new Date();
   }
 
   const account = await prisma.account.update({

@@ -134,8 +134,34 @@ export const deleteMonthlyBudgetOverride = (
   month: number,
 ) => api.delete(`/budgets/${year}/${type}/monthly/${month}`);
 
-export const getCategoryOutliers = (year: number) =>
-  api.get<CategoryOutliersData>(`/budgets/${year}/category-outliers`);
+function localDateStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Reference date for the category-outliers endpoint given a specific month:
+ * - current month  → today (partial window matches live data)
+ * - past month     → last day of that month (full window)
+ * - future month   → first day (endpoint treats it as a future year boundary)
+ */
+function outliersRefDate(year: number, month: number): string {
+  const now = new Date();
+  const isCurrent = year === now.getFullYear() && month === now.getMonth() + 1;
+  const isFuture  = year >  now.getFullYear() || (year === now.getFullYear() && month > now.getMonth() + 1);
+  if (isCurrent) return localDateStr();
+  if (isFuture)  return `${year}-${String(month).padStart(2, "0")}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  return `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+}
+
+export const getCategoryOutliers = (year: number, month?: number) => {
+  const today = month !== undefined ? outliersRefDate(year, month) : localDateStr();
+  return api.get<CategoryOutliersData>(`/budgets/${year}/category-outliers?today=${today}`);
+};
+
+export const getCategoryOutliersYtd = (year: number) =>
+  api.get<CategoryOutliersData>(`/budgets/${year}/category-outliers-ytd?today=${localDateStr()}`);
 
 export const getBudgetSettings = () =>
   api.get<{ jointSplitRatio: number }>("/budgets/settings");
@@ -212,6 +238,8 @@ export const deleteLot = (id: string, force = false) =>
   api.delete(`/investments/lots/${id}${force ? "?force=true" : ""}`);
 export const searchTickers = (q: string) =>
   api.get<TickerSearchResult[]>(`/investments/search?q=${encodeURIComponent(q)}`);
+export const resolveTicker = (q: string) =>
+  api.get<TickerSearchResult>(`/investments/search/resolve?q=${encodeURIComponent(q)}`);
 export const refreshPrices = (source: string) => api.post<{ updated: number; tickers: string[] }>("/investments/prices/refresh", { source });
 export const getTickerPrice = (ticker: string, date?: string) => {
   const query = date ? `?date=${encodeURIComponent(date)}` : "";

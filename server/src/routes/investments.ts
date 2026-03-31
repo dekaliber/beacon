@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/client.js";
+import { getMetadata as getTiingoMeta, getDividendScanResult } from "../services/tiingo.js";
+import { deactivateIfOrphaned } from "./instruments.js";
 
 export const investmentRoutes = Router();
 
@@ -391,7 +393,7 @@ investmentRoutes.get("/allocation", async (req, res) => {
         isActive: true,
         ...(taxFilter !== undefined && { isTaxAdvantaged: taxFilter }),
       },
-      select: { id: true },
+      select: { id: true, cashBalance: true },
     });
     const accountIds = investmentAccounts.map((a) => a.id);
 
@@ -473,6 +475,22 @@ investmentRoutes.get("/allocation", async (req, res) => {
       creditWeight(mv, mi.instrument?.weights ?? []);
     }
 
+    // Credit settlement cash balances — look for a display unit named "Cash" (case-insensitive);
+    // if found, the cash counts toward it; otherwise it falls into unclassified.
+    const cashDuId = [...displayUnitInfo.entries()]
+      .find(([, du]) => du.name.toLowerCase() === "cash")?.[0];
+    for (const acct of investmentAccounts) {
+      if (acct.cashBalance == null) continue;
+      const cb = parseFloat(acct.cashBalance.toString());
+      if (cb <= 0) continue;
+      totalValue += cb;
+      if (cashDuId) {
+        duValues.set(cashDuId, (duValues.get(cashDuId) ?? 0) + cb);
+      } else {
+        unclassifiedValue += cb;
+      }
+    }
+
     // 5. Build ordered response ───────────────────────────────────────────────
     // actualPct is computed relative to classifiedValue so that unclassified
     // holdings are excluded from the denominator, making target vs. actual
@@ -542,6 +560,14 @@ investmentRoutes.get("/allocation", async (req, res) => {
 
 investmentRoutes.get("/accounts", async (_req, res) => {
   try {
+    // Find all asset class ids whose name is "Cash" (case-insensitive) so we can
+    // identify cash-classified holdings via their instrument weights.
+    const cashAssetClasses = await prisma.assetClass.findMany({
+      where: { name: { equals: "Cash", mode: "insensitive" } },
+      select: { id: true },
+    });
+    const cashAssetClassIds = new Set(cashAssetClasses.map((c) => c.id));
+
     const accounts = await prisma.account.findMany({
       where: {
         isActive: true,
@@ -550,9 +576,24 @@ investmentRoutes.get("/accounts", async (_req, res) => {
       },
       include: {
         holdings: {
-          include: { lots: true },
+          include: {
+            lots: true,
+            instrument: {
+              include: {
+                weights: { select: { assetClassId: true, weight: true } },
+              },
+            },
+          },
         },
-        manualInvestments: true,
+        manualInvestments: {
+          include: {
+            instrument: {
+              include: {
+                weights: { select: { assetClassId: true, weight: true } },
+              },
+            },
+          },
+        },
       },
       orderBy: { name: "asc" },
     });
@@ -568,17 +609,41 @@ investmentRoutes.get("/accounts", async (_req, res) => {
     });
     const priceMap = new Map(cachedPrices.map((p) => [p.ticker, p]));
 
+    // Helper: given a market value and an instrument's weights, compute how much
+    // of that value is classified as Cash vs. unclassified (no weights at all).
+    const classifyCashAndUntracked = (
+      mv: number,
+      weights: { assetClassId: string; weight: any }[],
+    ): { cashValue: number; untrackedValue: number } => {
+      if (weights.length === 0) return { cashValue: 0, untrackedValue: mv };
+      const cashValue = weights.reduce((sum, w) => {
+        if (!cashAssetClassIds.has(w.assetClassId)) return sum;
+        return sum + mv * (parseFloat(w.weight.toString()) / 100);
+      }, 0);
+      return { cashValue, untrackedValue: 0 };
+    };
+
     const result = accounts.map((account) => {
       let totalMarketValue = 0;
       let totalCost = 0;
       let totalGain = 0;
+      let classifiedCashValue = 0;
+      let untrackedValue = 0;
 
       const holdingsSummary = account.holdings.map((holding) => {
         const priceRecord = priceMap.get(holding.ticker);
         const currentPrice = priceRecord ? parseFloat(priceRecord.price.toString()) : null;
         const fields = computeHoldingFields(holding.lots, currentPrice);
 
-        if (fields.marketValue != null) totalMarketValue += fields.marketValue;
+        if (fields.marketValue != null) {
+          totalMarketValue += fields.marketValue;
+          const { cashValue, untrackedValue: uv } = classifyCashAndUntracked(
+            fields.marketValue,
+            holding.instrument?.weights ?? [],
+          );
+          classifiedCashValue += cashValue;
+          untrackedValue += uv;
+        }
         totalCost += fields.totalCost;
         if (fields.totalGain != null) totalGain += fields.totalGain;
 
@@ -602,11 +667,25 @@ investmentRoutes.get("/accounts", async (_req, res) => {
         totalMarketValue += mv;
         totalCost += tc;
         totalGain += mv - tc;
+        const { cashValue, untrackedValue: uv } = classifyCashAndUntracked(
+          mv,
+          m.instrument?.weights ?? [],
+        );
+        classifiedCashValue += cashValue;
+        untrackedValue += uv;
       }
 
       // For banking accounts, use the stored balance as market value
       if (account.type === "CHECKING" || account.type === "SAVINGS") {
         totalMarketValue = parseFloat(account.balance.toString());
+      }
+
+      // Add settlement cash to investment account totals (no cost basis — cash has no gain)
+      const cashBalance = account.type === "INVESTMENT" && account.cashBalance != null
+        ? parseFloat(account.cashBalance.toString())
+        : null;
+      if (cashBalance != null) {
+        totalMarketValue += cashBalance;
       }
 
       return {
@@ -623,6 +702,13 @@ investmentRoutes.get("/accounts", async (_req, res) => {
         totalCost,
         totalGain,
         totalGainPct: totalCost > 0 ? (totalGain / totalCost) * 100 : 0,
+        cashBalance,
+        cashBalanceUpdatedAt: account.cashBalanceUpdatedAt,
+        isTaxAdvantaged: account.isTaxAdvantaged,
+        taxAdvantageType: account.taxAdvantageType,
+        // Composition helpers (investment accounts only; 0 for banking accounts)
+        classifiedCashValue,
+        untrackedValue,
       };
     });
 
@@ -725,6 +811,10 @@ investmentRoutes.post("/holdings", async (req, res) => {
       });
       instrumentId = instrument.id;
     }
+    // Re-activate in case this instrument was previously deactivated
+    if (instrumentId) {
+      await prisma.instrument.update({ where: { id: instrumentId }, data: { isActive: true } });
+    }
 
     const holding = await prisma.investmentHolding.create({
       data: {
@@ -795,6 +885,11 @@ investmentRoutes.delete("/holdings/:id", async (req, res) => {
       });
     }
 
+    const holding = await prisma.investmentHolding.findUnique({
+      where: { id: holdingId },
+      select: { instrumentId: true },
+    });
+
     await prisma.$transaction(async (tx) => {
       // If no sales, delete the associated purchase activities (user correcting a mistake)
       if (saleCount === 0) {
@@ -803,6 +898,7 @@ investmentRoutes.delete("/holdings/:id", async (req, res) => {
         });
       }
       await tx.investmentHolding.delete({ where: { id: holdingId } });
+      await deactivateIfOrphaned(tx, holding?.instrumentId);
     });
     res.status(204).send();
   } catch (err) {
@@ -1053,6 +1149,31 @@ investmentRoutes.get("/search", async (req, res) => {
   }
 });
 
+// ── GET /api/investments/search/resolve?q= ────────────────────────────────
+// Resolve a single exact ticker via Tiingo. Called only when the user
+// explicitly submits a ticker that returned zero Yahoo search results.
+// Returns { ticker, name, type, exchange } on success, 404 if unknown.
+
+investmentRoutes.get("/search/resolve", async (req, res) => {
+  try {
+    const ticker = ((req.query.q as string) ?? "").trim().toUpperCase();
+    if (!ticker) return res.status(400).json({ error: "Missing q parameter" });
+
+    const meta = await getTiingoMeta(ticker);
+    if (!meta) return res.status(404).json({ error: "Ticker not found" });
+
+    // Tiingo's exchangeCode "NMFQS" identifies NASDAQ Money Market Fund
+    // Quotation System instruments — i.e. money market funds.
+    const isMmf = meta.exchangeCode === "NMFQS";
+    const type = isMmf ? "Money Market" : "Mutual Fund";
+
+    res.json({ ticker, name: meta.name, type, exchange: meta.exchangeCode });
+  } catch (err) {
+    console.error("[search/resolve]", err);
+    res.status(500).json({ error: "Failed to resolve ticker" });
+  }
+});
+
 // ── POST /api/investments/holdings/backfill-meta ──────────────────────────
 // One-time: populate name/type for holdings where type is null.
 // Deduplicates API calls across all accounts sharing the same ticker.
@@ -1114,43 +1235,77 @@ investmentRoutes.post("/prices/refresh", async (req, res) => {
     const tickers = [...new Set(holdings.map((h) => h.ticker))];
     if (tickers.length === 0) return res.json({ updated: 0, tickers: [] });
 
-    console.log(`[price-refresh] triggered from ${source} — ${tickers.length} ticker(s)`);
+    // Identify tickers already known to require Tiingo (e.g. money market funds).
+    // These skip Yahoo entirely — no wasted request, no misleading null warning.
+    const tiingoRows = await prisma.tickerPrice.findMany({
+      where: { ticker: { in: tickers }, priceSource: "TIINGO" },
+      select: { ticker: true },
+    });
+    const tiingoTickers = new Set(tiingoRows.map((r) => r.ticker));
+
+    console.log(
+      `[price-refresh] triggered from ${source} — ${tickers.length} ticker(s)` +
+      (tiingoTickers.size > 0 ? ` (${tiingoTickers.size} via Tiingo)` : ""),
+    );
 
     let updated = 0;
     const results: string[] = [];
 
-    // Fetch prices with a small delay to be polite to Yahoo's servers
     for (const ticker of tickers) {
-      const priceData = await fetchYahooPrice(ticker);
-      if (priceData) {
-        const dateStr = priceData.priceDate.toISOString().slice(0, 10);
-        console.log(`[price-refresh] ${ticker}: $${priceData.price} (${dateStr})`);
+      let price: number | null = null;
+      let priceDate: Date | null = null;
+      let priceSource: string;
+
+      if (tiingoTickers.has(ticker)) {
+        // Tiingo-sourced ticker: use close (unadjusted), correct for MMFs.
+        // Scan window: just the last 7 days to get today's NAV efficiently.
+        const today = new Date().toISOString().slice(0, 10);
+        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const result = await getDividendScanResult(ticker, weekAgo, today);
+        if (result.latestClose != null && result.latestCloseDate != null) {
+          price = result.latestClose;
+          priceDate = new Date(result.latestCloseDate + "T00:00:00Z");
+        }
+        priceSource = "TIINGO";
+      } else {
+        // Yahoo path: try first; if it fails and no existing row exists,
+        // the dividend scan will handle Tiingo promotion when it runs.
+        const priceData = await fetchYahooPrice(ticker);
+        if (priceData) {
+          price = priceData.price;
+          priceDate = priceData.priceDate;
+        } else {
+          console.warn(`[price-refresh] ${ticker}: no data returned from Yahoo Finance`);
+        }
+        priceSource = "YAHOO";
+        // Small delay to be polite to Yahoo's servers
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+
+      if (price != null && priceDate != null) {
+        const dateStr = priceDate.toISOString().slice(0, 10);
+        console.log(`[price-refresh] ${ticker}: $${price} (${dateStr}) [${priceSource}]`);
 
         // Normalize the price date to UTC midnight for TickerPriceHistory
-        const raw = priceData.priceDate;
-        const historyDate = new Date(Date.UTC(raw.getUTCFullYear(), raw.getUTCMonth(), raw.getUTCDate()));
+        const historyDate = new Date(Date.UTC(
+          priceDate.getUTCFullYear(), priceDate.getUTCMonth(), priceDate.getUTCDate(),
+        ));
 
         await prisma.tickerPrice.upsert({
           where: { ticker },
-          create: { ticker, price: priceData.price, priceDate: priceData.priceDate },
-          update: { price: priceData.price, priceDate: priceData.priceDate },
+          create: { ticker, price, priceDate, priceSource },
+          update: { price, priceDate, priceSource },
         });
 
-        // Mirror into TickerPriceHistory so the chart and header always agree.
-        // Using upsert (not skipDuplicates) so a stale mid-day row gets corrected.
         await prisma.tickerPriceHistory.upsert({
           where: { ticker_date: { ticker, date: historyDate } },
-          create: { ticker, date: historyDate, closePrice: priceData.price },
-          update: { closePrice: priceData.price },
+          create: { ticker, date: historyDate, closePrice: price },
+          update: { closePrice: price },
         });
 
         updated++;
         results.push(ticker);
-      } else {
-        console.warn(`[price-refresh] ${ticker}: no data returned from Yahoo Finance`);
       }
-      // Small delay between requests
-      await new Promise((resolve) => setTimeout(resolve, 200));
     }
 
     console.log(`[price-refresh] done — ${updated}/${tickers.length} updated`);
@@ -1799,7 +1954,14 @@ investmentRoutes.put("/manual/:id", async (req, res) => {
 // DELETE /api/investments/manual/:id
 investmentRoutes.delete("/manual/:id", async (req, res) => {
   try {
-    await prisma.manualInvestment.delete({ where: { id: req.params.id } });
+    const manual = await prisma.manualInvestment.findUnique({
+      where: { id: req.params.id },
+      select: { instrumentId: true },
+    });
+    await prisma.$transaction(async (tx) => {
+      await tx.manualInvestment.delete({ where: { id: req.params.id } });
+      await deactivateIfOrphaned(tx, manual?.instrumentId);
+    });
     res.json({ success: true });
   } catch (err) {
     const e = err as any;
@@ -2240,6 +2402,7 @@ investmentRoutes.post("/sell", async (req, res) => {
       const holdingDeleted = remainingLots === 0;
       if (holdingDeleted) {
         await tx.investmentHolding.delete({ where: { id: holding.id } });
+        await deactivateIfOrphaned(tx, holding.instrumentId);
       }
 
       // 3. Create InvestmentActivity (holdingId set to null if holding was deleted)

@@ -160,6 +160,7 @@ async function buildProjection(
     closingDay: number | null;
     dueDay: number | null;
     linkedBankAccountId: string | null;
+    balanceUpdatedAt: Date | null;
   },
   windowStart: Date,
   windowEnd: Date,
@@ -408,11 +409,20 @@ async function buildProjection(
         div.exDate.getUTCMonth(),
         div.exDate.getUTCDate() + 4,
       ));
-      const date = div.activity?.date
-        ? toDateStr(div.activity.date)
-        : div.paymentDate
-          ? toDateStr(div.paymentDate)
-          : toDateStr(fallback);
+      const effectiveDate = div.activity?.date ?? div.paymentDate ?? fallback;
+      const date = toDateStr(effectiveDate);
+
+      // Skip confirmed dividends whose effective date is on or before the last
+      // time the user updated their bank balance — those amounts are already
+      // reflected in the stored balance and would be double-counted.
+      if (
+        div.status === "CONFIRMED" &&
+        account.balanceUpdatedAt !== null &&
+        effectiveDate <= account.balanceUpdatedAt
+      ) {
+        continue;
+      }
+
       rawEvents.push({
         id: `div-${div.id}`,
         date,
@@ -710,6 +720,7 @@ cashFlowRoutes.get("/", async (req, res) => {
         closingDay: true,
         dueDay: true,
         linkedBankAccountId: true,
+        balanceUpdatedAt: true,
       },
       orderBy: [{ isJoint: "asc" }, { type: "asc" }, { name: "asc" }],
     });

@@ -507,7 +507,7 @@ function ItemTypeahead({
 
 interface IncomeFilterState {
   accountIds: string[];
-  categoryId: string;
+  categoryIds: string[];
   startDate: string;
   endDate: string;
   datePreset: string;
@@ -516,7 +516,7 @@ interface IncomeFilterState {
 
 const INCOME_DEFAULT_FILTERS: IncomeFilterState = {
   accountIds: [],
-  categoryId: "",
+  categoryIds: [],
   startDate: `${new Date().getFullYear()}-01-01`,
   endDate: "",
   datePreset: "This year",
@@ -531,7 +531,7 @@ function loadIncomeFilters(): IncomeFilterState {
     };
     return {
       accountIds: get("accountIds") ?? INCOME_DEFAULT_FILTERS.accountIds,
-      categoryId: get("categoryId") ?? INCOME_DEFAULT_FILTERS.categoryId,
+      categoryIds: get("categoryIds") ?? INCOME_DEFAULT_FILTERS.categoryIds,
       startDate: get("startDate") ?? INCOME_DEFAULT_FILTERS.startDate,
       endDate: get("endDate") ?? INCOME_DEFAULT_FILTERS.endDate,
       datePreset: get("datePreset") ?? INCOME_DEFAULT_FILTERS.datePreset,
@@ -544,7 +544,7 @@ function loadIncomeFilters(): IncomeFilterState {
 
 function saveIncomeFilters(filters: IncomeFilterState) {
   localStorage.setItem("beacon-income-accountIds", JSON.stringify(filters.accountIds));
-  localStorage.setItem("beacon-income-categoryId", JSON.stringify(filters.categoryId));
+  localStorage.setItem("beacon-income-categoryIds", JSON.stringify(filters.categoryIds));
   localStorage.setItem("beacon-income-startDate", JSON.stringify(filters.startDate));
   localStorage.setItem("beacon-income-endDate", JSON.stringify(filters.endDate));
   localStorage.setItem("beacon-income-datePreset", JSON.stringify(filters.datePreset));
@@ -603,7 +603,7 @@ export function IncomePage() {
       params.sortOrder = sort.order;
     }
     if (applied.accountIds.length > 0) params.accountIds = applied.accountIds.join(",");
-    if (applied.categoryId) params.categoryId = applied.categoryId;
+    if (applied.categoryIds.length > 0) params.categoryIds = applied.categoryIds.join(",");
     if (appliedSearch.trim()) params.search = appliedSearch.trim();
     const isDefaultDateFilter = (
       applied.startDate === INCOME_DEFAULT_FILTERS.startDate &&
@@ -697,9 +697,26 @@ export function IncomePage() {
   const eligibleAccounts = (accounts ?? []).filter((a) => INCOME_ACCOUNT_TYPES.includes(a.type) && !a.isHidden);
   const categories = incomeCategories ?? [];
 
+  const categoryFilterOptions = useMemo<MultiSelectOption[]>(() => {
+    const opts: MultiSelectOption[] = [];
+    const parents = categories.filter((c) => !c.parentId);
+    const children = categories.filter((c) => c.parentId);
+    for (const parent of parents) {
+      const kids = children.filter((c) => c.parentId === parent.id);
+      if (kids.length === 0) {
+        opts.push({ id: parent.id, label: parent.name });
+      } else {
+        for (const child of kids) {
+          opts.push({ id: child.id, label: `${parent.name} > ${child.name}` });
+        }
+      }
+    }
+    return opts;
+  }, [categories]);
+
   const hasActiveFilters = !!(
     applied.accountIds.length > 0 ||
-    applied.categoryId ||
+    applied.categoryIds.length > 0 ||
     applied.startDate !== INCOME_DEFAULT_FILTERS.startDate ||
     (applied.endDate && applied.endDate !== todayStr)
   );
@@ -895,16 +912,12 @@ export function IncomePage() {
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Category</label>
-              <select
-                value={staged.categoryId}
-                onChange={(e) => setStaged((s) => ({ ...s, categoryId: e.target.value }))}
-                className="rounded-md border border-border px-2 py-1.5 text-sm"
-              >
-                <option value="">All categories</option>
-                {[...categories].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <MultiSelectDropdown
+                options={categoryFilterOptions}
+                selected={staged.categoryIds}
+                onChange={(ids) => setStaged((s) => ({ ...s, categoryIds: ids }))}
+                placeholder="Categories"
+              />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Date Range</label>
@@ -933,16 +946,6 @@ export function IncomePage() {
                 <input type="date" value={staged.endDate || todayStr} onChange={(e) => setStaged((s) => ({ ...s, endDate: e.target.value, datePreset: "Custom" }))} className="rounded-md border border-border px-2 py-1.5 text-sm" />
               </div>
             </div>
-            <div className="flex items-center gap-2 self-end pb-1">
-              <input
-                type="checkbox"
-                id="showOnlyReceived"
-                checked={staged.showOnlyReceived}
-                onChange={(e) => setStaged((s) => ({ ...s, showOnlyReceived: e.target.checked }))}
-                className="h-4 w-4 rounded border-border"
-              />
-              <label htmlFor="showOnlyReceived" className="text-sm select-none cursor-pointer">Show only received income</label>
-            </div>
             <div>
               <label className="mb-1 block text-xs invisible select-none" aria-hidden="true">x</label>
               <div className="flex h-8 items-center gap-3">
@@ -952,6 +955,19 @@ export function IncomePage() {
                 <Button size="sm" onClick={applyFilters}>Apply</Button>
               </div>
             </div>
+          </div>
+          <div className="mt-3 border-t border-border pt-3 flex items-center gap-3">
+            <button
+              role="switch"
+              aria-checked={staged.showOnlyReceived}
+              onClick={() => setStaged((s) => ({ ...s, showOnlyReceived: !s.showOnlyReceived }))}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${staged.showOnlyReceived ? "bg-primary" : "bg-muted"}`}
+            >
+              <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${staged.showOnlyReceived ? "translate-x-4" : "translate-x-0"}`} />
+            </button>
+            <span className="text-sm select-none cursor-pointer" onClick={() => setStaged((s) => ({ ...s, showOnlyReceived: !s.showOnlyReceived }))}>
+              Show only received income
+            </span>
           </div>
         </Card>
       )}
@@ -1359,18 +1375,21 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
             <div className="mt-3 space-y-3">
               <div>
                 <label className="mb-1 block text-sm font-medium">Tax Status</label>
-                <select
-                  value={taxClassification}
-                  onChange={(e) => setTaxClassification(e.target.value)}
-                  className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="">Not specified</option>
-                  <option value="CAPITAL_GAIN">Capital Gain</option>
-                  <option value="ORDINARY">Ordinary</option>
-                  <option value="QUALIFIED">Qualified</option>
-                  <option value="RETURN_OF_CAPITAL">Return of Capital</option>
-                  <option value="TAX_EXEMPT">Tax-Exempt</option>
-                </select>
+                <div className="relative">
+                  <select
+                    value={taxClassification}
+                    onChange={(e) => setTaxClassification(e.target.value)}
+                    className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                  >
+                    <option value="">Not specified</option>
+                    <option value="CAPITAL_GAIN">Capital Gain</option>
+                    <option value="ORDINARY">Ordinary</option>
+                    <option value="QUALIFIED">Qualified</option>
+                    <option value="RETURN_OF_CAPITAL">Return of Capital</option>
+                    <option value="TAX_EXEMPT">Tax-Exempt</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+                </div>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">Notes</label>

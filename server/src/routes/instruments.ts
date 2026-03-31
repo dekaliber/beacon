@@ -29,6 +29,23 @@ const instrumentInclude = {
   },
 };
 
+// ── Soft-delete helper ─────────────────────────────────────────────────────
+// Deactivates an instrument if it has no remaining holdings or manual investments
+// across any account. Safe to call inside or outside a transaction.
+
+export async function deactivateIfOrphaned(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any,
+  instrumentId: string | null | undefined
+) {
+  if (!instrumentId) return;
+  const holdingCount = await db.investmentHolding.count({ where: { instrumentId } });
+  if (holdingCount > 0) return;
+  const manualCount = await db.manualInvestment.count({ where: { instrumentId } });
+  if (manualCount > 0) return;
+  await db.instrument.update({ where: { id: instrumentId }, data: { isActive: false } });
+}
+
 // ── Backfill helper ────────────────────────────────────────────────────────
 // Creates Instrument records for any holdings that pre-date this feature.
 // Safe to call repeatedly — upserts on primaryTicker and skips linked holdings.
@@ -72,6 +89,8 @@ async function backfillUnlinkedHoldings() {
       where: { id: { in: ids } },
       data: { instrumentId },
     });
+    // Re-activate in case this instrument was previously deactivated
+    await prisma.instrument.update({ where: { id: instrumentId }, data: { isActive: true } });
   }
 }
 
@@ -104,6 +123,8 @@ async function backfillUnlinkedManualInvestments() {
       where: { id: { in: ids } },
       data: { instrumentId: instrument.id },
     });
+    // Re-activate in case this instrument was previously deactivated
+    await prisma.instrument.update({ where: { id: instrument.id }, data: { isActive: true } });
   }
 }
 
@@ -116,6 +137,7 @@ instrumentRoutes.get("/", async (_req, res) => {
     await backfillUnlinkedHoldings();
     await backfillUnlinkedManualInvestments();
     const instruments = await prisma.instrument.findMany({
+      where: { isActive: true },
       include: instrumentInclude,
       orderBy: { primaryTicker: "asc" },
     });

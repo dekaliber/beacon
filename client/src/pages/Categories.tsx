@@ -415,10 +415,11 @@ function DeleteCategoryModal({ category, usageCount, allCategories, onConfirm, o
 
             <div>
               <label className="mb-1 block text-sm font-medium">Reassign {recordLabel} to</label>
+              <div className="relative">
               <select
                 value={reassignTo}
                 onChange={(e) => setReassignTo(e.target.value)}
-                className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
               >
                 <option value="">Leave uncategorized</option>
                 {parentCategories.map((parent) => {
@@ -435,6 +436,8 @@ function DeleteCategoryModal({ category, usageCount, allCategories, onConfirm, o
                   );
                 })}
               </select>
+              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+              </div>
             </div>
           </>
         ) : (

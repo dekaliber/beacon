@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { Plus, Pencil, Trash2, Landmark, CreditCard, TrendingUp, EyeOff, ArrowRight } from "lucide-react";
+import { Plus, Pencil, Trash2, Landmark, CreditCard, TrendingUp, EyeOff, ArrowRight, ChevronDown } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
 import { getAccounts, createAccount, updateAccount, deleteAccount, getInvestmentHoldings, getRecurrenceRules } from "@/api";
-import type { Account } from "@/types";
+import type { Account, TaxAdvantageType } from "@/types";
 
 const accountTypeLabels: Record<string, string> = {
   CHECKING: "Checking",
@@ -108,7 +108,11 @@ export function Accounts() {
                 )}
                 {account.isTaxAdvantaged && (
                   <span className="rounded-full bg-emerald-600 text-white text-[10px] font-semibold px-1.5 py-0.5 uppercase tracking-wide">
-                    Tax-Advantaged
+                    {account.taxAdvantageType === "TRADITIONAL" ? "Traditional"
+                      : account.taxAdvantageType === "ROTH" ? "Roth"
+                      : account.taxAdvantageType === "HSA" ? "HSA"
+                      : account.taxAdvantageType === "PLAN_529" ? "529"
+                      : "Tax-Advantaged"}
                   </span>
                 )}
               </div>
@@ -255,6 +259,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
   const [isJoint, setIsJoint] = useState(false);
   const [isManaged, setIsManaged] = useState(false);
   const [isTaxAdvantaged, setIsTaxAdvantaged] = useState(false);
+  const [taxAdvantageType, setTaxAdvantageType] = useState<TaxAdvantageType | "">("");
   const [isHidden, setIsHidden] = useState(false);
   const [accountType, setAccountType] = useState<Account["type"]>(account?.type ?? "CHECKING");
   const [selectedColor, setSelectedColor] = useState(account?.color ?? ACCOUNT_COLORS[0]);
@@ -271,7 +276,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
 
   // Bank accounts available as link targets for CC and investment settings
   const bankAccounts = allAccounts.filter(
-    (a) => (a.type === "CHECKING" || a.type === "SAVINGS") && a.isActive && a.id !== account?.id
+    (a) => (a.type === "CHECKING" || a.type === "SAVINGS") && a.isActive && !a.isHidden && a.id !== account?.id
   );
 
   useEffect(() => {
@@ -279,6 +284,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
       setIsJoint(account?.isJoint ?? false);
       setIsManaged(account?.isManaged ?? false);
       setIsTaxAdvantaged(account?.isTaxAdvantaged ?? false);
+      setTaxAdvantageType(account?.taxAdvantageType ?? "");
       setIsHidden(account?.isHidden ?? false);
       setAccountType(account?.type ?? "CHECKING");
       setSelectedColor(account?.color ?? ACCOUNT_COLORS[0]);
@@ -308,6 +314,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
       isJoint,
       isManaged: accountType === "INVESTMENT" ? isManaged : false,
       isTaxAdvantaged: accountType !== "CREDIT_CARD" ? isTaxAdvantaged : false,
+      taxAdvantageType: accountType !== "CREDIT_CARD" && isTaxAdvantaged ? (taxAdvantageType || null) : null,
       isHidden,
     };
     if (!account && (accountType === "CHECKING" || accountType === "SAVINGS")) {
@@ -417,21 +424,24 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
 
         <div>
           <label className="mb-1 block text-sm font-medium">Type</label>
-          <select
-            name="type"
-            required
-            value={accountType}
-            onChange={(e) => {
-              const t = e.target.value as Account["type"];
-              setAccountType(t);
-              if (t !== "INVESTMENT") setIsManaged(false);
-            }}
-            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-            {Object.entries(accountTypeLabels).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              name="type"
+              required
+              value={accountType}
+              onChange={(e) => {
+                const t = e.target.value as Account["type"];
+                setAccountType(t);
+                if (t !== "INVESTMENT") setIsManaged(false);
+              }}
+              className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+            >
+              {Object.entries(accountTypeLabels).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+          </div>
         </div>
 
         {!account && (accountType === "CHECKING" || accountType === "SAVINGS") && (
@@ -488,7 +498,10 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
               <input
                 type="checkbox"
                 checked={isTaxAdvantaged}
-                onChange={(e) => setIsTaxAdvantaged(e.target.checked)}
+                onChange={(e) => {
+                  setIsTaxAdvantaged(e.target.checked);
+                  if (!e.target.checked) setTaxAdvantageType("");
+                }}
                 className="h-4 w-4 rounded border-border"
               />
               <span className="text-sm font-medium">Tax-advantaged account</span>
@@ -496,6 +509,25 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
             <p className="mt-1 ml-6 text-xs text-muted-foreground">
               IRA, 401(k), HSA, 529, or similar. Investment sales and dividends will not generate income records.
             </p>
+            {isTaxAdvantaged && (
+              <div className="mt-3 ml-6">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Account type</label>
+                <div className="relative">
+                  <select
+                    value={taxAdvantageType}
+                    onChange={(e) => setTaxAdvantageType(e.target.value as TaxAdvantageType | "")}
+                    className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground bg-background"
+                  >
+                    <option value="">Select type…</option>
+                    <option value="TRADITIONAL">Traditional IRA / 401(k)</option>
+                    <option value="ROTH">Roth IRA / 401(k)</option>
+                    <option value="HSA">HSA</option>
+                    <option value="PLAN_529">529</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -553,16 +585,19 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium">Paid from Account</label>
-              <select
-                value={linkedBankAccountId}
-                onChange={(e) => setLinkedBankAccountId(e.target.value)}
-                className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                <option value="">— None selected —</option>
-                {bankAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  value={linkedBankAccountId}
+                  onChange={(e) => setLinkedBankAccountId(e.target.value)}
+                  className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                >
+                  <option value="">— None selected —</option>
+                  {bankAccounts.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+              </div>
               <p className="mt-1 text-xs text-muted-foreground">Which bank account pays this card</p>
             </div>
           </div>
@@ -574,29 +609,35 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dividend Settings</p>
             <div>
               <label className="mb-1 block text-sm font-medium">Default Election</label>
-              <select
-                value={dividendElection}
-                onChange={(e) => setDividendElection(e.target.value)}
-                className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                <option value="">Ask each time</option>
-                <option value="REINVEST">Always reinvest (DRIP)</option>
-                <option value="CASH">Always pay as cash</option>
-              </select>
+              <div className="relative">
+                <select
+                  value={dividendElection}
+                  onChange={(e) => setDividendElection(e.target.value)}
+                  className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                >
+                  <option value="">Ask each time</option>
+                  <option value="REINVEST">Always reinvest (DRIP)</option>
+                  <option value="CASH">Always pay as cash</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+              </div>
             </div>
             {dividendElection === "CASH" && (
               <div>
                 <label className="mb-1 block text-sm font-medium">Deposit to Account</label>
-                <select
-                  value={defaultCashAccountId}
-                  onChange={(e) => setDefaultCashAccountId(e.target.value)}
-                  className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="">— None selected —</option>
-                  {bankAccounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    value={defaultCashAccountId}
+                    onChange={(e) => setDefaultCashAccountId(e.target.value)}
+                    className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                  >
+                    <option value="">— None selected —</option>
+                    {bankAccounts.map((a) => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+                </div>
                 <p className="mt-1 text-xs text-muted-foreground">Where cash dividends are deposited</p>
               </div>
             )}

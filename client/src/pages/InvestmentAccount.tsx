@@ -32,6 +32,7 @@ import {
   Tag,
   Clock,
   ChevronRight,
+  Banknote,
 } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -41,6 +42,7 @@ import {
   getInvestmentHoldings,
   getInvestmentActivity,
   getAccounts,
+  updateAccount,
   createHolding,
   patchHolding,
   deleteHolding,
@@ -48,6 +50,7 @@ import {
   updateLot,
   deleteLot,
   searchTickers,
+  resolveTicker,
   getTickerPrice,
   importInvestments,
   getManualInvestments,
@@ -248,7 +251,11 @@ function TickerSearch({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<TickerSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [resolving, setResolving] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
+  // Track the query that produced the current empty result so we only show
+  // the fallback option when the search has settled on a stable empty state.
+  const [emptyQuery, setEmptyQuery] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -256,16 +263,34 @@ function TickerSearch({
 
   const search = useCallback((q: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    setEmptyQuery(""); // clear fallback while typing
     if (!q.trim()) { setResults([]); return; }
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        setResults(await searchTickers(q));
+        const r = await searchTickers(q);
+        setResults(r);
         setHighlighted(0);
+        if (r.length === 0) setEmptyQuery(q.trim());
       } catch { setResults([]); }
       finally { setLoading(false); }
     }, 300);
   }, []);
+
+  const handleResolve = async () => {
+    const ticker = emptyQuery.toUpperCase();
+    setResolving(true);
+    try {
+      const result = await resolveTicker(ticker);
+      onSelect(result);
+    } catch {
+      // Tiingo also couldn't resolve it — fall back to a bare-minimum result
+      // so the user can still add the ticker manually with its symbol as the name.
+      onSelect({ ticker, name: ticker, type: "Mutual Fund", exchange: "" });
+    } finally {
+      setResolving(false);
+    }
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") { e.preventDefault(); setHighlighted(h => Math.min(h + 1, results.length - 1)); }
@@ -309,9 +334,23 @@ function TickerSearch({
           ))}
         </div>
       )}
-      {!loading && query.length > 1 && results.length === 0 && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-md border border-border bg-background shadow-lg px-3 py-4 text-sm text-muted-foreground text-center">
-          No results for "{query}"
+      {!loading && emptyQuery.length > 0 && results.length === 0 && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-md border border-border bg-background shadow-lg">
+          <div className="px-3 py-2.5 text-sm text-muted-foreground border-b border-border">
+            No results for "{emptyQuery}"
+          </div>
+          <button
+            onClick={handleResolve}
+            disabled={resolving}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-accent transition-colors disabled:opacity-60"
+          >
+            <Plus className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+            <span className="text-sm">
+              {resolving
+                ? `Looking up ${emptyQuery.toUpperCase()}…`
+                : `Add "${emptyQuery.toUpperCase()}" as a ticker`}
+            </span>
+          </button>
         </div>
       )}
     </div>
@@ -799,7 +838,7 @@ function LotRow({
             <h3 className="text-base font-semibold">Delete {lot.acquiredDate ? formatDate(lot.acquiredDate) : "managed"} lot?</h3>
             {deleteWarning ? (
               <>
-                <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">{deleteWarning}</p>
+                <p className="mt-2 text-sm text-amber-600">{deleteWarning}</p>
                 <p className="mt-2 text-sm text-muted-foreground">
                   If you recorded this purchase by mistake, you can force-delete. Otherwise, use the <strong>Sell</strong> function to properly record a sale.
                 </p>
@@ -1295,7 +1334,7 @@ function HoldingRow({
             <h3 className="text-base font-semibold">Delete {holding.ticker}?</h3>
             {deleteWarning ? (
               <>
-                <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">{deleteWarning}</p>
+                <p className="mt-2 text-sm text-amber-600">{deleteWarning}</p>
                 <p className="mt-2 text-sm text-muted-foreground">
                   Deleting this holding will orphan its sale history (the records will be preserved but unlinked). If you still want to proceed, confirm below.
                 </p>
@@ -2153,7 +2192,7 @@ function SellModal({
   };
 
   const gainColor = (v: number) =>
-    v >= 0 ? "text-green-600" : "text-red-500 dark:text-red-400";
+    v >= 0 ? "text-green-600" : "text-red-500";
 
   return (
     <Modal
@@ -2220,15 +2259,18 @@ function SellModal({
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1">Cost Basis Method</label>
-                <select
-                  value={method}
-                  onChange={(e) => setMethod(e.target.value as typeof method)}
-                  className="w-full rounded border border-border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary bg-background"
-                >
-                  {COST_BASIS_METHODS.map((m) => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    value={method}
+                    onChange={(e) => setMethod(e.target.value as typeof method)}
+                    className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                  >
+                    {COST_BASIS_METHODS.map((m) => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+                </div>
                 <p className="mt-1 text-xs text-muted-foreground">{methodInfo.description}</p>
               </div>
             </>
@@ -2241,7 +2283,7 @@ function SellModal({
                 </div>
                 <div className="max-h-52 overflow-y-auto rounded border border-border">
                   <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-gray-100 dark:bg-gray-800 z-10">
+                    <thead className="sticky top-0 bg-gray-100 z-10">
                       <tr className="text-muted-foreground uppercase tracking-wide">
                         <th className="py-2 px-3 text-left font-medium">Acquired</th>
                         <th className="py-2 px-3 text-right font-medium">Available</th>
@@ -2352,16 +2394,19 @@ function SellModal({
 
           <div>
             <label className="block text-xs font-medium mb-1">Proceeds Go To</label>
-            <select
-              value={destAccountId}
-              onChange={(e) => setDestAccountId(e.target.value)}
-              className="w-full rounded border border-border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary bg-background"
-            >
-              <option value="">Select account…</option>
-              {eligibleAccounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={destAccountId}
+                onChange={(e) => setDestAccountId(e.target.value)}
+                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+              >
+                <option value="">Select account…</option>
+                {eligibleAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+            </div>
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
@@ -2401,7 +2446,7 @@ function SellModal({
                       <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
                         lot.termType === "LONG"
                           ? "bg-green-100 text-green-700"
-                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                          : "bg-amber-100 text-amber-700"
                       }`}>
                         {lot.termType === "LONG" ? "Long-term" : "Short-term"}
                       </span>
@@ -2584,7 +2629,7 @@ function EditSaleActivityModal({
           </div>
           <div>
             <p className="text-muted-foreground mb-0.5">Gain / Loss</p>
-            <p className={`font-medium tabular-nums ${gain >= 0 ? "text-green-600" : "text-red-500 dark:text-red-400"}`}>
+            <p className={`font-medium tabular-nums ${gain >= 0 ? "text-green-600" : "text-red-500"}`}>
               {gain >= 0 ? "+" : ""}{formatCurrency(gain)}
             </p>
           </div>
@@ -2886,16 +2931,19 @@ function ReviewDividendModal({
               <label className="block text-xs font-medium text-muted-foreground mb-1">
                 Category <span className="font-normal opacity-60">(optional)</span>
               </label>
-              <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className={inputCls}
-              >
-                <option value="">No category</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                  className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                >
+                  <option value="">No category</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+              </div>
             </div>
           </>
         )}
@@ -2961,18 +3009,21 @@ function ReviewDividendModal({
           <label className="block text-xs font-medium text-muted-foreground mb-1">
             Dividend Type <span className="font-normal opacity-60">(optional)</span>
           </label>
-          <select
-            value={taxClassification}
-            onChange={(e) => setTaxClassification(e.target.value as TaxClassification | "")}
-            className={inputCls}
-          >
-            <option value="">Not specified</option>
-            <option value="CAPITAL_GAIN">Capital Gain</option>
-            <option value="ORDINARY">Ordinary</option>
-            <option value="QUALIFIED">Qualified</option>
-            <option value="RETURN_OF_CAPITAL">Return of Capital</option>
-            <option value="TAX_EXEMPT">Tax-Exempt</option>
-          </select>
+          <div className="relative">
+            <select
+              value={taxClassification}
+              onChange={(e) => setTaxClassification(e.target.value as TaxClassification | "")}
+              className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+            >
+              <option value="">Not specified</option>
+              <option value="CAPITAL_GAIN">Capital Gain</option>
+              <option value="ORDINARY">Ordinary</option>
+              <option value="QUALIFIED">Qualified</option>
+              <option value="RETURN_OF_CAPITAL">Return of Capital</option>
+              <option value="TAX_EXEMPT">Tax-Exempt</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+          </div>
         </div>
 
         {/* Notes — applies to both paths */}
@@ -3316,7 +3367,7 @@ function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHo
                         isSale
                           ? isGainPositive
                             ? "text-green-600"
-                            : "text-red-500 dark:text-red-400"
+                            : "text-red-500"
                           : "text-muted-foreground"
                       }`}>
                         {isSale
@@ -3892,6 +3943,11 @@ export function InvestmentAccount() {
   const [chartKey, setChartKey] = useState(0);
   const refreshChart = useCallback(() => setChartKey((k) => k + 1), []);
 
+  // Cash balance editing
+  const [editingCash, setEditingCash] = useState(false);
+  const [cashInput, setCashInput] = useState("");
+  const [savingCash, setSavingCash] = useState(false);
+
   const toggleHolding = useCallback((id: string) => {
     setExpandedIds(prev => {
       const next = new Set(prev);
@@ -3903,7 +3959,7 @@ export function InvestmentAccount() {
 
   const [snapshotYear, setSnapshotYear] = useState(new Date().getFullYear());
 
-  const { data: accounts } = useApi(() => getAccounts(), []);
+  const { data: accounts, refetch: refetchAccounts } = useApi(() => getAccounts(), []);
   const { data: holdings, refetch } = useApi(
     () => getInvestmentHoldings(accountId!),
     [accountId]
@@ -4006,11 +4062,24 @@ export function InvestmentAccount() {
   const isBanking = account.type === "CHECKING" || account.type === "SAVINGS";
   const isInvestment = account.type === "INVESTMENT";
 
+  const cashBalance = account.cashBalance != null ? parseFloat(account.cashBalance) : null;
+
+  const handleSaveCash = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingCash(true);
+    const parsed = parseFloat(cashInput);
+    const value = cashInput.trim() === "" || isNaN(parsed) ? null : parsed;
+    await updateAccount(account.id, { cashBalance: value } as Partial<Account>);
+    setSavingCash(false);
+    setEditingCash(false);
+    refetchAccounts();
+  };
+
   const manualMV = manuals.reduce((s, m) => s + m.marketValue, 0);
   const manualCost = manuals.reduce((s, m) => s + (m.totalCost ?? 0), 0);
   const manualGain = manuals.reduce((s, m) => m.totalCost != null ? s + (m.marketValue - m.totalCost) : s, 0);
 
-  const totalMarketValue = holdings.reduce((s, h) => s + (h.marketValue ?? 0), 0) + manualMV;
+  const totalMarketValue = holdings.reduce((s, h) => s + (h.marketValue ?? 0), 0) + manualMV + (cashBalance ?? 0);
   const totalCost = holdings.reduce((s, h) => s + h.totalCost, 0) + manualCost;
   const totalGain = holdings.reduce((s, h) => s + (h.totalGain ?? 0), 0) + manualGain;
   const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
@@ -4053,7 +4122,7 @@ export function InvestmentAccount() {
       </div>
 
       {/* Investment: prominent market value + chart + performance summary (shown above tab nav) */}
-      {isInvestment && (holdings.length > 0 || manuals.length > 0) && (
+      {isInvestment && (holdings.length > 0 || manuals.length > 0 || cashBalance != null) && (
         <>
           {/* Prominent market value — no label needed */}
           <p className="text-3xl font-bold tabular-nums">{formatCurrency(totalMarketValue)}</p>
@@ -4102,6 +4171,78 @@ export function InvestmentAccount() {
                   Prices as of {formatDate(priceDate)} at 4:00 PM {easternTZAbbr(priceDate)}
                 </p>
               )}
+
+              {/* Settlement cash */}
+              <div className="pt-3 border-t border-border mt-3">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-1.5">
+                    <Banknote className="h-3.5 w-3.5 text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                      Settlement Cash
+                    </p>
+                  </div>
+                  {!editingCash && (
+                    <button
+                      onClick={() => {
+                        setCashInput(cashBalance != null ? String(cashBalance) : "");
+                        setEditingCash(true);
+                      }}
+                      className="rounded p-0.5 hover:bg-accent transition-colors"
+                      aria-label="Edit cash balance"
+                    >
+                      <Pencil className="h-3 w-3 text-muted-foreground" />
+                    </button>
+                  )}
+                </div>
+                {editingCash ? (
+                  <form onSubmit={handleSaveCash} className="flex items-center gap-1.5 mt-1.5">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={cashInput}
+                      onChange={(e) => setCashInput(e.target.value)}
+                      autoFocus
+                      placeholder="0.00"
+                      className="w-full rounded border border-border px-2 py-1 text-sm tabular-nums focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <button
+                      type="submit"
+                      disabled={savingCash}
+                      className="rounded p-1 hover:bg-accent transition-colors"
+                      aria-label="Save"
+                    >
+                      <Check className="h-3.5 w-3.5 text-green-600" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingCash(false)}
+                      className="rounded p-1 hover:bg-accent transition-colors"
+                      aria-label="Cancel"
+                    >
+                      <X className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                  </form>
+                ) : cashBalance != null ? (
+                  <div>
+                    <p className="text-base font-semibold tabular-nums">{formatCurrency(cashBalance)}</p>
+                    {account.cashBalanceUpdatedAt && (
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Updated {new Date(account.cashBalanceUpdatedAt).toLocaleDateString("en-US", {
+                          month: "short", day: "numeric", year: "numeric",
+                        })}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setCashInput(""); setEditingCash(true); }}
+                    className="text-sm text-primary underline underline-offset-2 hover:opacity-80 transition-opacity"
+                  >
+                    Add cash balance
+                  </button>
+                )}
+              </div>
             </Card>
           </div>
         </>

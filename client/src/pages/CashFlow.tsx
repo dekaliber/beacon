@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -22,19 +22,23 @@ import {
   AlertTriangle,
   Trash2,
   Wallet,
+  Landmark,
 } from "lucide-react";
 import { Card } from "@/components/Card";
+import { Button } from "@/components/Button";
+import { Modal } from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
 import {
   getCashFlow,
   upsertStatementOverride,
-  deleteStatementOverride,
   createBalanceAdjustment,
   updateBalanceAdjustment,
   deleteBalanceAdjustment,
+  getInvestmentAccounts,
+  updateAccount,
 } from "@/api";
 import { formatCurrency, cn } from "@/lib/utils";
-import type { CashFlowProjection, CashFlowEvent, DailyBalance } from "@/types";
+import type { CashFlowProjection, CashFlowEvent, DailyBalance, InvestmentAccountSummary } from "@/types";
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
 
@@ -193,18 +197,6 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName }: CCPaymen
     }
   };
 
-  const handleClear = async () => {
-    if (!event.overrideId) return;
-    setSaving(true);
-    try {
-      await deleteStatementOverride(event.overrideId);
-      onSaved();
-      setOpen(false);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (!open) {
     return (
       <>
@@ -214,7 +206,7 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName }: CCPaymen
           {formatCurrency(event.amount)}
         </td>
         {/* Edit cell */}
-        <td className="py-2 pr-4 w-7">
+        <td className="py-2 pr-4 w-14">
           <button
             onClick={() => { setValue(Math.abs(event.amount).toFixed(2)); setOpen(true); }}
             className="rounded p-1 hover:bg-accent text-muted-foreground"
@@ -246,7 +238,7 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName }: CCPaymen
         </span>
       </td>
       {/* Edit cell — confirm / clear-override / cancel */}
-      <td className="py-2 pr-4 w-7">
+      <td className="py-2 pr-4 w-14">
         <span className="inline-flex items-center gap-0.5">
           <button
             onClick={handleSave}
@@ -256,16 +248,6 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName }: CCPaymen
           >
             <Check className="h-3.5 w-3.5" />
           </button>
-          {event.overrideId && (
-            <button
-              onClick={handleClear}
-              disabled={saving}
-              className="rounded p-0.5 hover:bg-accent text-amber-600"
-              title="Remove override"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
           <button
             onClick={() => setOpen(false)}
             className="rounded p-0.5 hover:bg-accent text-muted-foreground"
@@ -312,7 +294,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved }: NewAdjustmentRowP
 
   if (!open) {
     return (
-      <tr className="border-b border-dashed border-red-200 dark:border-red-900/40">
+      <tr className="border-b border-dashed border-red-200">
         <td colSpan={5} className="py-1.5 px-1">
           <button
             onClick={() => { setDate(defaultDate); setOpen(true); }}
@@ -327,7 +309,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved }: NewAdjustmentRowP
   }
 
   return (
-    <tr className="border-b border-dashed border-red-300 dark:border-red-900/60 bg-red-50/50 dark:bg-red-950/20">
+    <tr className="border-b border-dashed border-red-300 bg-red-50/50">
       <td className="py-2 pr-4">
         <input
           type="date"
@@ -362,7 +344,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved }: NewAdjustmentRowP
           }}
         />
       </td>
-      <td className="py-2 pr-4 w-7" colSpan={2}>
+      <td className="py-2 pr-4 w-14" colSpan={2}>
         <span className="inline-flex items-center gap-0.5">
           <button
             onClick={handleSave}
@@ -503,7 +485,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
           />
         </span>
       </td>
-      <td className="py-2 pr-4 w-7">
+      <td className="py-2 pr-4 w-14">
         <span className="inline-flex items-center gap-0.5">
           <button
             onClick={handleSave}
@@ -558,8 +540,8 @@ function EventsLedger({ events, accountId, onRefetch }: LedgerProps) {
             <th className="py-2 pr-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide w-24">Date</th>
             <th className="py-2 pr-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Description</th>
             <th className="py-2 pr-2 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide w-36">Amount</th>
-            <th className="py-2 pr-4 w-7" />
-            <th className="py-2 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide w-32">Balance</th>
+            <th className="py-2 pr-4 w-14" />
+            <th className="py-2 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide w-24">Balance</th>
           </tr>
         </thead>
         <tbody>
@@ -591,7 +573,7 @@ function EventsLedger({ events, accountId, onRefetch }: LedgerProps) {
                         </span>
                       )}
                       {event.confidence === "KNOWN" && event.type !== "CC_PAYMENT" && (
-                        <span className="rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                        <span className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
                           Confirmed
                         </span>
                       )}
@@ -601,7 +583,7 @@ function EventsLedger({ events, accountId, onRefetch }: LedgerProps) {
                         </span>
                       )}
                       {event.overrideId && (
-                        <span className="rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                        <span className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
                           Confirmed
                         </span>
                       )}
@@ -623,7 +605,7 @@ function EventsLedger({ events, accountId, onRefetch }: LedgerProps) {
                         {event.amount >= 0 ? "+" : ""}
                         {formatCurrency(event.amount)}
                       </td>
-                      <td className="py-2 pr-4 w-7" />
+                      <td className="py-2 pr-4 w-14" />
                     </>
                   )}
                   <td className={cn(
@@ -702,11 +684,111 @@ function AccountPanel({ projection, windowEnd, onRefetch }: AccountPanelProps) {
   );
 }
 
+// ── Edit balance modal ────────────────────────────────────────────────────────
+
+function EditBalanceModal({
+  account,
+  onClose,
+  onSave,
+}: {
+  account: InvestmentAccountSummary | null;
+  onClose: () => void;
+  onSave: (id: string, balance: number) => Promise<void>;
+}) {
+  const [value, setValue] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (account) setValue(String(parseFloat(account.balance) || 0));
+  }, [account]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!account) return;
+    setSaving(true);
+    await onSave(account.id, parseFloat(value) || 0);
+    setSaving(false);
+  };
+
+  return (
+    <Modal open={!!account} onClose={onClose} title="Edit Balance">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium">
+            Current Balance — {account?.name}
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            autoFocus
+            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          {account?.balanceUpdatedAt && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Last updated {new Date(account.balanceUpdatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </p>
+          )}
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function CashFlow() {
   const { data, refetch } = useApi(() => getCashFlow(45), []);
+  const { data: accounts, refetch: refetchAccounts } = useApi(() => getInvestmentAccounts(), []);
   const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [editingBalance, setEditingBalance] = useState<InvestmentAccountSummary | null>(null);
+
+  const bankingAccounts = (accounts ?? []).filter(
+    (a) => a.type === "CHECKING" || a.type === "SAVINGS"
+  );
+
+  const handleSaveBalance = async (id: string, balance: number) => {
+    await updateAccount(id, { balance });
+    setEditingBalance(null);
+    refetchAccounts();
+  };
+
+  const renderBankingTile = (account: InvestmentAccountSummary) => (
+    <div key={account.id}>
+      <Card className="px-4 py-3">
+        <div className="flex items-center gap-3">
+          <div
+            className="h-8 w-8 flex-shrink-0 rounded-md flex items-center justify-center"
+            style={account.color ? { backgroundColor: account.color } : { backgroundColor: "#e2e2df" }}
+          >
+            <Landmark className="h-4 w-4 text-gray-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-sm truncate">{account.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {account.type === "CHECKING" ? "Checking · Cash" : "Savings · Cash"}
+            </p>
+          </div>
+          <div className="text-right flex-shrink-0 mr-2">
+            <p className="font-bold tabular-nums text-sm">
+              {formatCurrency(account.totalMarketValue)}
+            </p>
+          </div>
+          <button
+            onClick={() => setEditingBalance(account)}
+            className="rounded p-1 hover:bg-accent flex-shrink-0"
+          >
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+        </div>
+      </Card>
+    </div>
+  );
 
   const projections = data?.projections ?? [];
 
@@ -762,44 +844,68 @@ export function CashFlow() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Cash Flow</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {fmtDate(data.windowStart)} – {fmtDate(data.windowEnd)} · {data.windowDays}-day projection
-          </p>
-        </div>
+      <div>
+        <h2 className="text-2xl font-bold">Cash Flow</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {fmtDate(data.windowStart)} – {fmtDate(data.windowEnd)} · {data.windowDays}-day projection
+        </p>
       </div>
 
-      {/* Tab bar */}
-      <div className="border-b border-border">
-        <div className="flex items-center gap-0 overflow-x-auto">
-          {personal.length > 0 && joint.length > 0 && (
-            <span className="mr-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
-              Personal
-            </span>
+      <div className="flex flex-col lg:flex-row items-start gap-6">
+        {/* Left 2/3: tab bar + account panel */}
+        <div className="min-w-0 basis-2/3 w-full space-y-4">
+          {/* Tab bar */}
+          <div className="border-b border-border">
+            <div className="flex items-center gap-0 overflow-x-auto">
+              {personal.length > 0 && joint.length > 0 && (
+                <span className="mr-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                  Personal
+                </span>
+              )}
+              {personal.map((p) => <TabButton key={p.accountId} p={p} />)}
+              {joint.length > 0 && (
+                <>
+                  <span className="mx-3 text-border">|</span>
+                  <span className="mr-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                    Joint
+                  </span>
+                  {joint.map((p) => <TabButton key={p.accountId} p={p} />)}
+                </>
+              )}
+            </div>
+          </div>
+
+          {selectedProjection && (
+            <AccountPanel
+              key={selectedProjection.accountId}
+              projection={selectedProjection}
+              windowEnd={data.windowEnd}
+              onRefetch={refetch}
+            />
           )}
-          {personal.map((p) => <TabButton key={p.accountId} p={p} />)}
-          {joint.length > 0 && (
-            <>
-              <span className="mx-3 text-border">|</span>
-              <span className="mr-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                Joint
+        </div>
+
+        {/* Right 1/3: banking accounts */}
+        {bankingAccounts.length > 0 && (
+          <div className="min-w-0 basis-1/3 w-full space-y-2">
+            <div className="flex items-center gap-2 py-1">
+              <Landmark className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                Banking (Cash)
               </span>
-              {joint.map((p) => <TabButton key={p.accountId} p={p} />)}
-            </>
-          )}
-        </div>
+            </div>
+            <div className="space-y-1.5">
+              {bankingAccounts.map(renderBankingTile)}
+            </div>
+          </div>
+        )}
       </div>
 
-      {selectedProjection && (
-        <AccountPanel
-          key={selectedProjection.accountId}
-          projection={selectedProjection}
-          windowEnd={data.windowEnd}
-          onRefetch={refetch}
-        />
-      )}
+      <EditBalanceModal
+        account={editingBalance}
+        onClose={() => setEditingBalance(null)}
+        onSave={handleSaveBalance}
+      />
     </div>
   );
 }
