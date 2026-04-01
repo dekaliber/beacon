@@ -27,6 +27,7 @@ import {
   deleteTransfer,
 } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { useDemo } from "@/context/DemoContext";
 import type { WithdrawalEvent, WithdrawalType, InvestmentSettings } from "@/types";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -670,9 +671,13 @@ export function WithdrawalsPage() {
     [year]
   );
   const { data: investmentAccountsData } = useApi(() => getInvestmentAccounts(), []);
+  const { isDemoMode, demoFactor } = useDemo();
   const currentPortfolioValue = useMemo(
-    () => (investmentAccountsData ?? []).reduce((sum, a) => sum + a.totalMarketValue, 0),
-    [investmentAccountsData]
+    () => {
+      const raw = (investmentAccountsData ?? []).reduce((sum, a) => sum + a.totalMarketValue, 0);
+      return isDemoMode ? raw * demoFactor : raw;
+    },
+    [investmentAccountsData, isDemoMode, demoFactor]
   );
 
   // Accounts for the transfer modal (non-joint investment + banking only)

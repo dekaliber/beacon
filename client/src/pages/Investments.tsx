@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { TrendingUp, TrendingDown, Landmark, LineChart, ChevronRight, Pencil, Layers, Target, ArrowUpRight } from "lucide-react";
 import { Card } from "@/components/Card";
@@ -9,6 +9,8 @@ import { getInvestmentAccounts, getAllocationSummary, refreshPrices, updateAccou
 import { formatCurrency } from "@/lib/utils";
 import { isPriceRefreshNeeded } from "@/lib/priceUtils";
 import { useNotifications } from "@/context/NotificationContext";
+import { useDemo } from "@/context/DemoContext";
+import { scaleInvestmentAccounts, scaleAllocationSummary } from "@/lib/demo";
 import type { InvestmentAccountSummary, AllocationSummary, AllocationItem, WithdrawalSummary, InvestmentSettings } from "@/types";
 
 // ── Allocation card ──────────────────────────────────────────────────────────
@@ -693,6 +695,15 @@ export function Investments() {
   const pendingDividendAccountIds = new Set(
     notifications?.pendingDividends.map((g) => g.accountId) ?? []
   );
+  const { isDemoMode, demoFactor } = useDemo();
+  const displayAccounts = useMemo(
+    () => isDemoMode && accounts ? scaleInvestmentAccounts(accounts, demoFactor) : accounts,
+    [accounts, isDemoMode, demoFactor]
+  );
+  const displayAllocation = useMemo(
+    () => isDemoMode && allocation ? scaleAllocationSummary(allocation, demoFactor) : allocation,
+    [allocation, isDemoMode, demoFactor]
+  );
 
   useEffect(() => {
     if (!accounts || refreshedRef.current) return;
@@ -711,18 +722,18 @@ export function Investments() {
     refetch();
   };
 
-  if (!accounts) return null;
+  if (!displayAccounts) return null;
 
-  const investmentAccounts = accounts.filter((a) => a.type === "INVESTMENT");
+  const investmentAccounts = displayAccounts.filter((a) => a.type === "INVESTMENT");
 
-  const totalPortfolioValue = accounts.reduce((sum, a) => sum + a.totalMarketValue, 0);
+  const totalPortfolioValue = displayAccounts.reduce((sum, a) => sum + a.totalMarketValue, 0);
   const totalDayGain = investmentAccounts.reduce((sum, a) => sum + (a.totalDayGain ?? 0), 0);
   const totalDayGainPct = totalPortfolioValue > 0 ? (totalDayGain / totalPortfolioValue) * 100 : null;
 
   // ── Asset Composition breakdown ──────────────────────────────────────────
   // Settlement cash + banking balances + holdings classified as Cash via instrument weights
   const settlementCash = investmentAccounts.reduce((sum, a) => sum + (a.cashBalance ?? 0), 0);
-  const bankingBalance = accounts
+  const bankingBalance = displayAccounts
     .filter((a) => a.type === "CHECKING" || a.type === "SAVINGS")
     .reduce((sum, a) => sum + a.totalMarketValue, 0);
   const classifiedCashHoldings = investmentAccounts.reduce((sum, a) => sum + a.classifiedCashValue, 0);
@@ -840,7 +851,7 @@ export function Investments() {
       </div>
 
       {/* Portfolio summary */}
-      {accounts.length > 0 && (
+      {displayAccounts.length > 0 && (
         <Card className="p-5">
           {/*
             Outer grid: Total Portfolio | divider | [Asset Composition + connector + Tax Buckets]
@@ -925,7 +936,7 @@ export function Investments() {
       )}
 
       {/* Withdrawal Rate */}
-      {accounts.length > 0 && (
+      {displayAccounts.length > 0 && (
         <WithdrawalRateCard
           summary={withdrawalSummary}
           settings={investmentSettings}
@@ -934,7 +945,7 @@ export function Investments() {
       )}
 
       {/* Two-column: accounts list (left) + asset allocation (right) */}
-      {(investmentAccounts.length > 0 || allocation) && (
+      {(investmentAccounts.length > 0 || displayAllocation) && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Left: Investment accounts */}
           {investmentAccounts.length > 0 && (
@@ -952,9 +963,9 @@ export function Investments() {
           )}
 
           {/* Right: Asset Allocation */}
-          {allocation && (
+          {displayAllocation && (
             <AllocationCard
-              data={allocation}
+              data={displayAllocation}
               filter={allocationFilter}
               onFilterChange={setAllocationFilter}
             />
@@ -963,7 +974,7 @@ export function Investments() {
       )}
 
       {/* Empty state */}
-      {accounts.length === 0 && (
+      {displayAccounts.length === 0 && (
         <Card className="p-8 text-center">
           <LineChart className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-40" />
           <p className="font-semibold text-lg mb-1">No investment or banking accounts</p>

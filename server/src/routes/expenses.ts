@@ -67,12 +67,13 @@ expenseRoutes.get("/", async (req, res) => {
   if (req.query.search) {
     const searchStr = req.query.search as string;
     const asNumber = parseFloat(searchStr);
+    const isValidNumber = !isNaN(asNumber) && /^-?\d+(\.\d+)?$/.test(searchStr.trim());
     const orConditions: Record<string, unknown>[] = [
       { description: { contains: searchStr, mode: "insensitive" } },
       { vendor: { contains: searchStr, mode: "insensitive" } },
     ];
-    if (!isNaN(asNumber) && asNumber > 0) {
-      orConditions.push({ amount: { equals: new Prisma.Decimal(searchStr) } });
+    if (isValidNumber && asNumber > 0) {
+      orConditions.push({ amount: { equals: new Prisma.Decimal(searchStr.trim()) } });
       orConditions.push({ amount: { equals: new Prisma.Decimal(-asNumber) } });
     }
     where.OR = orConditions;
