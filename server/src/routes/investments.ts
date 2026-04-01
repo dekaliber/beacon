@@ -57,19 +57,11 @@ async function fetchYahooPrice(ticker: string): Promise<{ price: number; priceDa
     const data = await res.json() as any;
     const result = data?.chart?.result?.[0];
     if (!result) return null;
-    const closes: number[] = result?.indicators?.quote?.[0]?.close ?? [];
-    const timestamps: number[] = result?.timestamp ?? [];
-    // Find the last non-null close
-    let price: number | null = null;
-    let priceDate: Date | null = null;
-    for (let i = closes.length - 1; i >= 0; i--) {
-      if (closes[i] != null) {
-        price = closes[i];
-        priceDate = new Date(timestamps[i] * 1000);
-        break;
-      }
-    }
-    if (price == null || priceDate == null) return null;
+    const meta = result?.meta;
+    const price: number | null = meta?.regularMarketPrice ?? null;
+    const priceTs: number | null = meta?.regularMarketTime ?? null;
+    if (price == null || priceTs == null) return null;
+    const priceDate = new Date(priceTs * 1000);
     return { price, priceDate };
   } catch {
     return null;
@@ -1325,10 +1317,16 @@ investmentRoutes.post("/prices/refresh", async (req, res) => {
         const dateStr = priceDate.toISOString().slice(0, 10);
         console.log(`[price-refresh] ${ticker}: $${price} (${dateStr}) [${priceSource}]`);
 
-        // Normalize the price date to UTC midnight for TickerPriceHistory
-        const historyDate = new Date(Date.UTC(
-          priceDate.getUTCFullYear(), priceDate.getUTCMonth(), priceDate.getUTCDate(),
-        ));
+        // Normalize to the ET calendar date, then store as UTC midnight.
+        // We use ET here because regularMarketTime for a 4 PM ET close is 8 PM
+        // UTC, which can roll over to the next UTC date — so UTC date extraction
+        // would produce an off-by-one (e.g. April 1 instead of March 31).
+        const etDateStr = new Intl.DateTimeFormat("en-US", {
+          timeZone: "America/New_York",
+          year: "numeric", month: "2-digit", day: "2-digit",
+        }).format(priceDate);
+        const [etMonth, etDay, etYear] = etDateStr.split("/");
+        const historyDate = new Date(Date.UTC(Number(etYear), Number(etMonth) - 1, Number(etDay)));
 
         await prisma.tickerPrice.upsert({
           where: { ticker },

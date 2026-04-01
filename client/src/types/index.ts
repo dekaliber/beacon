@@ -573,6 +573,7 @@ export type CashFlowEventType =
   | "TRANSFER_IN"
   | "TRANSFER_OUT"
   | "DIVIDEND"
+  | "INCOME"
   | "BALANCE_ADJUSTMENT";
 
 export type CashFlowConfidence = "KNOWN" | "PROJECTED";

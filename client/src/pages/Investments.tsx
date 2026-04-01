@@ -511,6 +511,12 @@ function WithdrawalRateCard({
   });
 
   const maxMonthTotal = Math.max(...allMonths.map((m) => m.total), 1);
+  // Scale the y-axis so the tallest bar reaches ~80% of the chart height, leaving headroom at the top
+  const chartMax = maxMonthTotal * 1.25;
+
+  // Target monthly withdrawal dollar amount (used to draw the reference line on the chart)
+  const targetMonthlyAmount = targetRate != null ? (targetRate * effectiveDenominator) / 12 : null;
+  const targetLinePct = targetMonthlyAmount != null ? Math.min(targetMonthlyAmount / chartMax, 1) : null;
 
   return (
     <Card className="p-5">
@@ -571,9 +577,16 @@ function WithdrawalRateCard({
           </p>
 
           {/* Bars */}
-          <div className="flex items-end gap-0 flex-1" style={{ height: "64px" }}>
+          <div className="relative flex items-end gap-0" style={{ height: "125px" }}>
+            {/* Target withdrawal rate line */}
+            {targetLinePct != null && (
+              <div
+                className="absolute inset-x-0 border-t-2 border-dashed border-red-500 pointer-events-none z-10"
+                style={{ bottom: `${13 + targetLinePct * 104}px` }}
+              />
+            )}
             {allMonths.map((m) => {
-              const heightPct = m.total > 0 ? (m.total / maxMonthTotal) * 100 : 0;
+              const heightPct = m.total > 0 ? (m.total / chartMax) * 100 : 0;
               const monthLabel = new Date(`${m.month}-01T12:00:00`).toLocaleDateString("en-US", {
                 month: "short",
               });
@@ -586,7 +599,7 @@ function WithdrawalRateCard({
                   style={{ gap: "4px" }}
                 >
                   {/* Bar area */}
-                  <div className="w-full flex items-end justify-center" style={{ height: "52px" }}>
+                  <div className="w-full flex items-end justify-center" style={{ height: "104px" }}>
                     <div
                       className={`w-[55%] rounded-t-sm transition-colors cursor-default ${
                         m.isFuture
@@ -703,6 +716,8 @@ export function Investments() {
   const investmentAccounts = accounts.filter((a) => a.type === "INVESTMENT");
 
   const totalPortfolioValue = accounts.reduce((sum, a) => sum + a.totalMarketValue, 0);
+  const totalDayGain = investmentAccounts.reduce((sum, a) => sum + (a.totalDayGain ?? 0), 0);
+  const totalDayGainPct = totalPortfolioValue > 0 ? (totalDayGain / totalPortfolioValue) * 100 : null;
 
   // ── Asset Composition breakdown ──────────────────────────────────────────
   // Settlement cash + banking balances + holdings classified as Cash via instrument weights
@@ -839,6 +854,9 @@ export function Investments() {
                 Total Portfolio
               </p>
               <p className="text-3xl font-bold tabular-nums">{formatCurrency(totalPortfolioValue)}</p>
+              {totalDayGain !== 0 && (
+                <GainBadge value={totalDayGain} pct={totalDayGainPct} label="1-day" className="mt-0.5" />
+              )}
             </div>
 
             {/* Divider */}
