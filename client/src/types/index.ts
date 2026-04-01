@@ -305,6 +305,8 @@ export interface InvestmentAccountSummary {
   totalCost: number;
   totalGain: number;
   totalGainPct: number;
+  totalDayGain: number | null;
+  totalDayGainPct: number | null;
   cashBalance: number | null;
   cashBalanceUpdatedAt: string | null;
   isTaxAdvantaged: boolean;
@@ -512,6 +514,54 @@ export interface StatementOverride {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ── Withdrawal types ──────────────────────────────────────────────────────────
+
+export type WithdrawalType =
+  | "dividend"
+  | "interest"
+  | "cap_gains_dist"
+  | "sale_proceeds"
+  | "return_of_capital"
+  | "transfer"
+  | "reinvestment";
+
+export interface WithdrawalAccountRef {
+  id: string;
+  name: string;
+  color: string | null;
+  type: string;
+}
+
+export interface WithdrawalEvent {
+  id: string;
+  date: string;
+  type: WithdrawalType;
+  description: string;
+  account: WithdrawalAccountRef;
+  toAccount?: WithdrawalAccountRef;
+  amount: string;
+  isEditable: boolean;
+  incomeId?: string;
+  transferId?: string;
+}
+
+export interface WithdrawalMonthlySummary {
+  month: string; // "YYYY-MM"
+  total: number;
+}
+
+export interface WithdrawalSummary {
+  year: number;
+  ytdTotal: number;
+  ytdMonths: number;
+  monthlySummaries: WithdrawalMonthlySummary[];
+}
+
+export interface InvestmentSettings {
+  withdrawalRateDenominator: number | null;
+  withdrawalRateTarget: number | null;
 }
 
 // ── Cash flow projection types ────────────────────────────────────────────────

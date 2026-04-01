@@ -18,6 +18,7 @@ import { instrumentRoutes } from "./routes/instruments.js";
 import { transferRoutes } from "./routes/transfers.js";
 import { statementOverrideRoutes } from "./routes/statementOverrides.js";
 import { cashFlowRoutes } from "./routes/cashFlow.js";
+import { withdrawalRoutes } from "./routes/withdrawals.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,6 +44,7 @@ app.use("/api/instruments", instrumentRoutes);
 app.use("/api/transfers", transferRoutes);
 app.use("/api/statement-overrides", statementOverrideRoutes);
 app.use("/api/cash-flow", cashFlowRoutes);
+app.use("/api/withdrawals", withdrawalRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {

@@ -33,6 +33,9 @@ import type {
   TransactionGroup,
   UpcomingExpenseItem,
   CashFlowResponse,
+  WithdrawalEvent,
+  WithdrawalSummary,
+  InvestmentSettings,
 } from "../types";
 
 // Accounts
@@ -505,8 +508,12 @@ export const deleteStatementOverride = (id: string) =>
   api.delete(`/statement-overrides/${id}`);
 
 // Cash flow
-export const getCashFlow = (windowDays = 45) =>
-  api.get<CashFlowResponse>(`/cash-flow?windowDays=${windowDays}`);
+export const getCashFlow = (windowDays = 45) => {
+  // Pass the client's local date so the server anchors the window to "today"
+  // in the user's timezone rather than UTC.
+  const localDate = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
+  return api.get<CashFlowResponse>(`/cash-flow?windowDays=${windowDays}&date=${localDate}`);
+};
 
 export const createBalanceAdjustment = (data: {
   accountId: string;
@@ -524,3 +531,16 @@ export const updateBalanceAdjustment = (id: string, data: {
 
 export const deleteBalanceAdjustment = (id: string) =>
   api.delete(`/cash-flow/adjustments/${id}`);
+
+// Withdrawals
+export const getWithdrawals = (year?: number) =>
+  api.get<WithdrawalEvent[]>(`/withdrawals${year != null ? `?year=${year}` : ""}`);
+
+export const getWithdrawalSummary = (year?: number) =>
+  api.get<WithdrawalSummary>(`/withdrawals/summary${year != null ? `?year=${year}` : ""}`);
+
+export const getInvestmentSettings = () =>
+  api.get<InvestmentSettings>("/withdrawals/settings");
+
+export const updateInvestmentSettings = (data: Partial<InvestmentSettings>) =>
+  api.patch<InvestmentSettings>("/withdrawals/settings", data);

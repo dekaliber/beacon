@@ -1,15 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { TrendingUp, TrendingDown, Landmark, LineChart, ChevronRight, Pencil, Layers, Target } from "lucide-react";
+import { TrendingUp, TrendingDown, Landmark, LineChart, ChevronRight, Pencil, Layers, Target, ArrowUpRight } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
-import { getInvestmentAccounts, getAllocationSummary, refreshPrices, updateAccount } from "@/api";
+import { getInvestmentAccounts, getAllocationSummary, refreshPrices, updateAccount, getWithdrawalSummary, getInvestmentSettings } from "@/api";
 import { formatCurrency } from "@/lib/utils";
 import { isPriceRefreshNeeded } from "@/lib/priceUtils";
 import { useNotifications } from "@/context/NotificationContext";
-import type { InvestmentAccountSummary, AllocationSummary, AllocationItem } from "@/types";
+import type { InvestmentAccountSummary, AllocationSummary, AllocationItem, WithdrawalSummary, InvestmentSettings } from "@/types";
 
 // ── Allocation card ──────────────────────────────────────────────────────────
 
@@ -383,7 +383,7 @@ function SummaryRow({
 
 // ── Gain badge ──────────────────────────────────────────────────────────────
 
-function GainBadge({ value, pct, className = "" }: { value: number; pct?: number | null; className?: string }) {
+function GainBadge({ value, pct, label, className = "" }: { value: number; pct?: number | null; label?: string; className?: string }) {
   const positive = value >= 0;
   const Icon = positive ? TrendingUp : TrendingDown;
   return (
@@ -396,6 +396,9 @@ function GainBadge({ value, pct, className = "" }: { value: number; pct?: number
       {formatCurrency(Math.abs(value))}
       {pct != null && (
         <span className="text-xs opacity-70">({Math.abs(pct).toFixed(2)}%)</span>
+      )}
+      {label != null && (
+        <span className="text-xs opacity-50">{label}</span>
       )}
     </span>
   );
@@ -457,6 +460,203 @@ function EditBalanceModal({
   );
 }
 
+// ── Withdrawal Rate card ─────────────────────────────────────────────────────
+
+function annualizedRate(total: number, months: number, denominator: number): number | null {
+  if (denominator <= 0 || months <= 0) return null;
+  return (total * (12 / months)) / denominator;
+}
+
+function WithdrawalRateCard({
+  summary,
+  settings,
+  portfolioValue,
+}: {
+  summary: WithdrawalSummary | null | undefined;
+  settings: InvestmentSettings | null | undefined;
+  portfolioValue: number;
+}) {
+  const navigate = useNavigate();
+  const [barTooltip, setBarTooltip] = useState<{
+    month: string;
+    total: number;
+    rate: number | null;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const effectiveDenominator = settings?.withdrawalRateDenominator ?? portfolioValue;
+  const targetRate = settings?.withdrawalRateTarget ?? null;
+
+  const ytdTotal = summary?.ytdTotal ?? 0;
+  const ytdMonths = summary?.ytdMonths ?? 1;
+  const ytdRate = annualizedRate(ytdTotal, ytdMonths, effectiveDenominator);
+
+  const hasRate = ytdRate !== null && effectiveDenominator > 0;
+  const rateStr = hasRate ? `${(ytdRate! * 100).toFixed(2)}%` : "—";
+
+  // Build all 12 months for the current year; months without data default to 0.
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1; // 1-indexed
+  const monthMap = Object.fromEntries(
+    (summary?.monthlySummaries ?? []).map((m) => [m.month, m.total])
+  );
+  const allMonths = Array.from({ length: 12 }, (_, i) => {
+    const key = `${currentYear}-${String(i + 1).padStart(2, "0")}`;
+    return {
+      month: key,
+      total: monthMap[key] ?? 0,
+      isFuture: i + 1 > currentMonth,
+    };
+  });
+
+  const maxMonthTotal = Math.max(...allMonths.map((m) => m.total), 1);
+
+  return (
+    <Card className="p-5">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-[1fr_1px_2fr]">
+
+        {/* Left: numbers */}
+        <div className="flex flex-col gap-4 md:pr-5">
+          <div className="flex items-center gap-2">
+            <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Withdrawal Rate
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-4">
+            <div>
+              <p className="text-3xl font-bold tabular-nums">{rateStr}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">annualized (YTD)</p>
+            </div>
+            <div>
+              <p className="text-3xl font-bold tabular-nums">{formatCurrency(ytdTotal)}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">withdrawn YTD</p>
+            </div>
+          </div>
+
+          <div className="mt-auto space-y-1.5">
+            {targetRate !== null && ytdRate !== null && effectiveDenominator > 0 && (
+              <p className={`text-xs font-medium tabular-nums ${
+                ytdRate <= targetRate ? "text-green-600" : "text-red-500"
+              }`}>
+                {ytdRate <= targetRate
+                  ? `▼ ${((targetRate - ytdRate) * 100).toFixed(2)}% under target`
+                  : `▲ ${((ytdRate - targetRate) * 100).toFixed(2)}% over target`}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {settings?.withdrawalRateDenominator
+                ? `vs. ${formatCurrency(settings.withdrawalRateDenominator)} (fixed)`
+                : `vs. ${formatCurrency(portfolioValue)} portfolio`}
+            </p>
+            <button
+              onClick={() => navigate("/investments/withdrawals")}
+              className="flex items-center gap-1 text-xs text-primary hover:underline underline-offset-2"
+            >
+              View history
+              <ChevronRight className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="hidden md:block bg-border" />
+
+        {/* Right: bar chart */}
+        <div className="flex flex-col md:pl-5">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+            Monthly Withdrawals
+          </p>
+
+          {/* Bars */}
+          <div className="flex items-end gap-0 flex-1" style={{ height: "64px" }}>
+            {allMonths.map((m) => {
+              const heightPct = m.total > 0 ? (m.total / maxMonthTotal) * 100 : 0;
+              const monthLabel = new Date(`${m.month}-01T12:00:00`).toLocaleDateString("en-US", {
+                month: "short",
+              });
+              const monthRate = annualizedRate(m.total, 1, effectiveDenominator);
+
+              return (
+                <div
+                  key={m.month}
+                  className="flex-1 flex flex-col items-center"
+                  style={{ gap: "4px" }}
+                >
+                  {/* Bar area */}
+                  <div className="w-full flex items-end justify-center" style={{ height: "52px" }}>
+                    <div
+                      className={`w-[55%] rounded-t-sm transition-colors cursor-default ${
+                        m.isFuture
+                          ? "bg-muted"
+                          : "bg-primary/50 hover:bg-primary/80"
+                      }`}
+                      style={{ height: heightPct > 0 ? `${heightPct}%` : m.isFuture ? "3px" : "2px" }}
+                      onMouseEnter={(e) =>
+                        setBarTooltip({
+                          month: monthLabel,
+                          total: m.total,
+                          rate: m.isFuture ? null : monthRate,
+                          x: e.clientX,
+                          y: e.clientY,
+                        })
+                      }
+                      onMouseMove={(e) =>
+                        setBarTooltip((t) =>
+                          t ? { ...t, x: e.clientX, y: e.clientY } : null
+                        )
+                      }
+                      onMouseLeave={() => setBarTooltip(null)}
+                    />
+                  </div>
+                  {/* Month label */}
+                  <span
+                    className={`text-[9px] leading-none tabular-nums text-center w-full ${
+                      m.isFuture ? "text-muted-foreground/40" : "text-muted-foreground"
+                    }`}
+                  >
+                    {monthLabel}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Hover tooltip (portal-style, fixed position) */}
+      {barTooltip && (
+        <div
+          className="fixed z-50 pointer-events-none bg-white border border-border rounded-lg shadow-lg px-3 py-2 text-xs min-w-[150px]"
+          style={{
+            left: barTooltip.x + 14,
+            top: barTooltip.y - 8,
+            transform: "translateY(-100%)",
+          }}
+        >
+          <p className="font-semibold mb-1.5">{barTooltip.month}</p>
+          <div className="space-y-1">
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Withdrawn</span>
+              <span className="font-medium tabular-nums">{formatCurrency(barTooltip.total)}</span>
+            </div>
+            {barTooltip.rate !== null && (
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Ann. rate</span>
+                <span className="font-medium tabular-nums">
+                  {`${(barTooltip.rate * 100).toFixed(2)}%`}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ── Main component ──────────────────────────────────────────────────────────
 
 type AllocationFilter = "all" | "taxable" | "tax-advantaged";
@@ -469,6 +669,11 @@ export function Investments() {
     () => getAllocationSummary(allocationFilter),
     [allocationFilter]
   );
+  const { data: withdrawalSummary } = useApi(
+    () => getWithdrawalSummary(new Date().getFullYear()),
+    []
+  );
+  const { data: investmentSettings } = useApi(() => getInvestmentSettings(), []);
   const refreshedRef = useRef(false);
   const [editingBalance, setEditingBalance] = useState<InvestmentAccountSummary | null>(null);
   const { notifications } = useNotifications();
@@ -585,8 +790,8 @@ export function Investments() {
               <p className="font-bold tabular-nums text-sm">
                 {formatCurrency(account.totalMarketValue)}
               </p>
-              {!isBanking && account.totalGain !== 0 && (
-                <GainBadge value={account.totalGain} pct={account.totalGainPct} />
+              {!isBanking && account.totalDayGain != null && account.totalDayGain !== 0 && (
+                <GainBadge value={account.totalDayGain} pct={account.totalDayGainPct} label="1-day" />
               )}
             </div>
 
@@ -645,7 +850,7 @@ export function Investments() {
               line at the vertical midpoint of the first data row (header ≈ 26px + half
               of a text-sm row ≈ 10px → top: 36px).
             */}
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-[1fr_2rem_1fr] md:gap-0 md:pl-5">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-[1fr_2rem_1fr] md:gap-4 md:pl-5">
               {/* Asset Composition */}
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">
@@ -662,7 +867,7 @@ export function Investments() {
 
               {/* Connector column — dotted line sits at the Invested row's vertical center */}
               <div className="hidden md:block relative">
-                <div className="absolute inset-x-1.5 top-[36px] border-t border-dashed border-border" />
+                <div className="absolute inset-x-0 top-[36px] border-t border-dashed border-border" />
               </div>
 
               {/* Tax Buckets */}
@@ -699,6 +904,15 @@ export function Investments() {
             </div>
           </div>
         </Card>
+      )}
+
+      {/* Withdrawal Rate */}
+      {accounts.length > 0 && (
+        <WithdrawalRateCard
+          summary={withdrawalSummary}
+          settings={investmentSettings}
+          portfolioValue={totalPortfolioValue}
+        />
       )}
 
       {/* Two-column: accounts list (left) + asset allocation (right) */}

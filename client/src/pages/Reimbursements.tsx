@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { Card } from "@/components/Card";
 import { EmptyState } from "@/components/EmptyState";
+import { Modal } from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
 import { getExpenses, updateExpense } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -10,12 +12,17 @@ export function ReimbursementsPage() {
     () => getExpenses({ isReimbursementExpected: "true", limit: "200" }),
     []
   );
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
 
-  const handleResolve = async (id: string) => {
-    if (confirm("Mark this as resolved? This will clear the reimbursement flag.")) {
-      await updateExpense(id, { isReimbursementExpected: false, reimbursementNote: null });
-      refetch();
-    }
+  const handleResolve = (id: string) => {
+    setResolvingId(id);
+  };
+
+  const confirmResolve = async () => {
+    if (!resolvingId) return;
+    await updateExpense(resolvingId, { isReimbursementExpected: false, reimbursementNote: null });
+    setResolvingId(null);
+    refetch();
   };
 
   const expenses = expenseData?.data ?? [];
@@ -119,6 +126,30 @@ export function ReimbursementsPage() {
           />
         )}
       </Card>
+      <Modal
+        open={resolvingId !== null}
+        onClose={() => setResolvingId(null)}
+        title="Mark as resolved?"
+        className="max-w-sm"
+      >
+        <p className="text-sm text-muted-foreground">
+          This will clear the reimbursement flag on this transaction.
+        </p>
+        <div className="mt-6 flex gap-3">
+          <button
+            onClick={() => setResolvingId(null)}
+            className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-accent"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={confirmResolve}
+            className="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+          >
+            Confirm
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

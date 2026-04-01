@@ -8,7 +8,6 @@ import {
   Tags,
   Tag,
   Repeat,
-  AlertCircle,
   Settings,
   LineChart,
   Bell,
@@ -108,7 +107,6 @@ const navItems = [
   { to: "/investments", icon: LineChart, label: "Investments" },
   { to: "/cash-flow", icon: Waves, label: "Cash Flow" },
   { to: "/recurring", icon: Repeat, label: "Recurring" },
-  { to: "/reimbursements", icon: AlertCircle, label: "Reimbursements" },
 ];
 
 const configItems = [
