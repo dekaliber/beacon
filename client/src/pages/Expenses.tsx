@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
   Plus, Pencil, Receipt, AlertCircle,
@@ -1925,7 +1925,7 @@ export function Expenses() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Expenses</h2>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           {/* Uncategorized quick filter */}
           {uncategorizedCount > 0 && (
             <Button
@@ -1940,6 +1940,14 @@ export function Expenses() {
               </span>
             </Button>
           )}
+          <Link
+            to="/expenses/reimbursements"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <AlertCircle className="h-4 w-4" />
+            Reimbursements
+          </Link>
+          <div className="h-5 w-px bg-border" />
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input

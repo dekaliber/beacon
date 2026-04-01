@@ -331,6 +331,20 @@ model BudgetSettings {
   @@map("budget_settings")
 }
 
+model InvestmentSettings {
+  id                        String   @id @default(cuid())
+  // Portfolio value used as the denominator for withdrawal rate calculations.
+  // Null = use the live portfolio value from investment accounts.
+  withdrawalRateDenominator Decimal? @db.Decimal(14, 2)
+  // Target annual withdrawal rate stored as a ratio (e.g. 0.0400 = 4.00%).
+  // Null = no target configured.
+  withdrawalRateTarget      Decimal? @db.Decimal(5, 4)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@map("investment_settings")
+}
+
 // ── Investment models ───────────────────────────────────────────────────────────
 
 model InvestmentHolding {

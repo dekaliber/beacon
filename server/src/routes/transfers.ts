@@ -95,6 +95,45 @@ transferRoutes.post("/rules/:id/archive", async (req, res) => {
   res.status(204).send();
 });
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const BANKING_TYPES = ["CHECKING", "SAVINGS"] as const;
+
+/**
+ * For withdrawal-context transfers created via the Withdrawals page, exactly one
+ * side must be an INVESTMENT account and the other must be CHECKING/SAVINGS.
+ * Returns an error message string if invalid, null if valid.
+ * Note: this is only enforced when both IDs resolve to known accounts; the caller
+ * must look up account types from the DB before calling this.
+ */
+async function validateWithdrawalTransferAccounts(
+  fromAccountId: string,
+  toAccountId: string
+): Promise<string | null> {
+  if (fromAccountId === toAccountId) {
+    return "Source and destination accounts must be different.";
+  }
+  const [from, to] = await Promise.all([
+    prisma.account.findUnique({ where: { id: fromAccountId }, select: { type: true, isJoint: true } }),
+    prisma.account.findUnique({ where: { id: toAccountId }, select: { type: true, isJoint: true } }),
+  ]);
+  if (!from || !to) return "One or both accounts not found.";
+  if (from.isJoint || to.isJoint) return "Joint accounts cannot be used for portfolio transfers.";
+
+  const fromIsBanking = (BANKING_TYPES as readonly string[]).includes(from.type);
+  const toIsBanking = (BANKING_TYPES as readonly string[]).includes(to.type);
+  const fromIsInvestment = from.type === "INVESTMENT";
+  const toIsInvestment = to.type === "INVESTMENT";
+
+  const validBrokerageToBank = fromIsInvestment && toIsBanking;
+  const validBankToBrokerage = fromIsBanking && toIsInvestment;
+
+  if (!validBrokerageToBank && !validBankToBrokerage) {
+    return "One account must be a brokerage (Investment) account and the other must be a banking (Checking/Savings) account.";
+  }
+  return null;
+}
+
 // ── Transfer routes ───────────────────────────────────────────────────────────
 
 // List transfers (optionally filter by accountId and/or date range)
@@ -141,6 +180,9 @@ transferRoutes.post("/", async (req, res) => {
 
   const { description, amount, date, notes, fromAccountId, toAccountId, isConfirmed, recurrence } =
     parsed.data;
+
+  const accountError = await validateWithdrawalTransferAccounts(fromAccountId, toAccountId);
+  if (accountError) return res.status(400).json({ error: accountError });
 
   const transferDate = new Date(date);
 
@@ -205,6 +247,21 @@ transferRoutes.post("/", async (req, res) => {
 transferRoutes.put("/:id", async (req, res) => {
   const parsed = transferSchema.omit({ recurrence: true }).partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  // If both account IDs are being updated together, validate the combination.
+  // If only one is provided, look up the existing transfer to get the other side.
+  const { fromAccountId: newFrom, toAccountId: newTo } = parsed.data;
+  if (newFrom || newTo) {
+    const existing = await prisma.transfer.findUnique({
+      where: { id: req.params.id },
+      select: { fromAccountId: true, toAccountId: true },
+    });
+    if (!existing) return res.status(404).json({ error: "Transfer not found" });
+    const resolvedFrom = newFrom ?? existing.fromAccountId;
+    const resolvedTo = newTo ?? existing.toAccountId;
+    const accountError = await validateWithdrawalTransferAccounts(resolvedFrom, resolvedTo);
+    if (accountError) return res.status(400).json({ error: accountError });
+  }
 
   const { date, ...rest } = parsed.data;
   const transfer = await prisma.transfer.update({

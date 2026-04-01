@@ -609,6 +609,30 @@ investmentRoutes.get("/accounts", async (_req, res) => {
     });
     const priceMap = new Map(cachedPrices.map((p) => [p.ticker, p]));
 
+    // Load the two most recent closing prices per ticker from TickerPriceHistory
+    // to compute 1-day change. Using a 7-day window is enough to cover any weekend
+    // or holiday gap while keeping the query small.
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const recentHistory = await prisma.tickerPriceHistory.findMany({
+      where: { ticker: { in: allTickers }, date: { gte: sevenDaysAgo } },
+      orderBy: { date: "desc" },
+      select: { ticker: true, date: true, closePrice: true },
+    });
+    // Keep only the two most recent entries per ticker (already desc-sorted)
+    const historyByTicker = new Map<string, { closePrice: number }[]>();
+    for (const row of recentHistory) {
+      const entries = historyByTicker.get(row.ticker) ?? [];
+      if (entries.length < 2) {
+        entries.push({ closePrice: parseFloat(row.closePrice.toString()) });
+        historyByTicker.set(row.ticker, entries);
+      }
+    }
+    // prevCloseMap: ticker → previous trading day's close price
+    const prevCloseMap = new Map<string, number>();
+    for (const [ticker, entries] of historyByTicker) {
+      if (entries.length >= 2) prevCloseMap.set(ticker, entries[1].closePrice);
+    }
+
     // Helper: given a market value and an instrument's weights, compute how much
     // of that value is classified as Cash vs. unclassified (no weights at all).
     const classifyCashAndUntracked = (
@@ -629,6 +653,9 @@ investmentRoutes.get("/accounts", async (_req, res) => {
       let totalGain = 0;
       let classifiedCashValue = 0;
       let untrackedValue = 0;
+      // 1-day change accumulators: null until at least one holding has prev-close data
+      let totalDayGain: number | null = null;
+      let prevDayValue = 0; // sum of prevClose * quantity for holdings with history
 
       const holdingsSummary = account.holdings.map((holding) => {
         const priceRecord = priceMap.get(holding.ticker);
@@ -646,6 +673,14 @@ investmentRoutes.get("/accounts", async (_req, res) => {
         }
         totalCost += fields.totalCost;
         if (fields.totalGain != null) totalGain += fields.totalGain;
+
+        // Accumulate 1-day gain using the previous trading day's close price
+        const prevClose = prevCloseMap.get(holding.ticker);
+        if (prevClose != null && currentPrice != null && fields.totalQuantity > 0) {
+          const dayGain = (currentPrice - prevClose) * fields.totalQuantity;
+          totalDayGain = (totalDayGain ?? 0) + dayGain;
+          prevDayValue += prevClose * fields.totalQuantity;
+        }
 
         return {
           id: holding.id,
@@ -702,6 +737,10 @@ investmentRoutes.get("/accounts", async (_req, res) => {
         totalCost,
         totalGain,
         totalGainPct: totalCost > 0 ? (totalGain / totalCost) * 100 : 0,
+        totalDayGain,
+        totalDayGainPct: totalDayGain != null && prevDayValue > 0
+          ? (totalDayGain / prevDayValue) * 100
+          : null,
         cashBalance,
         cashBalanceUpdatedAt: account.cashBalanceUpdatedAt,
         isTaxAdvantaged: account.isTaxAdvantaged,
@@ -2267,7 +2306,21 @@ investmentRoutes.post("/sell/preview", async (req, res) => {
     });
     if (!holding) return res.status(404).json({ error: { message: "Holding not found" } });
 
-    const totalQty = holding.lots.reduce(
+    // Only lots acquired on or before the sale date are eligible
+    const eligibleLots = holding.lots.filter(
+      (l) => l.acquiredDate == null || l.acquiredDate <= body.saleDate
+    );
+
+    if (body.lotAllocations) {
+      const eligibleIds = new Set(eligibleLots.map((l) => l.id));
+      if (body.lotAllocations.some((a) => !eligibleIds.has(a.lotId))) {
+        return res.status(400).json({
+          error: { message: "One or more selected lots were purchased after the sale date and cannot be included in this sale." },
+        });
+      }
+    }
+
+    const totalQty = eligibleLots.reduce(
       (sum, l) => sum + parseFloat(l.quantity.toString()),
       0
     );
@@ -2276,12 +2329,12 @@ investmentRoutes.post("/sell/preview", async (req, res) => {
       : body.sharesToSell;
     if (sharesToSell > totalQty + 0.000001) {
       return res.status(400).json({
-        error: { message: `Cannot sell ${sharesToSell} shares; only ${totalQty} available` },
+        error: { message: `Cannot sell ${sharesToSell} shares; only ${totalQty} available from lots acquired on or before the sale date` },
       });
     }
 
     const calc = computeSell(
-      holding.lots,
+      eligibleLots,
       sharesToSell,
       body.pricePerShare,
       body.saleDate,
@@ -2343,22 +2396,36 @@ investmentRoutes.post("/sell", async (req, res) => {
     if (destAccount.type === "CREDIT_CARD")
       return res.status(400).json({ error: { message: "Destination account cannot be a credit card" } });
 
+    // Only lots acquired on or before the sale date are eligible
+    const eligibleLots = holding.lots.filter(
+      (l) => l.acquiredDate == null || l.acquiredDate <= body.saleDate
+    );
+
+    if (body.lotAllocations) {
+      const eligibleIds = new Set(eligibleLots.map((l) => l.id));
+      if (body.lotAllocations.some((a) => !eligibleIds.has(a.lotId))) {
+        return res.status(400).json({
+          error: { message: "One or more selected lots were purchased after the sale date and cannot be included in this sale." },
+        });
+      }
+    }
+
     const sharesToSell = body.lotAllocations
       ? body.lotAllocations.reduce((s, a) => s + a.shares, 0)
       : body.sharesToSell;
-    const totalQty = holding.lots.reduce(
+    const totalQty = eligibleLots.reduce(
       (sum, l) => sum + parseFloat(l.quantity.toString()),
       0
     );
     if (sharesToSell > totalQty + 0.000001) {
       return res.status(400).json({
-        error: { message: `Cannot sell ${sharesToSell} shares; only ${totalQty} available` },
+        error: { message: `Cannot sell ${sharesToSell} shares; only ${totalQty} available from lots acquired on or before the sale date` },
       });
     }
 
     // Compute lot breakdown (re-computed server-side, never trust client preview)
     const calc = computeSell(
-      holding.lots,
+      eligibleLots,
       sharesToSell,
       body.pricePerShare,
       body.saleDate,

@@ -410,26 +410,13 @@ async function buildProjection(
         div.exDate.getUTCDate() + 4,
       ));
       const effectiveDate = div.activity?.date ?? div.paymentDate ?? fallback;
-      const date = toDateStr(effectiveDate);
-
-      // Skip confirmed dividends whose effective date is on or before the last
-      // time the user updated their bank balance — those amounts are already
-      // reflected in the stored balance and would be double-counted.
-      if (
-        div.status === "CONFIRMED" &&
-        account.balanceUpdatedAt !== null &&
-        effectiveDate <= account.balanceUpdatedAt
-      ) {
-        continue;
-      }
-
       rawEvents.push({
         id: `div-${div.id}`,
-        date,
+        date: toDateStr(effectiveDate),
         description: `${div.ticker} dividend`,
         amount: parseFloat(div.estimatedTotal.toString()),
         type: "DIVIDEND",
-        confidence: div.status === "CONFIRMED" && div.paymentDate ? "KNOWN" : "PROJECTED",
+        confidence: div.status === "CONFIRMED" ? "KNOWN" : "PROJECTED",
         relatedAccountId: inv.id,
         relatedAccountName: inv.name,
       });
@@ -471,6 +458,18 @@ async function buildProjection(
       confidence: "KNOWN",
       adjustmentId: adj.id,
     });
+  }
+
+  // Drop any KNOWN-confidence event whose date falls on or before the last
+  // time the user manually updated their account balance. Such events are
+  // already reflected in the stored balance and would be double-counted.
+  if (account.balanceUpdatedAt !== null) {
+    const cutoff = toDateStr(account.balanceUpdatedAt);
+    for (let i = rawEvents.length - 1; i >= 0; i--) {
+      if (rawEvents[i].confidence === "KNOWN" && rawEvents[i].date <= cutoff) {
+        rawEvents.splice(i, 1);
+      }
+    }
   }
 
   // Sort by date, then debits before credits (conservative ordering)
@@ -698,8 +697,12 @@ cashFlowRoutes.get("/", async (req, res) => {
       180,
     );
 
-    const now = new Date();
-    const windowStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    // Prefer the client-supplied local date (YYYY-MM-DD) so the window starts
+    // on the user's "today" rather than the server's UTC date.
+    const dateParam = req.query.date as string | undefined;
+    const windowStart = (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam))
+      ? (() => { const [y, m, d] = dateParam.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d)); })()
+      : (() => { const now = new Date(); return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())); })();
     const windowEnd = new Date(windowStart);
     windowEnd.setUTCDate(windowEnd.getUTCDate() + windowDays - 1);
 
