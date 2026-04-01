@@ -76,6 +76,8 @@ import { ApiError } from "@/api/client";
 import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/utils";
 import { useNotifications } from "@/context/NotificationContext";
 import { isPriceRefreshNeeded } from "@/lib/priceUtils";
+import { useDemo } from "@/context/DemoContext";
+import { scaleGrowthPoints, scaleManuals, scaleHolding } from "@/lib/demo";
 import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity, GrowthPoint, GrowthEvent, PendingDividend, TaxClassification, Category } from "@/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -3725,7 +3727,12 @@ function GrowthChartTooltip({ active, payload, label }: any) {
 function GrowthChart({ accountId, onDayGain }: { accountId: string; onDayGain?: (gain: number | null) => void }) {
   const [duration, setDuration] = useState<ChartDuration>("YTD");
   const { data, loading, error } = useApi(() => getInvestmentGrowth(accountId), [accountId]);
-  const allPoints = data?.points ?? [];
+  const { isDemoMode, demoFactor } = useDemo();
+  const rawPoints = data?.points ?? [];
+  const allPoints = useMemo(
+    () => isDemoMode ? scaleGrowthPoints(rawPoints, demoFactor) : rawPoints,
+    [rawPoints, isDemoMode, demoFactor]
+  );
 
   // Filter to the selected duration window
   const points = useMemo(() => {
@@ -4024,6 +4031,8 @@ export function InvestmentAccount() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [holdings]);
 
+  const { isDemoMode, demoFactor } = useDemo();
+
   const sortedHoldings = useMemo(() => {
     if (!holdings) return [];
     const TYPE_ORDER: Record<string, number> = { "Mutual Fund": 0, "ETF": 1 };
@@ -4041,20 +4050,30 @@ export function InvestmentAccount() {
     [manualInvestments]
   );
 
+  // Scaled versions for display — dollar amounts multiplied by demoFactor when demo mode is on
+  const displayHoldings = useMemo(
+    () => isDemoMode ? sortedHoldings.map((h) => scaleHolding(h, demoFactor)) : sortedHoldings,
+    [sortedHoldings, isDemoMode, demoFactor]
+  );
+  const displayManuals = useMemo(
+    () => isDemoMode ? scaleManuals(manuals, demoFactor) : manuals,
+    [manuals, isDemoMode, demoFactor]
+  );
+
   // Build ordered list of groups: each unique group across holdings AND manuals (null → "Other")
   const holdingGroups = useMemo(() => {
     const seen = new Set<string>();
     const order: string[] = [];
-    for (const h of sortedHoldings) {
+    for (const h of displayHoldings) {
       const key = h.group ?? "";
       if (!seen.has(key)) { seen.add(key); order.push(key); }
     }
-    for (const m of manuals) {
+    for (const m of displayManuals) {
       const key = m.group ?? "";
       if (!seen.has(key)) { seen.add(key); order.push(key); }
     }
     return order;
-  }, [sortedHoldings, manuals]);
+  }, [displayHoldings, displayManuals]);
 
   const account = accounts?.find((a: Account) => a.id === accountId);
   if (!account || !holdings) return null;
@@ -4075,16 +4094,16 @@ export function InvestmentAccount() {
     refetchAccounts();
   };
 
-  const manualMV = manuals.reduce((s, m) => s + m.marketValue, 0);
-  const manualCost = manuals.reduce((s, m) => s + (m.totalCost ?? 0), 0);
-  const manualGain = manuals.reduce((s, m) => m.totalCost != null ? s + (m.marketValue - m.totalCost) : s, 0);
+  const manualMV = displayManuals.reduce((s, m) => s + m.marketValue, 0);
+  const manualCost = displayManuals.reduce((s, m) => s + (m.totalCost ?? 0), 0);
+  const manualGain = displayManuals.reduce((s, m) => m.totalCost != null ? s + (m.marketValue - m.totalCost) : s, 0);
 
-  const totalMarketValue = holdings.reduce((s, h) => s + (h.marketValue ?? 0), 0) + manualMV + (cashBalance ?? 0);
-  const totalCost = holdings.reduce((s, h) => s + h.totalCost, 0) + manualCost;
-  const totalGain = holdings.reduce((s, h) => s + (h.totalGain ?? 0), 0) + manualGain;
+  const totalMarketValue = displayHoldings.reduce((s, h) => s + (h.marketValue ?? 0), 0) + manualMV + ((cashBalance ?? 0) * (isDemoMode ? demoFactor : 1));
+  const totalCost = displayHoldings.reduce((s, h) => s + h.totalCost, 0) + manualCost;
+  const totalGain = displayHoldings.reduce((s, h) => s + (h.totalGain ?? 0), 0) + manualGain;
   const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
-  const shortTermGain = holdings.reduce((s, h) => s + h.shortTermGain, 0);
-  const longTermGain = holdings.reduce((s, h) => s + h.longTermGain, 0);
+  const shortTermGain = displayHoldings.reduce((s, h) => s + h.shortTermGain, 0);
+  const longTermGain = displayHoldings.reduce((s, h) => s + h.longTermGain, 0);
   const priceDate = holdings.find((h) => h.priceDate)?.priceDate;
 
   return (
@@ -4397,10 +4416,10 @@ export function InvestmentAccount() {
                     {holdingGroups.length > 1
                       ? /* Grouped view — insert a header row between groups */
                         holdingGroups.flatMap((group) => {
-                          const groupHoldings = sortedHoldings.filter(
+                          const groupHoldings = displayHoldings.filter(
                             (h) => (h.group ?? "") === group
                           );
-                          const groupManuals = manuals.filter(
+                          const groupManuals = displayManuals.filter(
                             (m) => (m.group ?? "") === group
                           );
                           const groupMV =
@@ -4436,7 +4455,7 @@ export function InvestmentAccount() {
                                 onToggle={() => toggleHolding(holding.id)}
                                 onDeleted={refetch}
                                 onUpdated={refetch}
-                                onSell={() => setSellModalHolding(holding)}
+                                onSell={() => setSellModalHolding(sortedHoldings.find(h => h.id === holding.id) ?? holding)}
                                 rowRef={(el) => {
                                   if (el) holdingRowRefs.current.set(holding.id, el);
                                   else holdingRowRefs.current.delete(holding.id);
@@ -4447,7 +4466,7 @@ export function InvestmentAccount() {
                               <ManualHoldingRow
                                 key={entry.id}
                                 entry={entry}
-                                onEdit={() => { setEditingManual(entry); setManualModalOpen(true); }}
+                                onEdit={() => { setEditingManual(manuals.find(m => m.id === entry.id)); setManualModalOpen(true); }}
                                 onDeleted={refetchManual}
                               />
                             )),
@@ -4455,7 +4474,7 @@ export function InvestmentAccount() {
                         })
                       : /* Flat view — no group headers when all in one group */
                         [
-                          ...sortedHoldings.map((holding) => (
+                          ...displayHoldings.map((holding) => (
                             <HoldingRow
                               key={holding.id}
                               holding={holding}
@@ -4463,18 +4482,18 @@ export function InvestmentAccount() {
                               onToggle={() => toggleHolding(holding.id)}
                               onDeleted={refetch}
                               onUpdated={refetch}
-                              onSell={() => setSellModalHolding(holding)}
+                              onSell={() => setSellModalHolding(sortedHoldings.find(h => h.id === holding.id) ?? holding)}
                               rowRef={(el) => {
                                 if (el) holdingRowRefs.current.set(holding.id, el);
                                 else holdingRowRefs.current.delete(holding.id);
                               }}
                             />
                           )),
-                          ...manuals.map((entry) => (
+                          ...displayManuals.map((entry) => (
                             <ManualHoldingRow
                               key={entry.id}
                               entry={entry}
-                              onEdit={() => { setEditingManual(entry); setManualModalOpen(true); }}
+                              onEdit={() => { setEditingManual(manuals.find(m => m.id === entry.id)); setManualModalOpen(true); }}
                               onDeleted={refetchManual}
                             />
                           )),
@@ -4527,13 +4546,16 @@ export function InvestmentAccount() {
           )}
 
           {/* Sticky holding row — appears below nav when a parent row scrolls out of view */}
-          {stickyHolding && (
-            <StickyHoldingRow
-              holding={stickyHolding}
-              expanded={expandedIds.has(stickyHolding.id)}
-              onToggle={() => toggleHolding(stickyHolding.id)}
-            />
-          )}
+          {stickyHolding && (() => {
+            const sh = displayHoldings.find(h => h.id === stickyHolding.id) ?? stickyHolding;
+            return (
+              <StickyHoldingRow
+                holding={sh}
+                expanded={expandedIds.has(sh.id)}
+                onToggle={() => toggleHolding(sh.id)}
+              />
+            );
+          })()}
         </>
       )}
     </div>

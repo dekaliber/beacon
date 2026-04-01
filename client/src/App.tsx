@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { NotificationProvider } from "@/context/NotificationContext";
+import { DemoProvider } from "@/context/DemoContext";
 import { Dashboard } from "@/pages/Dashboard";
 import { Expenses } from "@/pages/Expenses";
 import { Budgets } from "@/pages/Budgets";
@@ -20,6 +21,7 @@ import { WithdrawalsPage } from "@/pages/Withdrawals";
 function App() {
   return (
     <BrowserRouter>
+      <DemoProvider>
       <NotificationProvider>
       <Routes>
         <Route element={<Layout />}>
@@ -41,6 +43,7 @@ function App() {
         </Route>
       </Routes>
       </NotificationProvider>
+      </DemoProvider>
     </BrowserRouter>
   );
 }

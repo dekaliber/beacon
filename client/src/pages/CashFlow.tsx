@@ -412,7 +412,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
 
   if (!editing) {
     return (
-      <tr className="group border-b border-border/50 hover:bg-muted/30 transition-colors">
+      <tr className="group border-b border-border/50 bg-amber-50/50 hover:bg-amber-50 transition-colors">
         <td className="py-2 pr-4 text-muted-foreground whitespace-nowrap">{fmtDate(event.date)}</td>
         <td className="py-2 pr-4">
           <div className="flex items-center gap-2">
@@ -453,7 +453,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
   }
 
   return (
-    <tr className="border-b border-border/50 bg-muted/20">
+    <tr className="border-b border-border/50 bg-amber-50">
       <td className="py-2 pr-4">
         <input
           type="date"
@@ -758,6 +758,7 @@ export function CashFlow() {
     await updateAccount(id, { balance });
     setEditingBalance(null);
     refetchAccounts();
+    refetch();
   };
 
   const renderBankingTile = (account: InvestmentAccountSummary) => (

@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
-import { Plus, Pencil, Trash2, Landmark, CreditCard, TrendingUp, EyeOff, ArrowRight, ChevronDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Landmark, CreditCard, TrendingUp, EyeOff, ArrowRight, ChevronDown, Eye } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
 import { getAccounts, createAccount, updateAccount, deleteAccount, getInvestmentHoldings, getRecurrenceRules } from "@/api";
+import { cn } from "@/lib/utils";
+import { useDemo } from "@/context/DemoContext";
 import type { Account, TaxAdvantageType } from "@/types";
 
 const accountTypeLabels: Record<string, string> = {
@@ -52,6 +54,7 @@ export function Accounts() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
   const { data: accounts, refetch } = useApi(() => getAccounts({ includeHidden: true }), []);
+  const { isDemoMode, toggleDemoMode } = useDemo();
 
   const handleSave = async (data: Partial<Account>) => {
     if (editing) {
@@ -190,9 +193,24 @@ export function Accounts() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Accounts</h2>
-        <Button onClick={() => { setEditing(null); setModalOpen(true); }}>
-          <Plus className="h-4 w-4" /> Add Account
-        </Button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleDemoMode}
+            title={isDemoMode ? "Disable demo mode" : "Enable demo mode"}
+            className={cn(
+              "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+              isDemoMode
+                ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            )}
+          >
+            {isDemoMode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            Demo mode
+          </button>
+          <Button onClick={() => { setEditing(null); setModalOpen(true); }}>
+            <Plus className="h-4 w-4" /> Add Account
+          </Button>
+        </div>
       </div>
 
       {accounts.length > 0 ? (
