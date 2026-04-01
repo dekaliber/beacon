@@ -383,7 +383,9 @@ budgetRoutes.get("/:year", async (req, res) => {
   const year = parseInt(req.params.year);
   if (isNaN(year)) return res.status(400).json({ error: "Invalid year" });
 
-  const today = new Date();
+  // Prefer the client's local date (YYYY-MM-DD) to avoid UTC vs. local-time skew.
+  const todayParam = req.query.today as string | undefined;
+  const today = todayParam ? new Date(`${todayParam}T00:00:00Z`) : new Date();
   // Clamp the reference point to within the requested year so historical and
   // future-year queries stay fully contained in that year.
   const effectiveToday =

@@ -3646,7 +3646,7 @@ function durationStartDate(duration: ChartDuration): string {
     const diff = (now.getDay() + 6) % 7; // days since Monday
     const monday = new Date(now);
     monday.setDate(now.getDate() - diff);
-    return monday.toISOString().split("T")[0];
+    return monday.toLocaleDateString("en-CA");
   } else if (duration === "MTD") {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
   } else {

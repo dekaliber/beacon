@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import {
   TrendingDown,
+  TrendingUp,
   CreditCard,
   ArrowDownLeft,
   ArrowUpRight,
@@ -68,6 +69,7 @@ function eventIcon(type: CashFlowEvent["type"]) {
     case "TRANSFER_IN":        return <ArrowDownLeft className="h-3.5 w-3.5" />;
     case "TRANSFER_OUT":       return <ArrowUpRight className="h-3.5 w-3.5" />;
     case "DIVIDEND":           return <Sparkles className="h-3.5 w-3.5" />;
+    case "INCOME":             return <TrendingUp className="h-3.5 w-3.5" />;
     case "BALANCE_ADJUSTMENT": return <Wallet className="h-3.5 w-3.5" />;
   }
 }
@@ -270,7 +272,7 @@ interface NewAdjustmentRowProps {
 }
 
 function NewAdjustmentRow({ defaultDate, accountId, onSaved }: NewAdjustmentRowProps) {
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const today = useMemo(() => new Date().toLocaleDateString("en-CA"), []);
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(defaultDate);
   const [description, setDescription] = useState("Cash injection");
@@ -374,7 +376,7 @@ interface AdjustmentEventRowProps {
 }
 
 function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const today = useMemo(() => new Date().toLocaleDateString("en-CA"), []);
   const [editing, setEditing] = useState(false);
   const [date, setDate] = useState(event.date);
   const [description, setDescription] = useState(event.description);

@@ -107,6 +107,7 @@ type EventType =
   | "TRANSFER_IN"
   | "TRANSFER_OUT"
   | "DIVIDEND"
+  | "INCOME"
   | "BALANCE_ADJUSTMENT";
 
 type Confidence = "KNOWN" | "PROJECTED";
@@ -367,6 +368,28 @@ async function buildProjection(
     }
   }
 
+  // 3c. Income records credited to this account (excludes DIVIDEND subtype —
+  //     those are already projected from PendingDividend records in section 4)
+  const incomeRecords = await prisma.income.findMany({
+    where: {
+      accountId: account.id,
+      date: { gte: windowStart, lte: windowEnd },
+      isCashReceived: true,
+      subtype: { not: "DIVIDEND" },
+    },
+    select: { id: true, date: true, source: true, amount: true },
+  });
+  for (const inc of incomeRecords) {
+    rawEvents.push({
+      id: `inc-${inc.id}`,
+      date: toDateStr(inc.date),
+      description: inc.source || "Income",
+      amount: parseFloat(inc.amount.toString()),
+      type: "INCOME",
+      confidence: "KNOWN",
+    });
+  }
+
   // 4. Cash dividends deposited into this account (from investment accounts)
   const investmentAccountsUsingThis = allAccounts.filter(
     (a) => a.type === "INVESTMENT",
@@ -460,13 +483,15 @@ async function buildProjection(
     });
   }
 
-  // Drop any KNOWN-confidence event whose date falls on or before the last
+  // Drop any KNOWN-confidence event whose date falls strictly before the last
   // time the user manually updated their account balance. Such events are
   // already reflected in the stored balance and would be double-counted.
+  // Events on the same calendar day as balanceUpdatedAt are kept — the balance
+  // snapshot may have been recorded before those events were entered.
   if (account.balanceUpdatedAt !== null) {
     const cutoff = toDateStr(account.balanceUpdatedAt);
     for (let i = rawEvents.length - 1; i >= 0; i--) {
-      if (rawEvents[i].confidence === "KNOWN" && rawEvents[i].date <= cutoff) {
+      if (rawEvents[i].confidence === "KNOWN" && rawEvents[i].date < cutoff) {
         rawEvents.splice(i, 1);
       }
     }

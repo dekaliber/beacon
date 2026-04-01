@@ -116,7 +116,7 @@ export const deleteTransactionGroup = (id: string) => api.delete(`/transaction-g
 
 // Budgets
 export const getBudgetOverview = (year: number) =>
-  api.get<BudgetOverview>(`/budgets/${year}`);
+  api.get<BudgetOverview>(`/budgets/${year}?today=${new Date().toLocaleDateString("en-CA")}`);
 
 export const setAnnualBudget = (
   year: number,

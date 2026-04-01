@@ -209,28 +209,6 @@ export async function scanForDividends(
         data: { lastDividendScanAt: now },
       });
 
-      // Piggyback: update TickerPrice with the latest close from this response.
-      // Avoids a redundant Tiingo call during price refresh for Tiingo-sourced tickers.
-      // Only write if this is the first call for this ticker (not a cache hit) so we
-      // don't redundantly upsert for every account that holds the same fund.
-      if (latestClose != null && latestCloseDate != null && !tickerCache?.has(holding.ticker + "__written")) {
-        tickerCache?.set(holding.ticker + "__written", Promise.resolve(scanResult));
-        const priceDate = new Date(latestCloseDate + "T00:00:00Z");
-        const historyDate = new Date(Date.UTC(
-          priceDate.getUTCFullYear(), priceDate.getUTCMonth(), priceDate.getUTCDate(),
-        ));
-        await prisma.tickerPrice.upsert({
-          where: { ticker: holding.ticker },
-          create: { ticker: holding.ticker, price: latestClose, priceDate, priceSource: "TIINGO" },
-          update: { price: latestClose, priceDate, priceSource: "TIINGO" },
-        });
-        await prisma.tickerPriceHistory.upsert({
-          where: { ticker_date: { ticker: holding.ticker, date: historyDate } },
-          create: { ticker: holding.ticker, date: historyDate, closePrice: latestClose },
-          update: { closePrice: latestClose },
-        });
-        console.log(`${tag}: piggybacked price update — $${latestClose} (${latestCloseDate})`);
-      }
 
       for (const event of events) {
         const exDate = new Date(event.exDate);

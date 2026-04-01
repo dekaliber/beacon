@@ -232,7 +232,7 @@ function TransferModal({
 }) {
   const investmentAccounts = allAccounts.filter((a) => a.type === "INVESTMENT");
   const bankingAccounts = allAccounts.filter((a) => a.type !== "INVESTMENT");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString("en-CA");
   const [form, setForm] = useState<TransferFormData>({
     fromAccountId: "",
     toAccountId: "",
@@ -572,16 +572,18 @@ function MonthSection({
   month,
   events,
   denominator,
+  defaultCollapsed,
   onEdit,
   onDelete,
 }: {
   month: string; // "YYYY-MM"
   events: WithdrawalEvent[];
   denominator: number | null;
+  defaultCollapsed: boolean;
   onEdit: (event: WithdrawalEvent) => void;
   onDelete: (event: WithdrawalEvent) => void;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const total = events.reduce(
     (s, e) => s + (e.type === "reinvestment" ? -1 : 1) * parseFloat(e.amount),
     0
@@ -774,15 +776,18 @@ export function WithdrawalsPage() {
           <h2 className="text-2xl font-bold">Withdrawals</h2>
         </div>
         <div className="flex items-center gap-3">
-          <select
-            value={year}
-            onChange={(e) => setYear(parseInt(e.target.value))}
-            className="rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-            {YEAR_OPTIONS.map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={year}
+              onChange={(e) => setYear(parseInt(e.target.value))}
+              className="appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+            >
+              {YEAR_OPTIONS.map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+          </div>
           <Button onClick={() => { setEditingEvent(null); setTransferModalOpen(true); }}>
             <Plus className="h-4 w-4 mr-1.5" />
             Add Transfer
@@ -792,7 +797,7 @@ export function WithdrawalsPage() {
 
       {/* Summary row */}
       <Card className="p-4">
-        <div className="flex items-start gap-6 flex-wrap">
+        <div className="flex items-start gap-9 flex-wrap">
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
               YTD Total
@@ -876,16 +881,20 @@ export function WithdrawalsPage() {
             <span />
           </div>
 
-          {monthGroups.map(([month, monthEvents]) => (
-            <MonthSection
-              key={month}
-              month={month}
-              events={monthEvents}
-              denominator={effectiveDenominator > 0 ? effectiveDenominator : null}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-            />
-          ))}
+          {monthGroups.map(([month, monthEvents]) => {
+            const currentMonth = new Date().toLocaleDateString("en-CA").slice(0, 7);
+            return (
+              <MonthSection
+                key={month}
+                month={month}
+                events={monthEvents}
+                denominator={effectiveDenominator > 0 ? effectiveDenominator : null}
+                defaultCollapsed={month !== currentMonth}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
+            );
+          })}
         </Card>
       )}
 

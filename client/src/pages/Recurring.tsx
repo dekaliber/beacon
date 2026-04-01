@@ -929,7 +929,7 @@ export function Recurring() {
     setDeleteTarget(rule);
   };
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = new Date().toLocaleDateString("en-CA");
   const endDateIsRetroactive = !!editForm.endDate && editForm.endDate < todayStr;
 
   const handleEditSave = async () => {
