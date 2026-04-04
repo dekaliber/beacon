@@ -52,7 +52,7 @@ export function TagsPage() {
               <div key={tag.id} className="flex items-center justify-between py-3">
                 <div className="flex items-center gap-3">
                   <div
-                    className="h-4 w-4 rounded-full border border-border"
+                    className="h-7 w-7 flex-shrink-0 rounded-md"
                     style={{ backgroundColor: tag.color ?? "hsl(var(--muted-foreground))" }}
                   />
                   <span className="font-medium">{tag.name}</span>
@@ -134,29 +134,18 @@ function TagModal({ open, onClose, onSave, tag }: TagModalProps) {
 
         <div>
           <label className="mb-2 block text-sm font-medium">Color</label>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid w-fit grid-cols-8 gap-2">
             {PRESET_COLORS.map((c) => (
               <button
                 key={c}
                 type="button"
                 onClick={() => setColor(c)}
-                className="h-7 w-7 rounded-full border-2 transition-transform hover:scale-110"
-                style={{
-                  backgroundColor: c,
-                  borderColor: color === c ? "#000" : "transparent",
-                }}
+                style={{ backgroundColor: c }}
+                className={`h-7 w-7 rounded-md transition-transform hover:scale-110 ${
+                  color === c ? "scale-110 ring-2 ring-border ring-offset-1" : ""
+                }`}
               />
             ))}
-          </div>
-          <div className="mt-3 flex items-center gap-2">
-            <label className="text-sm text-muted-foreground">Custom:</label>
-            <input
-              type="color"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              className="h-8 w-12 cursor-pointer rounded border border-border"
-            />
-            <span className="text-sm text-muted-foreground">{color}</span>
           </div>
         </div>
 

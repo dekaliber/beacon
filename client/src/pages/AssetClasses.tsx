@@ -169,48 +169,48 @@ export function AssetClassesPage() {
         </div>
       )}
 
-      <Card>
-        {assetClasses && assetClasses.length > 0 ? (
-          <div className="divide-y divide-border">
-            {assetClasses.map((topClass) => {
-              const expanded = expandedIds.has(topClass.id);
-              const hasChildren = (topClass.children?.length ?? 0) > 0;
-              const derived = isDerived(topClass) ? effectiveTarget(topClass) : undefined;
-              return (
-                <div key={topClass.id}>
-                  {/* Top-level row */}
+      {assetClasses && assetClasses.length > 0 ? (
+        <Card className="divide-y divide-border p-0">
+          {assetClasses.map((topClass) => {
+            const expanded = expandedIds.has(topClass.id);
+            const hasChildren = (topClass.children?.length ?? 0) > 0;
+            const derived = isDerived(topClass) ? effectiveTarget(topClass) : undefined;
+            return (
+              <div key={topClass.id}>
+                {/* Top-level row */}
+                <AssetClassRow
+                  assetClass={topClass}
+                  isChild={false}
+                  expanded={expanded}
+                  hasChildren={hasChildren}
+                  derivedTarget={derived}
+                  onToggle={() => toggleExpand(topClass.id)}
+                  onEdit={() => openEdit(topClass)}
+                  onDelete={() => handleDelete(topClass)}
+                  onSetTarget={() => setTargetModal({ open: true, assetClass: topClass })}
+                  onAddChild={() => { openAdd(topClass.id); setExpandedIds((p) => new Set([...p, topClass.id])); }}
+                />
+                {/* Children */}
+                {expanded && topClass.children?.map((child) => (
                   <AssetClassRow
-                    assetClass={topClass}
-                    isChild={false}
-                    expanded={expanded}
-                    hasChildren={hasChildren}
-                    derivedTarget={derived}
-                    onToggle={() => toggleExpand(topClass.id)}
-                    onEdit={() => openEdit(topClass)}
-                    onDelete={() => handleDelete(topClass)}
-                    onSetTarget={() => setTargetModal({ open: true, assetClass: topClass })}
-                    onAddChild={() => { openAdd(topClass.id); setExpandedIds((p) => new Set([...p, topClass.id])); }}
+                    key={child.id}
+                    assetClass={child}
+                    isChild={true}
+                    expanded={false}
+                    hasChildren={false}
+                    onToggle={() => {}}
+                    onEdit={() => openEdit(child)}
+                    onDelete={() => handleDelete(child)}
+                    onSetTarget={() => setTargetModal({ open: true, assetClass: child })}
+                    onAddChild={() => {}}
                   />
-                  {/* Children */}
-                  {expanded && topClass.children?.map((child) => (
-                    <AssetClassRow
-                      key={child.id}
-                      assetClass={child}
-                      isChild={true}
-                      expanded={false}
-                      hasChildren={false}
-                      onToggle={() => {}}
-                      onEdit={() => openEdit(child)}
-                      onDelete={() => handleDelete(child)}
-                      onSetTarget={() => setTargetModal({ open: true, assetClass: child })}
-                      onAddChild={() => {}}
-                    />
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
+                ))}
+              </div>
+            );
+          })}
+        </Card>
+      ) : (
+        <Card>
           <EmptyState
             icon={PieChart}
             title="No asset classes yet"
@@ -221,8 +221,8 @@ export function AssetClassesPage() {
               </Button>
             }
           />
-        )}
-      </Card>
+        </Card>
+      )}
 
       <AssetClassModal
         open={modalState.open}
@@ -281,24 +281,28 @@ function AssetClassRow({
       {!isChild && (
         <button
           onClick={onToggle}
-          className={cn(
-            "flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors",
-            hasChildren ? "text-muted-foreground hover:text-foreground" : "invisible"
-          )}
+          className={`rounded p-0.5 ${hasChildren ? "hover:bg-accent" : ""}`}
+          disabled={!hasChildren}
         >
-          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          {hasChildren ? (
+            expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
+          ) : (
+            <span className="inline-block h-4 w-4" />
+          )}
         </button>
       )}
 
-      {/* Color swatch */}
-      <div
-        className="h-3.5 w-3.5 shrink-0 rounded-full border border-border"
-        style={{ backgroundColor: assetClass.color ?? "#e2e8f0" }}
-      />
+      {/* Color swatch (top-level only; children inherit) */}
+      {!isChild && (
+        <div
+          className="h-7 w-7 shrink-0 rounded-md"
+          style={{ backgroundColor: assetClass.color ?? "#e2e8f0" }}
+        />
+      )}
 
       {/* Name + system badge */}
       <div className="flex flex-1 items-center gap-2 min-w-0">
-        <span className={cn("font-medium truncate", isChild && "text-sm")}>{assetClass.name}</span>
+        <span className={cn("truncate", isChild ? "text-sm" : "font-medium")}>{assetClass.name}</span>
         {assetClass.isSystem && (
           <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
             built-in
@@ -368,9 +372,6 @@ function AssetClassModal({ open, onClose, onSave, editing, isChild }: AssetClass
   const [saving, setSaving] = useState(false);
   const [color, setColor] = useState<string>(editing?.color ?? PRESET_COLORS[0]);
 
-  // Reset color when editing target changes
-  const colorValue = editing?.color ?? color;
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
@@ -406,30 +407,24 @@ function AssetClassModal({ open, onClose, onSave, editing, isChild }: AssetClass
           </div>
         )}
 
-        <div>
-          <label className="mb-2 block text-sm font-medium">Color</label>
-          <div className="flex flex-wrap gap-2">
-            {PRESET_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setColor(c)}
-                className="h-7 w-7 rounded-full border-2 transition-transform hover:scale-110"
-                style={{ backgroundColor: c, borderColor: color === c ? "#000" : "transparent" }}
-              />
-            ))}
+        {!isChild && (
+          <div>
+            <label className="mb-2 block text-sm font-medium">Color</label>
+            <div className="grid w-fit grid-cols-6 gap-2">
+              {PRESET_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setColor(c)}
+                  style={{ backgroundColor: c }}
+                  className={`h-7 w-7 rounded-md transition-transform hover:scale-110 ${
+                    color === c ? "scale-110 ring-2 ring-border ring-offset-1" : ""
+                  }`}
+                />
+              ))}
+            </div>
           </div>
-          <div className="mt-3 flex items-center gap-2">
-            <label className="text-sm text-muted-foreground">Custom:</label>
-            <input
-              type="color"
-              value={colorValue}
-              onChange={(e) => setColor(e.target.value)}
-              className="h-8 w-12 cursor-pointer rounded border border-border"
-            />
-            <span className="text-sm text-muted-foreground">{colorValue}</span>
-          </div>
-        </div>
+        )}
 
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>

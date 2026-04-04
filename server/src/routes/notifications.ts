@@ -1,34 +1,24 @@
 import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { scanForDividends } from "./pendingDividends.js";
-import type { DividendScanResult } from "../services/tiingo.js";
 
 export const notificationRoutes = Router();
 
 /**
  * GET /api/notifications
  *
- * Scans all investment accounts for new dividends, then returns a summary of
- * all pending items grouped by account.  Called once on app load so the bell
+ * Scans all active instruments for new dividends, then returns a summary of
+ * all pending items grouped by account. Called once on app load so the bell
  * badge is always current without requiring the user to visit a specific tab.
  */
 notificationRoutes.get("/", async (_req, res) => {
-  // 1. Find every investment account
-  const accounts = await prisma.account.findMany({
-    where: { type: "INVESTMENT", isActive: true },
-    select: { id: true, name: true },
-  });
+  // 1. Scan all instruments for new dividends. Each unique ticker is queried
+  //    from Tiingo exactly once regardless of how many accounts hold it.
+  //    Per-instrument errors are swallowed inside scanForDividends so a single
+  //    bad ticker can't prevent the rest from running or the response from returning.
+  await scanForDividends();
 
-  // 2. Scan each account for new dividends (errors are swallowed per-account
-  //    so a single bad ticker/account can't break the whole response).
-  //    A shared tickerCache ensures each unique ticker is only fetched from
-  //    Tiingo once per session, even when the same fund appears in multiple accounts.
-  const tickerCache = new Map<string, Promise<DividendScanResult>>();
-  await Promise.allSettled(
-    accounts.map((account) => scanForDividends(account, tickerCache)),
-  );
-
-  // 3. Count pending dividends per account
+  // 2. Count pending dividends per account
   const counts = await prisma.pendingDividend.groupBy({
     by: ["accountId"],
     where: { status: "PENDING" },
@@ -37,13 +27,17 @@ notificationRoutes.get("/", async (_req, res) => {
 
   const countMap = new Map(counts.map((c) => [c.accountId, c._count.id]));
 
-  const pendingDividends = accounts
-    .filter((a) => (countMap.get(a.id) ?? 0) > 0)
-    .map((a) => ({
-      accountId: a.id,
-      accountName: a.name,
-      count: countMap.get(a.id)!,
-    }));
+  // 3. Resolve account names for accounts that have pending dividends
+  const accounts = await prisma.account.findMany({
+    where: { id: { in: [...countMap.keys()] } },
+    select: { id: true, name: true },
+  });
+
+  const pendingDividends = accounts.map((a) => ({
+    accountId: a.id,
+    accountName: a.name,
+    count: countMap.get(a.id)!,
+  }));
 
   const totalCount = pendingDividends.reduce((sum, g) => sum + g.count, 0);
 

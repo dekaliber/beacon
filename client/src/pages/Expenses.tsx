@@ -16,7 +16,7 @@ import { MultiSelectDropdown } from "@/components/MultiSelectDropdown";
 import type { MultiSelectOption, MultiSelectGroup } from "@/components/MultiSelectDropdown";
 import { BulkEditBar } from "@/components/BulkEditBar";
 import type { GroupAction } from "@/components/BulkEditBar";
-import { useApi } from "@/hooks/useApi";
+import { useApi, getApiCache } from "@/hooks/useApi";
 import {
   getExpenses, getAccounts, getFlatCategories, getTags,
   createExpense, updateExpense, deleteExpense, importExpenses,
@@ -1214,6 +1214,27 @@ function saveExpenseFilters(filters: ExpenseFilterState) {
   localStorage.setItem("beacon-expenses-datePreset", JSON.stringify(filters.datePreset));
 }
 
+// Compute the cache key for the first page of expenses using the same logic as the filterParams
+// useMemo + queryParams useMemo in the component. Used to pre-populate allExpenses from cache
+// on mount so the list is visible on the very first render (no empty-state flash on navigation).
+function getInitialExpenseData(): Expense[] {
+  try {
+    const applied = loadExpenseFilters();
+    const todayStr = localToday();
+    const params: Record<string, string> = { limit: "50", sortBy: "date", sortOrder: "desc" };
+    if (applied.categoryIds.length > 0) params.categoryIds = applied.categoryIds.join(",");
+    if (applied.accountIds.length > 0) params.accountIds = applied.accountIds.join(",");
+    if (applied.tagIds.length > 0) params.tagIds = applied.tagIds.join(",");
+    params.startDate = applied.startDate || EXPENSE_DEFAULT_FILTERS.startDate;
+    const endDate = applied.endDate || todayStr;
+    params.endDate = endDate > todayStr ? todayStr : endDate;
+    params.page = "1";
+    return getApiCache<{ data: Expense[] }>(`expenses-${JSON.stringify(params)}`)?.data ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export function Expenses() {
   const location = useLocation();
   const { toasts, addToast, dismissToast } = useToast();
@@ -1224,11 +1245,12 @@ export function Expenses() {
   useEffect(() => () => { pendingDeleteTimers.current.forEach(clearTimeout); }, []);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
+  const [allExpenses, setAllExpenses] = useState<Expense[]>(getInitialExpenseData);
   const [hasMore, setHasMore] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingMoreRef = useRef(false);
+  const isFirstMount = useRef(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [offsetParent, setOffsetParent] = useState<Expense | null>(null);
@@ -1337,18 +1359,19 @@ export function Expenses() {
     return params;
   }, [tomorrowStr, applied, showUncategorized]);
 
-  const { data: expenseData, loading } = useApi(() => getExpenses(queryParams), [queryParams]);
-  const { data: upcomingData, refetch: refetchUpcoming } = useApi(() => getExpenses(upcomingParams), [upcomingParams]);
-  const { data: categories } = useApi(() => getFlatCategories(), []);
-  const { data: accounts } = useApi(() => getAccounts({ includeHidden: true }), []);
-  const { data: tags, refetch: refetchTags } = useApi(() => getTags(), []);
-  const { data: vendorList, refetch: refetchVendors } = useApi(() => getExpenseVendors(), []);
-  const { data: uncatData, refetch: refetchUncat } = useApi(() => getUncategorizedCount(), []);
+  const { data: expenseData, loading } = useApi(() => getExpenses(queryParams), [queryParams], `expenses-${JSON.stringify(queryParams)}`);
+  const { data: upcomingData, refetch: refetchUpcoming } = useApi(() => getExpenses(upcomingParams), [upcomingParams], `expenses-upcoming-${JSON.stringify(upcomingParams)}`);
+  const { data: categories } = useApi(() => getFlatCategories("EXPENSE"), [], "categories-EXPENSE");
+  const { data: accounts } = useApi(() => getAccounts({ includeHidden: true }), [], "accounts");
+  const { data: tags, refetch: refetchTags } = useApi(() => getTags(), [], "tags");
+  const { data: vendorList, refetch: refetchVendors } = useApi(() => getExpenseVendors(), [], "expense-vendors");
+  const { data: uncatData, refetch: refetchUncat } = useApi(() => getUncategorizedCount(), [], "expense-uncategorized-count");
   // Note: transaction group metadata is now embedded in each expense's `transactionGroup` field;
   // no separate groups query is needed.
 
-  // Reset accumulated data when filters/sort change
+  // Reset accumulated data when filters/sort change (skip on initial mount to preserve cached data)
   useEffect(() => {
+    if (isFirstMount.current) { isFirstMount.current = false; return; }
     setCurrentPage(1);
     setAllExpenses([]);
     setHasMore(false);

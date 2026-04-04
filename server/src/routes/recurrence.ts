@@ -25,6 +25,7 @@ const recurrenceUpdateSchema = recurrenceSchema
   .extend({
     categoryId: z.string().nullable().optional(),
     endDate: z.string().nullable().optional(),
+    group: z.string().nullable().optional(),
   });
 
 /**

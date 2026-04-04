@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
-import { getDividendScanResult, type DividendScanResult } from "../services/tiingo.js";
+import { getDividendScanResult, type DividendEvent } from "../services/tiingo.js";
+import { backfillUnlinkedHoldings } from "./instruments.js";
 
 export const pendingDividendRoutes = Router();
 
@@ -65,6 +66,14 @@ async function getSharesAtDate(holdingId: string, date: Date): Promise<number> {
 // How long to wait before retrying a holding whose last attempt was rate-limited or errored.
 const ATTEMPT_RETRY_MS = 60 * 60 * 1000; // 1 hour
 
+const ts = () => new Date().toLocaleString();
+
+// In-memory guard: prevents two concurrent scans from racing through the
+// lastDividendAttemptAt check before either has had a chance to stamp it.
+// Handles React StrictMode's double-invoked effects in development, and
+// protects against concurrent requests from multiple browser tabs in production.
+let scanInProgress = false;
+
 /**
  * Returns the most recent 8 PM Eastern cutoff as a UTC Date.
  * If it is currently past 8 PM ET today, returns today's 8 PM ET.
@@ -97,184 +106,229 @@ function lastCutoff8pmET(now: Date): Date {
 }
 
 /**
- * Scan all active holdings for an account and create PendingDividend records
- * for any new dividend events found in Tiingo's daily price data.
+ * Scan all active instruments for new dividend events and create PendingDividend
+ * records for each linked holding that qualifies.
  *
- * Scan timing mirrors price refreshes: a holding is eligible once per day,
+ * Scan timing mirrors price refreshes: an instrument is eligible once per day,
  * starting from the first app load after 8 PM ET (when mutual fund NAVs have
- * settled). Holdings that were rate-limited or errored are retried no sooner
+ * settled). Instruments that were rate-limited or errored are retried no sooner
  * than 1 hour after the last attempt (tracked via lastDividendAttemptAt).
- * Already-seen (holdingId, exDate) pairs are also skipped via the unique constraint.
- * Events where shares-at-ex-date = 0 are skipped.
  *
- * @param tickerCache  Optional shared cache (ticker → in-flight or resolved Promise)
- *                     passed in when scanning multiple accounts in the same session.
- *                     Ensures each unique ticker is only fetched from Tiingo once,
- *                     even when the same fund appears in several accounts.
+ * Scanning at the instrument level means each unique ticker is queried from
+ * Tiingo exactly once, regardless of how many accounts hold it.
  */
-export async function scanForDividends(
-  account: { id: string; name: string },
-  tickerCache?: Map<string, Promise<DividendScanResult>>,
-): Promise<void> {
-  const { id: accountId, name: accountName } = account;
+export async function scanForDividends(): Promise<void> {
+  if (scanInProgress) {
+    console.log(`[${ts()}] [dividend-scan]: skipped (scan already in progress)`);
+    return;
+  }
+  scanInProgress = true;
+  try {
+    await runScan();
+  } finally {
+    scanInProgress = false;
+  }
+}
 
-  const holdings = await prisma.investmentHolding.findMany({
-    where: { accountId },
-    select: { id: true, ticker: true, createdAt: true, lastDividendScanAt: true, lastDividendAttemptAt: true },
+async function runScan(): Promise<void> {
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  const cutoff = lastCutoff8pmET(now);
+  const lookbackMs = 14 * 24 * 60 * 60 * 1000;
+
+  // Ensure all holdings have an instrumentId before querying instruments.
+  // Holdings created via the lot import flow before today's fix may have
+  // instrumentId = null and would otherwise be invisible to this scan.
+  await backfillUnlinkedHoldings();
+
+  // Fetch all active, non-manual instruments. For each we will scan its
+  // primary ticker AND every alias ticker registered in InstrumentTicker.
+  // Holdings are queried per-ticker below so that alias-ticker holdings are
+  // found regardless of which instrument their instrumentId points to.
+  const instruments = await prisma.instrument.findMany({
+    where: { isActive: true, isManual: false },
+    select: {
+      id: true,
+      primaryTicker: true,
+      lastDividendScanAt: true,
+      lastDividendAttemptAt: true,
+      tickers: { select: { ticker: true } },
+    },
   });
 
   await Promise.all(
-    holdings.map(async (holding) => {
-      const tag = `[dividend-scan] ${accountName} / ${holding.ticker}`;
-
-      const now = new Date();
-      const todayStr = now.toISOString().slice(0, 10);
-      const cutoff = lastCutoff8pmET(now);
+    instruments.map(async (instrument) => {
+      const tag = `[dividend-scan] ${instrument.primaryTicker}`;
+      const aliasSuffix = instrument.tickers.length > 0
+        ? ` + aliases [${instrument.tickers.map((t) => t.ticker).join(", ")}]`
+        : "";
 
       // Skip if already successfully scanned since the last 8 PM ET cutoff.
-      if (holding.lastDividendScanAt && holding.lastDividendScanAt >= cutoff) {
-        console.log(`${tag}: skipped (already scanned since last 8 PM ET cutoff)`);
+      if (instrument.lastDividendScanAt && instrument.lastDividendScanAt >= cutoff) {
+        console.log(`[${ts()}] ${tag}: skipped (already scanned since last 8 PM ET cutoff)${aliasSuffix}`);
         return;
       }
 
-      // Skip if the last attempt (success or failure) was within the past hour —
-      // prevents hammering Tiingo when rate-limited during a multi-load session.
-      if (holding.lastDividendAttemptAt &&
-          now.getTime() - holding.lastDividendAttemptAt.getTime() < ATTEMPT_RETRY_MS) {
-        const nextAt = new Date(holding.lastDividendAttemptAt.getTime() + ATTEMPT_RETRY_MS);
-        console.log(`${tag}: skipped (rate-limit backoff — next attempt after ${nextAt.toLocaleString()})`);
+      // Skip if the last attempt FAILED (error or rate-limit) and is within the
+      // retry window. A failed attempt is one where lastDividendAttemptAt is newer
+      // than lastDividendScanAt (i.e. the scan never completed successfully after
+      // that attempt).
+      const lastAttemptFailed =
+        instrument.lastDividendAttemptAt &&
+        (!instrument.lastDividendScanAt ||
+          instrument.lastDividendAttemptAt > instrument.lastDividendScanAt);
+      if (
+        lastAttemptFailed &&
+        now.getTime() - instrument.lastDividendAttemptAt!.getTime() < ATTEMPT_RETRY_MS
+      ) {
+        const nextAt = new Date(instrument.lastDividendAttemptAt!.getTime() + ATTEMPT_RETRY_MS);
+        console.log(`[${ts()}] ${tag}: skipped (rate-limit backoff — next attempt after ${nextAt.toLocaleString()})${aliasSuffix}`);
         return;
       }
-
-      // Look back 14 days before the holding was created so we catch dividends
-      // whose ex-date fell just before the user added the holding but whose
-      // payable date lands after — a common pattern for mutual funds.
-      const lookbackMs = 14 * 24 * 60 * 60 * 1000;
-      const startDate = new Date(holding.createdAt.getTime() - lookbackMs)
-        .toISOString()
-        .slice(0, 10);
 
       // Stamp the attempt time before calling Tiingo so that even a failure is
       // recorded and the 1-hour retry backoff applies.
-      await prisma.investmentHolding.update({
-        where: { id: holding.id },
+      await prisma.instrument.update({
+        where: { id: instrument.id },
         data: { lastDividendAttemptAt: now },
       });
 
-      // Deduplicate Tiingo API calls across accounts: if another account already
-      // queued or completed a fetch for this ticker this session, reuse that
-      // Promise rather than issuing a second identical request.
-      let scanPromise: Promise<DividendScanResult>;
-      if (tickerCache?.has(holding.ticker)) {
-        console.log(`${tag}: skipped API call — ticker already queried this session`);
-        scanPromise = tickerCache.get(holding.ticker)!;
-      } else {
-        console.log(`${tag}: querying Tiingo (${startDate} → ${todayStr})`);
-        scanPromise = getDividendScanResult(holding.ticker, startDate, todayStr);
-        tickerCache?.set(holding.ticker, scanPromise);
-      }
+      // Build the full ticker list: primary ticker + every alias ticker.
+      // Each ticker is scanned independently — alias tickers are separate
+      // securities with their own dividend amounts, not duplicates.
+      const allTickers = [
+        instrument.primaryTicker,
+        ...instrument.tickers.map((t) => t.ticker),
+      ];
 
-      let scanResult: DividendScanResult;
-      try {
-        scanResult = await scanPromise;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        const isRateLimit = msg.includes("429");
-        if (isRateLimit) {
-          console.warn(`${tag}: RATE LIMITED — ${msg}`);
+      let anyTickerErrored = false;
+
+      for (const ticker of allTickers) {
+        // Find all holdings for this specific ticker across all active accounts.
+        // Querying by ticker directly (rather than through instrument.holdings)
+        // ensures we catch holdings regardless of which instrument they're linked to.
+        const holdings = await prisma.investmentHolding.findMany({
+          where: { ticker, account: { isActive: true, type: "INVESTMENT" } },
+          select: { id: true, ticker: true, accountId: true, createdAt: true },
+        });
+
+        if (holdings.length === 0) continue;
+
+        // Look back 14 days before the earliest holding was created so we catch
+        // dividends whose ex-date fell just before the user added the holding.
+        const earliestCreatedAt = holdings.reduce(
+          (min, h) => (h.createdAt < min ? h.createdAt : min),
+          holdings[0].createdAt,
+        );
+        const startDate = new Date(earliestCreatedAt.getTime() - lookbackMs)
+          .toISOString()
+          .slice(0, 10);
+
+        const tickerLabel = ticker === instrument.primaryTicker
+          ? ticker
+          : `${ticker} (alias of ${instrument.primaryTicker})`;
+        console.log(`[${ts()}] ${tag}: querying Tiingo for ${tickerLabel} (${startDate} → ${todayStr})`);
+
+        let events: DividendEvent[];
+        try {
+          ({ dividends: events } = await getDividendScanResult(ticker, startDate, todayStr));
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes("429")) {
+            console.warn(`[${ts()}] ${tag}: RATE LIMITED on ${tickerLabel} — ${msg}`);
+          } else {
+            console.warn(`[${ts()}] ${tag}: API ERROR on ${tickerLabel} — ${msg}`);
+          }
+          anyTickerErrored = true;
+          continue; // Try remaining tickers instead of aborting the entire instrument
+        }
+
+        if (events.length === 0) {
+          console.log(`[${ts()}] ${tag}: no dividend events for ${tickerLabel}`);
         } else {
-          console.warn(`${tag}: API ERROR — ${msg}`);
+          const latest = events[events.length - 1];
+          console.log(
+            `[${ts()}] ${tag}: ${events.length} event(s) for ${tickerLabel}. ` +
+            `Latest → ex-date ${latest.exDate}, $${latest.perShareAmount}/share`,
+          );
         }
-        return;
+
+        // Fan out: create PendingDividend records for each qualifying holding.
+        for (const event of events) {
+          const exDate = new Date(event.exDate);
+
+          for (const holding of holdings) {
+            // Check if we already have a pending dividend for this holding + ex-date.
+            const existing = await prisma.pendingDividend.findUnique({
+              where: { holdingId_exDate: { holdingId: holding.id, exDate } },
+            });
+            if (existing) {
+              console.log(`[${ts()}] ${tag} [${event.exDate}] ${holding.ticker}@${holding.accountId}: skipped — PendingDividend already exists (status: ${existing.status})`);
+              continue;
+            }
+
+            // Check if a DIVIDEND activity already exists for this holding near this
+            // date (±3 days to account for minor date discrepancies).
+            const threeDays = 3 * 24 * 60 * 60 * 1000;
+            const existingActivity = await prisma.investmentActivity.findFirst({
+              where: {
+                holdingId: holding.id,
+                type: "DIVIDEND",
+                date: {
+                  gte: new Date(exDate.getTime() - threeDays),
+                  lte: new Date(exDate.getTime() + threeDays),
+                },
+              },
+            });
+            if (existingActivity) {
+              console.log(`[${ts()}] ${tag} [${event.exDate}] ${holding.ticker}@${holding.accountId}: skipped — DIVIDEND activity already recorded (id: ${existingActivity.id})`);
+              continue;
+            }
+
+            const shares = await getSharesAtDate(holding.id, exDate);
+            if (shares <= 0) {
+              console.log(`[${ts()}] ${tag} [${event.exDate}] ${holding.ticker}@${holding.accountId}: skipped — 0 shares at ex-date`);
+              continue;
+            }
+
+            const estimatedTotal = parseFloat((shares * event.perShareAmount).toFixed(2));
+
+            // Estimate payment date as ex-date + 4 calendar days.
+            // Tiingo's daily price endpoint does not include payment dates, so this
+            // is a best-effort estimate. The UI communicates this as tentative.
+            const paymentDate = new Date(exDate.getTime() + 4 * 24 * 60 * 60 * 1000);
+
+            // Upsert — the unique constraint on (holdingId, exDate) prevents duplicates
+            // but a concurrent scan could race; upsert handles that cleanly.
+            await prisma.pendingDividend.upsert({
+              where: { holdingId_exDate: { holdingId: holding.id, exDate } },
+              create: {
+                holdingId: holding.id,
+                accountId: holding.accountId,
+                ticker: holding.ticker,
+                exDate,
+                paymentDate,
+                perShareAmount: event.perShareAmount,
+                sharesAtExDate: shares,
+                estimatedTotal,
+              },
+              update: {}, // No-op if it already exists
+            });
+            console.log(
+              `[${ts()}] ${tag} [${event.exDate}] ${holding.ticker}@${holding.accountId}: created PendingDividend — ` +
+              `${shares} shares × $${event.perShareAmount} = $${estimatedTotal}`,
+            );
+          }
+        }
       }
 
-      const { dividends: events, latestClose, latestCloseDate } = scanResult;
-
-      // Log the raw API response before any business logic is applied
-      if (events.length === 0) {
-        console.log(`${tag}: no dividend events returned`);
-      } else {
-        // Events are in ascending date order from Tiingo
-        const latest = events[events.length - 1];
-        console.log(
-          `${tag}: ${events.length} event(s) from API. ` +
-          `Latest → ex-date ${latest.exDate}, $${latest.perShareAmount}/share`,
-        );
-      }
-
-      // Stamp the holding as successfully scanned so it is skipped until the
-      // next 8 PM ET daily cutoff.
-      await prisma.investmentHolding.update({
-        where: { id: holding.id },
-        data: { lastDividendScanAt: now },
-      });
-
-
-      for (const event of events) {
-        const exDate = new Date(event.exDate);
-
-        // Check if we already have a pending dividend for this holding + ex-date
-        const existing = await prisma.pendingDividend.findUnique({
-          where: { holdingId_exDate: { holdingId: holding.id, exDate } },
+      // Only stamp success if every ticker was scanned without error, so that
+      // failed tickers are retried on the next scan cycle.
+      if (!anyTickerErrored) {
+        await prisma.instrument.update({
+          where: { id: instrument.id },
+          data: { lastDividendScanAt: now },
         });
-        if (existing) {
-          console.log(`${tag} [${event.exDate}]: skipped — PendingDividend already exists (status: ${existing.status})`);
-          continue;
-        }
-
-        // Check if a DIVIDEND activity already exists for this holding near this date
-        // (±3 days to account for minor date discrepancies)
-        const threeDays = 3 * 24 * 60 * 60 * 1000;
-        const existingActivity = await prisma.investmentActivity.findFirst({
-          where: {
-            holdingId: holding.id,
-            type: "DIVIDEND",
-            date: {
-              gte: new Date(exDate.getTime() - threeDays),
-              lte: new Date(exDate.getTime() + threeDays),
-            },
-          },
-        });
-        if (existingActivity) {
-          console.log(`${tag} [${event.exDate}]: skipped — DIVIDEND activity already recorded (id: ${existingActivity.id})`);
-          continue;
-        }
-
-        const shares = await getSharesAtDate(holding.id, exDate);
-        if (shares <= 0) {
-          console.log(`${tag} [${event.exDate}]: skipped — 0 shares at ex-date`);
-          continue;
-        }
-
-        const estimatedTotal = parseFloat(
-          (shares * event.perShareAmount).toFixed(2),
-        );
-
-        // Estimate payment date as ex-date + 4 calendar days.
-        // Tiingo's daily price endpoint does not include payment dates, so this
-        // is a best-effort estimate. The UI communicates this as tentative.
-        const paymentDate = new Date(exDate.getTime() + 4 * 24 * 60 * 60 * 1000);
-
-        // Upsert — the unique constraint on (holdingId, exDate) prevents duplicates
-        // but a concurrent scan could race; upsert handles that cleanly.
-        await prisma.pendingDividend.upsert({
-          where: { holdingId_exDate: { holdingId: holding.id, exDate } },
-          create: {
-            holdingId: holding.id,
-            accountId,
-            ticker: holding.ticker,
-            exDate,
-            paymentDate,
-            perShareAmount: event.perShareAmount,
-            sharesAtExDate: shares,
-            estimatedTotal,
-          },
-          update: {}, // No-op if it already exists
-        });
-        console.log(
-          `${tag} [${event.exDate}]: created PendingDividend — ` +
-          `${shares} shares × $${event.perShareAmount} = $${estimatedTotal}`,
-        );
       }
     }),
   );

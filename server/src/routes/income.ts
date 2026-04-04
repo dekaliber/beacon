@@ -79,7 +79,7 @@ incomeRoutes.get("/", async (req, res) => {
 
   let orderBy: Record<string, unknown>[];
   if (!sortBy || sortBy === "date") {
-    orderBy = [{ date: sortOrder }, { createdAt: "asc" }];
+    orderBy = [{ date: sortOrder }, { createdAt: "desc" }];
   } else if (sortBy === "account") {
     orderBy = [{ account: { name: sortOrder } }, { date: "desc" }];
   } else if (sortBy === "category") {

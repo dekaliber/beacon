@@ -65,8 +65,13 @@ accountRoutes.put("/:id", async (req, res) => {
 
   const data: Record<string, unknown> = { ...parsed.data };
 
-  // Auto-stamp balanceUpdatedAt whenever the balance field is explicitly updated
-  if (parsed.data.balance !== undefined) {
+  // Auto-stamp balanceUpdatedAt whenever the balance field is explicitly updated,
+  // but only if the client did not supply its own value. Clients should send the
+  // local calendar date as midnight UTC (YYYY-MM-DDT00:00:00.000Z) so that the
+  // cutoff comparison in the Cash Flow projection uses the user's local date
+  // rather than the server's UTC date (which can differ by a day for users west
+  // of UTC updating their balance in the evening).
+  if (parsed.data.balance !== undefined && parsed.data.balanceUpdatedAt === undefined) {
     data.balanceUpdatedAt = new Date();
   }
 

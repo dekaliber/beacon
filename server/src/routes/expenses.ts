@@ -187,7 +187,7 @@ expenseRoutes.get("/", async (req, res) => {
         GROUP BY "transactionGroupId"
       ) grp_min ON e."transactionGroupId" = grp_min."transactionGroupId"
       WHERE ${whereSQL}
-      ORDER BY COALESCE(pe.date, grp_min.min_date, e.date) ${dir}, CASE WHEN e."recurrenceRuleId" IS NOT NULL THEN 0 ELSE 1 END ${dir}, e."createdAt" ASC
+      ORDER BY COALESCE(pe.date, grp_min.min_date, e.date) ${dir}, CASE WHEN e."recurrenceRuleId" IS NOT NULL THEN 0 ELSE 1 END ${dir}, e."createdAt" DESC
       LIMIT $${p} OFFSET $${p + 1}
     `;
     params.push(limit, skip);

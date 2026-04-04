@@ -806,6 +806,31 @@ investmentRoutes.get("/holdings/:accountId", async (req, res) => {
   }
 });
 
+// ── Instrument resolution helper ──────────────────────────────────────────
+// Resolves the Instrument id for a ticker: checks alias tickers first, then
+// upserts on primaryTicker, then reactivates in case it was soft-deleted.
+// Shared by the manual add-holding route and the lot import route so both
+// paths always produce a holding with a valid instrumentId.
+
+async function resolveInstrumentId(ticker: string, name: string): Promise<string> {
+  const alias = await prisma.instrumentTicker.findUnique({
+    where: { ticker },
+    select: { instrumentId: true },
+  });
+  const id = alias
+    ? alias.instrumentId
+    : (
+        await prisma.instrument.upsert({
+          where: { primaryTicker: ticker },
+          update: {},
+          create: { primaryTicker: ticker, name },
+          select: { id: true },
+        })
+      ).id;
+  await prisma.instrument.update({ where: { id }, data: { isActive: true } });
+  return id;
+}
+
 // ── POST /api/investments/holdings ────────────────────────────────────────
 
 const createHoldingSchema = z.object({
@@ -825,27 +850,7 @@ investmentRoutes.post("/holdings", async (req, res) => {
     });
     if (!account) return res.status(404).json({ error: { message: "Investment account not found" } });
 
-    // Auto-resolve instrument: check alias tickers first, then primary ticker, then create new
-    let instrumentId: string | null = null;
-    const aliasTicker = await (prisma as any).instrumentTicker.findUnique({
-      where: { ticker: body.ticker },
-      select: { instrumentId: true },
-    });
-    if (aliasTicker) {
-      instrumentId = aliasTicker.instrumentId;
-    } else {
-      const instrument = await (prisma as any).instrument.upsert({
-        where: { primaryTicker: body.ticker },
-        update: {},
-        create: { primaryTicker: body.ticker, name: body.name },
-        select: { id: true },
-      });
-      instrumentId = instrument.id;
-    }
-    // Re-activate in case this instrument was previously deactivated
-    if (instrumentId) {
-      await prisma.instrument.update({ where: { id: instrumentId }, data: { isActive: true } });
-    }
+    const instrumentId = await resolveInstrumentId(body.ticker, body.name);
 
     const holding = await prisma.investmentHolding.create({
       data: {
@@ -1402,11 +1407,12 @@ investmentRoutes.post("/import", async (req, res) => {
             metaCache.set(symbol, await fetchYahooMeta(symbol));
           }
           const { name, type } = metaCache.get(symbol)!;
+          const instrumentId = await resolveInstrumentId(symbol, name);
           holding = await prisma.investmentHolding.create({
-            data: { accountId: body.accountId, ticker: symbol, name, type },
+            data: { accountId: body.accountId, ticker: symbol, name, type, instrumentId },
           });
-        } else if (holding.name === holding.ticker || holding.type === null) {
-          // Holding exists but name/type was never resolved — fix it
+        } else if (holding.name === holding.ticker || holding.type === null || !holding.instrumentId) {
+          // Holding exists but name/type was never resolved, or instrumentId is missing — fix it
           if (!metaCache.has(symbol)) {
             metaCache.set(symbol, await fetchYahooMeta(symbol));
           }
@@ -1414,6 +1420,7 @@ investmentRoutes.post("/import", async (req, res) => {
           const updates: Record<string, string | null> = {};
           if (holding.name === holding.ticker && name !== symbol) updates.name = name;
           if (holding.type === null && type !== null) updates.type = type;
+          if (!holding.instrumentId) updates.instrumentId = await resolveInstrumentId(symbol, name);
           if (Object.keys(updates).length > 0) {
             holding = await prisma.investmentHolding.update({
               where: { id: holding.id },

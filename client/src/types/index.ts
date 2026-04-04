@@ -174,6 +174,7 @@ export interface RecurrenceRule {
   nextExpenseDate?: string | null;
   categoryId: string;
   accountId: string;
+  group: string | null;
   isActive: boolean;
 }
 
@@ -205,7 +206,7 @@ export interface BudgetPanel {
   mtdTotal: number;                  // actual spend in current month incl. pending
   normalizedYTD: number;             // timing-adjusted figure for run-rate
   projectedAnnual: number;           // expected full-year spend
-  remaining: number;                 // effectiveAnnual - projectedAnnual (can be negative)
+  remaining: number;                 // budget - recurring annual costs - discretionary spent (can be negative)
   percentAboveBelow: number;         // run-rate ratio minus 1 (e.g. 0.032 = 3.2% over)
   chart: BudgetChart;
 }
@@ -589,8 +590,12 @@ export interface CashFlowEvent {
   relatedAccountName?: string;
   periodStart?: string;
   periodEnd?: string;
+  /** First day of expenses included in this billing period (day after previous close) */
+  statementPeriodStart?: string;
   overrideId?: string;
   adjustmentId?: string;
+  /** Present on TRANSFER_IN/TRANSFER_OUT events backed by a real Transfer record so the UI can confirm them */
+  transferId?: string;
   runningBalance: number;
 }
 

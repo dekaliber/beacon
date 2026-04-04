@@ -122,9 +122,11 @@ async function computeMetrics(
   mtdTotal: number;             // actual spend in current month incl. pending (display only)
   normalizedYTD: number;        // timing-adjusted figure for the run-rate ratio
   projectedAnnual: number;      // expected full-year spend at current trajectory
+  recurringExpectedAnnual: number; // total known recurring costs for the full year
+  actualDiscretionaryYTD: number;  // discretionary (non-recurring) spend so far
 }> {
   if (accountIds.length === 0) {
-    return { ytdCompletedMonths: 0, mtdTotal: 0, normalizedYTD: 0, projectedAnnual: 0 };
+    return { ytdCompletedMonths: 0, mtdTotal: 0, normalizedYTD: 0, projectedAnnual: 0, recurringExpectedAnnual: 0, actualDiscretionaryYTD: 0 };
   }
 
   const startOfYear  = new Date(Date.UTC(year, 0, 1));
@@ -300,7 +302,7 @@ async function computeMetrics(
     elapsed > 0 ? (actualDiscretionaryYTD / elapsed) * totalDays : 0;
   const projectedAnnual = recurringExpectedAnnual + projectedDiscretionary;
 
-  return { ytdCompletedMonths, mtdTotal, normalizedYTD, projectedAnnual };
+  return { ytdCompletedMonths, mtdTotal, normalizedYTD, projectedAnnual, recurringExpectedAnnual, actualDiscretionaryYTD };
 }
 
 /**
@@ -455,18 +457,22 @@ budgetRoutes.get("/:year", async (req, res) => {
   // and rolling into total. This keeps the joint panel self-consistent at the
   // user's split fraction rather than showing the full joint pool.
   const scaledJoint = {
-    ytdCompletedMonths: jointMetrics.ytdCompletedMonths * splitRatio,
-    mtdTotal:           jointMetrics.mtdTotal           * splitRatio,
-    normalizedYTD:      jointMetrics.normalizedYTD      * splitRatio,
-    projectedAnnual:    jointMetrics.projectedAnnual    * splitRatio,
+    ytdCompletedMonths:      jointMetrics.ytdCompletedMonths      * splitRatio,
+    mtdTotal:                jointMetrics.mtdTotal                * splitRatio,
+    normalizedYTD:           jointMetrics.normalizedYTD           * splitRatio,
+    projectedAnnual:         jointMetrics.projectedAnnual         * splitRatio,
+    recurringExpectedAnnual: jointMetrics.recurringExpectedAnnual * splitRatio,
+    actualDiscretionaryYTD:  jointMetrics.actualDiscretionaryYTD  * splitRatio,
   };
 
   // Total = personal + already-scaled joint (no further multiplier)
   const totalMetrics = {
-    ytdCompletedMonths: personalMetrics.ytdCompletedMonths + scaledJoint.ytdCompletedMonths,
-    mtdTotal:           personalMetrics.mtdTotal           + scaledJoint.mtdTotal,
-    normalizedYTD:      personalMetrics.normalizedYTD      + scaledJoint.normalizedYTD,
-    projectedAnnual:    personalMetrics.projectedAnnual    + scaledJoint.projectedAnnual,
+    ytdCompletedMonths:      personalMetrics.ytdCompletedMonths      + scaledJoint.ytdCompletedMonths,
+    mtdTotal:                personalMetrics.mtdTotal                + scaledJoint.mtdTotal,
+    normalizedYTD:           personalMetrics.normalizedYTD           + scaledJoint.normalizedYTD,
+    projectedAnnual:         personalMetrics.projectedAnnual         + scaledJoint.projectedAnnual,
+    recurringExpectedAnnual: personalMetrics.recurringExpectedAnnual + scaledJoint.recurringExpectedAnnual,
+    actualDiscretionaryYTD:  personalMetrics.actualDiscretionaryYTD  + scaledJoint.actualDiscretionaryYTD,
   };
 
   /** Derive run-rate stats from raw metrics + the effective annual budget. */
@@ -481,7 +487,10 @@ budgetRoutes.get("/:year", async (req, res) => {
       budget > 0
         ? metrics.projectedAnnual / budget - 1
         : 0;
-    const remaining = budget - metrics.projectedAnnual;
+    // Remaining = budget minus all known recurring costs for the year minus
+    // discretionary spend that has already happened.  This tells the user how
+    // much they can still freely spend rather than a projection-based estimate.
+    const remaining = budget - metrics.recurringExpectedAnnual - metrics.actualDiscretionaryYTD;
     return {
       ytdCompletedMonths: Math.round(metrics.ytdCompletedMonths * 100) / 100,
       mtdTotal:           Math.round(metrics.mtdTotal           * 100) / 100,
@@ -687,6 +696,7 @@ budgetRoutes.get("/:year/category-outliers", async (req, res) => {
         delta:          Math.round(delta * 100) / 100,
       };
     })
+    .filter((o) => o.delta !== 0)
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
     .slice(0, 10);
 
@@ -818,6 +828,7 @@ budgetRoutes.get("/:year/category-outliers-ytd", async (req, res) => {
         delta:          Math.round(delta * 100) / 100,
       };
     })
+    .filter((o) => o.delta !== 0)
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
     .slice(0, 10);
 

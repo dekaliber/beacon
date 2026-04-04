@@ -92,7 +92,7 @@ function BudgetEditor({ value, onSave, helperText }: BudgetEditorProps) {
               if (e.key === "Enter") handleSave();
               if (e.key === "Escape") setEditing(false);
             }}
-            className="w-36 rounded-md border border-border px-2 py-1 text-xl font-bold focus:border-primary focus:outline-none"
+            className="w-36 rounded-md border border-border px-2 py-1 text-xl font-bold focus:border-primary focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             autoFocus
           />
           <button
@@ -561,7 +561,7 @@ function BudgetPanelCard({
                 : "text-success"
               : undefined
           }
-          sub={remaining < 0 ? "projected over budget" : "projected headroom"}
+          sub={remaining < 0 ? "over budget" : "available to spend"}
         />
         <Metric
           label="Remaining / month"

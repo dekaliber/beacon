@@ -50,7 +50,7 @@ export async function deactivateIfOrphaned(
 // Creates Instrument records for any holdings that pre-date this feature.
 // Safe to call repeatedly — upserts on primaryTicker and skips linked holdings.
 
-async function backfillUnlinkedHoldings() {
+export async function backfillUnlinkedHoldings() {
   const unlinked = await prisma.investmentHolding.findMany({
     where: { instrumentId: null },
     select: { id: true, ticker: true, name: true },

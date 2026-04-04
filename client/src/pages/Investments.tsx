@@ -406,61 +406,6 @@ function GainBadge({ value, pct, label, className = "" }: { value: number; pct?:
   );
 }
 
-// ── Edit Balance Modal ───────────────────────────────────────────────────────
-
-function EditBalanceModal({
-  account,
-  onClose,
-  onSave,
-}: {
-  account: InvestmentAccountSummary | null;
-  onClose: () => void;
-  onSave: (id: string, balance: number) => Promise<void>;
-}) {
-  const [value, setValue] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (account) setValue(String(parseFloat(account.balance) || 0));
-  }, [account]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!account) return;
-    setSaving(true);
-    await onSave(account.id, parseFloat(value) || 0);
-    setSaving(false);
-  };
-
-  return (
-    <Modal open={!!account} onClose={onClose} title="Edit Balance">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="mb-1 block text-sm font-medium">
-            Current Balance — {account?.name}
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            autoFocus
-            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-          {account?.balanceUpdatedAt && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Last updated {new Date(account.balanceUpdatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-            </p>
-          )}
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
 
 // ── Withdrawal Rate card ─────────────────────────────────────────────────────
 
@@ -690,7 +635,6 @@ export function Investments() {
   );
   const { data: investmentSettings } = useApi(() => getInvestmentSettings(), []);
   const refreshedRef = useRef(false);
-  const [editingBalance, setEditingBalance] = useState<InvestmentAccountSummary | null>(null);
   const { notifications } = useNotifications();
   const pendingDividendAccountIds = new Set(
     notifications?.pendingDividends.map((g) => g.accountId) ?? []
@@ -716,13 +660,7 @@ export function Investments() {
     }
   }, [accounts, refetch]);
 
-  const handleSaveBalance = async (id: string, balance: number) => {
-    await updateAccount(id, { balance });
-    setEditingBalance(null);
-    refetch();
-  };
-
-  if (!displayAccounts) return null;
+if (!displayAccounts) return null;
 
   const investmentAccounts = displayAccounts.filter((a) => a.type === "INVESTMENT");
 
@@ -821,16 +759,7 @@ export function Investments() {
               )}
             </div>
 
-            {isBanking ? (
-              <button
-                onClick={(e) => { e.stopPropagation(); setEditingBalance(account); }}
-                className="rounded p-1 hover:bg-accent flex-shrink-0"
-              >
-                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-            ) : (
-              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            )}
+            <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           </div>
         </Card>
       </div>
@@ -991,11 +920,7 @@ export function Investments() {
         </Card>
       )}
 
-      <EditBalanceModal
-        account={editingBalance}
-        onClose={() => setEditingBalance(null)}
-        onSave={handleSaveBalance}
-      />
+
     </div>
   );
 }

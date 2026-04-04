@@ -271,6 +271,7 @@ model RecurrenceRule {
   nextOccurrence DateTime
   categoryId    String
   accountId     String
+  group         String?
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -356,11 +357,6 @@ model InvestmentHolding {
   assetClass String?
   instrumentId String?
   instrument   Instrument? @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
-  // Set after each successful Tiingo dividend scan; used to enforce the daily scan window.
-  lastDividendScanAt    DateTime?
-  // Set after every scan attempt (success or failure); used to enforce a 1-hour retry
-  // backoff so rate-limited holdings are not retried on every subsequent app load.
-  lastDividendAttemptAt DateTime?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -525,6 +521,11 @@ model Instrument {
   name              String?
   isManual          Boolean  @default(false)
   isActive          Boolean  @default(true)
+  // Set after each successful Tiingo dividend scan; used to enforce the daily scan window.
+  lastDividendScanAt    DateTime?
+  // Set after every scan attempt (success or failure); used to enforce a 1-hour retry
+  // backoff so rate-limited tickers are not retried on every subsequent app load.
+  lastDividendAttemptAt DateTime?
   tickers           InstrumentTicker[]
   weights           InstrumentAssetClassWeight[]
   holdings          InvestmentHolding[]

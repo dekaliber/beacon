@@ -124,9 +124,13 @@ interface CashFlowEvent {
   /** Present on CC_PAYMENT events so the UI can offer a statement override */
   periodStart?: string;
   periodEnd?: string;
+  /** First day of expenses included in this billing period (day after previous close) */
+  statementPeriodStart?: string;
   overrideId?: string;
   /** Present on BALANCE_ADJUSTMENT events so the UI can edit/delete */
   adjustmentId?: string;
+  /** Present on TRANSFER_IN/TRANSFER_OUT events backed by a real Transfer record so the UI can confirm them */
+  transferId?: string;
   runningBalance: number;  // filled in after sorting
 }
 
@@ -262,6 +266,7 @@ async function buildProjection(
       confidence: t.isConfirmed ? "KNOWN" : "PROJECTED",
       relatedAccountId: t.toAccountId,
       relatedAccountName: accountName(t.toAccountId),
+      transferId: t.id,
     });
     if (t.transferRuleId) {
       if (!seenTransferRuleDatesFrom.has(t.transferRuleId)) {
@@ -323,6 +328,7 @@ async function buildProjection(
       confidence: t.isConfirmed ? "KNOWN" : "PROJECTED",
       relatedAccountId: t.fromAccountId,
       relatedAccountName: accountName(t.fromAccountId),
+      transferId: t.id,
     });
     if (t.transferRuleId) {
       if (!seenTransferRuleDatesTo.has(t.transferRuleId)) {
@@ -483,15 +489,13 @@ async function buildProjection(
     });
   }
 
-  // Drop any KNOWN-confidence event whose date falls strictly before the last
+  // Drop any KNOWN-confidence event whose date falls on or before the last
   // time the user manually updated their account balance. Such events are
   // already reflected in the stored balance and would be double-counted.
-  // Events on the same calendar day as balanceUpdatedAt are kept — the balance
-  // snapshot may have been recorded before those events were entered.
   if (account.balanceUpdatedAt !== null) {
     const cutoff = toDateStr(account.balanceUpdatedAt);
     for (let i = rawEvents.length - 1; i >= 0; i--) {
-      if (rawEvents[i].confidence === "KNOWN" && rawEvents[i].date < cutoff) {
+      if (rawEvents[i].confidence === "KNOWN" && rawEvents[i].date <= cutoff) {
         rawEvents.splice(i, 1);
       }
     }
@@ -577,20 +581,22 @@ async function computeCCPaymentEvents(
       let overrideId: string | undefined;
       let confidence: Confidence;
 
+      // The billing period spans (prevClose, closeDate] — expenses strictly
+      // after the previous close date through and including the current close.
+      const prevClose = new Date(Date.UTC(
+        closeDate.getUTCFullYear(),
+        closeDate.getUTCMonth() - 1,
+        cc.closingDay,
+      ));
+
       if (override) {
         paymentAmount = parseFloat(override.amount.toString());
         overrideId = override.id;
         confidence = "KNOWN";
       } else {
         // Sum all expenses charged to this CC during the billing period.
-        // The period starts the day after the previous closing date.
         // Always PROJECTED: the bank debit is a future event regardless of
         // whether the statement has already closed.
-        const prevClose = new Date(Date.UTC(
-          closeDate.getUTCFullYear(),
-          closeDate.getUTCMonth() - 1,
-          cc.closingDay,
-        ));
         const periodExpenses = await prisma.expense.aggregate({
           _sum: { amount: true },
           where: { accountId: cc.id, date: { gt: prevClose, lte: closeDate } },
@@ -613,6 +619,11 @@ async function computeCCPaymentEvents(
         relatedAccountName: cc.name,
         periodStart: toDateStr(closeDate),
         periodEnd: toDateStr(dueDate),
+        statementPeriodStart: toDateStr(new Date(Date.UTC(
+          prevClose.getUTCFullYear(),
+          prevClose.getUTCMonth(),
+          prevClose.getUTCDate() + 1,
+        ))),
         overrideId,
       });
     }

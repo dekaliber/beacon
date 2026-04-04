@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useLayoutEffect } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -19,11 +19,13 @@ import {
   Pencil,
   Check,
   X,
+  List,
   PlusCircle,
   AlertTriangle,
   Trash2,
   Wallet,
   Landmark,
+  SquareCheckBig,
 } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -37,9 +39,11 @@ import {
   deleteBalanceAdjustment,
   getInvestmentAccounts,
   updateAccount,
+  getExpenses,
+  confirmTransfer,
 } from "@/api";
 import { formatCurrency, cn } from "@/lib/utils";
-import type { CashFlowProjection, CashFlowEvent, DailyBalance, InvestmentAccountSummary } from "@/types";
+import type { CashFlowProjection, CashFlowEvent, DailyBalance, InvestmentAccountSummary, Expense } from "@/types";
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
 
@@ -175,9 +179,11 @@ interface CCPaymentCellsProps {
   accountId: string;
   onSaved: () => void;
   amountClassName: string;
+  onDetailClick?: (rowMidY: number) => void;
+  isDetailOpen?: boolean;
 }
 
-function CCPaymentCells({ event, accountId, onSaved, amountClassName }: CCPaymentCellsProps) {
+function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailClick, isDetailOpen }: CCPaymentCellsProps) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(Math.abs(event.amount).toFixed(2));
   const [saving, setSaving] = useState(false);
@@ -209,13 +215,30 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName }: CCPaymen
         </td>
         {/* Edit cell */}
         <td className="py-2 pr-4 w-14">
-          <button
-            onClick={() => { setValue(Math.abs(event.amount).toFixed(2)); setOpen(true); }}
-            className="rounded p-1 hover:bg-accent text-muted-foreground"
-            title="Override statement amount"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => { setValue(Math.abs(event.amount).toFixed(2)); setOpen(true); }}
+              className="rounded p-1 hover:bg-accent text-muted-foreground"
+              title="Override statement amount"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            {onDetailClick && (
+              <button
+                onClick={(e) => {
+                  const rect = (e.currentTarget.closest("tr") as HTMLElement).getBoundingClientRect();
+                  onDetailClick(rect.top + rect.height / 2);
+                }}
+                className={cn(
+                  "rounded p-1 hover:bg-accent",
+                  isDetailOpen ? "text-primary" : "text-muted-foreground",
+                )}
+                title="View statement transactions"
+              >
+                <List className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </td>
       </>
     );
@@ -241,7 +264,7 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName }: CCPaymen
       </td>
       {/* Edit cell — confirm / clear-override / cancel */}
       <td className="py-2 pr-4 w-14">
-        <span className="inline-flex items-center gap-0.5">
+        <div className="flex items-center gap-1">
           <button
             onClick={handleSave}
             disabled={saving}
@@ -257,7 +280,7 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName }: CCPaymen
           >
             <X className="h-3.5 w-3.5" />
           </button>
-        </span>
+        </div>
       </td>
     </>
   );
@@ -347,7 +370,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved }: NewAdjustmentRowP
         />
       </td>
       <td className="py-2 pr-4 w-14" colSpan={2}>
-        <span className="inline-flex items-center gap-0.5">
+        <div className="flex items-center gap-1">
           <button
             onClick={handleSave}
             disabled={saving || !amount || parseFloat(amount) <= 0}
@@ -362,7 +385,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved }: NewAdjustmentRowP
           >
             <X className="h-3.5 w-3.5" />
           </button>
-        </span>
+        </div>
       </td>
     </tr>
   );
@@ -488,7 +511,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
         </span>
       </td>
       <td className="py-2 pr-4 w-14">
-        <span className="inline-flex items-center gap-0.5">
+        <div className="flex items-center gap-1">
           <button
             onClick={handleSave}
             disabled={saving}
@@ -503,7 +526,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
           >
             <X className="h-3.5 w-3.5" />
           </button>
-        </span>
+        </div>
       </td>
       <td className={cn(
         "py-2 text-right tabular-nums font-semibold",
@@ -515,15 +538,142 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
   );
 }
 
+// ── Statement detail panel ────────────────────────────────────────────────────
+
+interface StatementDetailPanelProps {
+  event: CashFlowEvent;
+  rowMidY: number;
+  onClose: () => void;
+}
+
+function StatementDetailPanel({ event, rowMidY, onClose }: StatementDetailPanelProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [notchTop, setNotchTop] = useState(24);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!event.statementPeriodStart || !event.periodStart || !event.relatedAccountId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    getExpenses({
+      accountId: event.relatedAccountId,
+      startDate: event.statementPeriodStart,
+      endDate: event.periodStart,
+      limit: "200",
+      sortBy: "date",
+      sortOrder: "asc",
+    })
+      .then((res) => setExpenses(res.data))
+      .catch(() => setExpenses([]))
+      .finally(() => setLoading(false));
+  }, [event.id, event.statementPeriodStart, event.periodStart, event.relatedAccountId]);
+
+  const measureNotch = () => {
+    if (!panelRef.current) return;
+    const rect = panelRef.current.getBoundingClientRect();
+    const offset = rowMidY - rect.top;
+    setNotchTop(Math.max(12, Math.min(offset, rect.height - 12)));
+  };
+
+  useLayoutEffect(measureNotch, [rowMidY]);
+  useEffect(measureNotch, [loading, rowMidY]);
+
+  return (
+    <div ref={panelRef} className="relative mt-4">
+      {/* Arrow notch - border */}
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          left: -12,
+          top: notchTop - 8,
+          width: 0,
+          height: 0,
+          borderTop: "8px solid transparent",
+          borderBottom: "8px solid transparent",
+          borderRight: "12px solid hsl(var(--border))",
+          zIndex: 10,
+        }}
+      />
+      {/* Arrow notch - fill */}
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          left: -10,
+          top: notchTop - 8,
+          width: 0,
+          height: 0,
+          borderTop: "8px solid transparent",
+          borderBottom: "8px solid transparent",
+          borderRight: "11px solid hsl(var(--card))",
+          zIndex: 11,
+        }}
+      />
+
+      <Card className="p-3 overflow-hidden">
+        <div className="flex items-center justify-between mb-2.5">
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            {event.relatedAccountName}
+            {event.statementPeriodStart && event.periodStart && (
+              <span className="font-normal normal-case ml-1">
+                · {fmtShort(event.statementPeriodStart)} – {fmtShort(event.periodStart)}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded p-0.5 hover:bg-accent text-muted-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {loading ? (
+          <p className="py-3 text-center text-xs text-muted-foreground">Loading…</p>
+        ) : expenses.length === 0 ? (
+          <p className="py-3 text-center text-xs text-muted-foreground">No transactions found</p>
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="pb-1.5 pr-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Date</th>
+                <th className="pb-1.5 pr-2 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Vendor</th>
+                <th className="pb-1.5 text-right text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {expenses.map((exp) => (
+                <tr key={exp.id} className="border-b border-border/40">
+                  <td className="py-1.5 pr-3 text-muted-foreground whitespace-nowrap">
+                    {fmtShort(exp.date.slice(0, 10))}
+                  </td>
+                  <td className="py-1.5 pr-2 max-w-[90px] truncate">{exp.vendor}</td>
+                  <td className="py-1.5 text-right tabular-nums text-red-500">
+                    {formatCurrency(Math.abs(parseFloat(exp.amount)))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 // ── Events ledger ─────────────────────────────────────────────────────────────
 
 interface LedgerProps {
   events: CashFlowEvent[];
   accountId: string;
   onRefetch: () => void;
+  selectedCCPaymentId?: string | null;
+  onCCPaymentClick?: (event: CashFlowEvent, rowMidY: number) => void;
 }
 
-function EventsLedger({ events, accountId, onRefetch }: LedgerProps) {
+function EventsLedger({ events, accountId, onRefetch, selectedCCPaymentId, onCCPaymentClick }: LedgerProps) {
   const firstNegativeIdx = events.findIndex((e) => e.runningBalance < 0);
 
   if (events.length === 0) {
@@ -597,6 +747,8 @@ function EventsLedger({ events, accountId, onRefetch }: LedgerProps) {
                       accountId={event.relatedAccountId ?? accountId}
                       onSaved={onRefetch}
                       amountClassName={event.amount >= 0 ? "text-green-600" : "text-red-500"}
+                      onDetailClick={onCCPaymentClick ? (rowMidY) => onCCPaymentClick(event, rowMidY) : undefined}
+                      isDetailOpen={event.id === selectedCCPaymentId}
                     />
                   ) : (
                     <>
@@ -607,7 +759,19 @@ function EventsLedger({ events, accountId, onRefetch }: LedgerProps) {
                         {event.amount >= 0 ? "+" : ""}
                         {formatCurrency(event.amount)}
                       </td>
-                      <td className="py-2 pr-4 w-14" />
+                      <td className="py-2 pr-4 w-14">
+                        {(event.type === "TRANSFER_IN" || event.type === "TRANSFER_OUT") &&
+                          event.transferId &&
+                          event.confidence === "PROJECTED" && (
+                          <button
+                            onClick={async () => { await confirmTransfer(event.transferId!); onRefetch(); }}
+                            className="rounded p-1 hover:bg-accent text-muted-foreground hover:text-green-600"
+                            title="Confirm transfer"
+                          >
+                            <SquareCheckBig className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </td>
                     </>
                   )}
                   <td className={cn(
@@ -632,9 +796,11 @@ interface AccountPanelProps {
   projection: CashFlowProjection;
   windowEnd: string;
   onRefetch: () => void;
+  selectedCCPaymentId?: string | null;
+  onCCPaymentClick?: (event: CashFlowEvent, rowMidY: number) => void;
 }
 
-function AccountPanel({ projection, windowEnd, onRefetch }: AccountPanelProps) {
+function AccountPanel({ projection, windowEnd, onRefetch, selectedCCPaymentId, onCCPaymentClick }: AccountPanelProps) {
   const firstNegativeEntry = projection.dailyBalances.find((d) => d.balance < 0);
   const firstNegativeDate = firstNegativeEntry?.date;
   const shortfall = firstNegativeEntry ? Math.abs(firstNegativeEntry.balance) : 0;
@@ -681,6 +847,8 @@ function AccountPanel({ projection, windowEnd, onRefetch }: AccountPanelProps) {
         events={projection.events}
         accountId={projection.accountId}
         onRefetch={onRefetch}
+        selectedCCPaymentId={selectedCCPaymentId}
+        onCCPaymentClick={onCCPaymentClick}
       />
     </div>
   );
@@ -719,17 +887,20 @@ function EditBalanceModal({
           <label className="mb-1 block text-sm font-medium">
             Current Balance — {account?.name}
           </label>
-          <input
-            type="number"
-            step="0.01"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            autoFocus
-            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+            <input
+              type="text"
+              inputMode="text"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              autoFocus
+              className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
           {account?.balanceUpdatedAt && (
             <p className="mt-1 text-xs text-muted-foreground">
-              Last updated {new Date(account.balanceUpdatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              Last updated {(([y, m, d]) => new Date(+y, +m - 1, +d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }))(account.balanceUpdatedAt.slice(0, 10).split("-"))}
             </p>
           )}
         </div>
@@ -749,13 +920,25 @@ export function CashFlow() {
   const { data: accounts, refetch: refetchAccounts } = useApi(() => getInvestmentAccounts(), []);
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [editingBalance, setEditingBalance] = useState<InvestmentAccountSummary | null>(null);
+  const [selectedCCPayment, setSelectedCCPayment] = useState<{ event: CashFlowEvent; rowMidY: number } | null>(null);
+
+  const handleCCPaymentClick = (event: CashFlowEvent, rowMidY: number) => {
+    setSelectedCCPayment((prev) =>
+      prev?.event.id === event.id ? null : { event, rowMidY }
+    );
+  };
 
   const bankingAccounts = (accounts ?? []).filter(
     (a) => a.type === "CHECKING" || a.type === "SAVINGS"
   );
 
   const handleSaveBalance = async (id: string, balance: number) => {
-    await updateAccount(id, { balance });
+    // Send the user's local calendar date as midnight UTC so the Cash Flow
+    // cutoff comparison uses the correct local date instead of the server's
+    // UTC date, which can be a day ahead for users west of UTC in the evening.
+    const d = new Date();
+    const localDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    await updateAccount(id, { balance, balanceUpdatedAt: `${localDate}T00:00:00.000Z` });
     setEditingBalance(null);
     refetchAccounts();
     refetch();
@@ -807,7 +990,7 @@ export function CashFlow() {
     const hasNegative = p.minBalance < 0;
     return (
       <button
-        onClick={() => setActiveTab(p.accountId)}
+        onClick={() => { setActiveTab(p.accountId); setSelectedCCPayment(null); }}
         className={cn(
           "flex items-center gap-2 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap",
           isActive
@@ -884,11 +1067,13 @@ export function CashFlow() {
               projection={selectedProjection}
               windowEnd={data.windowEnd}
               onRefetch={refetch}
+              selectedCCPaymentId={selectedCCPayment?.event.id}
+              onCCPaymentClick={handleCCPaymentClick}
             />
           )}
         </div>
 
-        {/* Right 1/3: banking accounts */}
+        {/* Right 1/3: banking accounts + statement detail */}
         {bankingAccounts.length > 0 && (
           <div className="min-w-0 basis-1/3 w-full space-y-2">
             <div className="flex items-center gap-2 py-1">
@@ -900,6 +1085,13 @@ export function CashFlow() {
             <div className="space-y-1.5">
               {bankingAccounts.map(renderBankingTile)}
             </div>
+            {selectedCCPayment && (
+              <StatementDetailPanel
+                event={selectedCCPayment.event}
+                rowMidY={selectedCCPayment.rowMidY}
+                onClose={() => setSelectedCCPayment(null)}
+              />
+            )}
           </div>
         )}
       </div>

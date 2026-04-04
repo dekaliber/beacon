@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, memo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { Trash2, Pencil, Archive, ChevronDown, ChevronRight, Repeat, Plus, ArrowRight } from "lucide-react";
@@ -233,7 +233,100 @@ function annualizedAmount(rule: { amount: string; frequency: string; interval: n
   }
 }
 
+const SHORT_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmtShortDate(d: Date): string {
+  return `${SHORT_MONTHS[d.getMonth()]} ${d.getDate()}`;
+}
+
+// Parse a date string (ISO timestamp or "YYYY-MM-DD") as local midnight to
+// avoid UTC-offset shifts. Slices to the date portion before parsing.
+function parseLocalDate(s: string): Date {
+  const [y, m, d] = s.slice(0, 10).split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// Count payment occurrences from ruleStart (on the rule's billing cycle) that
+// fall within [windowStart, windowEnd] inclusive.
+function countOccurrences(
+  ruleStart: Date,
+  windowStart: Date,
+  windowEnd: Date,
+  frequency: string,
+  interval: number,
+): number {
+  let current = new Date(ruleStart);
+  let count = 0;
+  switch (frequency) {
+    case "DAILY": {
+      if (current < windowStart) {
+        const steps = Math.ceil((windowStart.getTime() - current.getTime()) / (86400000 * interval));
+        current = new Date(ruleStart.getTime() + steps * interval * 86400000);
+      }
+      while (current <= windowEnd) { count++; current = new Date(current.getTime() + interval * 86400000); }
+      break;
+    }
+    case "WEEKLY": {
+      if (current < windowStart) {
+        const steps = Math.ceil((windowStart.getTime() - current.getTime()) / (86400000 * 7 * interval));
+        current = new Date(ruleStart.getTime() + steps * 7 * interval * 86400000);
+      }
+      while (current <= windowEnd) { count++; current = new Date(current.getTime() + 7 * interval * 86400000); }
+      break;
+    }
+    case "MONTHLY": {
+      while (current < windowStart) {
+        current = new Date(current.getFullYear(), current.getMonth() + interval, current.getDate());
+      }
+      while (current <= windowEnd) {
+        count++;
+        current = new Date(current.getFullYear(), current.getMonth() + interval, current.getDate());
+      }
+      break;
+    }
+    case "YEARLY": {
+      while (current < windowStart) {
+        current = new Date(current.getFullYear() + interval, current.getMonth(), current.getDate());
+      }
+      while (current <= windowEnd) {
+        count++;
+        current = new Date(current.getFullYear() + interval, current.getMonth(), current.getDate());
+      }
+      break;
+    }
+  }
+  return count;
+}
+
+// Returns the total cost for this rule within the current calendar year,
+// counting actual payment occurrences. When the rule's start or end date
+// constrains the year window, also returns a human-readable note.
+function effectiveYearCost(rule: {
+  amount: string; frequency: string; interval: number;
+  startDate: string; endDate?: string | null;
+}): { cost: number; proratedNote: string | null } {
+  const abs = Math.abs(parseFloat(rule.amount));
+  const year = new Date().getFullYear();
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd   = new Date(year, 11, 31);
+  const ruleStart = parseLocalDate(rule.startDate);
+  const ruleEnd   = rule.endDate ? parseLocalDate(rule.endDate) : null;
+
+  const windowStart = ruleStart > yearStart ? ruleStart : yearStart;
+  const windowEnd   = ruleEnd && ruleEnd < yearEnd ? ruleEnd : yearEnd;
+
+  const count = countOccurrences(ruleStart, windowStart, windowEnd, rule.frequency, rule.interval);
+  const effectiveCost = abs * count;
+  const annualized    = annualizedAmount(rule);
+
+  if (effectiveCost >= annualized) return { cost: annualized, proratedNote: null };
+
+  const note = `${count} payment${count !== 1 ? "s" : ""} from ${fmtShortDate(windowStart)} to ${fmtShortDate(windowEnd)}`;
+  return { cost: effectiveCost, proratedNote: note };
+}
+
 // ── Annualized cost chart ─────────────────────────────────────────────────────
+
+const EMPTY_CATEGORIES: Category[] = [];
 
 const CHART_EXPENSE_COLOR = "#6366f1"; // indigo-500
 const CHART_CREDIT_COLOR  = "#16a34a"; // green-600
@@ -251,6 +344,7 @@ interface AnnualCostItem {
   description: string;
   annualized: number;
   isCredit: boolean;
+  proratedNote: string | null;
 }
 interface AnnualCostEntry {
   name: string;       // truncated for Y-axis
@@ -266,11 +360,16 @@ function AnnualCostTooltip({ active, payload }: { active?: boolean; payload?: { 
   return (
     <div className="rounded-md border border-border bg-background p-2.5 shadow-md" style={{ fontSize: 12, minWidth: 180 }}>
       <p className="font-semibold text-foreground">{d.fullName}</p>
-      <p className="mt-0.5 mb-2 text-muted-foreground">{formatCurrency(d.value)} / year</p>
-      <div className="space-y-1 border-t border-border pt-2">
+      <p className="mt-0.5 mb-2 text-muted-foreground">{formatCurrency(d.value)} expected this year</p>
+      <div className="space-y-1.5 border-t border-border pt-2">
         {d.items.map((item, i) => (
-          <div key={i} className="flex items-center justify-between gap-3">
-            <span className="truncate text-muted-foreground" style={{ maxWidth: 140 }}>{item.description}</span>
+          <div key={i} className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <span className="truncate text-muted-foreground block" style={{ maxWidth: 140 }}>{item.description}</span>
+              {item.proratedNote && (
+                <span className="text-xs text-muted-foreground/70">* {item.proratedNote}</span>
+              )}
+            </div>
             <span className={`shrink-0 font-medium ${item.isCredit ? "text-green-600" : ""}`}>
               {formatCurrency(item.annualized)}
             </span>
@@ -281,11 +380,11 @@ function AnnualCostTooltip({ active, payload }: { active?: boolean; payload?: { 
   );
 }
 
-function AnnualCostPanel({
+const AnnualCostPanel = memo(function AnnualCostPanel({
   rules,
   categories,
 }: {
-  rules: Pick<RecurrenceRule, "description" | "amount" | "frequency" | "interval" | "categoryId">[];
+  rules: Pick<RecurrenceRule, "description" | "amount" | "frequency" | "interval" | "categoryId" | "startDate" | "endDate">[];
   categories: Category[];
 }) {
   // categoryId → leaf name (just the child name keeps Y-axis labels short)
@@ -301,10 +400,12 @@ function AnnualCostPanel({
     const key      = rule.categoryId || "__none__";
     const fullName = catNameMap.get(rule.categoryId) ?? "Uncategorized";
     if (!groupMap.has(key)) groupMap.set(key, { fullName, items: [] });
+    const { cost, proratedNote } = effectiveYearCost(rule);
     groupMap.get(key)!.items.push({
       description: rule.description,
-      annualized:  annualizedAmount(rule),
+      annualized:  cost,
       isCredit:    parseFloat(rule.amount) < 0,
+      proratedNote,
     });
   }
 
@@ -358,7 +459,7 @@ function AnnualCostPanel({
       </ResponsiveContainer>
     </div>
   );
-}
+});
 
 // ── Year-over-year chart ──────────────────────────────────────────────────────
 
@@ -545,6 +646,7 @@ interface EditForm {
   amount: string;
   accountId: string;
   categoryId: string;
+  group: string;
   endDate: string;
 }
 
@@ -579,7 +681,7 @@ function ConfirmModal({
 
 interface TransferRuleFormData {
   description?: string;
-  amount?: number;
+  amount?: string;
   fromAccountId?: string;
   toAccountId?: string;
   frequency?: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
@@ -611,7 +713,7 @@ function TransferRuleModal({
         rule
           ? {
               description: rule.description,
-              amount: parseFloat(rule.amount),
+              amount: rule.amount,
               fromAccountId: rule.fromAccountId,
               toAccountId: rule.toAccountId,
               frequency: rule.frequency,
@@ -659,12 +761,11 @@ function TransferRuleModal({
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
-              type="number"
-              step="0.01"
-              min="0.01"
+              type="text"
+              inputMode="text"
               required
               value={form.amount ?? ""}
-              onChange={(e) => set({ amount: parseFloat(e.target.value) })}
+              onChange={(e) => set({ amount: e.target.value })}
               className={`${inputCls} pl-7`}
             />
           </div>
@@ -842,6 +943,7 @@ export function Recurring() {
     amount: "",
     accountId: "",
     categoryId: "",
+    group: "",
     endDate: "",
   });
   const [saving, setSaving] = useState(false);
@@ -852,6 +954,23 @@ export function Recurring() {
     () => new Map((accounts ?? []).map((a) => [a.id, a.name])),
     [accounts],
   );
+
+  // Group active rules by their group field. Named groups sorted alphabetically;
+  // ungrouped rules (group === null) collected under a null key at the end.
+  const ruleGroups = useMemo(() => {
+    if (!rules) return [];
+    const map = new Map<string | null, RecurrenceRule[]>();
+    for (const rule of rules) {
+      const key = rule.group ?? null;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(rule);
+    }
+    const named = [...map.entries()]
+      .filter(([k]) => k !== null)
+      .sort(([a], [b]) => (a as string).localeCompare(b as string));
+    const ungrouped = map.has(null) ? [[null, map.get(null)!] as [null, RecurrenceRule[]]] : [];
+    return [...named, ...ungrouped];
+  }, [rules]);
 
   const categoryOptions = useMemo(() => {
     const cats = categories ?? [];
@@ -916,6 +1035,7 @@ export function Recurring() {
       amount: n.toFixed(2),
       accountId: rule.accountId,
       categoryId: rule.categoryId ?? "",
+      group: rule.group ?? "",
       endDate: rule.endDate ? rule.endDate.slice(0, 10) : "",
     });
     setEditError(null);
@@ -947,6 +1067,7 @@ export function Recurring() {
         amount: amountVal,
         accountId: editForm.accountId,
         categoryId: editForm.categoryId || null,
+        group: editForm.group.trim() || null,
         endDate: editForm.endDate || null,
       });
       setEditTarget(null);
@@ -1000,25 +1121,36 @@ export function Recurring() {
 
         {/* Left: active table + ended section — 2/3 width */}
         <div className="min-w-0 basis-2/3 space-y-6">
-          <Card>
-            {rules && rules.length > 0 ? (
-              <RuleTable
-                rules={rules}
-                accountMap={accountMap}
-                onEdit={handleEditOpen}
-                onArchive={setArchiveTarget}
-                highlightId={highlightId}
-                highlightFading={highlightFading}
-                highlightRowRef={setHighlightRowRef}
-              />
-            ) : (
+          {rules && rules.length > 0 ? (
+            <div className="space-y-6">
+              {ruleGroups.map(([groupName, groupRules]) => (
+                <div key={groupName ?? "__ungrouped__"}>
+                  {groupName && (
+                    <p className="mb-2 text-sm font-semibold">{groupName}</p>
+                  )}
+                  <Card>
+                    <RuleTable
+                      rules={groupRules}
+                      accountMap={accountMap}
+                      onEdit={handleEditOpen}
+                      onArchive={setArchiveTarget}
+                      highlightId={highlightId}
+                      highlightFading={highlightFading}
+                      highlightRowRef={setHighlightRowRef}
+                    />
+                  </Card>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Card>
               <EmptyState
                 icon={Repeat}
                 title="No recurring expenses"
                 description="Create a recurring expense by toggling 'Recurring expense' when adding a new expense."
               />
-            )}
-          </Card>
+            </Card>
+          )}
 
           <div>
             <button
@@ -1058,7 +1190,7 @@ export function Recurring() {
         {rules && rules.length > 0 && (
           <div className="min-w-0 basis-1/3 space-y-6">
             <Card className="p-5">
-              <AnnualCostPanel rules={rules} categories={categories ?? []} />
+              <AnnualCostPanel rules={rules} categories={categories ?? EMPTY_CATEGORIES} />
             </Card>
             {recurringHistory && recurringHistory.length > 0 && (
               <Card className="p-5">
@@ -1158,11 +1290,11 @@ export function Recurring() {
           onClose={() => { setTransferModalOpen(false); setEditingTransferRule(null); }}
           onSave={async (data) => {
             if (editingTransferRule) {
-              await updateTransferRule(editingTransferRule.id, data);
+              await updateTransferRule(editingTransferRule.id, { ...data, amount: parseFloat(data.amount!) });
             } else {
               await createTransfer({
                 description: data.description!,
-                amount: data.amount!,
+                amount: parseFloat(data.amount!),
                 date: data.startDate!,
                 fromAccountId: data.fromAccountId!,
                 toAccountId: data.toAccountId!,
@@ -1371,13 +1503,16 @@ export function Recurring() {
           {/* Amount */}
           <div>
             <label className="mb-1 block text-sm font-medium">Amount</label>
-            <input
-              type="number"
-              step="0.01"
-              value={editForm.amount}
-              onChange={(e) => setEditForm((f) => ({ ...f, amount: e.target.value }))}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+              <input
+                type="text"
+                inputMode="text"
+                value={editForm.amount}
+                onChange={(e) => setEditForm((f) => ({ ...f, amount: e.target.value }))}
+                className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
           </div>
 
           {/* Account */}
@@ -1418,6 +1553,21 @@ export function Recurring() {
               </select>
               <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
             </div>
+          </div>
+
+          {/* Group */}
+          <div>
+            <label className="mb-1 block text-sm font-medium">
+              Group{" "}
+              <span className="font-normal text-muted-foreground">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={editForm.group}
+              onChange={(e) => setEditForm((f) => ({ ...f, group: e.target.value }))}
+              placeholder="e.g. Subscriptions, Loans"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
           </div>
 
           {/* End date */}

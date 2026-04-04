@@ -11,7 +11,7 @@ import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { MultiSelectDropdown } from "@/components/MultiSelectDropdown";
 import type { MultiSelectOption, MultiSelectGroup } from "@/components/MultiSelectDropdown";
-import { useApi } from "@/hooks/useApi";
+import { useApi, getApiCache } from "@/hooks/useApi";
 import { getIncome, getAccounts, getFlatCategories, createIncome, updateIncome, deleteIncome, importIncome, bulkUpdateIncome, bulkDeleteIncome } from "@/api";
 import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/utils";
 import type { Account, Category, Income } from "@/types";
@@ -62,7 +62,7 @@ function CurrencyInput({ name, defaultValue, required, autoFocus }: { name: stri
           autoFocus={autoFocus}
           className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           placeholder="0.00"
-          inputMode="decimal"
+          inputMode="text"
         />
       </div>
       <input type="hidden" name={name} value={numericValue.toFixed(2)} />
@@ -266,7 +266,7 @@ function EditableAmountCell({ value, onSave, positive }: { value: string; onSave
             if (e.key === "Escape") setEditing(false);
           }}
           className="w-full rounded border border-primary pl-4 pr-1 py-0.5 text-right text-sm font-semibold focus:outline-none"
-          inputMode="decimal"
+          inputMode="text"
         />
       </div>
     );
@@ -551,13 +551,35 @@ function saveIncomeFilters(filters: IncomeFilterState) {
   localStorage.setItem("beacon-income-showOnlyReceived", JSON.stringify(filters.showOnlyReceived));
 }
 
+// Compute the cache key for the first page of income using the same logic as the filterParams
+// useMemo + queryParams useMemo in the component. Used to pre-populate allIncomes from cache
+// on mount so the list is visible on the very first render (no empty-state flash on navigation).
+function getInitialIncomeData(): Income[] {
+  try {
+    const applied = loadIncomeFilters();
+    const todayStr = localToday();
+    const params: Record<string, string> = { limit: "50", sortBy: "date", sortOrder: "desc" };
+    if (applied.accountIds.length > 0) params.accountIds = applied.accountIds.join(",");
+    if (applied.categoryIds.length > 0) params.categoryIds = applied.categoryIds.join(",");
+    params.startDate = applied.startDate || INCOME_DEFAULT_FILTERS.startDate;
+    const endDate = applied.endDate || todayStr;
+    params.endDate = endDate > todayStr ? todayStr : endDate;
+    if (!applied.showOnlyReceived) params.showOnlyReceived = "false";
+    params.page = "1";
+    return getApiCache<{ data: Income[] }>(`income-${JSON.stringify(params)}`)?.data ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export function IncomePage() {
   const [currentPage, setCurrentPage] = useState(1);
-  const [allIncomes, setAllIncomes] = useState<Income[]>([]);
+  const [allIncomes, setAllIncomes] = useState<Income[]>(getInitialIncomeData);
   const [hasMore, setHasMore] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingMoreRef = useRef(false);
+  const isFirstMount = useRef(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [editing, setEditing] = useState<Income | null>(null);
@@ -633,18 +655,21 @@ export function IncomePage() {
     limit: "100",
   }), [tomorrowStr]);
 
-  const { data: incomeData, loading } = useApi(() => getIncome(queryParams), [queryParams]);
-  const { data: upcomingData, refetch: refetchUpcoming } = useApi(() => getIncome(upcomingParams), [upcomingParams]);
-  const { data: accounts } = useApi(() => getAccounts({ includeHidden: true }), []);
-  const { data: incomeCategories } = useApi(() => getFlatCategories("INCOME"), []);
+  const { data: incomeData, loading } = useApi(() => getIncome(queryParams), [queryParams], `income-${JSON.stringify(queryParams)}`);
+  const { data: upcomingData, refetch: refetchUpcoming } = useApi(() => getIncome(upcomingParams), [upcomingParams], `income-upcoming-${JSON.stringify(upcomingParams)}`);
+  const { data: accounts } = useApi(() => getAccounts({ includeHidden: true }), [], "accounts");
+  const { data: incomeCategories } = useApi(() => getFlatCategories("INCOME"), [], "categories-INCOME");
 
+  // Reset accumulated data when filters/sort change (skip on initial mount to preserve cached data)
   useEffect(() => {
+    if (isFirstMount.current) { isFirstMount.current = false; return; }
     setCurrentPage(1);
     setAllIncomes([]);
     setHasMore(false);
     loadingMoreRef.current = false;
   }, [filterParams]);
 
+  // Accumulate income pages as they load
   useEffect(() => {
     if (!incomeData) return;
     const { data, pagination: pag } = incomeData;

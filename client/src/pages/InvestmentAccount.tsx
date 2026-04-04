@@ -233,8 +233,9 @@ function DollarInput({
         placeholder={placeholder ?? "0.00"}
         required={required}
         className={
-          inputClassName ??
-          "w-full rounded border border-border pl-7 pr-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          (inputClassName ??
+          "w-full rounded border border-border pl-7 pr-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary") +
+          " [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         }
       />
     </div>
@@ -775,7 +776,7 @@ function LotRow({
               value={cps}
               step="0.000001"
               onChange={(e) => setCps(e.target.value)}
-              className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
+              className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
           </div>
         </td>
@@ -4215,16 +4216,18 @@ export function InvestmentAccount() {
                 </div>
                 {editingCash ? (
                   <form onSubmit={handleSaveCash} className="flex items-center gap-1.5 mt-1.5">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={cashInput}
-                      onChange={(e) => setCashInput(e.target.value)}
-                      autoFocus
-                      placeholder="0.00"
-                      className="w-full rounded border border-border px-2 py-1 text-sm tabular-nums focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
+                    <div className="relative w-full">
+                      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                      <input
+                        type="text"
+                        inputMode="text"
+                        value={cashInput}
+                        onChange={(e) => setCashInput(e.target.value)}
+                        autoFocus
+                        placeholder="0.00"
+                        className="w-full rounded border border-border pl-5 pr-2 py-1 text-sm tabular-nums focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
                     <button
                       type="submit"
                       disabled={savingCash}
