@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useLayoutEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useLayoutEffect, useCallback } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -26,11 +26,13 @@ import {
   Wallet,
   Landmark,
   SquareCheckBig,
+  Info,
 } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
+import { ToastContainer, useToast } from "@/components/Toast";
 import {
   getCashFlow,
   upsertStatementOverride,
@@ -41,6 +43,8 @@ import {
   updateAccount,
   getExpenses,
   confirmTransfer,
+  updateTransfer,
+  deleteTransfer,
 } from "@/api";
 import { formatCurrency, cn } from "@/lib/utils";
 import type { CashFlowProjection, CashFlowEvent, DailyBalance, InvestmentAccountSummary, Expense } from "@/types";
@@ -671,9 +675,14 @@ interface LedgerProps {
   onRefetch: () => void;
   selectedCCPaymentId?: string | null;
   onCCPaymentClick?: (event: CashFlowEvent, rowMidY: number) => void;
+  onEditTransfer?: (event: CashFlowEvent) => void;
+  pendingDeleteTransferIds?: Set<string>;
 }
 
-function EventsLedger({ events, accountId, onRefetch, selectedCCPaymentId, onCCPaymentClick }: LedgerProps) {
+function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPaymentId, onCCPaymentClick, onEditTransfer, pendingDeleteTransferIds }: LedgerProps) {
+  const events = pendingDeleteTransferIds?.size
+    ? rawEvents.filter((e) => !e.transferId || !pendingDeleteTransferIds.has(e.transferId))
+    : rawEvents;
   const firstNegativeIdx = events.findIndex((e) => e.runningBalance < 0);
 
   if (events.length === 0) {
@@ -761,15 +770,25 @@ function EventsLedger({ events, accountId, onRefetch, selectedCCPaymentId, onCCP
                       </td>
                       <td className="py-2 pr-4 w-14">
                         {(event.type === "TRANSFER_IN" || event.type === "TRANSFER_OUT") &&
-                          event.transferId &&
-                          event.confidence === "PROJECTED" && (
-                          <button
-                            onClick={async () => { await confirmTransfer(event.transferId!); onRefetch(); }}
-                            className="rounded p-1 hover:bg-accent text-muted-foreground hover:text-green-600"
-                            title="Confirm transfer"
-                          >
-                            <SquareCheckBig className="h-3.5 w-3.5" />
-                          </button>
+                          event.transferId && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => onEditTransfer?.(event)}
+                              className="rounded p-1 hover:bg-accent text-muted-foreground hover:text-foreground"
+                              title="Edit transfer"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            {event.confidence === "PROJECTED" && (
+                              <button
+                                onClick={async () => { await confirmTransfer(event.transferId!); onRefetch(); }}
+                                className="rounded p-1 hover:bg-accent text-muted-foreground hover:text-green-600"
+                                title="Confirm transfer"
+                              >
+                                <SquareCheckBig className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
                         )}
                       </td>
                     </>
@@ -798,9 +817,11 @@ interface AccountPanelProps {
   onRefetch: () => void;
   selectedCCPaymentId?: string | null;
   onCCPaymentClick?: (event: CashFlowEvent, rowMidY: number) => void;
+  onEditTransfer?: (event: CashFlowEvent) => void;
+  pendingDeleteTransferIds?: Set<string>;
 }
 
-function AccountPanel({ projection, windowEnd, onRefetch, selectedCCPaymentId, onCCPaymentClick }: AccountPanelProps) {
+function AccountPanel({ projection, windowEnd, onRefetch, selectedCCPaymentId, onCCPaymentClick, onEditTransfer, pendingDeleteTransferIds }: AccountPanelProps) {
   const firstNegativeEntry = projection.dailyBalances.find((d) => d.balance < 0);
   const firstNegativeDate = firstNegativeEntry?.date;
   const shortfall = firstNegativeEntry ? Math.abs(firstNegativeEntry.balance) : 0;
@@ -849,8 +870,110 @@ function AccountPanel({ projection, windowEnd, onRefetch, selectedCCPaymentId, o
         onRefetch={onRefetch}
         selectedCCPaymentId={selectedCCPaymentId}
         onCCPaymentClick={onCCPaymentClick}
+        onEditTransfer={onEditTransfer}
+        pendingDeleteTransferIds={pendingDeleteTransferIds}
       />
     </div>
+  );
+}
+
+// ── Edit transfer instance modal ─────────────────────────────────────────────
+
+interface EditTransferTarget {
+  transferId: string;
+  date: string;
+  amount: number;
+  description: string;
+}
+
+function EditTransferModal({
+  target,
+  onClose,
+  onSaved,
+  onDelete,
+}: {
+  target: EditTransferTarget | null;
+  onClose: () => void;
+  onSaved: () => void;
+  onDelete: (transferId: string) => void;
+}) {
+  const [date, setDate] = useState("");
+  const [amount, setAmount] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (target) {
+      setDate(target.date);
+      setAmount(Math.abs(target.amount).toFixed(2));
+    }
+  }, [target]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!target) return;
+    setSaving(true);
+    try {
+      await updateTransfer(target.transferId, {
+        date,
+        amount: parseFloat(amount.replace(/,/g, "")) || 0,
+      });
+      onClose();
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open={!!target} onClose={onClose} title="Edit Transfer">
+      <form onSubmit={handleSave} className="space-y-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium">Description</label>
+          <p className="text-sm text-muted-foreground">{target?.description}</p>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">Date</label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">Amount</label>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => { onClose(); onDelete(target!.transferId); }}
+            disabled={saving}
+            className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </button>
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving…" : "Save Changes"}
+            </Button>
+          </div>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -876,7 +999,7 @@ function EditBalanceModal({
     e.preventDefault();
     if (!account) return;
     setSaving(true);
-    await onSave(account.id, parseFloat(value) || 0);
+    await onSave(account.id, parseFloat(value.replace(/,/g, "")) || 0);
     setSaving(false);
   };
 
@@ -904,6 +1027,13 @@ function EditBalanceModal({
             </p>
           )}
         </div>
+        <div className="flex items-start gap-2 rounded-md bg-blue-50 px-3 py-2.5 text-xs text-blue-800">
+          <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+          <p>
+            Confirmed transactions on or before this date are assumed to be
+            reflected in the balance and will be excluded from the projection.
+          </p>
+        </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
           <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
@@ -921,6 +1051,46 @@ export function CashFlow() {
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [editingBalance, setEditingBalance] = useState<InvestmentAccountSummary | null>(null);
   const [selectedCCPayment, setSelectedCCPayment] = useState<{ event: CashFlowEvent; rowMidY: number } | null>(null);
+  const [editingTransfer, setEditingTransfer] = useState<EditTransferTarget | null>(null);
+  const { toasts, addToast, dismissToast } = useToast();
+
+  // Transfers awaiting optimistic deletion (hidden in UI; API call deferred 8 s)
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
+  const pendingDeleteTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  useEffect(() => () => { pendingDeleteTimers.current.forEach(clearTimeout); }, []);
+
+  const handleDeleteTransfer = useCallback((transferId: string) => {
+    setPendingDeleteIds((prev) => new Set([...prev, transferId]));
+
+    const timerId = setTimeout(async () => {
+      await deleteTransfer(transferId);
+      setPendingDeleteIds((prev) => { const s = new Set(prev); s.delete(transferId); return s; });
+      pendingDeleteTimers.current.delete(transferId);
+      refetch();
+    }, 8000);
+
+    pendingDeleteTimers.current.set(transferId, timerId);
+
+    addToast({
+      message: "Transfer deleted",
+      onUndo: () => {
+        clearTimeout(timerId);
+        pendingDeleteTimers.current.delete(transferId);
+        setPendingDeleteIds((prev) => { const s = new Set(prev); s.delete(transferId); return s; });
+      },
+      duration: 8000,
+    });
+  }, [addToast, refetch]);
+
+  const handleEditTransfer = (event: CashFlowEvent) => {
+    if (!event.transferId) return;
+    setEditingTransfer({
+      transferId: event.transferId,
+      date: event.date,
+      amount: event.amount,
+      description: event.description,
+    });
+  };
 
   const handleCCPaymentClick = (event: CashFlowEvent, rowMidY: number) => {
     setSelectedCCPayment((prev) =>
@@ -1069,6 +1239,8 @@ export function CashFlow() {
               onRefetch={refetch}
               selectedCCPaymentId={selectedCCPayment?.event.id}
               onCCPaymentClick={handleCCPaymentClick}
+              onEditTransfer={handleEditTransfer}
+              pendingDeleteTransferIds={pendingDeleteIds}
             />
           )}
         </div>
@@ -1096,11 +1268,18 @@ export function CashFlow() {
         )}
       </div>
 
+      <EditTransferModal
+        target={editingTransfer}
+        onClose={() => setEditingTransfer(null)}
+        onSaved={() => { refetch(); }}
+        onDelete={handleDeleteTransfer}
+      />
       <EditBalanceModal
         account={editingBalance}
         onClose={() => setEditingBalance(null)}
         onSave={handleSaveBalance}
       />
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

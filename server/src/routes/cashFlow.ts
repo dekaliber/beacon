@@ -422,9 +422,10 @@ async function buildProjection(
         // stored account balance). Confirmed-but-future dividends still need
         // to appear in the projection even though they have an activityId.
         NOT: { activityId: { not: null }, paymentDate: { lt: windowStart } },
-        // Include dividends with a known payment date inside the window,
-        // AND dividends with no payment date yet (managed accounts often lack one).
+        // PENDING dividends always appear until the user confirms/dismisses
+        // them. CONFIRMED dividends are date-windowed so settled ones drop off.
         OR: [
+          { status: "PENDING" },
           { paymentDate: { gte: windowStart, lte: windowEnd } },
           { paymentDate: null },
         ],
