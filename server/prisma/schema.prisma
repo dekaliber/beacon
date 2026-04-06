@@ -214,6 +214,7 @@ model Tag {
   id        String   @id @default(cuid())
   name      String   @unique
   color     String?
+  group     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

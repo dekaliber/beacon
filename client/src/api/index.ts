@@ -101,8 +101,8 @@ export const bulkDeleteIncome = (ids: string[]) =>
 
 // Tags
 export const getTags = () => api.get<Tag[]>("/tags");
-export const createTag = (data: { name: string; color?: string }) => api.post<Tag>("/tags", data);
-export const updateTag = (id: string, data: { name?: string; color?: string }) => api.put<Tag>(`/tags/${id}`, data);
+export const createTag = (data: { name: string; color?: string; group?: string | null }) => api.post<Tag>("/tags", data);
+export const updateTag = (id: string, data: { name?: string; color?: string; group?: string | null }) => api.put<Tag>(`/tags/${id}`, data);
 export const deleteTag = (id: string) => api.delete(`/tags/${id}`);
 
 // Transaction Groups

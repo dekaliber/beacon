@@ -49,6 +49,9 @@ export interface Tag {
   id: string;
   name: string;
   color: string | null;
+  group: string | null;
+  personalTotal: number;
+  jointTotal: number;
   createdAt: string;
   updatedAt: string;
 }
