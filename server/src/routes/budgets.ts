@@ -967,29 +967,42 @@ budgetRoutes.get("/:year/monthly-spending", async (req, res) => {
       (jointBudget?.monthlyOverrides ?? []).map((o) => ({ month: o.month, amount: Number(o.amount) })),
     );
 
-    // Fetch all expenses for the year with vendor and account info
+    // Fetch all expenses for the year with vendor and account info.
+    // Offsets (parentExpenseId != null) are included so they net against
+    // their parent in totals and can be surfaced in the tooltip.
     const expenses = await prisma.expense.findMany({
       where: {
         accountId: { in: allIds },
         date: { gte: startOfYear, lte: endOfYear },
-        parentExpenseId: null, // exclude offsetting transactions
         ...ignoredExpenseFilter(ignoredCategoryIds),
       },
       select: {
+        id: true,
         amount: true,
         vendor: true,
         description: true,
         date: true,
         accountId: true,
+        parentExpenseId: true,
+        transactionGroupId: true,
       },
-      orderBy: { date: "asc" },
+      // Sort by date, then group transaction-linked rows together, parents
+      // before their offsets within each transaction group / standalone cluster.
+      orderBy: [{ date: "asc" }, { transactionGroupId: "asc" }, { id: "asc" }],
     });
 
     // Build a set of joint account IDs for fast lookup
     const jointIdSet = new Set(jointIds);
 
     // Group expenses by month → day
-    type DayExpense = { vendor: string; amount: number; isJoint: boolean };
+    type DayExpense = {
+      id: string;
+      vendor: string;
+      amount: number;
+      isJoint: boolean;
+      parentExpenseId: string | null;
+      transactionGroupId: string | null;
+    };
     const months: {
       month: number;
       days: Record<number, DayExpense[]>;
@@ -1011,9 +1024,12 @@ budgetRoutes.get("/:year/monthly-spending", async (req, res) => {
 
       if (!months[m].days[day]) months[m].days[day] = [];
       months[m].days[day].push({
+        id: exp.id,
         vendor: exp.vendor || exp.description,
         amount,
         isJoint,
+        parentExpenseId: exp.parentExpenseId,
+        transactionGroupId: exp.transactionGroupId,
       });
 
       if (isJoint) {

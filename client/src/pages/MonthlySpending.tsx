@@ -41,22 +41,103 @@ function dayTotal(
   }, 0);
 }
 
-/** Pick a heat color using a log scale so low-spend days remain distinguishable
- *  even when a single outlier (e.g. rent) dominates the max. */
-function heatColor(amount: number, maxAmount: number): string {
-  if (amount <= 0 || maxAmount <= 0) return "transparent";
-  // log1p avoids log(0) and gives a smooth curve from $1 upward
-  const intensity = Math.min(Math.log1p(amount) / Math.log1p(maxAmount), 1);
+/** Pick a heat color using a square-root scale.
+ *
+ *  sqrt gives a gentler curve than log — it still boosts visibility of
+ *  low-spend days but doesn't compress the top end as aggressively, keeping
+ *  high-spend days clearly distinguishable from each other.
+ *
+ *  Both scales share a single symmetric anchor — absMax — which is the larger
+ *  of |maxDaySpend| and |minDaySpend|. This means a -$100 day on a year where
+ *  the biggest positive day is $3000 will appear faint green, not dark green. */
+function heatColor(amount: number, absMax: number): string {
+  if (absMax <= 0 || amount === 0) return "transparent";
+  const intensity = Math.min(Math.sqrt(Math.abs(amount)) / Math.sqrt(absMax), 1);
+  // 8 evenly-spaced opacity buckets from ~0 to 1
+  if (amount < 0) {
+    // Green scale using green-600 (#16a34a)
+    if (intensity < 0.125) return "rgba(22, 163, 74, 0.07)";
+    if (intensity < 0.250) return "rgba(22, 163, 74, 0.20)";
+    if (intensity < 0.375) return "rgba(22, 163, 74, 0.33)";
+    if (intensity < 0.500) return "rgba(22, 163, 74, 0.47)";
+    if (intensity < 0.625) return "rgba(22, 163, 74, 0.60)";
+    if (intensity < 0.750) return "rgba(22, 163, 74, 0.73)";
+    if (intensity < 0.875) return "rgba(22, 163, 74, 0.87)";
+    return "rgba(22, 163, 74, 1.00)";
+  }
   // Red scale using red-600 (#dc2626)
-  if (intensity < 0.20) return "rgba(220, 38, 38, 0.10)";
-  if (intensity < 0.35) return "rgba(220, 38, 38, 0.20)";
-  if (intensity < 0.50) return "rgba(220, 38, 38, 0.35)";
-  if (intensity < 0.65) return "rgba(220, 38, 38, 0.50)";
-  if (intensity < 0.80) return "rgba(220, 38, 38, 0.65)";
-  return "rgba(220, 38, 38, 0.80)";
+  if (intensity < 0.125) return "rgba(220, 38, 38, 0.07)";
+  if (intensity < 0.250) return "rgba(220, 38, 38, 0.20)";
+  if (intensity < 0.375) return "rgba(220, 38, 38, 0.33)";
+  if (intensity < 0.500) return "rgba(220, 38, 38, 0.47)";
+  if (intensity < 0.625) return "rgba(220, 38, 38, 0.60)";
+  if (intensity < 0.750) return "rgba(220, 38, 38, 0.73)";
+  if (intensity < 0.875) return "rgba(220, 38, 38, 0.87)";
+  return "rgba(220, 38, 38, 1.00)";
 }
 
 // ── Tooltip ──────────────────────────────────────────────────────────────────
+
+/**
+ * Build the ordered list of expenses to display in the tooltip.
+ *
+ * Rules:
+ * - Apply the current filter (personal / joint / total).
+ * - Group each parent expense with its offsets. If the net of a parent+offsets
+ *   cluster rounds to zero, omit the whole cluster (fully reimbursed).
+ * - Expenses sharing a transactionGroupId are kept adjacent.
+ * - Order: transaction-grouped clusters first (by tgId), then standalone.
+ */
+function buildTooltipRows(
+  expenses: MonthlySpendingDay[],
+  filter: FilterMode,
+): MonthlySpendingDay[] {
+  // 1. Apply filter
+  const filtered = expenses.filter((e) => {
+    if (filter === "personal") return !e.isJoint;
+    if (filter === "joint") return e.isJoint;
+    return true;
+  });
+  if (filtered.length === 0) return [];
+
+  // 2. Build lookup structures
+  const idSet = new Set(filtered.map((e) => e.id));
+
+  // Map parentId -> offset expenses (only offsets whose parent is in the filtered set)
+  const offsetsByParent = new Map<string, MonthlySpendingDay[]>();
+  const offsetIds = new Set<string>();
+
+  for (const e of filtered) {
+    if (e.parentExpenseId && idSet.has(e.parentExpenseId)) {
+      if (!offsetsByParent.has(e.parentExpenseId)) offsetsByParent.set(e.parentExpenseId, []);
+      offsetsByParent.get(e.parentExpenseId)!.push(e);
+      offsetIds.add(e.id);
+    }
+  }
+
+  // 3. Build clusters: each top-level expense + its offsets
+  // Cluster = [parent, ...offsets]; fully-zeroed clusters are dropped.
+  const clusters: MonthlySpendingDay[][] = [];
+
+  for (const e of filtered) {
+    if (offsetIds.has(e.id)) continue; // handled as part of a parent cluster
+
+    const offsets = offsetsByParent.get(e.id) ?? [];
+    const net = e.amount + offsets.reduce((s, o) => s + o.amount, 0);
+    if (Math.abs(net) < 0.005) continue; // fully zeroed out — omit both
+
+    clusters.push([e, ...offsets]);
+  }
+
+  // 4. Sort clusters: transaction-grouped ones together (by tgId), nulls last
+  clusters.sort((a, b) => {
+    const tgA = a[0].transactionGroupId ?? "\uffff";
+    const tgB = b[0].transactionGroupId ?? "\uffff";
+    return tgA < tgB ? -1 : tgA > tgB ? 1 : 0;
+  });
+
+  return clusters.flat();
+}
 
 function DayTooltip({
   expenses,
@@ -71,14 +152,10 @@ function DayTooltip({
   x: number;
   y: number;
 }) {
-  const filtered = expenses.filter((e) => {
-    if (filter === "personal") return !e.isJoint;
-    if (filter === "joint") return e.isJoint;
-    return true;
-  });
-  if (filtered.length === 0) return null;
+  const rows = buildTooltipRows(expenses, filter);
+  if (rows.length === 0) return null;
 
-  const total = filtered.reduce(
+  const total = rows.reduce(
     (sum, e) => sum + (e.isJoint ? e.amount * splitRatio : e.amount),
     0,
   );
@@ -93,8 +170,8 @@ function DayTooltip({
         <span className="font-semibold text-foreground">{formatCurrency(total)}</span>
       </div>
       <div className="space-y-0.5">
-        {filtered.map((e, i) => (
-          <div key={i} className="flex justify-between gap-4">
+        {rows.map((e) => (
+          <div key={e.id} className="flex justify-between gap-4">
             <span className="text-muted-foreground truncate max-w-[160px]">
               <span className="inline-block w-3 text-center font-medium text-muted-foreground/70">{e.isJoint ? "J" : "P"}</span>
               {" "}{e.vendor}
@@ -119,7 +196,7 @@ function MonthCalendar({
   isFuture,
   isCurrentMonth,
   todayDay,
-  maxDaySpend,
+  absMaxDaySpend,
 }: {
   data: MonthlySpendingMonth;
   year: number;
@@ -128,7 +205,7 @@ function MonthCalendar({
   isFuture: boolean;
   isCurrentMonth: boolean;
   todayDay: number;
-  maxDaySpend: number;
+  absMaxDaySpend: number;
 }) {
   const [tooltip, setTooltip] = useState<{
     expenses: MonthlySpendingDay[];
@@ -161,11 +238,9 @@ function MonthCalendar({
     const isDayFuture = isFuture || (isCurrentMonth && day > todayDay);
     const expenses = data.days[day];
     const spend = isDayFuture ? 0 : dayTotal(expenses, filter, splitRatio);
-    const bg = isDayFuture ? undefined : heatColor(spend, maxDaySpend);
-    const hasExpenses = !isDayFuture && expenses && expenses.length > 0 &&
-      expenses.some((e) =>
-        filter === "total" || (filter === "personal" ? !e.isJoint : e.isJoint)
-      );
+    const bg = isDayFuture ? undefined : heatColor(spend, absMaxDaySpend);
+    const hasExpenses = !isDayFuture && expenses &&
+      buildTooltipRows(expenses, filter).length > 0;
 
     cells.push(
       <div
@@ -264,17 +339,19 @@ export function MonthlySpending() {
     [year],
   );
 
-  // Compute the max daily spend across the whole year for consistent heat scaling
-  const maxDaySpend = useMemo(() => {
+  // Compute a single symmetric anchor for both color scales. Using the larger
+  // of |max| and |min| ensures positive and negative shades are directly
+  // comparable in magnitude across the whole year.
+  const absMaxDaySpend = useMemo(() => {
     if (!data) return 0;
-    let max = 0;
+    let absMax = 0;
     for (const m of data.months) {
       for (const [, expenses] of Object.entries(m.days)) {
         const total = dayTotal(expenses, filter, data.splitRatio);
-        if (total > max) max = total;
+        if (Math.abs(total) > absMax) absMax = Math.abs(total);
       }
     }
-    return max;
+    return absMax;
   }, [data, filter]);
 
   const curYear = now.getFullYear();
@@ -341,7 +418,7 @@ export function MonthlySpending() {
                 isFuture={isFuture}
                 isCurrentMonth={isCurrentMonth}
                 todayDay={todayDay}
-                maxDaySpend={maxDaySpend}
+                absMaxDaySpend={absMaxDaySpend}
               />
             );
           })}

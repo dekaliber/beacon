@@ -235,9 +235,12 @@ export interface CategoryOutliersData {
 // ── Monthly spending heatmap types ───────────────────────────────────────────
 
 export interface MonthlySpendingDay {
+  id: string;
   vendor: string;
   amount: number;
   isJoint: boolean;
+  parentExpenseId: string | null;
+  transactionGroupId: string | null;
 }
 
 export interface MonthlySpendingMonth {
