@@ -17,6 +17,7 @@ import { AssetClassesPage } from "@/pages/AssetClasses";
 import { SecuritiesPage } from "@/pages/Securities";
 import { CashFlow } from "@/pages/CashFlow";
 import { WithdrawalsPage } from "@/pages/Withdrawals";
+import { MonthlySpending } from "@/pages/MonthlySpending";
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
           <Route path="/expenses" element={<Expenses />} />
           <Route path="/income" element={<IncomePage />} />
           <Route path="/budgets" element={<Budgets />} />
+          <Route path="/budgets/monthly-spending" element={<MonthlySpending />} />
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/categories" element={<Categories />} />
           <Route path="/tags" element={<TagsPage />} />

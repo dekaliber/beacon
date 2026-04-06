@@ -229,6 +229,31 @@ export interface CategoryOutliersData {
   scaleCap: number | null;
 }
 
+// ── Monthly spending heatmap types ───────────────────────────────────────────
+
+export interface MonthlySpendingDay {
+  vendor: string;
+  amount: number;
+  isJoint: boolean;
+}
+
+export interface MonthlySpendingMonth {
+  month: number;
+  days: Record<number, MonthlySpendingDay[]>;
+  personalTotal: number;
+  jointTotal: number;
+  combinedTotal: number;
+  personalBudget: number;
+  jointBudget: number;
+  combinedBudget: number;
+}
+
+export interface MonthlySpendingResponse {
+  year: number;
+  splitRatio: number;
+  months: MonthlySpendingMonth[];
+}
+
 /** Full budget overview response for a given year. */
 export interface BudgetOverview {
   year: number;

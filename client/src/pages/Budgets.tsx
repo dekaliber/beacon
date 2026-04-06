@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import { Link } from "react-router-dom";
 import {
   PiggyBank,
   ChevronLeft,
@@ -17,6 +18,7 @@ import {
   Check,
   X,
   Info,
+  CalendarDays,
 } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -762,6 +764,14 @@ export function Budgets() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Budget</h2>
+        <div className="flex items-center gap-3">
+          <Link
+            to="/budgets/monthly-spending"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <CalendarDays className="h-4 w-4" />
+            Monthly Spending
+          </Link>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)}>
             <ChevronLeft className="h-4 w-4" />
@@ -770,6 +780,7 @@ export function Budgets() {
           <Button variant="ghost" size="sm" onClick={() => setYear((y) => y + 1)}>
             <ChevronRight className="h-4 w-4" />
           </Button>
+        </div>
         </div>
       </div>
 

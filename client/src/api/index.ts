@@ -36,6 +36,7 @@ import type {
   WithdrawalEvent,
   WithdrawalSummary,
   InvestmentSettings,
+  MonthlySpendingResponse,
 } from "../types";
 
 // Accounts
@@ -136,6 +137,9 @@ export const deleteMonthlyBudgetOverride = (
   type: "personal" | "joint",
   month: number,
 ) => api.delete(`/budgets/${year}/${type}/monthly/${month}`);
+
+export const getMonthlySpending = (year: number) =>
+  api.get<MonthlySpendingResponse>(`/budgets/${year}/monthly-spending?today=${new Date().toLocaleDateString("en-CA")}`);
 
 function localDateStr() {
   const d = new Date();

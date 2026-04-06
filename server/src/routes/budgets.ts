@@ -920,6 +920,133 @@ budgetRoutes.delete("/:year/:type(personal|joint)/monthly/:month", async (req, r
   res.status(204).send();
 });
 
+// ── Monthly spending heatmap ──────────────────────────────────────────────────
+
+budgetRoutes.get("/:year/monthly-spending", async (req, res) => {
+  try {
+    const year = Number(req.params.year);
+    if (!Number.isFinite(year)) return res.status(400).json({ error: "Invalid year" });
+
+    const todayParam = typeof req.query.today === "string" ? req.query.today : undefined;
+    const effectiveToday = todayParam ? new Date(`${todayParam}T00:00:00`) : new Date();
+
+    const startOfYear = new Date(Date.UTC(year, 0, 1));
+    const endOfYear   = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
+
+    const [accounts, ignoredCategories, settings, annualBudgets] = await Promise.all([
+      prisma.account.findMany({
+        where: { isActive: true },
+        select: { id: true, isJoint: true },
+      }),
+      prisma.category.findMany({
+        where: { ignoreInBudget: true },
+        select: { id: true },
+      }),
+      getOrCreateSettings(),
+      prisma.annualBudget.findMany({
+        where: { year },
+        include: { monthlyOverrides: true },
+      }),
+    ]);
+
+    const personalIds        = accounts.filter((a) => !a.isJoint).map((a) => a.id);
+    const jointIds           = accounts.filter((a) =>  a.isJoint).map((a) => a.id);
+    const allIds             = accounts.map((a) => a.id);
+    const ignoredCategoryIds = ignoredCategories.map((c) => c.id);
+    const splitRatio         = Number(settings.jointSplitRatio);
+
+    // Budget amounts per month
+    const personalBudget = annualBudgets.find((b) => b.type === "PERSONAL") ?? null;
+    const jointBudget    = annualBudgets.find((b) => b.type === "JOINT")    ?? null;
+    const personalMonthly = resolveMonthlyAmounts(
+      personalBudget?.annualAmount != null ? Number(personalBudget.annualAmount) : null,
+      (personalBudget?.monthlyOverrides ?? []).map((o) => ({ month: o.month, amount: Number(o.amount) })),
+    );
+    const jointMonthly = resolveMonthlyAmounts(
+      jointBudget?.annualAmount != null ? Number(jointBudget.annualAmount) : null,
+      (jointBudget?.monthlyOverrides ?? []).map((o) => ({ month: o.month, amount: Number(o.amount) })),
+    );
+
+    // Fetch all expenses for the year with vendor and account info
+    const expenses = await prisma.expense.findMany({
+      where: {
+        accountId: { in: allIds },
+        date: { gte: startOfYear, lte: endOfYear },
+        parentExpenseId: null, // exclude offsetting transactions
+        ...ignoredExpenseFilter(ignoredCategoryIds),
+      },
+      select: {
+        amount: true,
+        vendor: true,
+        description: true,
+        date: true,
+        accountId: true,
+      },
+      orderBy: { date: "asc" },
+    });
+
+    // Build a set of joint account IDs for fast lookup
+    const jointIdSet = new Set(jointIds);
+
+    // Group expenses by month → day
+    type DayExpense = { vendor: string; amount: number; isJoint: boolean };
+    const months: {
+      month: number;
+      days: Record<number, DayExpense[]>;
+      personalTotal: number;
+      jointTotal: number;
+    }[] = Array.from({ length: 12 }, (_, i) => ({
+      month: i + 1,
+      days: {},
+      personalTotal: 0,
+      jointTotal: 0,
+    }));
+
+    for (const exp of expenses) {
+      const d = new Date(exp.date);
+      const m = d.getUTCMonth(); // 0-indexed
+      const day = d.getUTCDate();
+      const amount = Number(exp.amount);
+      const isJoint = jointIdSet.has(exp.accountId);
+
+      if (!months[m].days[day]) months[m].days[day] = [];
+      months[m].days[day].push({
+        vendor: exp.vendor || exp.description,
+        amount,
+        isJoint,
+      });
+
+      if (isJoint) {
+        months[m].jointTotal += amount;
+      } else {
+        months[m].personalTotal += amount;
+      }
+    }
+
+    // Build response
+    const result = months.map((m) => {
+      const personalBudgetAmt = personalMonthly[m.month - 1].amount;
+      const jointBudgetAmt    = jointMonthly[m.month - 1].amount;
+      const scaledJoint       = m.jointTotal * splitRatio;
+      return {
+        month: m.month,
+        days: m.days,
+        personalTotal:  Math.round(m.personalTotal * 100) / 100,
+        jointTotal:     Math.round(scaledJoint * 100) / 100,
+        combinedTotal:  Math.round((m.personalTotal + scaledJoint) * 100) / 100,
+        personalBudget: Math.round(personalBudgetAmt * 100) / 100,
+        jointBudget:    Math.round(jointBudgetAmt * 100) / 100,
+        combinedBudget: Math.round((personalBudgetAmt + jointBudgetAmt) * 100) / 100,
+      };
+    });
+
+    res.json({ year, splitRatio, months: result });
+  } catch (err) {
+    console.error("monthly-spending error", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ── Legacy stubs ───────────────────────────────────────────────────────────────
 // The old per-month Budget table has been removed.  These stubs prevent 404s
 // from any callers that haven't been updated yet.
