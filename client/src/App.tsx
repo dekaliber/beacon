@@ -18,6 +18,7 @@ import { SecuritiesPage } from "@/pages/Securities";
 import { CashFlow } from "@/pages/CashFlow";
 import { WithdrawalsPage } from "@/pages/Withdrawals";
 import { MonthlySpending } from "@/pages/MonthlySpending";
+import { TaxEstimatorPage } from "@/pages/TaxEstimator";
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/expenses" element={<Expenses />} />
           <Route path="/income" element={<IncomePage />} />
+          <Route path="/income/tax-estimator" element={<TaxEstimatorPage />} />
           <Route path="/budgets" element={<Budgets />} />
           <Route path="/budgets/monthly-spending" element={<MonthlySpending />} />
           <Route path="/accounts" element={<Accounts />} />

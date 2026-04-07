@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import {
-  Plus, Pencil, TrendingUp, ChevronRight,
+  Plus, Pencil, TrendingUp, ChevronRight, Calculator,
   ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, ChevronDown, Search,
   Upload, FileText, Check, CheckCircle2, AlertCircle,
 } from "lucide-react";
@@ -223,6 +225,140 @@ function EditableTypeaheadCell({
   );
 }
 
+// ── Inline category typeahead cell (two-level hierarchy) ──
+function EditableCategoryCell({
+  value, label, categories, onSave,
+}: {
+  value: string | null;
+  label: string;
+  categories: Category[];
+  onSave: (id: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [search, setSearch] = useState("");
+  const [focusIdx, setFocusIdx] = useState(0);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, minWidth: 0 });
+  const ref = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const parentCats = categories.filter((c) => !c.parentId);
+  const childCats = categories.filter((c) => c.parentId);
+
+  const flatOptions = useMemo(() => {
+    const opts: { id: string; label: string; parentLabel?: string }[] = [];
+    for (const parent of parentCats) {
+      const children = childCats.filter((c) => c.parentId === parent.id);
+      if (children.length === 0) {
+        opts.push({ id: parent.id, label: parent.name });
+      } else {
+        for (const child of children) {
+          opts.push({ id: child.id, label: child.name, parentLabel: parent.name });
+        }
+      }
+    }
+    return opts;
+  }, [categories]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return flatOptions;
+    const terms = search.toLowerCase().split(/\s+/);
+    return flatOptions.filter((o) => {
+      const text = (o.parentLabel ? o.parentLabel + " " : "") + o.label;
+      const words = text.toLowerCase().split(/\s+/);
+      return terms.every((t) => words.some((w) => w.startsWith(t)));
+    });
+  }, [search, flatOptions]);
+
+  useEffect(() => { setFocusIdx(0); }, [filtered]);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      const handler = (e: MouseEvent) => {
+        const target = e.target as Node;
+        if (
+          ref.current && !ref.current.contains(target) &&
+          dropdownRef.current && !dropdownRef.current.contains(target)
+        ) {
+          setEditing(false);
+          setSearch("");
+        }
+      };
+      document.addEventListener("mousedown", handler);
+      return () => document.removeEventListener("mousedown", handler);
+    }
+  }, [editing]);
+
+  const selectItem = (id: string) => {
+    setEditing(false);
+    setSearch("");
+    if (id !== value) onSave(id);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx((i) => Math.min(i + 1, filtered.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx((i) => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter" && filtered[focusIdx]) { e.preventDefault(); selectItem(filtered[focusIdx].id); }
+    else if (e.key === "Escape") { setEditing(false); setSearch(""); }
+  };
+
+  const startEditing = () => {
+    if (ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left, minWidth: rect.width });
+    }
+    setSearch("");
+    setEditing(true);
+  };
+
+  return (
+    <div ref={ref}>
+      {editing ? (
+        <input
+          ref={inputRef}
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Type to filter..."
+          className="w-full rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
+        />
+      ) : (
+        <span onClick={startEditing} className="cursor-pointer border-b border-dotted border-transparent hover:border-gray-400">
+          {label || <span className="text-muted-foreground italic">—</span>}
+        </span>
+      )}
+      {editing && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{ position: "fixed", top: dropdownPos.top, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 220), zIndex: 9999 }}
+          className="rounded-md border border-border bg-background shadow-lg"
+        >
+          <div className="max-h-48 overflow-auto">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-muted-foreground">No matches</p>
+            ) : (
+              filtered.map((o, i) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  onMouseDown={() => selectItem(o.id)}
+                >
+                  {o.parentLabel && <span className="text-muted-foreground">{o.parentLabel} &gt; </span>}
+                  {o.label}
+                </button>
+              ))
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
 // ── Inline amount cell ──
 function EditableAmountCell({ value, onSave, positive }: { value: string; onSave: (v: string) => void; positive?: boolean }) {
   const [editing, setEditing] = useState(false);
@@ -365,6 +501,157 @@ function EditableTaxStatusCell({ value, onSave }: { value: string | null; onSave
           : <span className="border-b border-dotted border-transparent text-muted-foreground hover:border-gray-400">—</span>
         }
       </span>
+    </div>
+  );
+}
+
+// ── Category typeahead (modal, two-level hierarchy) ──
+function CategoryTypeahead({
+  name, defaultValue, categories, required, triggerRef: externalTriggerRef, onTabFromSearch,
+}: {
+  name: string;
+  defaultValue?: string;
+  categories: Category[];
+  required?: boolean;
+  triggerRef?: React.RefObject<HTMLButtonElement | null>;
+  onTabFromSearch?: () => void;
+}) {
+  const [value, setValue] = useState(defaultValue ?? "");
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const [focusIdx, setFocusIdx] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const internalTriggerRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = externalTriggerRef ?? internalTriggerRef;
+  const clickingRef = useRef(false);
+  const justSelectedRef = useRef(false);
+
+  useEffect(() => { setValue(defaultValue ?? ""); }, [defaultValue]);
+
+  const parentCategories = categories.filter((c) => !c.parentId);
+  const childCategories = categories.filter((c) => c.parentId);
+
+  const flatOptions = useMemo(() => {
+    const opts: { id: string; label: string; parentLabel?: string }[] = [];
+    for (const parent of parentCategories) {
+      const children = childCategories.filter((c) => c.parentId === parent.id);
+      if (children.length === 0) {
+        opts.push({ id: parent.id, label: parent.name });
+      } else {
+        for (const child of children) {
+          opts.push({ id: child.id, label: child.name, parentLabel: parent.name });
+        }
+      }
+    }
+    return opts;
+  }, [categories]);
+
+  const filtered = useMemo(() => {
+    const visible = flatOptions.filter((o) => !categories.find((c) => c.id === o.id)?.isHidden);
+    if (!search.trim()) return visible;
+    const terms = search.toLowerCase().split(/\s+/);
+    return visible.filter((o) => {
+      const text = (o.parentLabel ? o.parentLabel + " " : "") + o.label;
+      const words = text.toLowerCase().split(/\s+/);
+      return terms.every((t) => words.some((w) => w.startsWith(t)));
+    });
+  }, [search, flatOptions, categories]);
+
+  useEffect(() => { setFocusIdx(0); }, [filtered]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const selectedLabel = useMemo(() => {
+    if (!value) return "";
+    const opt = flatOptions.find((o) => o.id === value);
+    return opt ? (opt.parentLabel ? `${opt.parentLabel} > ${opt.label}` : opt.label) : "";
+  }, [value, flatOptions]);
+
+  const selectItem = (id: string) => {
+    setValue(id);
+    setOpen(false);
+    setSearch("");
+    justSelectedRef.current = true;
+    setTimeout(() => triggerRef.current?.focus(), 0);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      setOpen(false);
+      setSearch("");
+      onTabFromSearch?.();
+      return;
+    }
+    if (!open) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx((i) => Math.min(i + 1, filtered.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx((i) => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter" && filtered[focusIdx]) { e.preventDefault(); selectItem(filtered[focusIdx].id); }
+    else if (e.key === "Escape") setOpen(false);
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <input type="hidden" name={name} value={value} />
+      {required && !value && <input type="text" required value="" className="hidden" tabIndex={-1} onChange={() => {}} />}
+      <button
+        ref={triggerRef}
+        type="button"
+        onMouseDown={() => { clickingRef.current = true; }}
+        onFocus={(e) => {
+          if (justSelectedRef.current || clickingRef.current) {
+            justSelectedRef.current = false;
+            clickingRef.current = false;
+            return;
+          }
+          const related = e.relatedTarget as Element | null;
+          if (related && !(related.compareDocumentPosition(e.currentTarget) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+          setOpen(true);
+        }}
+        onClick={() => setOpen((o) => !o)}
+        className="w-full rounded-md border border-border px-3 py-2 text-left text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+      >
+        {selectedLabel || <span className="text-muted-foreground">Select category</span>}
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-border bg-background shadow-lg">
+          <div className="border-b border-border p-2">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type to filter..."
+              className="w-full rounded border border-border px-2 py-1 text-sm focus:outline-none"
+              autoFocus
+            />
+          </div>
+          <div className="max-h-48 overflow-auto">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-muted-foreground">No matches</p>
+            ) : (
+              filtered.map((o, i) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  tabIndex={-1}
+                  className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  onMouseDown={() => selectItem(o.id)}
+                >
+                  {o.parentLabel && <span className="text-muted-foreground">{o.parentLabel} &gt; </span>}
+                  {o.label}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -895,6 +1182,14 @@ export function IncomePage() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Income</h2>
         <div className="flex gap-2">
+          <Link
+            to="/income/tax-estimator"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <Calculator className="h-4 w-4" />
+            Tax Estimator
+          </Link>
+          <div className="h-5 w-px bg-border self-center" />
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -1025,10 +1320,10 @@ export function IncomePage() {
                       <EditableCell value={income.source ?? ""} onSave={(v) => handleInlineUpdate(income.id, "source", v)} />
                     </td>
                     <td className="w-[130px] py-2 pr-3">
-                      <EditableTypeaheadCell
+                      <EditableCategoryCell
                         value={income.categoryId}
                         label={income.category?.name ?? ""}
-                        items={categories}
+                        categories={categories}
                         onSave={(v) => handleInlineUpdate(income.id, "categoryId", v)}
                       />
                     </td>
@@ -1141,10 +1436,10 @@ export function IncomePage() {
                         </div>
                       </td>
                       <td className="w-[130px] py-2 pr-3">
-                        <EditableTypeaheadCell
+                        <EditableCategoryCell
                           value={income.categoryId}
                           label={income.category?.name ?? ""}
-                          items={categories}
+                          categories={categories}
                           onSave={(v) => handleInlineUpdate(income.id, "categoryId", v)}
                         />
                       </td>
@@ -1367,11 +1662,10 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
 
         <div>
           <label className="mb-1 block text-sm font-medium">Category</label>
-          <ItemTypeahead
+          <CategoryTypeahead
             name="categoryId"
             defaultValue={income?.categoryId ?? ""}
-            items={categories}
-            placeholder="Select category"
+            categories={categories}
             triggerRef={categoryTriggerRef}
             onTabFromSearch={() => accountTriggerRef.current?.focus()}
           />
