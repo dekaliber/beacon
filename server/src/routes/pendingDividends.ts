@@ -471,13 +471,16 @@ pendingDividendRoutes.post("/:id/confirm", async (req, res) => {
       });
     }
 
-    // 3. Mark the pending dividend as confirmed
+    // 3. Mark the pending dividend as confirmed, updating paymentDate to the
+    // user-provided date. The original paymentDate was a system estimate
+    // (ex-date + 4 days); the date entered at confirmation is the actual one.
     const confirmedPending = await tx.pendingDividend.update({
       where: { id },
       data: {
         status: "CONFIRMED",
         confirmedAt: new Date(),
         activityId: activity.id,
+        paymentDate: payableDate,
       },
     });
 
@@ -603,13 +606,16 @@ pendingDividendRoutes.post("/:id/confirm-reinvest", async (req, res) => {
       });
     }
 
-    // 5. Mark the pending dividend as confirmed
+    // 5. Mark the pending dividend as confirmed, updating paymentDate to the
+    // reinvestment date. For a DRIP the reinvestment date is the economic
+    // equivalent of the cash payment date.
     const confirmedPending = await tx.pendingDividend.update({
       where: { id },
       data: {
         status: "CONFIRMED",
         confirmedAt: new Date(),
         activityId: dividendActivity.id,
+        paymentDate: reinvestDateObj,
       },
     });
 

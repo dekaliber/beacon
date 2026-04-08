@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { TrendingUp, TrendingDown, Landmark, LineChart, ChevronRight, Pencil, Layers, Target, ArrowUpRight } from "lucide-react";
+import { TrendingUp, TrendingDown, Landmark, LineChart, ChevronRight, Pencil, Library, Target, ArrowUpRight, Sliders } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
@@ -163,13 +163,487 @@ function DeviationBar({ actualPct, targetPct, scale, color, name, targetValue, a
 
 function DeviationBadge({ delta }: { delta: number }) {
   if (Math.abs(delta) < 0.05) {
-    return <span className="text-xs text-muted-foreground tabular-nums">on target</span>;
+    return <span className="text-right text-xs text-muted-foreground tabular-nums">on target</span>;
   }
   const over = delta > 0;
   return (
-    <span className={`text-xs font-medium tabular-nums ${over ? "text-amber-600" : "text-blue-600"}`}>
+    <span className={`text-right text-xs font-medium tabular-nums ${over ? "text-amber-600" : "text-blue-600"}`}>
       {over ? "+" : ""}{delta.toFixed(1)}%
     </span>
+  );
+}
+
+// ── Rebalancing Simulator Modal ──────────────────────────────────────────────
+
+type RebalanceTab = "manual" | "auto";
+
+/** Fixed-point iteration to find per-class purchase amounts.
+ *  For each under-allocated class, solves:
+ *    (actualValue + addition) / (classifiedValue + totalAdded) = (targetPct - tolerancePct) / 100
+ *  Over-allocated classes are never sold (addition = 0). Converges in < 30 steps. */
+function computeAutoAdditions(
+  items: AllocationItem[],
+  classifiedValue: number,
+  customTargetPcts: Record<string, number>,
+  tolerancePct: number,
+): Record<string, number> {
+  const additions: Record<string, number> = {};
+  items.forEach((i) => { additions[i.id] = 0; });
+
+  for (let iter = 0; iter < 40; iter++) {
+    const totalAdded = Object.values(additions).reduce((s, v) => s + v, 0);
+    const newTotal = classifiedValue + totalAdded;
+    let changed = false;
+    for (const item of items) {
+      const targetPct = customTargetPcts[item.id] ?? item.targetPct ?? 0;
+      const effectiveTarget = Math.max(0, (targetPct - tolerancePct) / 100);
+      const needed = Math.max(0, effectiveTarget * newTotal - item.actualValue);
+      if (Math.abs(needed - additions[item.id]) > 0.01) changed = true;
+      additions[item.id] = needed;
+    }
+    if (!changed) break;
+  }
+  return additions;
+}
+
+/** Fixed-total approximation for buy+sell rebalancing.
+ *  Sells over-allocated classes down to (target + tolerance) and buys
+ *  under-allocated classes up to (target − tolerance), using the current
+ *  portfolio value as the fixed denominator (valid because sells fund buys
+ *  and net cash is negligible relative to total). Returns negative values
+ *  for sells, positive for buys. */
+function computeAutoRebalance(
+  items: AllocationItem[],
+  classifiedValue: number,
+  customTargetPcts: Record<string, number>,
+  tolerancePct: number,
+): Record<string, number> {
+  const S = classifiedValue;
+  const adjustments: Record<string, number> = {};
+  for (const item of items) {
+    const targetPct = customTargetPcts[item.id] ?? item.targetPct ?? 0;
+    const actualPct = S > 0 ? (item.actualValue / S) * 100 : 0;
+    if (actualPct > targetPct + tolerancePct) {
+      // Over-allocated: sell to the upper tolerance boundary
+      adjustments[item.id] = ((targetPct + tolerancePct) / 100) * S - item.actualValue;
+    } else if (actualPct < targetPct - tolerancePct) {
+      // Under-allocated: buy to the lower tolerance boundary
+      adjustments[item.id] = ((targetPct - tolerancePct) / 100) * S - item.actualValue;
+    } else {
+      adjustments[item.id] = 0;
+    }
+  }
+  return adjustments;
+}
+
+// Suppress native number-input spinners on all browsers
+const NO_SPINNER = "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+
+function RebalanceModal({
+  data,
+  isOpen,
+  onClose,
+}: {
+  data: AllocationSummary;
+  isOpen: boolean;
+  onClose: () => void;
+}) {
+  const { items, classifiedValue } = data;
+  const [tab, setTab] = useState<RebalanceTab>("manual");
+  const [manualAdj, setManualAdj] = useState<Record<string, string>>(() => {
+    try {
+      const stored = localStorage.getItem("rebalance-manual-adj");
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [tolerancePct, setTolerancePct] = useState(0.5);
+  const [rebalanceMode, setRebalanceMode] = useState<"buy-only" | "buy-sell">("buy-only");
+
+  // Persist manual adjustments across modal sessions
+  useEffect(() => {
+    try {
+      localStorage.setItem("rebalance-manual-adj", JSON.stringify(manualAdj));
+    } catch {}
+  }, [manualAdj]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setTab("manual");
+    setTolerancePct(0.5);
+    setRebalanceMode("buy-only");
+  }, [isOpen]);
+
+  // ── Manual ────────────────────────────────────────────────────────────────
+  const manualDelta = items.reduce((s, item) => s + (parseFloat(manualAdj[item.id] ?? "0") || 0), 0);
+  const manualNewTotal = classifiedValue + manualDelta;
+
+  // Base scale is anchored to the static current + target percentages so it
+  // never shrinks as adjustments are entered. It can only grow if a projected
+  // value genuinely exceeds the current maximum.
+  const manualBaseScale = Math.max(
+    Math.ceil(Math.max(
+      ...items.map((i) => i.actualPct),
+      ...items.map((i) => i.targetPct ?? 0),
+      10,
+    ) / 5) * 5,
+    10,
+  );
+  const manualScale = Math.max(
+    Math.ceil(Math.max(
+      ...items.map((item) => {
+        const adj = parseFloat(manualAdj[item.id] ?? "0") || 0;
+        const v = Math.max(0, item.actualValue + adj);
+        return manualNewTotal > 0 ? (v / manualNewTotal) * 100 : 0;
+      }),
+      10,
+    ) / 5) * 5,
+    manualBaseScale,
+  );
+
+  // ── Auto ──────────────────────────────────────────────────────────────────
+  const autoTargets: Record<string, number> = {};
+  items.forEach((i) => { autoTargets[i.id] = i.targetPct ?? 0; });
+
+  const autoAdjustments = rebalanceMode === "buy-only"
+    ? computeAutoAdditions(items, classifiedValue, autoTargets, tolerancePct)
+    : computeAutoRebalance(items, classifiedValue, autoTargets, tolerancePct);
+  const autoNetCash = Object.values(autoAdjustments).reduce((s, v) => s + v, 0);
+  const autoNewTotal = classifiedValue + autoNetCash;
+
+  const autoBaseScale = Math.max(
+    Math.ceil(Math.max(
+      ...items.map((i) => i.actualPct),
+      ...items.map((i) => i.targetPct ?? 0),
+      10,
+    ) / 5) * 5,
+    10,
+  );
+  const autoScale = Math.max(
+    Math.ceil(Math.max(
+      ...items.map((item) => {
+        const adj = autoAdjustments[item.id] ?? 0;
+        return autoNewTotal > 0 ? ((item.actualValue + adj) / autoNewTotal) * 100 : 0;
+      }),
+      10,
+    ) / 5) * 5,
+    autoBaseScale,
+  );
+
+  // ── Shared stacked-bar data ────────────────────────────────────────────────
+  const toSeg = (item: AllocationItem, idx: number, pct: number): BarSegment => ({
+    pct,
+    color: itemColor(item, idx),
+    name: item.name,
+    targetPct: item.targetPct,
+    targetValue: item.targetPct != null ? (item.targetPct / 100) * classifiedValue : null,
+    actualPct: item.actualPct,
+    actualValue: item.actualValue,
+  });
+
+  const currentSegments = items.map((item, idx) => toSeg(item, idx, item.actualPct));
+
+  const manualProjectedSegments = items.map((item, idx) => {
+    const adj = parseFloat(manualAdj[item.id] ?? "0") || 0;
+    const newValue = Math.max(0, item.actualValue + adj);
+    const newPct = manualNewTotal > 0 ? (newValue / manualNewTotal) * 100 : 0;
+    return toSeg(item, idx, Math.max(newPct, 0));
+  });
+
+  const autoProjectedSegments = items.map((item, idx) => {
+    const adj = autoAdjustments[item.id] ?? 0;
+    const newPct = autoNewTotal > 0 ? ((item.actualValue + adj) / autoNewTotal) * 100 : 0;
+    return toSeg(item, idx, Math.max(newPct, 0));
+  });
+
+  // Column templates — identical between header row and data rows so alignment is guaranteed
+  // dot | name | bar | adjustment | current% | after% | vs.target
+  const MANUAL_COLS = "10px 160px 1fr 76px 48px 48px 60px";
+  // dot | name | bar | trade | current% | after% | vs.target
+  const AUTO_COLS   = "10px 160px 1fr 88px 48px 48px 60px";
+
+  const rowCls = "grid items-center gap-x-3";
+  const hdrCls = "text-xs font-medium text-muted-foreground";
+
+  return (
+    <Modal open={isOpen} onClose={onClose} title="Rebalancing Simulator" className="max-w-2xl">
+      {/* Tabs */}
+      <div className="flex gap-1 mb-5 border-b border-border -mx-6 px-6">
+        {(["manual", "auto"] as RebalanceTab[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              tab === t
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t === "manual" ? "Manual" : "Auto-Calculate"}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Manual tab ────────────────────────────────────────────────────── */}
+      {tab === "manual" && (
+        <div>
+          {/* Overview bars */}
+          <div className="mb-5 space-y-1.5">
+            <p className="mb-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Projected Allocation
+            </p>
+            <div className="flex items-center gap-2">
+              <span className="w-12 shrink-0 text-right text-xs text-muted-foreground">After</span>
+              <StackedBar segments={manualProjectedSegments} />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-12 shrink-0 text-right text-xs text-muted-foreground">Before</span>
+              <StackedBar segments={currentSegments} />
+            </div>
+          </div>
+
+          {/* Header */}
+          <div className={`mb-2 ${rowCls}`} style={{ gridTemplateColumns: MANUAL_COLS }}>
+            <span />
+            <span className={hdrCls}>Asset Class</span>
+            <span />
+            <span className={`${hdrCls} text-right`}>Adjustment</span>
+            <span className={`${hdrCls} text-right`}>Current</span>
+            <span className={`${hdrCls} text-right`}>After</span>
+            <span className={`${hdrCls} text-right`}>vs. Target</span>
+          </div>
+
+          <div className="border-t border-border" />
+
+          {/* Data rows */}
+          <div className="py-2 space-y-1.5">
+            {items.map((item, idx) => {
+              const adj = parseFloat(manualAdj[item.id] ?? "0") || 0;
+              const newValue = Math.max(0, item.actualValue + adj);
+              const newPct = manualNewTotal > 0 ? (newValue / manualNewTotal) * 100 : 0;
+              const delta = item.targetPct != null ? newPct - item.targetPct : null;
+              const color = itemColor(item, idx);
+              return (
+                <div key={item.id} className={rowCls} style={{ gridTemplateColumns: MANUAL_COLS }}>
+                  <span className="h-2 w-2 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
+                  <span className="text-sm font-medium truncate">{item.name}</span>
+                  <DeviationBar
+                    actualPct={newPct}
+                    targetPct={item.targetPct}
+                    scale={manualScale}
+                    color={color}
+                    name={item.name}
+                    targetValue={item.targetPct != null ? (item.targetPct / 100) * classifiedValue : null}
+                    actualValue={newValue}
+                  />
+                  <div className="relative">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none select-none">$</span>
+                    <input
+                      type="number"
+                      value={manualAdj[item.id] ?? ""}
+                      onChange={(e) => setManualAdj((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                      placeholder="0"
+                      className={`w-full rounded border border-border bg-background pl-5 pr-2 py-1 text-xs text-right tabular-nums focus:outline-none focus:ring-1 focus:ring-primary ${NO_SPINNER}`}
+                    />
+                  </div>
+                  <span className="text-right text-xs tabular-nums text-muted-foreground">
+                    {item.actualPct.toFixed(1)}%
+                  </span>
+                  <span className={`text-right text-xs tabular-nums font-medium ${
+                    delta == null ? "" : Math.abs(delta) < 0.5 ? "text-green-600" : delta > 0 ? "text-amber-600" : "text-blue-600"
+                  }`}>
+                    {newPct.toFixed(1)}%
+                  </span>
+                  <span className={`text-right text-xs tabular-nums ${
+                    delta == null ? "text-muted-foreground"
+                      : Math.abs(delta) < 0.5 ? "text-green-600"
+                      : delta > 0 ? "text-amber-600"
+                      : "text-blue-600"
+                  }`}>
+                    {delta != null ? `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}%` : "—"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between border-t border-border pt-3">
+            <span className="text-sm text-muted-foreground">Net cash deployed</span>
+            <span className={`text-sm font-semibold tabular-nums ${
+              manualDelta > 0 ? "text-green-600" : manualDelta < 0 ? "text-red-500" : "text-muted-foreground"
+            }`}>
+              {manualDelta >= 0 ? "+" : "−"}{formatCurrency(Math.abs(manualDelta))}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Auto-Calculate tab ────────────────────────────────────────────── */}
+      {tab === "auto" && (
+        <div>
+          {/* Controls: mode toggle + tolerance slider, 50/50 */}
+          <div className="grid grid-cols-3 gap-5">
+            {/* Mode toggle */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wide">Mode</label>
+              <div className="flex gap-1 rounded-lg bg-secondary p-1 w-fit">
+                {(["buy-only", "buy-sell"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setRebalanceMode(m)}
+                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      rebalanceMode === m
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {m === "buy-only" ? "Buy only" : "Buy & sell"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tolerance slider */}
+            <div className="col-span-2 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tolerance</label>
+                <span className="text-sm tabular-nums font-semibold text-primary">
+                  ±{tolerancePct.toFixed(1)}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={5}
+                step={0.1}
+                value={tolerancePct}
+                onChange={(e) => setTolerancePct(parseFloat(e.target.value))}
+                className="w-full accent-primary"
+              />
+              <p className="text-xs text-muted-foreground">
+                {rebalanceMode === "buy-only" ? (
+                  <>Buy into under-allocated classes until each is within{" "}
+                  <span className="font-medium">{tolerancePct.toFixed(1)}%</span> of target.
+                  Over-allocated classes are not sold.</>
+                ) : (
+                  <>Buy under-allocated and sell over-allocated classes to bring each within{" "}
+                  <span className="font-medium">{tolerancePct.toFixed(1)}%</span> of target.</>
+                )}
+              </p>
+            </div>
+          </div>
+
+          {/* Overview bars */}
+          <div className="mb-5 mt-5 space-y-1.5">
+            <p className="mb-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Projected Allocation
+            </p>
+            <div className="flex items-center gap-2">
+              <span className="w-12 shrink-0 text-right text-xs text-muted-foreground">After</span>
+              <StackedBar segments={autoProjectedSegments} />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-12 shrink-0 text-right text-xs text-muted-foreground">Before</span>
+              <StackedBar segments={currentSegments} />
+            </div>
+          </div>
+
+          {/* Header */}
+          <div className={`mb-2 ${rowCls}`} style={{ gridTemplateColumns: AUTO_COLS }}>
+            <span />
+            <span className={hdrCls}>Asset Class</span>
+            <span />
+            <span className={`${hdrCls} text-right`}>{rebalanceMode === "buy-only" ? "Buy" : "Trade"}</span>
+            <span className={`${hdrCls} text-right`}>Current</span>
+            <span className={`${hdrCls} text-right`}>After</span>
+            <span className={`${hdrCls} text-right`}>vs. Target</span>
+          </div>
+
+          <div className="border-t border-border" />
+
+          {/* Data rows */}
+          <div className="py-2 space-y-3">
+            {items.map((item, idx) => {
+              const adj = autoAdjustments[item.id] ?? 0;
+              const newValue = item.actualValue + adj;
+              const newPct = autoNewTotal > 0 ? (newValue / autoNewTotal) * 100 : 0;
+              const delta = item.targetPct != null ? newPct - item.targetPct : null;
+              const color = itemColor(item, idx);
+              const isBuy = adj > 1;
+              const isSell = adj < -1;
+              const deltaColor = delta == null ? "text-muted-foreground"
+                : Math.abs(delta) < tolerancePct ? "text-green-600"
+                : delta > 0 ? "text-amber-600"
+                : "text-blue-600";
+              return (
+                <div key={item.id} className={rowCls} style={{ gridTemplateColumns: AUTO_COLS }}>
+                  <span className="h-2 w-2 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
+                  <span className="text-sm font-medium truncate">{item.name}</span>
+                  <DeviationBar
+                    actualPct={newPct}
+                    targetPct={item.targetPct}
+                    scale={autoScale}
+                    color={color}
+                    name={item.name}
+                    targetValue={item.targetPct != null ? (item.targetPct / 100) * classifiedValue : null}
+                    actualValue={newValue}
+                  />
+                  <span className={`text-right text-xs tabular-nums font-medium ${
+                    isBuy ? "text-blue-600" : isSell ? "text-amber-600" : "text-muted-foreground"
+                  }`}>
+                    {isBuy ? `+${formatCurrency(adj)}` : isSell ? `−${formatCurrency(Math.abs(adj))}` : "—"}
+                  </span>
+                  <span className="text-right text-xs tabular-nums text-muted-foreground">
+                    {item.actualPct.toFixed(1)}%
+                  </span>
+                  <span className={`text-right text-xs tabular-nums font-medium ${deltaColor}`}>
+                    {newPct.toFixed(1)}%
+                  </span>
+                  <span className={`text-right text-xs tabular-nums ${deltaColor}`}>
+                    {delta != null ? `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}%` : "—"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between border-t border-border pt-3">
+            {rebalanceMode === "buy-only" ? (
+              <>
+                <span className="text-sm text-muted-foreground">Total cash to deploy</span>
+                <span className="text-sm font-semibold tabular-nums text-blue-600">
+                  {autoNetCash > 1 ? `+${formatCurrency(autoNetCash)}` : formatCurrency(0)}
+                </span>
+              </>
+            ) : autoNetCash > 1 ? (
+              <>
+                <span className="text-sm text-muted-foreground">Net cash to deploy</span>
+                <span className="text-sm font-semibold tabular-nums text-blue-600">
+                  +{formatCurrency(autoNetCash)}
+                </span>
+              </>
+            ) : autoNetCash < -1 ? (
+              <>
+                <span className="text-sm text-muted-foreground">Net cash proceeds</span>
+                <span className="text-sm font-semibold tabular-nums text-amber-600">
+                  −{formatCurrency(Math.abs(autoNetCash))}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-sm text-muted-foreground">Net cash</span>
+                <span className="text-sm font-semibold tabular-nums text-muted-foreground">
+                  {formatCurrency(0)}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -183,10 +657,12 @@ function AllocationCard({
   data,
   filter,
   onFilterChange,
+  onRebalance,
 }: {
   data: AllocationSummary;
   filter: AllocationFilter;
   onFilterChange: (f: AllocationFilter) => void;
+  onRebalance: () => void;
 }) {
   const { items, topLevelItems = items, unclassifiedValue, classifiedValue, hasAnyTargets } = data;
 
@@ -218,7 +694,9 @@ function AllocationCard({
               Asset Allocation
             </span>
           </div>
-          {filterButtons}
+          <div className="flex items-center gap-2">
+            {filterButtons}
+          </div>
         </div>
         <p className="text-sm text-muted-foreground">
           No target allocation configured.{" "}
@@ -265,7 +743,17 @@ function AllocationCard({
             Asset Allocation
           </span>
         </div>
-        {filterButtons}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onRebalance}
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+          >
+            <Sliders className="h-3 w-3" />
+            Rebalance
+          </button>
+          <div className="w-px h-3.5 bg-border" />
+          {filterButtons}
+        </div>
       </div>
 
       {/* Overview: paired stacked bars */}
@@ -284,7 +772,7 @@ function AllocationCard({
       <div className="border-t border-border" />
 
       {/* Per-class deviation rows */}
-      <div className="space-y-2">
+      <div className="space-y-3">
         {items.map((item, idx) => {
           const delta = item.targetPct != null ? item.actualPct - item.targetPct : null;
           const deltaDollars = delta != null ? (delta / 100) * classifiedValue : null;
@@ -318,9 +806,7 @@ function AllocationCard({
                 {item.actualPct.toFixed(1)}%
               </span>
               {/* Delta % */}
-              <span className="text-right">
-                {delta != null ? <DeviationBadge delta={delta} /> : null}
-              </span>
+              {delta != null ? <DeviationBadge delta={delta} /> : <span className="text-right" />}
               {/* Delta $ */}
               <span className={`text-right text-xs tabular-nums ${
                 deltaDollars == null ? "" :
@@ -625,6 +1111,7 @@ export function Investments() {
   const navigate = useNavigate();
   const { data: accounts, refetch } = useApi(() => getInvestmentAccounts(), []);
   const [allocationFilter, setAllocationFilter] = useState<AllocationFilter>("all");
+  const [showRebalance, setShowRebalance] = useState(false);
   const { data: allocation, refetch: refetchAllocation } = useApi(
     () => getAllocationSummary(allocationFilter),
     [allocationFilter]
@@ -774,7 +1261,7 @@ if (!displayAccounts) return null;
           to="/investments/securities"
           className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
         >
-          <Layers className="h-4 w-4" />
+          <Library className="h-4 w-4" />
           Securities
         </Link>
       </div>
@@ -893,11 +1380,19 @@ if (!displayAccounts) return null;
 
           {/* Right: Asset Allocation */}
           {displayAllocation && (
-            <AllocationCard
-              data={displayAllocation}
-              filter={allocationFilter}
-              onFilterChange={setAllocationFilter}
-            />
+            <>
+              <AllocationCard
+                data={displayAllocation}
+                filter={allocationFilter}
+                onFilterChange={setAllocationFilter}
+                onRebalance={() => setShowRebalance(true)}
+              />
+              <RebalanceModal
+                data={displayAllocation}
+                isOpen={showRebalance}
+                onClose={() => setShowRebalance(false)}
+              />
+            </>
           )}
         </div>
       )}

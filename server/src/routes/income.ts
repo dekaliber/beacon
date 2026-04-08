@@ -14,6 +14,42 @@ const INCOME_INCLUDE = {
   activity: true,
 } as const;
 
+// Resolves isCollectible for each income's linked activity by looking up the
+// instrument via the activity's ticker (primary or alias). This keeps the
+// Instrument as the single source of truth without requiring a schema relation
+// between InvestmentActivity and Instrument.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function attachCollectibleFlags(incomes: any[]): Promise<any[]> {
+  const tickers = new Set<string>();
+  for (const inc of incomes) {
+    if (inc.activity?.ticker) tickers.add(inc.activity.ticker);
+  }
+  if (tickers.size === 0) return incomes;
+
+  const tickerList = Array.from(tickers);
+
+  const [byPrimary, byAlias] = await Promise.all([
+    prisma.instrument.findMany({
+      where: { primaryTicker: { in: tickerList } },
+      select: { primaryTicker: true, isCollectible: true },
+    }),
+    prisma.instrumentTicker.findMany({
+      where: { ticker: { in: tickerList } },
+      select: { ticker: true, instrument: { select: { isCollectible: true } } },
+    }),
+  ]);
+
+  const map = new Map<string, boolean>();
+  for (const inst of byPrimary) map.set(inst.primaryTicker, inst.isCollectible);
+  for (const alias of byAlias) map.set(alias.ticker, alias.instrument.isCollectible);
+
+  return incomes.map((inc) => {
+    if (!inc.activity?.ticker) return inc;
+    const isCollectible = map.get(inc.activity.ticker) ?? false;
+    return { ...inc, activity: { ...inc.activity, isCollectible } };
+  });
+}
+
 const incomeSchema = z.object({
   amount: z.number().positive(),
   categoryId: z.string().optional(),
@@ -99,8 +135,10 @@ incomeRoutes.get("/", async (req, res) => {
     prisma.income.count({ where }),
   ]);
 
+  const enriched = await attachCollectibleFlags(incomes);
+
   res.json({
-    data: incomes,
+    data: enriched,
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   });
 });
@@ -112,7 +150,8 @@ incomeRoutes.get("/:id", async (req, res) => {
     include: INCOME_INCLUDE,
   });
   if (!income) return res.status(404).json({ error: "Income not found" });
-  res.json(income);
+  const [enriched] = await attachCollectibleFlags([income]);
+  res.json(enriched);
 });
 
 // Create income

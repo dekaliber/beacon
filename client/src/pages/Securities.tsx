@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Link2, Pencil, Layers, X, Plus } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Link2, Pencil, Layers, X, Plus } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
@@ -53,6 +54,7 @@ const WEIGHT_COLUMNS = [
 // ── Main page ──────────────────────────────────────────────────────────────
 
 export function SecuritiesPage() {
+  const navigate = useNavigate();
   const { data: instruments, refetch } = useApi(() => getInstruments(), []);
   const { data: assetClasses } = useApi(() => getFlatAssetClasses(), []);
 
@@ -196,6 +198,11 @@ export function SecuritiesPage() {
                 </span>
               );
             })}
+            {instrument.isCollectible && (
+              <span className="rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-xs font-medium text-amber-700 whitespace-nowrap">
+                28% max
+              </span>
+            )}
             {!isComplete && (
               <AlertTriangle
                 className="h-3.5 w-3.5 shrink-0 text-amber-500"
@@ -224,13 +231,21 @@ export function SecuritiesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Securities</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            All unique securities across your investment accounts. Set asset class weights here once and they apply everywhere.
-          </p>
+      <div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate("/investments")}
+              className="rounded p-1 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <h2 className="text-2xl font-bold">Securities</h2>
+          </div>
         </div>
+        <p className="text-sm text-muted-foreground mt-1">
+          All unique securities across your investment accounts. Set asset class weights here once and they apply everywhere.
+        </p>
       </div>
 
       <Card>
@@ -300,10 +315,10 @@ export function SecuritiesPage() {
         allInstruments={instruments ?? []}
         assetClasses={assetClasses ?? []}
         onClose={() => setEditModal({ open: false, instrument: null })}
-        onSave={async (id, { name, weights, mergeIds, removeTickers }) => {
+        onSave={async (id, { name, isCollectible, weights, mergeIds, removeTickers }) => {
           await Promise.all([
             setInstrumentWeights(id, weights),
-            patchInstrument(id, { name }),
+            patchInstrument(id, { name, isCollectible }),
             ...removeTickers.map((t) => removeInstrumentTicker(id, t)),
             ...mergeIds.map((otherId) => mergeInstrument(id, otherId)),
           ]);
@@ -319,6 +334,7 @@ export function SecuritiesPage() {
 
 interface EditSavePayload {
   name: string | null;
+  isCollectible: boolean;
   weights: { assetClassId: string; weight: number }[];
   mergeIds: string[];      // IDs of other instruments to merge into this one
   removeTickers: string[]; // alias ticker strings to remove
@@ -336,6 +352,7 @@ interface EditModalProps {
 function EditModal({ open, instrument, allInstruments, assetClasses, onClose, onSave }: EditModalProps) {
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
+  const [isCollectible, setIsCollectible] = useState(false);
   const [weights, setWeights] = useState<Record<string, string>>({});
   const [toRemove, setToRemove] = useState<Set<string>>(new Set());
   const [pendingSlots, setPendingSlots] = useState<string[]>([]);
@@ -343,6 +360,7 @@ function EditModal({ open, instrument, allInstruments, assetClasses, onClose, on
   useEffect(() => {
     if (!open || !instrument) return;
     setName(instrument.name ?? "");
+    setIsCollectible(instrument.isCollectible);
     const map: Record<string, string> = {};
     for (const w of instrument.weights) {
       map[w.assetClassId] = parseFloat(w.weight).toString();
@@ -371,6 +389,7 @@ function EditModal({ open, instrument, allInstruments, assetClasses, onClose, on
         .filter((id): id is string => id !== undefined);
       await onSave(instrument.id, {
         name: name.trim() || null,
+        isCollectible,
         weights: Object.entries(weights)
           .map(([assetClassId, w]) => ({ assetClassId, weight: parseFloat(w) || 0 }))
           .filter((e) => e.weight > 0),
@@ -496,6 +515,30 @@ function EditModal({ open, instrument, allInstruments, assetClasses, onClose, on
             className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>}
+
+        {/* ── Tax Treatment ── */}
+        <div>
+          <h3 className="text-sm font-semibold mb-2">Tax Treatment</h3>
+          <label className="flex items-center gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isCollectible}
+              onChange={(e) => setIsCollectible(e.target.checked)}
+              className="h-4 w-4 shrink-0 rounded border-border accent-primary"
+            />
+            <span className="flex items-center gap-1.5 text-sm">
+              Taxed as collectible
+              <span className="group relative">
+                <span className="flex h-3.5 w-3.5 cursor-default items-center justify-center rounded-full border border-muted-foreground/40 text-[9px] font-bold leading-none text-muted-foreground">
+                  ?
+                </span>
+                <span className="pointer-events-none invisible absolute bottom-full left-1/2 mb-2 w-64 -translate-x-1/2 rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100">
+                  Long-term gains taxed at the lesser of 28% or your ordinary income rate. Applies to grantor-trust gold and silver ETFs (e.g. GLD, IAU, SLV).
+                </span>
+              </span>
+            </span>
+          </label>
+        </div>
 
         {/* ── Equivalents ── */}
         {!instrument?.isManual && <div>

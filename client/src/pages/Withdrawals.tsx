@@ -524,8 +524,8 @@ function WithdrawalRow({
         <span className={
           isIncome
             ? "text-muted-foreground"
-            : event.type === "reinvestment"
-            ? "text-red-500"
+            : parseFloat(event.amount) > 0 && event.type !== "reinvestment"
+            ? "text-foreground"
             : "text-green-600"
         }>
           {event.type === "reinvestment" ? "−" : ""}{formatCurrency(event.amount)}

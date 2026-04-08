@@ -46,6 +46,15 @@ function CurrencyInput({ name, defaultValue, required, autoFocus }: { name: stri
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData("text");
+    const cleaned = pasted.replace(/[$,\s]/g, "");
+    if (cleaned === "" || /^\d*\.?\d{0,2}$/.test(cleaned)) {
+      e.preventDefault();
+      setRawValue(cleaned);
+    }
+  };
+
   const handleBlur = () => {
     if (rawValue && !isNaN(parseFloat(rawValue))) {
       setRawValue(parseFloat(rawValue).toFixed(2));
@@ -60,6 +69,7 @@ function CurrencyInput({ name, defaultValue, required, autoFocus }: { name: stri
           type="text"
           value={rawValue}
           onChange={handleChange}
+          onPaste={handlePaste}
           onBlur={handleBlur}
           autoFocus={autoFocus}
           className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
@@ -1181,7 +1191,7 @@ export function IncomePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Income</h2>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <Link
             to="/income/tax-estimator"
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -1189,7 +1199,7 @@ export function IncomePage() {
             <Calculator className="h-4 w-4" />
             Tax Estimator
           </Link>
-          <div className="h-5 w-px bg-border self-center" />
+          <div className="h-5 w-px bg-border" />
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input

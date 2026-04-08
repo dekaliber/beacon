@@ -417,10 +417,10 @@ async function buildProjection(
       where: {
         accountId: inv.id,
         status: { in: ["PENDING", "CONFIRMED"] },
-        // Exclude only dividends whose payment has already cleared (activity
-        // exists AND payment date is in the past — those are reflected in the
-        // stored account balance). Confirmed-but-future dividends still need
-        // to appear in the projection even though they have an activityId.
+        // Exclude confirmed dividends whose payment has already settled before
+        // the window — those are reflected in the stored account balance and
+        // would be double-counted. paymentDate is always updated to the actual
+        // payment date at confirmation time, so it is the authoritative field.
         NOT: { activityId: { not: null }, paymentDate: { lt: windowStart } },
         // PENDING dividends always appear until the user confirms/dismisses
         // them. CONFIRMED dividends are date-windowed so settled ones drop off.

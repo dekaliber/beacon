@@ -483,6 +483,23 @@ investmentRoutes.get("/allocation", async (req, res) => {
       }
     }
 
+    // Credit banking (checking/savings) balances — consistent with how the
+    // Asset Composition section on the client counts them as cash.
+    const bankingAccounts = await prisma.account.findMany({
+      where: { type: { in: ["CHECKING", "SAVINGS"] }, isActive: true },
+      select: { balance: true },
+    });
+    for (const acct of bankingAccounts) {
+      const bal = parseFloat(acct.balance.toString());
+      if (bal <= 0) continue;
+      totalValue += bal;
+      if (cashDuId) {
+        duValues.set(cashDuId, (duValues.get(cashDuId) ?? 0) + bal);
+      } else {
+        unclassifiedValue += bal;
+      }
+    }
+
     // 5. Build ordered response ───────────────────────────────────────────────
     // actualPct is computed relative to classifiedValue so that unclassified
     // holdings are excluded from the denominator, making target vs. actual
@@ -2592,6 +2609,22 @@ function serializeSnapshot(s: any) {
     updatedAt: s.updatedAt,
   };
 }
+
+// GET /api/investments/gain-snapshots?year=2026 — all snapshots for a given year
+investmentRoutes.get("/gain-snapshots", async (req, res) => {
+  try {
+    const year = req.query.year ? parseInt(req.query.year as string, 10) : new Date().getFullYear();
+    const snapshots = await prisma.realizedGainSnapshot.findMany({
+      where: { year },
+      include: { account: { select: { id: true, name: true, color: true } } },
+      orderBy: { account: { name: "asc" } },
+    });
+    res.json(snapshots.map((s) => ({ ...serializeSnapshot(s), account: s.account })));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: { message: "Failed to fetch gain snapshots" } });
+  }
+});
 
 // GET /api/investments/gain-snapshot/:accountId?year=2026
 investmentRoutes.get("/gain-snapshot/:accountId", async (req, res) => {

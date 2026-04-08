@@ -522,6 +522,7 @@ model Instrument {
   name              String?
   isManual          Boolean  @default(false)
   isActive          Boolean  @default(true)
+  isCollectible     Boolean  @default(false)
   // Set after each successful Tiingo dividend scan; used to enforce the daily scan window.
   lastDividendScanAt    DateTime?
   // Set after every scan attempt (success or failure); used to enforce a 1-hour retry

@@ -1,13 +1,13 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
-import { ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Settings } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Settings, Layers, Landmark, Briefcase, TrendingUp, Activity } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
-import { getIncome } from "@/api";
+import { getIncome, getAllGainSnapshots } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { Income } from "@/types";
+import type { Income, RealizedGainSnapshotWithAccount } from "@/types";
 
 // ── 2026 Federal Tax Data ──────────────────────────────────────────────────────
 
@@ -120,24 +120,37 @@ function getTaxableAmt(income: Income): number {
   return parseFloat(income.amount);
 }
 
-interface CapGainSplit { stcg: number; ltcg: number; }
+interface CapGainSplit { stcg: number; ltcg: number; collectibleLtcg: number; }
 
 function getCapGainSplit(income: Income): CapGainSplit {
   const act = income.activity;
   // Prisma serializes Decimal fields as strings in JSON, so we must use Number()
   // rather than relying on JS arithmetic to coerce them (which causes NaN via
   // string-concatenation in Array.reduce).
-  if (act) return {
-    stcg: act.shortTermGain != null ? Number(act.shortTermGain) : 0,
-    ltcg: act.longTermGain != null ? Number(act.longTermGain) : 0,
-  };
-  // No activity linked — treat full taxable amount as LTCG
-  return { stcg: 0, ltcg: getTaxableAmt(income) };
+  if (act) {
+    const ltcgRaw = act.longTermGain != null ? Number(act.longTermGain) : 0;
+    const isCollectible = act.isCollectible ?? false;
+    return {
+      stcg: act.shortTermGain != null ? Number(act.shortTermGain) : 0,
+      ltcg: isCollectible ? 0 : ltcgRaw,
+      collectibleLtcg: isCollectible ? ltcgRaw : 0,
+    };
+  }
+  // No activity linked — treat full taxable amount as regular LTCG
+  return { stcg: 0, ltcg: getTaxableAmt(income), collectibleLtcg: 0 };
 }
 
 // ── Group types ────────────────────────────────────────────────────────────────
 
 type TaxBucket = "ordinary" | "qualified_dividend" | "capital_gain" | "exempt" | "return_of_capital";
+
+const BUCKET_ORDER: Record<TaxBucket, number> = {
+  ordinary: 0,
+  capital_gain: 1,
+  qualified_dividend: 2,
+  exempt: 3,
+  return_of_capital: 4,
+};
 
 interface TaxGroup {
   label: string;
@@ -146,6 +159,7 @@ interface TaxGroup {
   totalTaxable: number;
   stcgTotal?: number;
   ltcgTotal?: number;
+  collectibleLtcgTotal?: number;
 }
 
 interface CategorySection {
@@ -163,8 +177,6 @@ function classifyIncome(inc: Income): { label: string; bucket: TaxBucket } {
     return { label: "Capital Gain", bucket: "capital_gain" };
   if (subtype === "DIVIDEND" && taxClassification === "QUALIFIED")
     return { label: "Qualified Dividend", bucket: "qualified_dividend" };
-  if (subtype === "DIVIDEND" && taxClassification === "ORDINARY")
-    return { label: "Ordinary Dividend", bucket: "ordinary" };
   return { label: "Ordinary Income", bucket: "ordinary" };
 }
 
@@ -213,6 +225,7 @@ function RateBadge({ label, className = "" }: { label: string; className?: strin
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export function TaxEstimatorPage() {
+  const navigate = useNavigate();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [filingStatus, setFilingStatus] = useState<FilingStatus>(() => {
@@ -228,27 +241,16 @@ export function TaxEstimatorPage() {
     () => localStorage.getItem("beacon-tax-withheld") ?? ""
   );
   const [assumptionsOpen, setAssumptionsOpen] = useState(false);
-  const [focusOnOpen, setFocusOnOpen] = useState(false);
+  const [focusOnOpen, setFocusOnOpen] = useState<"ordinary" | "ltcg" | false>(false);
   const otherOrdinaryRef = useRef<HTMLInputElement>(null);
-  const [niitInfoOpen, setNiitInfoOpen] = useState(false);
-  const niitInfoRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!niitInfoOpen) return;
-    const handle = (e: MouseEvent) => {
-      if (niitInfoRef.current && !niitInfoRef.current.contains(e.target as Node)) {
-        setNiitInfoOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handle);
-    return () => document.removeEventListener("mousedown", handle);
-  }, [niitInfoOpen]);
+  const otherLTCGRef = useRef<HTMLInputElement>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
 
-  // Focus the Other Ordinary Income field when the modal is opened via the edit link
+  // Focus the correct field when the modal is opened via an edit link
   useEffect(() => {
     if (assumptionsOpen && focusOnOpen) {
-      const t = setTimeout(() => { otherOrdinaryRef.current?.focus(); setFocusOnOpen(false); }, 50);
+      const ref = focusOnOpen === "ltcg" ? otherLTCGRef : otherOrdinaryRef;
+      const t = setTimeout(() => { ref.current?.focus(); setFocusOnOpen(false); }, 50);
       return () => clearTimeout(t);
     }
   }, [assumptionsOpen, focusOnOpen]);
@@ -290,6 +292,9 @@ export function TaxEstimatorPage() {
   const { data, loading } = useApi(() => getIncome(params), [params]);
   const incomes = useMemo(() => data?.data ?? [], [data]);
 
+  const { data: gainSnapshots } = useApi(() => getAllGainSnapshots(year), [year]);
+  const snapshots: RealizedGainSnapshotWithAccount[] = useMemo(() => gainSnapshots ?? [], [gainSnapshots]);
+
   const otherOrdinaryNum = parseFloat(otherOrdinary) || 0;
   const otherLTCGNum = parseFloat(otherLTCG) || 0;
   const withheldNum = parseFloat(withheld) || 0;
@@ -316,9 +321,19 @@ export function TaxEstimatorPage() {
     const exemptFromApp   = classified.exempt.reduce((s, i) => s + parseFloat(i.amount), 0);
     const rocFromApp      = classified.roc.reduce((s, i) => s + parseFloat(i.amount), 0);
 
+    // Net realized gains/losses from managed-account snapshots
+    const snapshotNetSTCG = snapshots.reduce(
+      (s, snap) => s + (snap.shortTermGain ?? 0) - (snap.shortTermLoss ?? 0), 0
+    );
+    const snapshotNetLTCG = snapshots.reduce(
+      (s, snap) => s + (snap.longTermGain ?? 0) - (snap.longTermLoss ?? 0), 0
+    );
+
     const capGainSplits = classified.capGain.map(getCapGainSplit);
-    const rawSTCG = capGainSplits.reduce((s, g) => s + g.stcg, 0);
-    const rawLTCG = capGainSplits.reduce((s, g) => s + g.ltcg, 0);
+    const rawCollectibleLTCG = capGainSplits.reduce((s, g) => s + g.collectibleLtcg, 0);
+    // Income records + managed-account snapshots combined for netting and display
+    const rawSTCG = capGainSplits.reduce((s, g) => s + g.stcg, 0) + snapshotNetSTCG;
+    const rawLTCG = capGainSplits.reduce((s, g) => s + g.ltcg, 0) + snapshotNetLTCG;
 
     // Net STCG against LTCG across app + other inputs, then cap loss deduction at $3,000
     let netSTCG = rawSTCG;
@@ -340,6 +355,9 @@ export function TaxEstimatorPage() {
     const stcgOrdinaryContrib = netSTCG >= 0 ? netSTCG : capLossDeduction;
     const ltcgContrib = Math.max(0, netLTCG);
     const qdContrib   = qualDivFromApp;
+    // Collectible LTCG is kept as a separate pool; positive gains are taxed at
+    // min(28%, marginalOrdRate). Losses reduce the collectible amount directly.
+    const collectibleContrib = Math.max(0, rawCollectibleLTCG);
 
     const stdDeduction = STANDARD_DEDUCTION[filingStatus];
     const grossOrdinary = otherOrdinaryNum + ordinaryFromApp + stcgOrdinaryContrib;
@@ -353,34 +371,41 @@ export function TaxEstimatorPage() {
     const ordBrackets  = ORDINARY_BRACKETS[filingStatus];
     const ltcgBrackets = LTCG_BRACKETS[filingStatus];
 
+    // Marginal ordinary rate is needed for the collectible rate, so compute first
+    const marginalOrdRate = marginalOrdinaryRate(taxableOrdinary, ordBrackets);
+    const collectibleRate = Math.min(0.28, marginalOrdRate);
+    const collectibleTax  = collectibleContrib * collectibleRate;
+
     const ordinaryTax     = calcOrdinaryTax(taxableOrdinary, ordBrackets);
     const preferentialTax = calcLTCGTax(taxablePreferential, taxableOrdinary, ltcgBrackets);
 
     // NIIT — 3.8% on lesser of NII or (MAGI - threshold)
-    // NII from app = all investment income (dividends, cap gains)
+    // NII from app = all investment income (dividends, cap gains, collectibles)
     // "Other ordinary income" is treated as wages (not NII)
-    const nii = ordinaryFromApp + rawSTCG + rawLTCG + qualDivFromApp + otherLTCGNum;
-    const magi = grossOrdinary + grossPreferential;
+    const nii = ordinaryFromApp + rawSTCG + rawLTCG + rawCollectibleLTCG + qualDivFromApp + otherLTCGNum;
+    const magi = grossOrdinary + grossPreferential + collectibleContrib;
     const niitThreshold = NIIT_THRESHOLD[filingStatus];
     const niitBase = magi > niitThreshold ? Math.max(0, Math.min(nii, magi - niitThreshold)) : 0;
     const niitTax = niitBase * 0.038;
 
-    const totalTax    = ordinaryTax + preferentialTax + niitTax;
+    const totalTax    = ordinaryTax + preferentialTax + collectibleTax + niitTax;
     const effectiveRate = magi > 0 ? totalTax / magi : 0;
 
-    const marginalOrdRate  = marginalOrdinaryRate(taxableOrdinary, ordBrackets);
     const ltcgEnd = taxableOrdinary + taxablePreferential;
     const marginalPrefRate = marginalLTCGRate(ltcgEnd, ltcgBrackets);
 
     return {
       ordinaryFromApp, qualDivFromApp, exemptFromApp, rocFromApp,
-      rawSTCG, rawLTCG, netSTCG, netLTCG, stcgOrdinaryContrib, ltcgContrib, qdContrib,
+      snapshotNetSTCG, snapshotNetLTCG,
+      rawSTCG, rawLTCG, rawCollectibleLTCG, netSTCG, netLTCG,
+      stcgOrdinaryContrib, ltcgContrib, qdContrib, collectibleContrib,
       grossOrdinary, grossPreferential, taxableOrdinary, taxablePreferential, stdDeduction,
-      ordinaryTax, preferentialTax, niitTax, niitBase, totalTax, effectiveRate,
+      ordinaryTax, preferentialTax, collectibleTax, collectibleRate, niitTax, niitBase,
+      totalTax, effectiveRate,
       marginalOrdRate, marginalPrefRate, ltcgEnd, magi,
       hasCapLoss, capLossDeduction,
     };
-  }, [classified, otherOrdinaryNum, otherLTCGNum, filingStatus]);
+  }, [classified, otherOrdinaryNum, otherLTCGNum, filingStatus, snapshots]);
 
   // Build category sections for detailed breakdown
   const categorySections = useMemo((): CategorySection[] => {
@@ -402,13 +427,13 @@ export function TaxEstimatorPage() {
     for (const section of map.values()) {
       for (const group of section.groups) {
         if (group.bucket === "capital_gain") {
-          let stcg = 0, ltcg = 0;
+          let stcg = 0, ltcg = 0, collectibleLtcg = 0;
           for (const inc of group.incomes) {
             const s = getCapGainSplit(inc);
-            stcg += s.stcg; ltcg += s.ltcg;
+            stcg += s.stcg; ltcg += s.ltcg; collectibleLtcg += s.collectibleLtcg;
           }
-          group.stcgTotal = stcg; group.ltcgTotal = ltcg;
-          group.totalTaxable = stcg + ltcg;
+          group.stcgTotal = stcg; group.ltcgTotal = ltcg; group.collectibleLtcgTotal = collectibleLtcg;
+          group.totalTaxable = stcg + ltcg + collectibleLtcg;
         } else if (group.bucket === "exempt" || group.bucket === "return_of_capital") {
           group.totalTaxable = 0;
         } else {
@@ -417,10 +442,29 @@ export function TaxEstimatorPage() {
       }
     }
 
+    for (const section of map.values()) {
+      section.groups.sort((a, b) => BUCKET_ORDER[a.bucket] - BUCKET_ORDER[b.bucket]);
+    }
+
     return Array.from(map.values()).sort((a, b) => a.categoryName.localeCompare(b.categoryName));
   }, [incomes]);
 
-  const rateLabel = (bucket: TaxBucket, groupSTCG?: number, groupLTCG?: number): React.ReactNode => {
+  // Whether any section has ordinary / preferential / collectible income — drives column visibility in headers
+  const anyOrdinaryInSections = categorySections.some((s) =>
+    s.groups.some((g) => g.bucket === "ordinary" || (g.bucket === "capital_gain" && (g.stcgTotal ?? 0) > 0))
+  );
+  const anyPreferentialInSections = categorySections.some((s) =>
+    s.groups.some((g) => g.bucket === "qualified_dividend" || (g.bucket === "capital_gain" && (g.ltcgTotal ?? 0) > 0))
+  );
+  const anyCollectibleInSections = categorySections.some((s) =>
+    s.groups.some((g) => g.bucket === "capital_gain" && (g.collectibleLtcgTotal ?? 0) !== 0)
+  );
+  // When the collectible rate equals the ordinary marginal rate (i.e. ordinary rate ≤ 28%),
+  // collectible gains are taxed identically to ordinary income, so roll them into the
+  // ordinary column rather than showing a redundant separate column.
+  const showCollectibleSeparately = anyCollectibleInSections && calc.collectibleRate < calc.marginalOrdRate;
+
+  const rateLabel = (bucket: TaxBucket, groupSTCG?: number, groupLTCG?: number, groupCollectible?: number): React.ReactNode => {
     if (bucket === "exempt" || bucket === "return_of_capital")
       return <RateBadge label="Non-taxable" className="bg-muted text-muted-foreground" />;
     if (bucket === "qualified_dividend")
@@ -428,10 +472,23 @@ export function TaxEstimatorPage() {
     if (bucket === "capital_gain") {
       const hasSTCG = (groupSTCG ?? 0) !== 0;
       const hasLTCG = (groupLTCG ?? 0) !== 0;
+      const hasCollectible = (groupCollectible ?? 0) !== 0;
+      // Collectible gains rolled into ordinary when rates are the same
+      const collectibleRolledUp = hasCollectible && !showCollectibleSeparately;
       return (
         <span className="flex flex-wrap gap-1">
-          {hasSTCG && <RateBadge label={`${fmtPct(calc.marginalOrdRate)} short-term (ordinary)`} className="bg-amber-50 text-amber-700" />}
+          {(hasSTCG || collectibleRolledUp) && (
+            <RateBadge
+              label={`${fmtPct(calc.marginalOrdRate)} ${
+                hasSTCG && collectibleRolledUp ? "short-term/collectible (ordinary)"
+                : hasSTCG                      ? "short-term (ordinary)"
+                :                                "ordinary rate"
+              }`}
+              className="bg-amber-50 text-amber-700"
+            />
+          )}
           {hasLTCG && <RateBadge label={`${fmtPct(calc.marginalPrefRate)} long-term (capital gains)`} className="bg-emerald-50 text-emerald-700" />}
+          {hasCollectible && showCollectibleSeparately && <RateBadge label={`${fmtPct(calc.collectibleRate)} collectible (28% max)`} className="bg-orange-50 text-orange-700" />}
         </span>
       );
     }
@@ -443,13 +500,12 @@ export function TaxEstimatorPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link
-            to="/income"
-            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          <button
+            onClick={() => navigate(-1)}
+            className="rounded p-1 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
-            Income
-          </Link>
+          </button>
           <h2 className="text-2xl font-bold">Tax Estimator</h2>
         </div>
         <div className="flex items-center gap-3">
@@ -461,14 +517,15 @@ export function TaxEstimatorPage() {
             <Settings className="h-4 w-4" />
             Tax Assumptions
           </button>
-          <div className="h-5 w-px bg-border" />
-          <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="min-w-[4rem] text-center font-semibold">{year}</span>
-          <Button variant="ghost" size="sm" onClick={() => setYear((y) => y + 1)}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="min-w-[4rem] text-center font-semibold">{year}</span>
+            <Button variant="ghost" size="sm" onClick={() => setYear((y) => y + 1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -514,6 +571,7 @@ export function TaxEstimatorPage() {
             onChange={updateOtherLTCG}
             placeholder="0"
             allowNegative
+            inputRef={otherLTCGRef}
           />
         </div>
         <p className="mt-4 text-xs text-muted-foreground">
@@ -524,16 +582,45 @@ export function TaxEstimatorPage() {
         </div>
       </Modal>
 
+      {/* Stat strip */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-lg border border-border px-4 py-3">
+          <p className="text-xs text-muted-foreground">Total Income (MAGI)</p>
+          <p className="mt-1 text-xl font-bold tabular-nums">{formatCurrency(calc.magi)}</p>
+        </div>
+        <div className="rounded-lg border border-border px-4 py-3">
+          <p className="text-xs text-muted-foreground">Estimated Federal Tax</p>
+          <p className="mt-1 text-xl font-bold tabular-nums">{formatCurrency(calc.totalTax)}</p>
+          {withheldNum > 0 && (() => {
+            const netOwed = calc.totalTax - withheldNum;
+            return (
+              <p className={`mt-1 text-xs font-medium tabular-nums ${netOwed >= 0 ? "text-amber-600" : "text-emerald-600"}`}>
+                {netOwed >= 0
+                  ? `${formatCurrency(netOwed)} owed after withholding`
+                  : `${formatCurrency(Math.abs(netOwed))} refund after withholding`}
+              </p>
+            );
+          })()}
+        </div>
+        <div className="rounded-lg border border-border px-4 py-3">
+          <p className="text-xs text-muted-foreground">Effective Tax Rate</p>
+          <p className="mt-1 text-xl font-bold tabular-nums">{(calc.effectiveRate * 100).toFixed(1)}%</p>
+        </div>
+      </div>
+
       {/* Tax Summary */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Income breakdown */}
         <Card>
-          <h3 className="mb-4 text-sm font-semibold">Income Breakdown</h3>
+          <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold">
+            <Layers className="h-4 w-4 text-muted-foreground" />
+            Income Breakdown
+          </h3>
           <div className="space-y-3 text-sm">
 
             {/* ── Ordinary ── */}
-            {(otherOrdinaryNum !== 0 || calc.ordinaryFromApp !== 0 || calc.rawSTCG !== 0) && (
-              <div className="flex gap-2">
+            {(otherOrdinaryNum !== 0 || calc.ordinaryFromApp !== 0 || calc.rawSTCG !== 0 || calc.rawCollectibleLTCG !== 0) && (
+              <div className="flex gap-1">
                 <div className="flex shrink-0 items-center justify-center w-5">
                   <span
                     className="text-[10px] font-semibold uppercase tracking-widest text-amber-500 select-none"
@@ -549,7 +636,7 @@ export function TaxEstimatorPage() {
                         Other Ordinary Income
                         <button
                           type="button"
-                          onClick={() => { setFocusOnOpen(true); setAssumptionsOpen(true); }}
+                          onClick={() => { setFocusOnOpen("ordinary"); setAssumptionsOpen(true); }}
                           className="ml-1.5 text-xs text-primary hover:underline"
                         >
                           Edit
@@ -578,13 +665,26 @@ export function TaxEstimatorPage() {
                       </span>
                     </div>
                   )}
+                  {calc.rawCollectibleLTCG !== 0 && (
+                    <div className="flex items-baseline gap-1.5 py-1.5">
+                      <span className="shrink-0">
+                        Collectible Gains
+                        <span className="ml-1 text-xs text-muted-foreground">(28% max rate)</span>
+                        {calc.rawCollectibleLTCG < 0 && <span className="ml-1 text-xs text-muted-foreground">(loss)</span>}
+                      </span>
+                      <span className="flex-1 h-0.5 mb-0.5" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize: "5px 100%", backgroundRepeat: "repeat-x" }} />
+                      <span className={`shrink-0 tabular-nums ${calc.rawCollectibleLTCG < 0 ? "text-destructive" : ""}`}>
+                        {calc.rawCollectibleLTCG < 0 ? "-" : ""}{formatCurrency(Math.abs(calc.rawCollectibleLTCG))}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
             {/* ── LT ── */}
             {(calc.qualDivFromApp !== 0 || calc.rawLTCG !== 0 || otherLTCGNum !== 0) && (
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <div className="flex shrink-0 items-center justify-center w-5">
                   <span
                     className="text-[10px] font-semibold uppercase tracking-widest text-emerald-600 select-none"
@@ -616,8 +716,14 @@ export function TaxEstimatorPage() {
                   {otherLTCGNum !== 0 && (
                     <div className="flex items-baseline gap-1.5 py-1.5">
                       <span className="shrink-0">
-                        Other Long-Term Capital Gains
-                        {otherLTCGNum < 0 && <span className="ml-1 text-xs text-muted-foreground">(loss)</span>}
+                        {otherLTCGNum < 0 ? "Other Long-Term Capital Losses" : "Other Long-Term Capital Gains"}
+                        <button
+                          type="button"
+                          onClick={() => { setFocusOnOpen("ltcg"); setAssumptionsOpen(true); }}
+                          className="ml-1.5 text-xs text-primary hover:underline"
+                        >
+                          Edit
+                        </button>
                       </span>
                       <span className="flex-1 h-0.5 mb-0.5" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize: "5px 100%", backgroundRepeat: "repeat-x" }} />
                       <span className={`shrink-0 tabular-nums ${otherLTCGNum < 0 ? "text-destructive" : ""}`}>
@@ -631,7 +737,7 @@ export function TaxEstimatorPage() {
 
             {/* ── $0 (non-taxable) ── */}
             {(calc.exemptFromApp !== 0 || calc.rocFromApp !== 0) && (
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <div className="flex shrink-0 items-center justify-center w-5">
                   <span
                     className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 select-none"
@@ -675,7 +781,7 @@ export function TaxEstimatorPage() {
 
           {calc.hasCapLoss && (
             <p className="mt-3 text-xs text-amber-600">
-              Capital loss of {formatCurrency(Math.abs(calc.stcgOrdinaryContrib + calc.ltcgContrib - calc.rawSTCG - calc.rawLTCG - otherLTCGNum))} exceeds gains.
+              Capital loss of {formatCurrency(Math.abs(calc.stcgOrdinaryContrib + calc.ltcgContrib - calc.rawSTCG - calc.rawLTCG - otherLTCGNum) + Math.max(0, -calc.rawCollectibleLTCG))} exceeds gains.
               Up to {formatCurrency(3000)} is deductible against ordinary income this year; excess carries forward.
             </p>
           )}
@@ -683,7 +789,10 @@ export function TaxEstimatorPage() {
 
         {/* Tax breakdown */}
         <Card>
-          <h3 className="mb-4 text-sm font-semibold">Estimated Federal Tax</h3>
+          <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold">
+            <Landmark className="h-4 w-4 text-muted-foreground" />
+            Estimated Federal Tax
+          </h3>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
@@ -695,8 +804,11 @@ export function TaxEstimatorPage() {
             <tbody className="divide-y divide-border/50">
               <tr>
                 <td className="py-2">
-                  <div>Ordinary Income Tax</div>
-                  <div className="text-xs text-muted-foreground">{formatCurrency(calc.taxableOrdinary)} taxable</div>
+                  <div className="flex items-center gap-2">
+                    <Briefcase className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                    Ordinary Income Tax
+                  </div>
+                  <div className="ml-[1.375rem] text-xs text-muted-foreground">{formatCurrency(calc.taxableOrdinary)} taxable</div>
                 </td>
                 <td className="py-2 text-right text-muted-foreground">
                   up to {fmtPct(calc.marginalOrdRate)}
@@ -706,8 +818,11 @@ export function TaxEstimatorPage() {
               {calc.taxablePreferential > 0 && (
                 <tr>
                   <td className="py-2">
-                    <div>Capital Gains / Qualified Dividends</div>
-                    <div className="text-xs text-muted-foreground">{formatCurrency(calc.taxablePreferential)} taxable</div>
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                      Capital Gains / Qualified Dividends
+                    </div>
+                    <div className="ml-[1.375rem] text-xs text-muted-foreground">{formatCurrency(calc.taxablePreferential)} taxable</div>
                   </td>
                   <td className="py-2 text-right text-muted-foreground">
                     up to {fmtPct(calc.marginalPrefRate)}
@@ -715,33 +830,43 @@ export function TaxEstimatorPage() {
                   <td className="py-2 text-right font-medium">{formatCurrency(calc.preferentialTax)}</td>
                 </tr>
               )}
+              {calc.collectibleContrib > 0 && (
+                <tr>
+                  <td className="py-2">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="h-3.5 w-3.5 shrink-0 text-orange-400" />
+                      Collectible Gains Tax
+                    </div>
+                    <div className="ml-[1.375rem] text-xs text-muted-foreground">{formatCurrency(calc.collectibleContrib)} taxable</div>
+                  </td>
+                  <td className="py-2 text-right text-muted-foreground">
+                    {fmtPct(calc.collectibleRate)}
+                  </td>
+                  <td className="py-2 text-right font-medium">{formatCurrency(calc.collectibleTax)}</td>
+                </tr>
+              )}
               {calc.niitBase > 0 && (
                 <tr>
                   <td className="py-2">
                     <div className="flex items-center gap-1.5">
+                      <Activity className="h-3.5 w-3.5 shrink-0 text-blue-400" />
                       Net Investment Income Tax
-                      <div className="relative" ref={niitInfoRef}>
-                        <button
-                          type="button"
-                          onClick={() => setNiitInfoOpen((v) => !v)}
-                          className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-muted-foreground/40 text-[9px] font-bold leading-none text-muted-foreground hover:border-foreground hover:text-foreground transition-colors"
-                        >
+                      <span className="group relative">
+                        <span className="flex h-3.5 w-3.5 cursor-default items-center justify-center rounded-full border border-muted-foreground/40 text-[9px] font-bold leading-none text-muted-foreground">
                           ?
-                        </button>
-                        {niitInfoOpen && (
-                          <div className="absolute left-0 top-5 z-20 w-64 rounded-md border border-border bg-background p-3 shadow-lg text-xs text-muted-foreground">
-                            <p><span className="font-medium text-foreground">MAGI:</span> {formatCurrency(calc.magi)}</p>
-                            <p className="mt-1.5">
-                              {calc.magi > NIIT_THRESHOLD[filingStatus]
-                                ? <><span className="font-medium text-foreground">{formatCurrency(calc.magi - NIIT_THRESHOLD[filingStatus])}</span> above the {formatCurrency(NIIT_THRESHOLD[filingStatus])} threshold</>
-                                : <><span className="font-medium text-foreground">{formatCurrency(NIIT_THRESHOLD[filingStatus] - calc.magi)}</span> below the {formatCurrency(NIIT_THRESHOLD[filingStatus])} threshold</>}
-                            </p>
-                            <p className="mt-1.5">{formatCurrency(calc.niitBase)} of net investment income subject to 3.8% NIIT</p>
-                          </div>
-                        )}
-                      </div>
+                        </span>
+                        <span className="pointer-events-none invisible absolute bottom-full left-1/2 mb-2 w-64 -translate-x-1/2 rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100">
+                          <span className="block"><span className="font-medium text-foreground">MAGI:</span> {formatCurrency(calc.magi)}</span>
+                          <span className="mt-1.5 block">
+                            {calc.magi > NIIT_THRESHOLD[filingStatus]
+                              ? <><span className="font-medium text-foreground">{formatCurrency(calc.magi - NIIT_THRESHOLD[filingStatus])}</span> above the {formatCurrency(NIIT_THRESHOLD[filingStatus])} threshold</>
+                              : <><span className="font-medium text-foreground">{formatCurrency(NIIT_THRESHOLD[filingStatus] - calc.magi)}</span> below the {formatCurrency(NIIT_THRESHOLD[filingStatus])} threshold</>}
+                          </span>
+                          <span className="mt-1.5 block">{formatCurrency(calc.niitBase)} of net investment income subject to 3.8% NIIT</span>
+                        </span>
+                      </span>
                     </div>
-                    <div className="text-xs text-muted-foreground">{formatCurrency(calc.niitBase)} subject to NIIT</div>
+                    <div className="ml-[1.375rem] text-xs text-muted-foreground">{formatCurrency(calc.niitBase)} subject to NIIT</div>
                   </td>
                   <td className="py-2 text-right text-muted-foreground">3.8%</td>
                   <td className="py-2 text-right font-medium">{formatCurrency(calc.niitTax)}</td>
@@ -785,7 +910,20 @@ export function TaxEstimatorPage() {
           {categorySections.map((section) => {
             const sectionKey = section.categoryName;
             const isExpanded = expandedSections.has(sectionKey);
-            const sectionTotal = section.groups.reduce((s, g) => s + g.totalTaxable, 0);
+            const sectionOrdinaryAmt = section.groups.reduce((sum, g) => {
+              if (g.bucket === "ordinary") return sum + g.totalTaxable;
+              if (g.bucket === "capital_gain") return sum + Math.max(0, g.stcgTotal ?? 0);
+              return sum;
+            }, 0);
+            const sectionPreferentialAmt = section.groups.reduce((sum, g) => {
+              if (g.bucket === "qualified_dividend") return sum + g.totalTaxable;
+              if (g.bucket === "capital_gain") return sum + Math.max(0, g.ltcgTotal ?? 0);
+              return sum;
+            }, 0);
+            const sectionCollectibleAmt = section.groups.reduce((sum, g) => {
+              if (g.bucket === "capital_gain") return sum + Math.max(0, g.collectibleLtcgTotal ?? 0);
+              return sum;
+            }, 0);
 
             return (
               <Card key={sectionKey} className="overflow-hidden p-0">
@@ -793,15 +931,32 @@ export function TaxEstimatorPage() {
                 <button
                   type="button"
                   onClick={() => toggleSection(sectionKey)}
-                  className="flex w-full items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors text-left"
+                  className="flex w-full items-center gap-4 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
                 >
-                  <span className="font-semibold">{section.categoryName}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-muted-foreground">
-                      {formatCurrency(sectionTotal)} taxable
+                  <span className="flex-1 font-semibold">{section.categoryName}</span>
+                  {(anyOrdinaryInSections || (anyCollectibleInSections && !showCollectibleSeparately)) && (
+                    <span className="w-[220px] shrink-0 text-right text-sm text-muted-foreground tabular-nums">
+                      {(() => {
+                        const amt = sectionOrdinaryAmt + (!showCollectibleSeparately ? sectionCollectibleAmt : 0);
+                        return amt > 0 ? <>{formatCurrency(amt)} <span className="text-xs">@ {fmtPct(calc.marginalOrdRate)} ordinary</span></> : null;
+                      })()}
                     </span>
-                    {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                  </div>
+                  )}
+                  {showCollectibleSeparately && (
+                    <span className="w-[240px] shrink-0 text-right text-sm text-muted-foreground tabular-nums">
+                      {sectionCollectibleAmt > 0 && (
+                        <>{formatCurrency(sectionCollectibleAmt)} <span className="text-xs">@ {fmtPct(calc.collectibleRate)} collectible</span></>
+                      )}
+                    </span>
+                  )}
+                  {anyPreferentialInSections && (
+                    <span className="w-[240px] shrink-0 text-right text-sm text-muted-foreground tabular-nums">
+                      {sectionPreferentialAmt > 0 && (
+                        <>{formatCurrency(sectionPreferentialAmt)} <span className="text-xs">@ {fmtPct(calc.marginalPrefRate)} LT capital gains</span></>
+                      )}
+                    </span>
+                  )}
+                  {isExpanded ? <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
                 </button>
 
                 {isExpanded && (
@@ -817,11 +972,25 @@ export function TaxEstimatorPage() {
 
                         {/* Transactions table */}
                         <div className="hidden md:block">
-                          <table className="w-full text-sm">
+                          <table className="w-full table-fixed text-sm">
+                            <colgroup>
+                              <col className="w-[100px]" />  {/* Date */}
+                              <col />                         {/* Source — fills remainder */}
+                              <col className="w-[180px]" />  {/* Account */}
+                              <col className="w-[120px]" />  {/* Amount */}
+                              {group.bucket === "capital_gain" && (
+                                <>
+                                  <col className="w-[120px]" />  {/* Short-Term */}
+                                  <col className="w-[120px]" />  {/* Long-Term */}
+                                </>
+                              )}
+                              <col className="w-[120px]" />  {/* Taxable */}
+                            </colgroup>
                             <thead>
                               <tr className="border-b border-border/50 text-left text-xs text-muted-foreground">
-                                <th className="pb-1.5 font-medium w-28">Date</th>
+                                <th className="pb-1.5 font-medium">Date</th>
                                 <th className="pb-1.5 font-medium">Source</th>
+                                <th className="pb-1.5 font-medium">Account</th>
                                 <th className="pb-1.5 font-medium text-right">Amount</th>
                                 {group.bucket === "capital_gain" && (
                                   <>
@@ -838,12 +1007,20 @@ export function TaxEstimatorPage() {
                                 const taxable = group.bucket === "exempt" || group.bucket === "return_of_capital"
                                   ? 0
                                   : group.bucket === "capital_gain"
-                                  ? (split!.stcg + split!.ltcg)
+                                  ? (split!.stcg + split!.ltcg + split!.collectibleLtcg)
                                   : getTaxableAmt(inc);
                                 return (
                                   <tr key={inc.id} className="hover:bg-muted/30">
                                     <td className="py-1.5 text-muted-foreground">{formatDate(inc.date)}</td>
-                                    <td className="py-1.5">{inc.source ?? <span className="text-muted-foreground italic">—</span>}</td>
+                                    <td className="py-1.5">
+                                      <span className="flex items-center gap-1.5 flex-wrap">
+                                        {inc.source ?? <span className="text-muted-foreground italic">—</span>}
+                                        {(split?.collectibleLtcg ?? 0) !== 0 && (
+                                          <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700">collectible</span>
+                                        )}
+                                      </span>
+                                    </td>
+                                    <td className="py-1.5 text-muted-foreground">{inc.account.name}</td>
                                     <td className="py-1.5 text-right">{formatCurrency(inc.amount)}</td>
                                     {group.bucket === "capital_gain" && (
                                       <>
@@ -878,16 +1055,23 @@ export function TaxEstimatorPage() {
                             const taxable = group.bucket === "exempt" || group.bucket === "return_of_capital"
                               ? 0
                               : group.bucket === "capital_gain"
-                              ? (split!.stcg + split!.ltcg)
+                              ? (split!.stcg + split!.ltcg + split!.collectibleLtcg)
                               : getTaxableAmt(inc);
                             return (
                               <div key={inc.id} className="flex items-start justify-between py-2">
                                 <div>
-                                  <p className="text-sm font-medium">{inc.source ?? <span className="italic text-muted-foreground">No source</span>}</p>
-                                  <p className="text-xs text-muted-foreground">{formatDate(inc.date)}</p>
-                                  {split && (split.stcg !== 0 || split.ltcg !== 0) && (
+                                  <p className="flex items-center gap-1.5 text-sm font-medium">
+                                    {inc.source ?? <span className="italic text-muted-foreground">No source</span>}
+                                    {(split?.collectibleLtcg ?? 0) !== 0 && (
+                                      <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700">collectible</span>
+                                    )}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">{formatDate(inc.date)} · {inc.account.name}</p>
+                                  {split && (split.stcg !== 0 || split.ltcg !== 0 || split.collectibleLtcg !== 0) && (
                                     <p className="text-xs text-muted-foreground">
-                                      ST: {split.stcg !== 0 ? formatCurrency(split.stcg) : "—"} · LT: {split.ltcg !== 0 ? formatCurrency(split.ltcg) : "—"}
+                                      {split.stcg !== 0 && <>ST: {formatCurrency(split.stcg)}</>}
+                                      {split.ltcg !== 0 && <>{split.stcg !== 0 ? " · " : ""}LT: {formatCurrency(split.ltcg)}</>}
+                                      {split.collectibleLtcg !== 0 && <>{(split.stcg !== 0 || split.ltcg !== 0) ? " · " : ""}Collectible: {formatCurrency(split.collectibleLtcg)}</>}
                                     </p>
                                   )}
                                 </div>
@@ -907,7 +1091,7 @@ export function TaxEstimatorPage() {
                         {/* Group total + rate */}
                         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border/50 pt-2">
                           <div className="flex items-center gap-2">
-                            {rateLabel(group.bucket, group.stcgTotal, group.ltcgTotal)}
+                            {rateLabel(group.bucket, group.stcgTotal, group.ltcgTotal, group.collectibleLtcgTotal)}
                           </div>
                           <div className="text-sm font-semibold">
                             {group.bucket === "exempt" || group.bucket === "return_of_capital" ? (
@@ -922,8 +1106,13 @@ export function TaxEstimatorPage() {
                                   </span>
                                 )}
                                 {group.ltcgTotal !== 0 && (
-                                  <span className={(group.ltcgTotal ?? 0) < 0 ? "text-destructive" : ""}>
+                                  <span className={`${(group.collectibleLtcgTotal ?? 0) !== 0 ? "mr-3" : ""} ${(group.ltcgTotal ?? 0) < 0 ? "text-destructive" : ""}`}>
                                     LT: {formatCurrency(group.ltcgTotal ?? 0)}
+                                  </span>
+                                )}
+                                {(group.collectibleLtcgTotal ?? 0) !== 0 && (
+                                  <span className={(group.collectibleLtcgTotal ?? 0) < 0 ? "text-destructive" : ""}>
+                                    Collectible: {formatCurrency(group.collectibleLtcgTotal ?? 0)}
                                   </span>
                                 )}
                               </span>
@@ -939,6 +1128,116 @@ export function TaxEstimatorPage() {
               </Card>
             );
           })}
+
+          {snapshots.length > 0 && (() => {
+            const managedKey = "__managed_accounts__";
+            const isExpanded = expandedSections.has(managedKey);
+            const snapshotNetST = snapshots.reduce((s, snap) => s + (snap.shortTermGain ?? 0) - (snap.shortTermLoss ?? 0), 0);
+            const snapshotNetLT = snapshots.reduce((s, snap) => s + (snap.longTermGain ?? 0) - (snap.longTermLoss ?? 0), 0);
+            return (
+              <Card key={managedKey} className="overflow-hidden p-0">
+                <button
+                  type="button"
+                  onClick={() => toggleSection(managedKey)}
+                  className="flex w-full items-center gap-4 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
+                >
+                  <span className="flex-1 font-semibold">Managed Accounts</span>
+                  {(anyOrdinaryInSections || (anyCollectibleInSections && !showCollectibleSeparately)) && (
+                    <span className="w-[220px] shrink-0 text-right text-sm text-muted-foreground tabular-nums">
+                      {snapshotNetST !== 0 && (
+                        <span className={snapshotNetST < 0 ? "text-destructive" : ""}>
+                          {snapshotNetST < 0 ? "-" : ""}{formatCurrency(Math.abs(snapshotNetST))}{" "}
+                          <span className="text-xs">@ {fmtPct(calc.marginalOrdRate)} ordinary</span>
+                        </span>
+                      )}
+                    </span>
+                  )}
+                  {showCollectibleSeparately && (
+                    <span className="w-[240px] shrink-0" />
+                  )}
+                  {anyPreferentialInSections && (
+                    <span className="w-[240px] shrink-0 text-right text-sm text-muted-foreground tabular-nums">
+                      {snapshotNetLT !== 0 && (
+                        <span className={snapshotNetLT < 0 ? "text-destructive" : ""}>
+                          {snapshotNetLT < 0 ? "-" : ""}{formatCurrency(Math.abs(snapshotNetLT))}{" "}
+                          <span className="text-xs">@ {fmtPct(calc.marginalPrefRate)} LT capital gains</span>
+                        </span>
+                      )}
+                    </span>
+                  )}
+                  {isExpanded ? <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                </button>
+
+                {isExpanded && (
+                  <div className="border-t border-border">
+                    <div className="hidden md:block px-4 py-3">
+                      <table className="w-full table-fixed text-sm">
+                        <colgroup>
+                          <col />
+                          <col className="w-[160px]" />
+                          <col className="w-[160px]" />
+                        </colgroup>
+                        <thead>
+                          <tr className="border-b border-border/50 text-left text-xs text-muted-foreground">
+                            <th className="pb-1.5 font-medium">Account</th>
+                            <th className="pb-1.5 font-medium text-right">Short-Term Net</th>
+                            <th className="pb-1.5 font-medium text-right">Long-Term Net</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/30">
+                          {snapshots.map((snap) => {
+                            const netST = (snap.shortTermGain ?? 0) - (snap.shortTermLoss ?? 0);
+                            const netLT = (snap.longTermGain ?? 0) - (snap.longTermLoss ?? 0);
+                            return (
+                              <tr key={snap.id} className="hover:bg-muted/30">
+                                <td className="py-1.5">
+                                  <span className="flex items-center gap-2">
+                                    {snap.account.color && (
+                                      <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: snap.account.color }} />
+                                    )}
+                                    {snap.account.name}
+                                  </span>
+                                </td>
+                                <td className={`py-1.5 text-right tabular-nums ${netST < 0 ? "text-destructive" : netST === 0 ? "text-muted-foreground" : ""}`}>
+                                  {netST === 0 ? "—" : (netST < 0 ? "-" : "") + formatCurrency(Math.abs(netST))}
+                                </td>
+                                <td className={`py-1.5 text-right tabular-nums ${netLT < 0 ? "text-destructive" : netLT === 0 ? "text-muted-foreground" : ""}`}>
+                                  {netLT === 0 ? "—" : (netLT < 0 ? "-" : "") + formatCurrency(Math.abs(netLT))}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile list */}
+                    <div className="divide-y divide-border/30 px-4 md:hidden">
+                      {snapshots.map((snap) => {
+                        const netST = (snap.shortTermGain ?? 0) - (snap.shortTermLoss ?? 0);
+                        const netLT = (snap.longTermGain ?? 0) - (snap.longTermLoss ?? 0);
+                        return (
+                          <div key={snap.id} className="flex items-center justify-between py-2">
+                            <div className="flex items-center gap-2 text-sm font-medium">
+                              {snap.account.color && (
+                                <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: snap.account.color }} />
+                              )}
+                              {snap.account.name}
+                            </div>
+                            <div className="text-right text-sm">
+                              {netST !== 0 && <p className={`tabular-nums ${netST < 0 ? "text-destructive" : ""}`}>ST: {netST < 0 ? "-" : ""}{formatCurrency(Math.abs(netST))}</p>}
+                              {netLT !== 0 && <p className={`tabular-nums ${netLT < 0 ? "text-destructive" : ""}`}>LT: {netLT < 0 ? "-" : ""}{formatCurrency(Math.abs(netLT))}</p>}
+                              {netST === 0 && netLT === 0 && <p className="text-muted-foreground">—</p>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            );
+          })()}
         </div>
       )}
     </div>

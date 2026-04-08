@@ -112,6 +112,17 @@ function CurrencyInput({ name, defaultValue, required, onChange, autoFocus }: { 
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData("text");
+    const cleaned = pasted.replace(/[$,\s]/g, "");
+    if (cleaned === "" || cleaned === "-" || /^-?\d*\.?\d{0,2}$/.test(cleaned)) {
+      e.preventDefault();
+      setRawValue(cleaned);
+      const parsed = parseFloat(cleaned);
+      if (!isNaN(parsed)) onChange?.(parsed);
+    }
+  };
+
   const handleBlur = () => {
     if (rawValue === "-") {
       setRawValue("");
@@ -131,6 +142,7 @@ function CurrencyInput({ name, defaultValue, required, onChange, autoFocus }: { 
           type="text"
           value={rawValue}
           onChange={handleChange}
+          onPaste={handlePaste}
           onBlur={handleBlur}
           autoFocus={autoFocus}
           className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"

@@ -23,6 +23,7 @@ import type {
   InvestmentLot,
   ManualInvestment,
   RealizedGainSnapshot,
+  RealizedGainSnapshotWithAccount,
   TickerSearchResult,
   PaginatedResponse,
   PendingDividend,
@@ -337,6 +338,8 @@ export const getInvestmentGrowth = (accountId: string) =>
   api.get<{ points: GrowthPoint[] }>(`/investments/growth/${accountId}`);
 
 // ── Realized Gain Snapshots ───────────────────────────────────────────────
+export const getAllGainSnapshots = (year: number) =>
+  api.get<RealizedGainSnapshotWithAccount[]>(`/investments/gain-snapshots?year=${year}`);
 export const getGainSnapshot = (accountId: string, year?: number) =>
   api.get<RealizedGainSnapshot | null>(
     `/investments/gain-snapshot/${accountId}${year != null ? `?year=${year}` : ""}`
@@ -410,7 +413,7 @@ export const getInstruments = () => api.get<Instrument[]>("/instruments");
 export const getInstrument = (id: string) => api.get<Instrument>(`/instruments/${id}`);
 export const createInstrument = (data: { primaryTicker: string; name?: string | null }) =>
   api.post<Instrument>("/instruments", data);
-export const patchInstrument = (id: string, data: { name?: string | null }) =>
+export const patchInstrument = (id: string, data: { name?: string | null; isCollectible?: boolean }) =>
   api.patch<Instrument>(`/instruments/${id}`, data);
 export const setInstrumentWeights = (
   id: string,

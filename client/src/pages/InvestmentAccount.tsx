@@ -4087,7 +4087,7 @@ export function InvestmentAccount() {
   const handleSaveCash = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingCash(true);
-    const parsed = parseFloat(cashInput);
+    const parsed = parseFloat(cashInput.replace(/,/g, ""));
     const value = cashInput.trim() === "" || isNaN(parsed) ? null : parsed;
     await updateAccount(account.id, { cashBalance: value } as Partial<Account>);
     setSavingCash(false);

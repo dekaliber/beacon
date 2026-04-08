@@ -121,6 +121,7 @@ export interface InvestmentActivity {
   shortTermGain: number | null;
   longTermGain: number | null;
   notes: string | null;
+  isCollectible?: boolean; // resolved at query time from the linked Instrument
   createdAt: string;
   updatedAt: string;
 }
@@ -323,6 +324,10 @@ export interface RealizedGainSnapshot {
   updatedAt: string;
 }
 
+export interface RealizedGainSnapshotWithAccount extends RealizedGainSnapshot {
+  account: { id: string; name: string; color: string | null };
+}
+
 export interface InvestmentAccountSummary {
   id: string;
   name: string;
@@ -476,6 +481,7 @@ export interface Instrument {
   primaryTicker: string;
   name: string | null;
   isManual: boolean;
+  isCollectible: boolean;
   tickers: InstrumentTicker[];
   weights: InstrumentWeight[];
   holdings: InstrumentHoldingRef[];

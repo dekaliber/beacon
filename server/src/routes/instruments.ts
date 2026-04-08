@@ -194,6 +194,7 @@ instrumentRoutes.post("/", async (req, res) => {
 
 const patchSchema = z.object({
   name: z.string().max(200).nullable().optional(),
+  isCollectible: z.boolean().optional(),
 });
 
 instrumentRoutes.patch("/:id", async (req, res) => {
