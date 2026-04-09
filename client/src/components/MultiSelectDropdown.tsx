@@ -28,6 +28,7 @@ export function MultiSelectDropdown({
   groups,
 }: MultiSelectDropdownProps) {
   const [open, setOpen] = useState(false);
+  const [flipUp, setFlipUp] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -78,7 +79,13 @@ export function MultiSelectDropdown({
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          if (!open && ref.current) {
+            const rect = ref.current.getBoundingClientRect();
+            setFlipUp(window.innerHeight - rect.bottom < 240);
+          }
+          setOpen(!open);
+        }}
         className={`flex items-center gap-1 rounded-md border px-2 py-1.5 text-sm ${
           isActive ? "border-primary text-primary" : "border-border text-foreground"
         }`}
@@ -88,7 +95,7 @@ export function MultiSelectDropdown({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 min-w-[200px] rounded-md border border-border bg-background shadow-lg">
+        <div className={`absolute left-0 z-50 min-w-[200px] rounded-md border border-border bg-background shadow-lg ${flipUp ? "bottom-full mb-1" : "top-full mt-1"}`}>
           <div className="flex gap-3 border-b border-border px-3 py-1.5">
             <button
               type="button"

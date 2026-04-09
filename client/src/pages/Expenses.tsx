@@ -168,6 +168,7 @@ function VendorAutocomplete({
 }) {
   const [value, setValue] = useState(defaultValue ?? "");
   const [open, setOpen] = useState(false);
+  const [flipUp, setFlipUp] = useState(false);
   const [focusIdx, setFocusIdx] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -217,15 +218,28 @@ function VendorAutocomplete({
         type="text"
         required={required}
         value={value}
-        onChange={(e) => { setValue(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)}
+        onChange={(e) => {
+          setValue(e.target.value);
+          if (ref.current) {
+            const rect = ref.current.getBoundingClientRect();
+            setFlipUp(window.innerHeight - rect.bottom < 240);
+          }
+          setOpen(true);
+        }}
+        onFocus={() => {
+          if (ref.current) {
+            const rect = ref.current.getBoundingClientRect();
+            setFlipUp(window.innerHeight - rect.bottom < 240);
+          }
+          setOpen(true);
+        }}
         onKeyDown={handleKeyDown}
         className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         placeholder="e.g. Amazon, Whole Foods, Netflix"
         autoComplete="off"
       />
       {open && filtered.length > 0 && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-auto rounded-md border border-border bg-background shadow-lg">
+        <div className={`absolute left-0 right-0 z-50 max-h-48 overflow-auto rounded-md border border-border bg-background shadow-lg ${flipUp ? "bottom-full mb-1" : "top-full mt-1"}`}>
           {filtered.map((v, i) => (
             <button
               key={v}
@@ -257,6 +271,7 @@ function CategoryTypeahead({
   const [value, setValue] = useState(defaultValue ?? "");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [flipUp, setFlipUp] = useState(false);
   const [focusIdx, setFocusIdx] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const internalTriggerRef = useRef<HTMLButtonElement>(null);
@@ -351,15 +366,25 @@ function CategoryTypeahead({
           // Only auto-open when tabbing forward (related target precedes this button in DOM)
           const related = e.relatedTarget as Element | null;
           if (related && !(related.compareDocumentPosition(e.currentTarget) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+          if (ref.current) {
+            const rect = ref.current.getBoundingClientRect();
+            setFlipUp(window.innerHeight - rect.bottom < 240);
+          }
           setOpen(true);
         }}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          if (!open && ref.current) {
+            const rect = ref.current.getBoundingClientRect();
+            setFlipUp(window.innerHeight - rect.bottom < 240);
+          }
+          setOpen((o) => !o);
+        }}
         className="w-full rounded-md border border-border px-3 py-2 text-left text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
       >
         {selectedLabel || <span className="text-muted-foreground">Select category</span>}
       </button>
       {open && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-border bg-background shadow-lg">
+        <div className={`absolute left-0 right-0 z-50 rounded-md border border-border bg-background shadow-lg ${flipUp ? "bottom-full mb-1" : "top-full mt-1"}`}>
           <div className="border-b border-border p-2">
             <input
               type="text"
@@ -409,6 +434,7 @@ function AccountTypeahead({
   const [value, setValue] = useState(defaultValue ?? "");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [flipUp, setFlipUp] = useState(false);
   const [focusIdx, setFocusIdx] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const internalTriggerRef = useRef<HTMLButtonElement>(null);
@@ -488,15 +514,25 @@ function AccountTypeahead({
           // Only auto-open when tabbing forward (related target precedes this button in DOM)
           const related = e.relatedTarget as Element | null;
           if (related && !(related.compareDocumentPosition(e.currentTarget) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+          if (ref.current) {
+            const rect = ref.current.getBoundingClientRect();
+            setFlipUp(window.innerHeight - rect.bottom < 240);
+          }
           setOpen(true);
         }}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          if (!open && ref.current) {
+            const rect = ref.current.getBoundingClientRect();
+            setFlipUp(window.innerHeight - rect.bottom < 240);
+          }
+          setOpen((o) => !o);
+        }}
         className="w-full rounded-md border border-border px-3 py-2 text-left text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
       >
         {selectedLabel || <span className="text-muted-foreground">Select account</span>}
       </button>
       {open && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-border bg-background shadow-lg">
+        <div className={`absolute left-0 right-0 z-50 rounded-md border border-border bg-background shadow-lg ${flipUp ? "bottom-full mb-1" : "top-full mt-1"}`}>
           <div className="border-b border-border p-2">
             <input
               type="text"
@@ -544,6 +580,7 @@ function TagTypeahead({
 }) {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [flipUp, setFlipUp] = useState(false);
   const [focusIdx, setFocusIdx] = useState(0);
   const [creating, setCreating] = useState(false);
   const [localTags, setLocalTags] = useState<Tag[]>([]);
@@ -631,9 +668,19 @@ function TagTypeahead({
           // Only auto-open when tabbing forward
           const related = e.relatedTarget as Element | null;
           if (related && !(related.compareDocumentPosition(e.currentTarget) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+          if (ref.current) {
+            const rect = ref.current.getBoundingClientRect();
+            setFlipUp(window.innerHeight - rect.bottom < 240);
+          }
           setOpen(true);
         }}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          if (!open && ref.current) {
+            const rect = ref.current.getBoundingClientRect();
+            setFlipUp(window.innerHeight - rect.bottom < 240);
+          }
+          setOpen((o) => !o);
+        }}
         className="w-full rounded-md border border-border px-3 py-2 text-left text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary min-h-[38px]"
       >
         {selectedTags.length === 0 ? (
@@ -653,7 +700,7 @@ function TagTypeahead({
         )}
       </button>
       {open && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-border bg-background shadow-lg">
+        <div className={`absolute left-0 right-0 z-50 rounded-md border border-border bg-background shadow-lg ${flipUp ? "bottom-full mb-1" : "top-full mt-1"}`}>
           <div className="border-b border-border p-2">
             <input
               type="text"
@@ -758,7 +805,7 @@ function EditableVendorCell({
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(value);
   const [focusIdx, setFocusIdx] = useState(0);
-  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, minWidth: 0 });
+  const [dropdownPos, setDropdownPos] = useState<{ top?: number; bottom?: number; left: number; minWidth: number }>({ left: 0, minWidth: 0 });
   const ref = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -801,7 +848,11 @@ function EditableVendorCell({
   const startEditing = () => {
     if (ref.current) {
       const rect = ref.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.bottom + 4, left: rect.left, minWidth: rect.width });
+      if (window.innerHeight - rect.bottom < 220) {
+        setDropdownPos({ bottom: window.innerHeight - rect.top + 4, left: rect.left, minWidth: rect.width });
+      } else {
+        setDropdownPos({ top: rect.bottom + 4, left: rect.left, minWidth: rect.width });
+      }
     }
     setEditValue(value);
     setEditing(true);
@@ -834,7 +885,7 @@ function EditableVendorCell({
       {editing && filtered.length > 0 && createPortal(
         <div
           ref={dropdownRef}
-          style={{ position: "fixed", top: dropdownPos.top, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 150), zIndex: 9999 }}
+          style={{ position: "fixed", top: dropdownPos.top, bottom: dropdownPos.bottom, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 150), zIndex: 9999 }}
           className="max-h-36 overflow-auto rounded-md border border-border bg-background shadow-lg"
         >
           {filtered.map((v, i) => (
@@ -867,7 +918,7 @@ function EditableCategoryCell({
   const [editing, setEditing] = useState(false);
   const [search, setSearch] = useState("");
   const [focusIdx, setFocusIdx] = useState(0);
-  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, minWidth: 0 });
+  const [dropdownPos, setDropdownPos] = useState<{ top?: number; bottom?: number; left: number; minWidth: number }>({ left: 0, minWidth: 0 });
   const ref = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -936,7 +987,11 @@ function EditableCategoryCell({
   const startEditing = () => {
     if (ref.current) {
       const rect = ref.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.bottom + 4, left: rect.left, minWidth: rect.width });
+      if (window.innerHeight - rect.bottom < 220) {
+        setDropdownPos({ bottom: window.innerHeight - rect.top + 4, left: rect.left, minWidth: rect.width });
+      } else {
+        setDropdownPos({ top: rect.bottom + 4, left: rect.left, minWidth: rect.width });
+      }
     }
     setSearch("");
     setEditing(true);
@@ -965,7 +1020,7 @@ function EditableCategoryCell({
       {editing && createPortal(
         <div
           ref={dropdownRef}
-          style={{ position: "fixed", top: dropdownPos.top, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 220), zIndex: 9999 }}
+          style={{ position: "fixed", top: dropdownPos.top, bottom: dropdownPos.bottom, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 220), zIndex: 9999 }}
           className="rounded-md border border-border bg-background shadow-lg"
         >
           <div className="max-h-48 overflow-auto">
@@ -1005,7 +1060,7 @@ function EditableAccountCell({
   const [editing, setEditing] = useState(false);
   const [search, setSearch] = useState("");
   const [focusIdx, setFocusIdx] = useState(0);
-  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, minWidth: 0 });
+  const [dropdownPos, setDropdownPos] = useState<{ top?: number; bottom?: number; left: number; minWidth: number }>({ left: 0, minWidth: 0 });
   const ref = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1061,7 +1116,11 @@ function EditableAccountCell({
   const startEditing = () => {
     if (ref.current) {
       const rect = ref.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.bottom + 4, left: rect.left, minWidth: rect.width });
+      if (window.innerHeight - rect.bottom < 220) {
+        setDropdownPos({ bottom: window.innerHeight - rect.top + 4, left: rect.left, minWidth: rect.width });
+      } else {
+        setDropdownPos({ top: rect.bottom + 4, left: rect.left, minWidth: rect.width });
+      }
     }
     setSearch("");
     setEditing(true);
@@ -1091,7 +1150,7 @@ function EditableAccountCell({
       {editing && createPortal(
         <div
           ref={dropdownRef}
-          style={{ position: "fixed", top: dropdownPos.top, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 180), zIndex: 9999 }}
+          style={{ position: "fixed", top: dropdownPos.top, bottom: dropdownPos.bottom, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 180), zIndex: 9999 }}
           className="rounded-md border border-border bg-background shadow-lg"
         >
           <div className="max-h-48 overflow-auto">

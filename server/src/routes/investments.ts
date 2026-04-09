@@ -1635,19 +1635,89 @@ investmentRoutes.get("/prices/:ticker", async (req, res) => {
   }
 });
 
+// ── POST /api/investments/qfx-import/:accountId ──────────────────────────
+// Accepts a list of parsed QFX transactions (parsed client-side via DOMParser)
+// and upserts them into QfxTransaction using FITID for deduplication so
+// overlapping date-range re-imports are safe. Only valid for managed accounts.
+// Also accepts an optional cashBalance to update the account's settlement cash.
+
+const qfxTransactionSchema = z.object({
+  fitId: z.string().min(1),
+  ticker: z.string().min(1),
+  type: z.enum(["BUY", "SELL", "REINVEST"]),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  shares: z.number().nonnegative(),
+  pricePerShare: z.number().nonnegative(), // 0 is valid for stock splits
+  total: z.number(),
+});
+
+const qfxImportSchema = z.object({
+  transactions: z.array(qfxTransactionSchema),
+  cashBalance: z.number().nullable().optional(),
+});
+
+investmentRoutes.post("/qfx-import/:accountId", async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const account = await prisma.account.findFirst({
+      where: { id: accountId, isActive: true, type: "INVESTMENT", isManaged: true },
+    });
+    if (!account) {
+      return res.status(404).json({ error: { message: "Managed investment account not found" } });
+    }
+
+    const body = qfxImportSchema.parse(req.body);
+    const { transactions, cashBalance } = body;
+
+    // Upsert all transactions — skip duplicates by (accountId, fitId)
+    const rows = transactions.map((t) => ({
+      accountId,
+      fitId: t.fitId,
+      ticker: t.ticker,
+      type: t.type as "BUY" | "SELL" | "REINVEST",
+      date: new Date(t.date),
+      shares: t.shares,
+      pricePerShare: t.pricePerShare,
+      total: t.total,
+    }));
+
+    const result = await prisma.qfxTransaction.createMany({
+      data: rows,
+      skipDuplicates: true,
+    });
+
+    // Optionally update the account's settlement cash balance
+    if (cashBalance != null) {
+      await prisma.account.update({
+        where: { id: accountId },
+        data: { cashBalance, cashBalanceUpdatedAt: new Date() },
+      });
+    }
+
+    res.json({ imported: result.count, total: transactions.length });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: { message: err.errors[0]?.message } });
+    }
+    console.error(err);
+    res.status(500).json({ error: { message: "Failed to import QFX transactions" } });
+  }
+});
+
 // ── GET /api/investments/growth/:accountId ────────────────────────────────
-// Returns a daily time-series of portfolio market value and cost basis for a
-// non-managed investment account, computed from lot-level purchase history and
-// TickerPriceHistory. Triggers a lazy gap-fill before computing so the series
-// always extends through the most recent trading day.
+// Returns a daily time-series of portfolio market value for an investment
+// account. Triggers a lazy gap-fill before computing so the series always
+// extends through the most recent trading day.
 //
-// Portfolio reconstruction: for each date D, the position in a ticker is:
-//   current remaining lots with acquiredDate ≤ D
-//   + shares from SALE activities with date > D (add back shares sold after D)
+// Self-directed accounts: reconstructs positions from lot-level purchase
+// history + SALE activities. Returns both marketValue and costBasis.
+//   For each date D: position = remaining lots acquired ≤ D + shares from
+//   future sales added back (handles partial/full liquidations).
 //
-// This correctly handles partial sales (cost basis and market value drop on the
-// sale date) and fully liquidated positions (no remaining lots, reconstructed
-// entirely from sale activity history).
+// Managed accounts (isManaged = true): reconstructs positions from imported
+// QFX transactions using a forward-accumulation approach. Returns marketValue
+// only (costBasis is omitted — lot matching is unreliable for robo accounts).
+//   For each date D: position = cumulative buys/reinvests - cumulative sells ≤ D.
 
 investmentRoutes.get("/growth/:accountId", async (req, res) => {
   try {
@@ -1657,6 +1727,157 @@ investmentRoutes.get("/growth/:accountId", async (req, res) => {
       where: { id: accountId, isActive: true, type: "INVESTMENT" },
     });
     if (!account) return res.status(404).json({ error: { message: "Account not found" } });
+
+    // ── Managed account path ──────────────────────────────────────────────
+    if (account.isManaged) {
+      const qfxTxns = await prisma.qfxTransaction.findMany({
+        where: { accountId },
+        orderBy: { date: "asc" },
+      });
+
+      if (qfxTxns.length === 0) return res.json({ points: [] });
+
+      const allTickers = [...new Set(qfxTxns.map((t) => t.ticker))];
+      await fillPriceGaps(allTickers);
+
+      const earliestDate = qfxTxns[0].date;
+      const priceRows = await prisma.tickerPriceHistory.findMany({
+        where: { ticker: { in: allTickers }, date: { gte: earliestDate } },
+        orderBy: { date: "asc" },
+      });
+      if (priceRows.length === 0) return res.json({ points: [] });
+
+      const pricesByTicker = new Map<string, Array<{ date: Date; closePrice: number }>>();
+      for (const row of priceRows) {
+        if (!pricesByTicker.has(row.ticker)) pricesByTicker.set(row.ticker, []);
+        pricesByTicker.get(row.ticker)!.push({
+          date: row.date,
+          closePrice: parseFloat(row.closePrice.toString()),
+        });
+      }
+
+      const effectiveDate = effectiveLastTradingDay();
+      const dateSet = new Set<string>();
+      for (const rows of pricesByTicker.values()) {
+        for (const r of rows) {
+          if (r.date <= effectiveDate) dateSet.add(r.date.toISOString());
+        }
+      }
+      const sortedDates = [...dateSet].sort();
+
+      function priceAsOf(ticker: string, asOf: Date): number | null {
+        const prices = pricesByTicker.get(ticker);
+        if (!prices) return null;
+        let best: number | null = null;
+        for (const p of prices) {
+          if (p.date <= asOf) best = p.closePrice;
+          else break;
+        }
+        return best;
+      }
+
+      // Parse transactions once into typed objects with numeric shares
+      type QfxTxn = { date: Date; ticker: string; type: "BUY" | "SELL" | "REINVEST"; shares: number; pricePerShare: number; total: number };
+      const parsedTxns: QfxTxn[] = qfxTxns.map((t) => ({
+        date: t.date,
+        ticker: t.ticker,
+        type: t.type as "BUY" | "SELL" | "REINVEST",
+        shares: parseFloat(t.shares.toString()),
+        pricePerShare: parseFloat(t.pricePerShare.toString()),
+        total: parseFloat(t.total.toString()),
+      }));
+
+      type ManagedEventRecord = { type: "BUY" | "SELL"; ticker: string; shares: number; pricePerShare: number | null; netAmount: number };
+      const rawEventsByDate = new Map<string, ManagedEventRecord[]>();
+      for (const t of parsedTxns) {
+        const dateKey = t.date.toISOString().split("T")[0];
+        if (!rawEventsByDate.has(dateKey)) rawEventsByDate.set(dateKey, []);
+        rawEventsByDate.get(dateKey)!.push({
+          type: t.type === "SELL" ? "SELL" : "BUY",
+          ticker: t.ticker,
+          shares: t.shares,
+          pricePerShare: t.pricePerShare,
+          netAmount: Math.abs(t.total),
+        });
+      }
+
+      const points: Array<{
+        date: string;
+        marketValue: number;
+        costBasis: null;
+        unrealizedGain: null;
+        unrealizedGainPct: null;
+        events?: ManagedEventRecord[];
+      }> = [];
+
+      // Pre-sort transactions by date and build a running-shares map so we
+      // don't re-scan all transactions for every chart date (O(n) not O(n²)).
+      let txnIdx = 0;
+      const runningShares = new Map<string, number>(); // ticker → cumulative shares
+      for (const ticker of allTickers) runningShares.set(ticker, 0);
+
+      for (const dateStr of sortedDates) {
+        const asOf = new Date(dateStr);
+
+        // Advance the running totals for all transactions up to this date
+        while (txnIdx < parsedTxns.length && parsedTxns[txnIdx].date <= asOf) {
+          const t = parsedTxns[txnIdx];
+          const prev = runningShares.get(t.ticker) ?? 0;
+          runningShares.set(t.ticker, prev + (t.type === "SELL" ? -t.shares : t.shares));
+          txnIdx++;
+        }
+
+        let marketValue = 0;
+        let hasPrice = false;
+
+        for (const ticker of allTickers) {
+          const qty = runningShares.get(ticker) ?? 0;
+          if (qty <= 0.000001) continue;
+
+          const price = priceAsOf(ticker, asOf);
+          if (price == null) continue;
+          hasPrice = true;
+          marketValue += qty * price;
+        }
+
+        if (!hasPrice) continue;
+
+        points.push({
+          date: asOf.toISOString().split("T")[0],
+          marketValue: Math.round(marketValue * 100) / 100,
+          costBasis: null,
+          unrealizedGain: null,
+          unrealizedGainPct: null,
+        });
+      }
+
+      // Snap events to chart dates
+      const chartDateList = points.map((p) => p.date).sort();
+      const chartDateSet = new Set(chartDateList);
+      const eventsByChartDate = new Map<string, ManagedEventRecord[]>();
+      for (const [eventDate, events] of rawEventsByDate) {
+        let snapDate: string | undefined;
+        if (chartDateSet.has(eventDate)) {
+          snapDate = eventDate;
+        } else {
+          for (const d of chartDateList) {
+            if (d <= eventDate) snapDate = d;
+            else break;
+          }
+        }
+        if (!snapDate) continue;
+        if (!eventsByChartDate.has(snapDate)) eventsByChartDate.set(snapDate, []);
+        eventsByChartDate.get(snapDate)!.push(...events);
+      }
+      for (const point of points) {
+        const events = eventsByChartDate.get(point.date);
+        if (events?.length) point.events = events;
+      }
+
+      return res.json({ points });
+    }
+
+    // ── Self-directed account path ────────────────────────────────────────
 
     // Load holdings with only dated lots (managed lots have null acquiredDate)
     const holdings = await prisma.investmentHolding.findMany({
@@ -1908,6 +2129,116 @@ investmentRoutes.get("/growth/:accountId", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: { message: "Failed to compute growth data" } });
+  }
+});
+
+// ── POST /api/investments/qfx-dividends/:accountId ───────────────────────
+// Creates InvestmentActivity (DIVIDEND) + Income records from QFX INCOME
+// entries for a managed account. Uses a two-layer dedup strategy:
+//   1. FITID check: activity notes field stores "QFX:{fitId}" — prevents
+//      re-importing the same dividend from an overlapping QFX file.
+//   2. Date proximity check: skips any dividend where a DIVIDEND activity
+//      already exists for the same ticker within ±5 days — prevents creating
+//      duplicates against records already confirmed via the Tiingo scan.
+
+const qfxDividendSchema = z.object({
+  fitId: z.string().min(1),
+  ticker: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  total: z.number().positive(),
+});
+
+const qfxDividendsSchema = z.object({
+  dividends: z.array(qfxDividendSchema),
+});
+
+investmentRoutes.post("/qfx-dividends/:accountId", async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const account = await prisma.account.findFirst({
+      where: { id: accountId, isActive: true, type: "INVESTMENT", isManaged: true },
+    });
+    if (!account) {
+      return res.status(404).json({ error: { message: "Managed investment account not found" } });
+    }
+
+    const { dividends } = qfxDividendsSchema.parse(req.body);
+
+    // Build ticker → holdingId map (null is valid — e.g. TIMXX has no holding row)
+    const holdings = await prisma.investmentHolding.findMany({
+      where: { accountId },
+      select: { id: true, ticker: true },
+    });
+    const holdingByTicker = new Map(holdings.map((h) => [h.ticker, h.id]));
+
+    let imported = 0;
+    let skipped = 0;
+
+    for (const div of dividends) {
+      const paymentDate = new Date(div.date);
+      const fiveDays = 5 * 24 * 60 * 60 * 1000;
+
+      // Layer 1: FITID check — was this exact QFX record already imported?
+      const fitIdNote = `QFX:${div.fitId}`;
+      const byFitId = await prisma.investmentActivity.findFirst({
+        where: { accountId, ticker: div.ticker, type: "DIVIDEND", notes: fitIdNote },
+      });
+      if (byFitId) { skipped++; continue; }
+
+      // Layer 2: date proximity check — does a DIVIDEND record already exist
+      // within ±5 days for this ticker (catches Tiingo-confirmed records)?
+      const byDate = await prisma.investmentActivity.findFirst({
+        where: {
+          accountId,
+          ticker: div.ticker,
+          type: "DIVIDEND",
+          date: {
+            gte: new Date(paymentDate.getTime() - fiveDays),
+            lte: new Date(paymentDate.getTime() + fiveDays),
+          },
+        },
+      });
+      if (byDate) { skipped++; continue; }
+
+      const holdingId = holdingByTicker.get(div.ticker) ?? null;
+
+      await prisma.$transaction(async (tx) => {
+        const activity = await tx.investmentActivity.create({
+          data: {
+            accountId,
+            holdingId,
+            ticker: div.ticker,
+            type: "DIVIDEND",
+            date: paymentDate,
+            amount: div.total,
+            notes: fitIdNote,
+            updatedAt: new Date(),
+          },
+        });
+        await tx.income.create({
+          data: {
+            accountId,
+            amount: div.total,
+            date: paymentDate,
+            source: div.ticker,
+            subtype: "DIVIDEND",
+            isCashReceived: true,
+            activityId: activity.id,
+            updatedAt: new Date(),
+          },
+        });
+      });
+
+      imported++;
+    }
+
+    res.json({ imported, skipped });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: { message: err.errors[0]?.message } });
+    }
+    console.error(err);
+    res.status(500).json({ error: { message: "Failed to import QFX dividends" } });
   }
 });
 

@@ -171,9 +171,13 @@ function DayTooltip({
       </div>
       <div className="space-y-0.5">
         {rows.map((e) => (
-          <div key={e.id} className="flex justify-between gap-4">
-            <span className="text-muted-foreground truncate max-w-[160px]">
-              <span className="inline-block w-3 text-center font-medium text-muted-foreground/70">{e.isJoint ? "J" : "P"}</span>
+          <div
+            key={e.id}
+            className="flex justify-between gap-4"
+            style={e.isRecurring ? { color: "var(--color-blue-400)" } : undefined}
+          >
+            <span className="truncate max-w-[160px]" style={e.isRecurring ? undefined : { color: "var(--color-muted-foreground)" }}>
+              <span className="inline-block w-3 text-center font-medium opacity-70">{e.isJoint ? "J" : "P"}</span>
               {" "}{e.vendor}
             </span>
             <span className="font-medium whitespace-nowrap">
@@ -239,8 +243,9 @@ function MonthCalendar({
     const expenses = data.days[day];
     const spend = isDayFuture ? 0 : dayTotal(expenses, filter, splitRatio);
     const bg = isDayFuture ? undefined : heatColor(spend, absMaxDaySpend);
-    const hasExpenses = !isDayFuture && expenses &&
-      buildTooltipRows(expenses, filter).length > 0;
+    const tooltipRows = !isDayFuture && expenses ? buildTooltipRows(expenses, filter) : [];
+    const hasExpenses = tooltipRows.length > 0;
+    const hasRecurring = hasExpenses && tooltipRows.some((e) => e.isRecurring);
 
     cells.push(
       <div
@@ -262,6 +267,12 @@ function MonthCalendar({
         onMouseLeave={() => setTooltip(null)}
       >
         {day}
+        {hasRecurring && (
+          <span
+            className="absolute left-1/2 -translate-x-1/2 w-1 h-1 rounded-full"
+            style={{ backgroundColor: "var(--color-blue-400)", bottom: "calc(var(--spacing) * 1.5)" }}
+          />
+        )}
       </div>
     );
   }

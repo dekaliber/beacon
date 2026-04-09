@@ -38,6 +38,8 @@ import type {
   WithdrawalSummary,
   InvestmentSettings,
   MonthlySpendingResponse,
+  QfxTransactionInput,
+  QfxDividendInput,
 } from "../types";
 
 // Accounts
@@ -336,6 +338,23 @@ export const executeSell = (data: SellRequest) =>
 
 export const getInvestmentGrowth = (accountId: string) =>
   api.get<{ points: GrowthPoint[] }>(`/investments/growth/${accountId}`);
+
+export const importQfx = (
+  accountId: string,
+  transactions: QfxTransactionInput[],
+  cashBalance?: number | null,
+) => api.post<{ imported: number; total: number }>(
+  `/investments/qfx-import/${accountId}`,
+  { transactions, cashBalance },
+);
+
+export const importQfxDividends = (
+  accountId: string,
+  dividends: QfxDividendInput[],
+) => api.post<{ imported: number; skipped: number }>(
+  `/investments/qfx-dividends/${accountId}`,
+  { dividends },
+);
 
 // ── Realized Gain Snapshots ───────────────────────────────────────────────
 export const getAllGainSnapshots = (year: number) =>

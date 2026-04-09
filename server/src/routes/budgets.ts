@@ -985,6 +985,7 @@ budgetRoutes.get("/:year/monthly-spending", async (req, res) => {
         accountId: true,
         parentExpenseId: true,
         transactionGroupId: true,
+        recurrenceRuleId: true,
       },
       // Sort by date, then group transaction-linked rows together, parents
       // before their offsets within each transaction group / standalone cluster.
@@ -1000,6 +1001,7 @@ budgetRoutes.get("/:year/monthly-spending", async (req, res) => {
       vendor: string;
       amount: number;
       isJoint: boolean;
+      isRecurring: boolean;
       parentExpenseId: string | null;
       transactionGroupId: string | null;
     };
@@ -1028,6 +1030,7 @@ budgetRoutes.get("/:year/monthly-spending", async (req, res) => {
         vendor: exp.vendor || exp.description,
         amount,
         isJoint,
+        isRecurring: !!exp.recurrenceRuleId,
         parentExpenseId: exp.parentExpenseId,
         transactionGroupId: exp.transactionGroupId,
       });

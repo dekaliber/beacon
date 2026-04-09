@@ -63,6 +63,8 @@ import {
   upsertGainSnapshot,
   deleteGainSnapshot,
   getInvestmentGrowth,
+  importQfx,
+  importQfxDividends,
   updateSaleActivity,
   refreshPrices,
   getPendingDividends,
@@ -3632,6 +3634,420 @@ function RealizedGainSnapshotPanel({
   );
 }
 
+// ── QFX Import Panel ──────────────────────────────────────────────────────────
+
+interface QfxParsedSummary {
+  transactions: import("@/types").QfxTransactionInput[];
+  dividends: import("@/types").QfxDividendInput[];
+  cashBalance: number | null;
+  tickers: string[];
+  netShares: Record<string, number>;
+  buyCount: number;
+  sellCount: number;
+  reinvestCount: number;
+  splitCount: number;
+  transferCount: number;
+  dividendCount: number;
+}
+
+function parseQfxDate(dtStr: string): string {
+  const clean = dtStr.replace(/\..+$/, "").replace(/\[.+$/, "");
+  return `${clean.slice(0, 4)}-${clean.slice(4, 6)}-${clean.slice(6, 8)}`;
+}
+
+function parseQfxFile(content: string): QfxParsedSummary {
+  const xmlStart = content.indexOf("<OFX>");
+  if (xmlStart === -1) throw new Error("Could not find <OFX> section in file");
+  const doc = new DOMParser().parseFromString(content.slice(xmlStart), "text/xml");
+  const parseErr = doc.querySelector("parsererror");
+  if (parseErr) throw new Error("File is not valid XML: " + parseErr.textContent?.slice(0, 100));
+
+  // Build CUSIP → ticker map; identify money market fund tickers
+  const cusipToTicker = new Map<string, string>();
+  const mmTickers = new Set<string>();
+  for (const info of Array.from(doc.querySelectorAll("STOCKINFO, MFINFO"))) {
+    const cusip = info.querySelector("UNIQUEID")?.textContent?.trim();
+    const ticker = info.querySelector("TICKER")?.textContent?.trim();
+    if (cusip && ticker) {
+      cusipToTicker.set(cusip, ticker);
+      if (info.tagName === "MFINFO") mmTickers.add(ticker);
+    }
+  }
+
+  function getTicker(el: Element): string | null {
+    const cusip = el.querySelector("SECID > UNIQUEID")?.textContent?.trim();
+    return cusip ? (cusipToTicker.get(cusip) ?? null) : null;
+  }
+  function txt(el: Element, tag: string): string {
+    return el.querySelector(tag)?.textContent?.trim() ?? "";
+  }
+
+  const transactions: import("@/types").QfxTransactionInput[] = [];
+  let splitCount = 0;
+  let transferCount = 0;
+
+  // BUYSTOCK / BUYMF
+  for (const el of Array.from(doc.querySelectorAll("BUYSTOCK, BUYMF"))) {
+    const inner = el.querySelector("INVBUY")!;
+    const ticker = getTicker(inner);
+    if (!ticker) continue;
+    const units = parseFloat(txt(inner, "UNITS"));
+    const unitPrice = parseFloat(txt(inner, "UNITPRICE"));
+    const total = parseFloat(txt(inner, "TOTAL"));
+    // Skip money market fund purchases (treated as cash)
+    if (mmTickers.has(ticker) && Math.abs(unitPrice - 1.0) < 0.02) continue;
+    transactions.push({
+      fitId: txt(inner, "FITID"),
+      ticker,
+      type: "BUY",
+      date: parseQfxDate(txt(inner, "DTTRADE")),
+      shares: Math.abs(units),
+      pricePerShare: unitPrice,
+      total,
+    });
+  }
+
+  // SELLSTOCK / SELLMF
+  for (const el of Array.from(doc.querySelectorAll("SELLSTOCK, SELLMF"))) {
+    const inner = el.querySelector("INVSELL")!;
+    const ticker = getTicker(inner);
+    if (!ticker) continue;
+    const units = parseFloat(txt(inner, "UNITS"));
+    const unitPrice = parseFloat(txt(inner, "UNITPRICE"));
+    const total = parseFloat(txt(inner, "TOTAL"));
+    // Skip money market fund sales (treated as cash)
+    if (mmTickers.has(ticker) && Math.abs(unitPrice - 1.0) < 0.02) continue;
+    transactions.push({
+      fitId: txt(inner, "FITID"),
+      ticker,
+      type: "SELL",
+      date: parseQfxDate(txt(inner, "DTTRADE")),
+      shares: Math.abs(units),
+      pricePerShare: Math.abs(unitPrice),
+      total,
+    });
+  }
+
+  // REINVEST (dividend reinvestment — creates new shares)
+  for (const el of Array.from(doc.querySelectorAll("REINVEST"))) {
+    const ticker = getTicker(el);
+    if (!ticker) continue;
+    const units = parseFloat(txt(el, "UNITS"));
+    const unitPrice = parseFloat(txt(el, "UNITPRICE"));
+    const total = parseFloat(txt(el, "TOTAL"));
+    transactions.push({
+      fitId: txt(el, "FITID"),
+      ticker,
+      type: "REINVEST",
+      date: parseQfxDate(txt(el, "DTTRADE")),
+      shares: Math.abs(units),
+      pricePerShare: Math.abs(unitPrice),
+      total,
+    });
+  }
+
+  // SPLIT — treated as a share grant (BUY at $0 cost so share count is correct).
+  // NEWUNITS is the total shares after the split; OLDUNITS is the total before.
+  // The net new shares added = NEWUNITS - OLDUNITS.
+  for (const el of Array.from(doc.querySelectorAll("SPLIT"))) {
+    const inner = el.querySelector("INVTRAN");
+    const ticker = getTicker(el);
+    if (!ticker || !inner) continue;
+    const newUnits = parseFloat(txt(el, "NEWUNITS"));
+    const oldUnits = parseFloat(txt(el, "OLDUNITS")) || 0;
+    const deltaUnits = newUnits - oldUnits;
+    if (isNaN(deltaUnits) || deltaUnits <= 0) continue;
+    splitCount++;
+    transactions.push({
+      fitId: txt(inner, "FITID"),
+      ticker,
+      type: "BUY",
+      date: parseQfxDate(txt(inner, "DTTRADE")),
+      shares: deltaUnits,
+      pricePerShare: 0,
+      total: 0,
+    });
+  }
+
+  // TRANSFER (shares transferred in/out of the account, e.g. ACATS)
+  // Use the sign of UNITS as the source of truth for direction — TFERACTION can be IN
+  // even when UNITS is negative (e.g. POSTYPE=SHORT records that reduce net shares).
+  for (const el of Array.from(doc.querySelectorAll("TRANSFER"))) {
+    const inner = el.querySelector("INVTRAN")!;
+    const ticker = getTicker(el);
+    if (!ticker) continue;
+    const units = parseFloat(txt(el, "UNITS"));
+    const avgCost = parseFloat(txt(el, "AVGCOSTBASIS"));
+    if (isNaN(units) || units === 0) continue;
+    // Skip money market fund transfers (treated as cash)
+    if (mmTickers.has(ticker)) continue;
+    const absUnits = Math.abs(units);
+    const price = isNaN(avgCost) ? 0 : Math.abs(avgCost);
+    transferCount++;
+    transactions.push({
+      fitId: txt(inner, "FITID"),
+      ticker,
+      type: units < 0 ? "SELL" : "BUY",
+      date: parseQfxDate(txt(inner, "DTTRADE")),
+      shares: absUnits,
+      pricePerShare: price,
+      total: absUnits * price,
+    });
+  }
+
+  // Derive cash balance from INVPOS snapshot (most accurate — avoids running total drift)
+  let cashBalance: number | null = null;
+  for (const pos of Array.from(doc.querySelectorAll("INVPOS"))) {
+    const cusip = pos.querySelector("SECID > UNIQUEID")?.textContent?.trim();
+    const ticker = cusip ? cusipToTicker.get(cusip) : null;
+    if (!ticker || !mmTickers.has(ticker)) continue;
+    const units = parseFloat(txt(pos, "UNITS"));
+    const unitPrice = parseFloat(txt(pos, "UNITPRICE"));
+    if (!isNaN(units) && !isNaN(unitPrice) && Math.abs(unitPrice - 1.0) < 0.02) {
+      cashBalance = Math.round(units * unitPrice * 100) / 100;
+    }
+  }
+
+  // Extract INCOME records (dividend payments)
+  const dividends: import("@/types").QfxDividendInput[] = [];
+  for (const el of Array.from(doc.querySelectorAll("INCOME"))) {
+    const cusip = el.querySelector("SECID > UNIQUEID")?.textContent?.trim();
+    const ticker = cusip ? cusipToTicker.get(cusip) : null;
+    if (!ticker) continue;
+    const fitId = txt(el, "FITID");
+    const dtTrade = txt(el, "DTTRADE");
+    const total = parseFloat(txt(el, "TOTAL"));
+    if (!fitId || !dtTrade || isNaN(total) || total <= 0) continue;
+    dividends.push({
+      fitId,
+      ticker,
+      date: parseQfxDate(dtTrade),
+      total,
+    });
+  }
+
+  const tickers = [...new Set(transactions.map((t) => t.ticker))].sort();
+
+  // Forward-accumulate net shares per ticker (what the growth chart will use)
+  const netShares: Record<string, number> = {};
+  for (const t of transactions) {
+    netShares[t.ticker] = (netShares[t.ticker] ?? 0) + (t.type === "SELL" ? -t.shares : t.shares);
+  }
+
+  return {
+    transactions,
+    dividends,
+    cashBalance,
+    tickers,
+    netShares,
+    buyCount: transactions.filter((t) => t.type === "BUY").length - transferCount,
+    sellCount: transactions.filter((t) => t.type === "SELL").length,
+    reinvestCount: transactions.filter((t) => t.type === "REINVEST").length,
+    splitCount,
+    transferCount,
+    dividendCount: dividends.length,
+  };
+}
+
+function QfxImportPanel({ accountId, onImported }: { accountId: string; onImported: () => void }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [parsed, setParsed] = useState<QfxParsedSummary | null>(null);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<{ imported: number; total: number; dividendsImported: number; dividendsSkipped: number } | null>(null);
+  const [importDividends, setImportDividends] = useState(true);
+  const [dividendStartDate, setDividendStartDate] = useState(`${new Date().getFullYear()}-01-01`);
+  const { notify } = useNotifications();
+
+  const filteredDividends = parsed && importDividends
+    ? parsed.dividends.filter((d) => d.date >= dividendStartDate)
+    : [];
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setParsed(null);
+    setParseError(null);
+    setResult(null);
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const content = evt.target?.result as string;
+        setParsed(parseQfxFile(content));
+      } catch (err) {
+        setParseError(err instanceof Error ? err.message : "Failed to parse file");
+      }
+    };
+    reader.readAsText(file);
+    // Reset so the same file can be re-selected
+    e.target.value = "";
+  }
+
+  async function handleImport() {
+    if (!parsed) return;
+    setImporting(true);
+    try {
+      const [txnRes, divRes] = await Promise.all([
+        importQfx(accountId, parsed.transactions, parsed.cashBalance),
+        filteredDividends.length > 0
+          ? importQfxDividends(accountId, filteredDividends)
+          : Promise.resolve({ imported: 0, skipped: 0 }),
+      ]);
+      setResult({ ...txnRes, dividendsImported: divRes.imported, dividendsSkipped: divRes.skipped });
+      setParsed(null);
+      onImported();
+      const parts = [];
+      if (txnRes.imported > 0) parts.push(`${txnRes.imported} transaction${txnRes.imported !== 1 ? "s" : ""}`);
+      if (divRes.imported > 0) parts.push(`${divRes.imported} dividend${divRes.imported !== 1 ? "s" : ""}`);
+      notify({ type: "success", message: parts.length > 0 ? `Imported ${parts.join(" and ")}` : "No new records (all already imported)" });
+    } catch (err) {
+      notify({ type: "error", message: err instanceof Error ? err.message : "Import failed" });
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <div className="px-4 py-4 space-y-3">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".qfx,.ofx"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
+      {!parsed && !result && (
+        <div className="flex items-center gap-3">
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-8 text-xs px-3 gap-1.5"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            Select QFX file
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Export from Wealthfront → Documents → Export to Quicken
+          </p>
+        </div>
+      )}
+
+      {parseError && (
+        <div className="flex items-center gap-2 text-xs text-red-600">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          {parseError}
+        </div>
+      )}
+
+      {parsed && (
+        <div className="space-y-3">
+          <div className="rounded-md border border-border bg-muted/30 px-3 py-2.5 text-xs space-y-2">
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-muted-foreground">
+              <span className="font-medium text-foreground">Ready to import</span>
+              <span>{parsed.buyCount} buy{parsed.buyCount !== 1 ? "s" : ""}</span>
+              <span>{parsed.sellCount} sell{parsed.sellCount !== 1 ? "s" : ""}</span>
+              <span>{parsed.reinvestCount} reinvestment{parsed.reinvestCount !== 1 ? "s" : ""}</span>
+              {parsed.splitCount > 0 && <span>{parsed.splitCount} split{parsed.splitCount !== 1 ? "s" : ""}</span>}
+              {parsed.transferCount > 0 && <span>{parsed.transferCount} transfer{parsed.transferCount !== 1 ? "s" : ""}</span>}
+              {parsed.dividendCount > 0 && (
+                <span>
+                  {importDividends ? filteredDividends.length : 0}/{parsed.dividendCount} dividend{parsed.dividendCount !== 1 ? "s" : ""}
+                </span>
+              )}
+              {parsed.cashBalance != null && <span>Cash balance: {formatCurrency(parsed.cashBalance)}</span>}
+            </div>
+            {/* Per-ticker net share table */}
+            <div className="grid gap-x-6 gap-y-0.5 pt-0.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}>
+              {parsed.tickers.map((ticker) => {
+                const shares = parsed.netShares[ticker] ?? 0;
+                return (
+                  <div key={ticker} className="flex items-baseline justify-between gap-2">
+                    <span className="font-mono text-[11px] text-foreground">{ticker}</span>
+                    <span className="tabular-nums text-muted-foreground">
+                      {shares.toLocaleString(undefined, { maximumFractionDigits: 6 })} sh
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          {parsed.dividendCount > 0 && (
+            <div className="flex items-center gap-4 text-xs">
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={importDividends}
+                  onChange={(e) => setImportDividends(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded accent-primary"
+                />
+                <span className="text-foreground">Import dividends</span>
+              </label>
+              {importDividends && (
+                <label className="flex items-center gap-1.5 text-muted-foreground">
+                  Starting
+                  <input
+                    type="date"
+                    value={dividendStartDate}
+                    onChange={(e) => setDividendStartDate(e.target.value)}
+                    className="h-6 rounded border border-border bg-background px-1.5 text-xs text-foreground"
+                  />
+                </label>
+              )}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              className="h-8 text-xs px-3"
+              disabled={importing}
+              onClick={handleImport}
+            >
+              {importing ? "Importing…" : "Confirm import"}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-8 text-xs px-3"
+              onClick={() => { setParsed(null); setParseError(null); }}
+            >
+              Cancel
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              {parsed.transactions.length} total transactions · duplicate FITIDs will be skipped
+            </p>
+          </div>
+        </div>
+      )}
+
+      {result && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs text-green-700">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              {result.imported} new transaction{result.imported !== 1 ? "s" : ""}
+              {result.dividendsImported > 0 && `, ${result.dividendsImported} dividend${result.dividendsImported !== 1 ? "s" : ""}`}
+              {" "}imported
+              {(result.total - result.imported) > 0 && ` · ${result.total - result.imported} transaction${result.total - result.imported !== 1 ? "s" : ""} already existed`}
+              {result.dividendsSkipped > 0 && ` · ${result.dividendsSkipped} dividend${result.dividendsSkipped !== 1 ? "s" : ""} already existed`}
+            </span>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-8 text-xs px-3 gap-1.5"
+            onClick={() => { setResult(null); fileInputRef.current?.click(); }}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            Import another file
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 // ── Growth chart ──────────────────────────────────────────────────────────────
@@ -3681,7 +4097,8 @@ function eventDotColor(events: GrowthEvent[]) {
 function GrowthChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload as GrowthPoint;
-  const pos = d.unrealizedGain >= 0;
+  const hasCostBasis = d.costBasis != null && d.unrealizedGain != null;
+  const pos = hasCostBasis ? d.unrealizedGain! >= 0 : true;
   return (
     <div className="rounded-lg border border-border bg-background shadow-md px-3 py-2 text-xs space-y-1 min-w-[210px]">
       <p className="font-semibold text-foreground mb-1">{formatAxisDate(label)}</p>
@@ -3689,34 +4106,52 @@ function GrowthChartTooltip({ active, payload, label }: any) {
         <span className="text-muted-foreground">Market value</span>
         <span className="font-medium tabular-nums">{formatCurrency(d.marketValue)}</span>
       </div>
-      <div className="flex justify-between gap-4">
-        <span className="text-muted-foreground">Cost basis</span>
-        <span className="font-medium tabular-nums">{formatCurrency(d.costBasis)}</span>
-      </div>
-      <div className="flex justify-between gap-4 pt-1 border-t border-border">
-        <span className="text-muted-foreground">Unrealized gain</span>
-        <span className={`font-medium tabular-nums ${pos ? "text-green-600" : "text-red-500"}`}>
-          {pos ? "+" : ""}{formatCurrency(d.unrealizedGain)} ({pos ? "+" : ""}{d.unrealizedGainPct.toFixed(2)}%)
-        </span>
-      </div>
-      {d.events?.length ? (
-        <div className="pt-1 border-t border-border space-y-0.5">
-          {d.events.map((ev, i) => {
-            const isSell = ev.type === "SELL";
-            const sharesStr = ev.shares.toLocaleString(undefined, { maximumFractionDigits: 4 });
-            return (
-              <div key={i} className="flex justify-between gap-4">
-                <span className="text-muted-foreground">
-                  {isSell ? "Sold" : "Bought"} {sharesStr} {ev.ticker}
-                </span>
-                <span className={`font-medium tabular-nums ${isSell ? "text-amber-600" : "text-green-600"}`}>
-                  {isSell ? "-" : "+"}{formatCurrency(ev.netAmount)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      ) : null}
+      {hasCostBasis && (
+        <>
+          <div className="flex justify-between gap-4">
+            <span className="text-muted-foreground">Cost basis</span>
+            <span className="font-medium tabular-nums">{formatCurrency(d.costBasis!)}</span>
+          </div>
+          <div className="flex justify-between gap-4 pt-1 border-t border-border">
+            <span className="text-muted-foreground">Unrealized gain</span>
+            <span className={`font-medium tabular-nums ${pos ? "text-green-600" : "text-red-500"}`}>
+              {pos ? "+" : ""}{formatCurrency(d.unrealizedGain!)} ({pos ? "+" : ""}{d.unrealizedGainPct!.toFixed(2)}%)
+            </span>
+          </div>
+        </>
+      )}
+      {d.events?.length ? (() => {
+        // Roll up multiple transactions on the same day into one row per ticker+type
+        const rolled = new Map<string, { type: string; ticker: string; shares: number; netAmount: number }>();
+        for (const ev of d.events) {
+          const key = `${ev.type}:${ev.ticker}`;
+          const existing = rolled.get(key);
+          if (existing) {
+            existing.shares += ev.shares;
+            existing.netAmount += ev.netAmount;
+          } else {
+            rolled.set(key, { ...ev });
+          }
+        }
+        return (
+          <div className="pt-1 border-t border-border space-y-0.5">
+            {[...rolled.values()].map((ev, i) => {
+              const isSell = ev.type === "SELL";
+              const sharesStr = ev.shares.toLocaleString(undefined, { maximumFractionDigits: 4 });
+              return (
+                <div key={i} className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">
+                    {isSell ? "Sold" : "Bought"} {sharesStr} {ev.ticker}
+                  </span>
+                  <span className={`font-medium tabular-nums ${isSell ? "text-amber-600" : "text-green-600"}`}>
+                    {isSell ? "-" : "+"}{formatCurrency(ev.netAmount)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })() : null}
     </div>
   );
 }
@@ -3725,7 +4160,7 @@ function GrowthChartTooltip({ active, payload, label }: any) {
 // Captures the bottom panel's active tooltip state via useEffect to avoid setState-during-render,
 // then renders nothing — the actual tooltip is drawn as an overlay on the top panel.
 
-function GrowthChart({ accountId, onDayGain }: { accountId: string; onDayGain?: (gain: number | null) => void }) {
+function GrowthChart({ accountId, isManaged, onImportClick, onDayGain }: { accountId: string; isManaged?: boolean; onImportClick?: () => void; onDayGain?: (gain: number | null) => void }) {
   const [duration, setDuration] = useState<ChartDuration>("YTD");
   const { data, loading, error } = useApi(() => getInvestmentGrowth(accountId), [accountId]);
   const { isDemoMode, demoFactor } = useDemo();
@@ -3808,7 +4243,14 @@ function GrowthChart({ accountId, onDayGain }: { accountId: string; onDayGain?: 
       <>
         {header}
         <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground text-center px-4">
-          {error ? "Failed to load growth data." : "No data yet. Add dated lots to track growth over time."}
+          {error
+            ? "Failed to load growth data."
+            : isManaged
+              ? <span>{"No transaction history yet. "}{onImportClick
+                    ? <button onClick={onImportClick} className="text-primary underline underline-offset-2 hover:no-underline">Import a QFX file</button>
+                    : "Import a QFX file"
+                  }{" to enable the growth chart."}</span>
+              : "No data yet. Add dated lots to track growth over time."}
         </div>
       </>
     );
@@ -3828,11 +4270,13 @@ function GrowthChart({ accountId, onDayGain }: { accountId: string; onDayGain?: 
   const tickEvery = Math.max(1, Math.floor(points.length / 6));
   const ticks = points.filter((_, i) => i % tickEvery === 0 || i === points.length - 1).map(p => p.date);
 
+  const hasCostBasis = !isManaged && points.some(p => p.costBasis != null);
+
   const mvMin = Math.min(...points.map(p => p.marketValue));
   const mvMax = Math.max(...points.map(p => p.marketValue));
-  const cbMin = Math.min(...points.map(p => p.costBasis));
-  const cbMax = Math.max(...points.map(p => p.costBasis));
   const mvPad = Math.max((mvMax - mvMin) * 0.08, 100);
+  const cbMin = hasCostBasis ? Math.min(...points.map(p => p.costBasis ?? 0)) : 0;
+  const cbMax = hasCostBasis ? Math.max(...points.map(p => p.costBasis ?? 0)) : 0;
   const cbPad = Math.max((cbMax - cbMin) * 0.08, 100);
 
   // Shared axis config
@@ -3848,10 +4292,12 @@ function GrowthChart({ accountId, onDayGain }: { accountId: string; onDayGain?: 
         <span className="inline-block w-6 h-0.5 bg-indigo-600" />
         Market value
       </span>
-      <span className="flex items-center gap-1.5">
-        <span className="inline-block w-6 border-t border-dashed border-slate-400" />
-        Cost basis
-      </span>
+      {hasCostBasis && (
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-6 border-t border-dashed border-slate-400" />
+          Cost basis
+        </span>
+      )}
       <span className="flex items-center gap-1.5">
         <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
         Buy
@@ -3887,7 +4333,7 @@ function GrowthChart({ accountId, onDayGain }: { accountId: string; onDayGain?: 
 
       {/* Top panel — market value, tight domain. z-10 ensures its tooltip floats above the bottom panel. */}
       <div className="relative z-10">
-      <ResponsiveContainer width="100%" height={130}>
+      <ResponsiveContainer width="100%" height={hasCostBasis ? 130 : 168}>
         <ComposedChart data={points} margin={MARGIN_TOP} syncId="growth">
           {gradDefs}
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
@@ -3900,24 +4346,38 @@ function GrowthChart({ accountId, onDayGain }: { accountId: string; onDayGain?: 
       </ResponsiveContainer>
       </div>
 
-      {/* Scale break indicator — two dashed lines offset from the Y-axis */}
-      <div className="flex flex-col gap-[5px] my-[3px]" style={{ paddingLeft: Y_WIDTH + MARGIN_TOP.left, paddingRight: MARGIN_TOP.right }}>
-        <div className="border-t border-dashed border-border" />
-        <div className="border-t border-dashed border-border" />
-      </div>
+      {hasCostBasis && (
+        <>
+          {/* Scale break indicator — two dashed lines offset from the Y-axis */}
+          <div className="flex flex-col gap-[5px] my-[3px]" style={{ paddingLeft: Y_WIDTH + MARGIN_TOP.left, paddingRight: MARGIN_TOP.right }}>
+            <div className="border-t border-dashed border-border" />
+            <div className="border-t border-dashed border-border" />
+          </div>
 
-      {/* Bottom panel — cost basis, tight domain */}
-      <ResponsiveContainer width="100%" height={80}>
+          {/* Bottom panel — cost basis, tight domain */}
+          <ResponsiveContainer width="100%" height={80}>
+            <ComposedChart data={points} margin={MARGIN_BTM} syncId="growth">
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="date" ticks={ticks} tickFormatter={formatAxisDate}
+                tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis {...yAxisProps} domain={[cbMin - cbPad, cbMax + cbPad]} />
+              <RechartsTooltip cursor={{ stroke: "#e2e8f0", strokeWidth: 1 }} content={() => null} />
+              <Line type="monotone" dataKey="costBasis" stroke="#94a3b8"
+                strokeWidth={1.5} strokeDasharray="5 4" dot={false} activeDot={{ r: 4, fill: "#94a3b8" }} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </>
+      )}
+
+      {/* X-axis date labels — shown on top panel when cost basis panel is hidden */}
+      {!hasCostBasis && (
+        <ResponsiveContainer width="100%" height={24}>
           <ComposedChart data={points} margin={MARGIN_BTM} syncId="growth">
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
             <XAxis dataKey="date" ticks={ticks} tickFormatter={formatAxisDate}
               tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis {...yAxisProps} domain={[cbMin - cbPad, cbMax + cbPad]} />
-            <RechartsTooltip cursor={{ stroke: "#e2e8f0", strokeWidth: 1 }} content={() => null} />
-            <Line type="monotone" dataKey="costBasis" stroke="#94a3b8"
-              strokeWidth={1.5} strokeDasharray="5 4" dot={false} activeDot={{ r: 4, fill: "#94a3b8" }} />
           </ComposedChart>
         </ResponsiveContainer>
+      )}
 
       {legend}
     </>
@@ -4149,23 +4609,18 @@ export function InvestmentAccount() {
 
           {/* Chart + summary row */}
           <div className="flex flex-col lg:flex-row items-start gap-6">
-            {/* Growth chart — 2/3 width, non-managed only */}
-            {!account.isManaged && (
-              <div className="min-w-0 basis-2/3 py-2 flex flex-col w-full">
-                <GrowthChart key={chartKey} accountId={accountId!} onDayGain={handleDayGain} />
-              </div>
-            )}
-            {/* Performance summary — 1/3 width (or full width if managed) */}
-            <Card className={`p-4 ${account.isManaged ? "w-full" : "min-w-0 basis-1/3 w-full"}`}>
+            {/* Growth chart — 2/3 width */}
+            <div className="min-w-0 basis-2/3 py-2 flex flex-col w-full">
+              <GrowthChart key={chartKey} accountId={accountId!} isManaged={account.isManaged} onImportClick={account.isManaged ? () => document.getElementById("qfx-import")?.scrollIntoView({ behavior: "smooth" }) : undefined} onDayGain={handleDayGain} />
+            </div>
+            {/* Performance summary — 1/3 width */}
+            <Card className="min-w-0 basis-1/3 w-full p-4">
               <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
                     1 Day {dayGain == null ? "Gain/Loss" : dayGain >= 0 ? "Gain" : "Loss"}
                   </p>
-                  {account.isManaged
-                    ? <span className="text-muted-foreground tabular-nums">—</span>
-                    : <GainCell value={dayGain} size="base" />
-                  }
+                  <GainCell value={dayGain} size="base" />
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
@@ -4507,6 +4962,22 @@ export function InvestmentAccount() {
               </div>
             </Card>
           ) : null}
+
+          {/* QFX import panel — shown for managed/robo-advisor accounts */}
+          {account.isManaged && (
+            <div id="qfx-import">
+            <Card className="overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                  <h3 className="font-semibold text-sm">Transaction History</h3>
+                </div>
+                <p className="text-xs text-muted-foreground">Import QFX to enable the growth chart</p>
+              </div>
+              <QfxImportPanel accountId={accountId!} onImported={refreshChart} />
+            </Card>
+            </div>
+          )}
 
           {/* Realized gain snapshot panel — shown for managed/robo-advisor accounts */}
           {account.isManaged && (

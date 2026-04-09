@@ -240,6 +240,7 @@ export interface MonthlySpendingDay {
   vendor: string;
   amount: number;
   isJoint: boolean;
+  isRecurring: boolean;
   parentExpenseId: string | null;
   transactionGroupId: string | null;
 }
@@ -364,10 +365,28 @@ export interface GrowthEvent {
 export interface GrowthPoint {
   date: string;
   marketValue: number;
-  costBasis: number;
-  unrealizedGain: number;
-  unrealizedGainPct: number;
+  // null for managed accounts where cost basis cannot be reliably reconstructed
+  costBasis: number | null;
+  unrealizedGain: number | null;
+  unrealizedGainPct: number | null;
   events?: GrowthEvent[];
+}
+
+export interface QfxTransactionInput {
+  fitId: string;
+  ticker: string;
+  type: "BUY" | "SELL" | "REINVEST";
+  date: string; // YYYY-MM-DD
+  shares: number;
+  pricePerShare: number;
+  total: number;
+}
+
+export interface QfxDividendInput {
+  fitId: string;
+  ticker: string;
+  date: string; // YYYY-MM-DD (actual payment date from QFX)
+  total: number;
 }
 
 export interface PendingDividend {
