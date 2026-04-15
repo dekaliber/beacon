@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
-  Plus, Pencil, Receipt, AlertCircle,
+  Plus, Pencil, Receipt, AlertCircle, Tag as TagIcon,
   ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, Repeat,
   AlertTriangle, Undo2, CheckCircle2, Upload, FileText, Check, GripVertical,
   ChevronRight, ChevronDown, Search, EyeOff,
@@ -2040,6 +2040,13 @@ export function Expenses() {
           >
             <AlertCircle className="h-4 w-4" />
             Reimbursements
+          </Link>
+          <Link
+            to="/expenses/tags"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <TagIcon className="h-4 w-4" />
+            Tags
           </Link>
           <div className="h-5 w-px bg-border" />
           <div className="relative">

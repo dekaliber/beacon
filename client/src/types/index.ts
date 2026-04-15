@@ -56,6 +56,17 @@ export interface Tag {
   updatedAt: string;
 }
 
+export interface OrphanedOffset {
+  id: string;
+  amount: string;
+  vendor: string;
+  description: string;
+  date: string;
+  parentExpenseId: string;
+  account: { isJoint: boolean };
+  parentExpense: { id: string; vendor: string; description: string } | null;
+}
+
 export interface ExpenseTag {
   expenseId: string;
   tagId: string;

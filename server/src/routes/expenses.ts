@@ -68,10 +68,13 @@ expenseRoutes.get("/", async (req, res) => {
     const searchStr = req.query.search as string;
     const asNumber = parseFloat(searchStr);
     const isValidNumber = !isNaN(asNumber) && /^-?\d+(\.\d+)?$/.test(searchStr.trim());
-    const orConditions: Record<string, unknown>[] = [
+    const textConditions: Record<string, unknown>[] = [
       { description: { contains: searchStr, mode: "insensitive" } },
       { vendor: { contains: searchStr, mode: "insensitive" } },
+      { offsets: { some: { description: { contains: searchStr, mode: "insensitive" } } } },
+      { offsets: { some: { vendor: { contains: searchStr, mode: "insensitive" } } } },
     ];
+    const orConditions: Record<string, unknown>[] = [...textConditions];
     if (isValidNumber && asNumber > 0) {
       orConditions.push({ amount: { equals: new Prisma.Decimal(searchStr.trim()) } });
       orConditions.push({ amount: { equals: new Prisma.Decimal(-asNumber) } });
@@ -152,7 +155,11 @@ expenseRoutes.get("/", async (req, res) => {
       const searchStr = req.query.search as string;
       const asNumber = parseFloat(searchStr);
       const term = `%${searchStr}%`;
-      const orParts: string[] = [`e.description ILIKE $${p}`, `e.vendor ILIKE $${p}`];
+      const orParts: string[] = [
+        `e.description ILIKE $${p}`,
+        `e.vendor ILIKE $${p}`,
+        `EXISTS (SELECT 1 FROM expenses o WHERE o."parentExpenseId" = e.id AND (o.description ILIKE $${p} OR o.vendor ILIKE $${p}))`,
+      ];
       params.push(term);
       p++;
       if (!isNaN(asNumber) && asNumber > 0) {

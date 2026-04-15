@@ -40,6 +40,7 @@ import type {
   MonthlySpendingResponse,
   QfxTransactionInput,
   QfxDividendInput,
+  OrphanedOffset,
 } from "../types";
 
 // Accounts
@@ -104,6 +105,8 @@ export const bulkDeleteIncome = (ids: string[]) =>
 
 // Tags
 export const getTags = () => api.get<Tag[]>("/tags");
+export const getTagOrphanedOffsets = (tagId: string) =>
+  api.get<OrphanedOffset[]>(`/tags/${tagId}/orphaned-offsets`);
 export const createTag = (data: { name: string; color?: string; group?: string | null }) => api.post<Tag>("/tags", data);
 export const updateTag = (id: string, data: { name?: string; color?: string; group?: string | null }) => api.put<Tag>(`/tags/${id}`, data);
 export const deleteTag = (id: string) => api.delete(`/tags/${id}`);

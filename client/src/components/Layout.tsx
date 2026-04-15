@@ -6,7 +6,6 @@ import {
   PiggyBank,
   Landmark,
   Tags,
-  Tag,
   Repeat,
   Settings,
   LineChart,
@@ -112,7 +111,6 @@ const navItems = [
 const configItems = [
   { to: "/accounts", icon: Landmark, label: "Accounts" },
   { to: "/categories", icon: Tags, label: "Categories" },
-  { to: "/tags", icon: Tag, label: "Tags" },
   { to: "/asset-classes", icon: PieChart, label: "Asset Classes" },
 ];
 

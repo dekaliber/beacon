@@ -48,6 +48,32 @@ tagRoutes.get("/", async (_req, res) => {
   res.json(result);
 });
 
+// Orphaned offsets: tagged expenses that are offset children whose parent is NOT tagged with the same tag
+tagRoutes.get("/:id/orphaned-offsets", async (req, res) => {
+  const tagId = req.params.id;
+
+  const offsets = await prisma.expense.findMany({
+    where: {
+      parentExpenseId: { not: null },
+      tags: { some: { tagId } },
+      parentExpense: { tags: { none: { tagId } } },
+    },
+    select: {
+      id: true,
+      amount: true,
+      vendor: true,
+      description: true,
+      date: true,
+      parentExpenseId: true,
+      account: { select: { isJoint: true } },
+      parentExpense: { select: { id: true, vendor: true, description: true } },
+    },
+    orderBy: { date: "asc" },
+  });
+
+  res.json(offsets);
+});
+
 // Create tag
 tagRoutes.post("/", async (req, res) => {
   const parsed = tagSchema.safeParse(req.body);

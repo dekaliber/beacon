@@ -1,13 +1,13 @@
 import { useRef, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, Tag as TagIcon, ChevronDown, ChevronUp, CornerDownRight } from "lucide-react";
+import { Plus, Pencil, Trash2, Tag as TagIcon, ChevronDown, ChevronUp, CornerDownRight, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
-import { getTags, createTag, updateTag, deleteTag, getExpenses } from "@/api";
+import { getTags, createTag, updateTag, deleteTag, getExpenses, getTagOrphanedOffsets } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { Expense, Tag } from "@/types";
+import type { Expense, OrphanedOffset, Tag } from "@/types";
 
 const PRESET_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e",
@@ -20,6 +20,7 @@ export function TagsPage() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
   const expenseCache = useRef<Map<string, Expense[]>>(new Map());
+  const orphanedOffsetCache = useRef<Map<string, OrphanedOffset[]>>(new Map());
 
   const { data: tags, refetch } = useApi(() => getTags(), []);
 
@@ -37,6 +38,7 @@ export function TagsPage() {
   const handleDelete = async (id: string) => {
     await deleteTag(id);
     expenseCache.current.delete(id);
+    orphanedOffsetCache.current.delete(id);
     setModalOpen(false);
     setEditing(null);
     refetch();
@@ -52,10 +54,15 @@ export function TagsPage() {
     if (!expenseCache.current.has(id)) {
       setLoadingIds((prev) => new Set([...prev, id]));
       try {
-        const res = await getExpenses({ tagIds: id, sortBy: "date", sortOrder: "asc", limit: "500" });
-        expenseCache.current.set(id, res.data);
+        const [expRes, orphanRes] = await Promise.all([
+          getExpenses({ tagIds: id, sortBy: "date", sortOrder: "asc", limit: "500" }),
+          getTagOrphanedOffsets(id),
+        ]);
+        expenseCache.current.set(id, expRes.data);
+        orphanedOffsetCache.current.set(id, orphanRes);
       } catch {
         expenseCache.current.set(id, []);
+        orphanedOffsetCache.current.set(id, []);
       }
       setLoadingIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
     }
@@ -115,6 +122,7 @@ export function TagsPage() {
                       const isExpanded = expandedIds.has(tag.id);
                       const isLoading = loadingIds.has(tag.id);
                       const expenses = expenseCache.current.get(tag.id) ?? [];
+                      const orphanedOffsets = orphanedOffsetCache.current.get(tag.id) ?? [];
                       return (
                         <div key={tag.id}>
                           {/* Tag row */}
@@ -170,7 +178,7 @@ export function TagsPage() {
                             <div className="border-t border-border/50 pb-1 pl-9 pt-1">
                               {isLoading ? (
                                 <p className="py-2 text-center text-xs text-muted-foreground">Loading…</p>
-                              ) : expenses.length === 0 ? (
+                              ) : expenses.length === 0 && orphanedOffsets.length === 0 ? (
                                 <p className="py-2 text-center text-xs text-muted-foreground">No expenses</p>
                               ) : (
                                 <table className="w-full table-fixed text-xs">
@@ -189,35 +197,74 @@ export function TagsPage() {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {expenses.map((exp) => (
-                                      <>
-                                        <tr key={exp.id} className="border-b border-border/30">
-                                          <td className="py-1.5 pr-3 tabular-nums text-muted-foreground">
-                                            {formatDate(exp.date.slice(0, 10))}
-                                          </td>
-                                          <td className="py-1.5 pr-2">
-                                            <span className="block truncate">{exp.vendor || exp.description}</span>
-                                          </td>
-                                          <td className="py-1.5">
-                                            <span
-                                              className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded text-[8px] font-bold text-white ${
-                                                exp.account.isJoint ? "bg-blue-500" : "bg-gray-400"
-                                              }`}
-                                            >
-                                              {exp.account.isJoint ? "J" : "P"}
-                                            </span>
-                                          </td>
-                                          <td className="py-1.5 text-right tabular-nums">
-                                            {formatCurrency(parseFloat(exp.amount))}
-                                          </td>
-                                        </tr>
-                                        {(exp.offsets ?? []).map((offset) => (
-                                          <tr key={offset.id} className="border-b border-border/30 last:border-0 text-muted-foreground">
-                                            <td className="py-1 pr-3" />
+                                    {[
+                                      ...expenses.map(e => ({ kind: "expense" as const, date: e.date, data: e })),
+                                      ...orphanedOffsets.map(o => ({ kind: "orphaned" as const, date: o.date, data: o })),
+                                    ].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0).map((item) => {
+                                      if (item.kind === "expense") {
+                                        const exp = item.data;
+                                        return (
+                                          <>
+                                            <tr key={exp.id} className="border-b border-border/30">
+                                              <td className="py-1.5 pr-3 tabular-nums text-muted-foreground">
+                                                {formatDate(exp.date.slice(0, 10))}
+                                              </td>
+                                              <td className="py-1.5 pr-2">
+                                                <span className="block truncate">{exp.vendor || exp.description}</span>
+                                              </td>
+                                              <td className="py-1.5">
+                                                <span
+                                                  className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded text-[8px] font-bold text-white ${
+                                                    exp.account.isJoint ? "bg-blue-500" : "bg-gray-400"
+                                                  }`}
+                                                >
+                                                  {exp.account.isJoint ? "J" : "P"}
+                                                </span>
+                                              </td>
+                                              <td className="py-1.5 text-right tabular-nums">
+                                                {formatCurrency(parseFloat(exp.amount))}
+                                              </td>
+                                            </tr>
+                                            {(exp.offsets ?? []).map((offset) => (
+                                              <tr key={offset.id} className="border-b border-border/30 last:border-0 text-muted-foreground">
+                                                <td className="py-1 pr-3" />
+                                                <td className="py-1 pr-2">
+                                                  <span className="flex items-center gap-1 truncate">
+                                                    <CornerDownRight className="h-3 w-3 flex-shrink-0 text-muted-foreground/50" />
+                                                    {offset.vendor || offset.description}
+                                                  </span>
+                                                </td>
+                                                <td className="py-1">
+                                                  <span
+                                                    className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded text-[8px] font-bold text-white ${
+                                                      offset.account.isJoint ? "bg-blue-500" : "bg-gray-400"
+                                                    }`}
+                                                  >
+                                                    {offset.account.isJoint ? "J" : "P"}
+                                                  </span>
+                                                </td>
+                                                <td className="py-1 text-right tabular-nums">
+                                                  {formatCurrency(parseFloat(offset.amount))}
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </>
+                                        );
+                                      } else {
+                                        const offset = item.data;
+                                        return (
+                                          <tr key={offset.id} className="border-b border-border/30 last:border-0">
+                                            <td className="py-1 pr-3 tabular-nums text-muted-foreground">
+                                              {formatDate(offset.date.slice(0, 10))}
+                                            </td>
                                             <td className="py-1 pr-2">
-                                              <span className="flex items-center gap-1 truncate">
-                                                <CornerDownRight className="h-3 w-3 flex-shrink-0 text-muted-foreground/50" />
-                                                {offset.vendor || offset.description}
+                                              <span className="flex items-center gap-1 truncate text-amber-600 dark:text-amber-400">
+                                                <CornerDownRight className="h-3 w-3 flex-shrink-0 opacity-60" />
+                                                <span className="truncate">{offset.vendor || offset.description}</span>
+                                                <AlertTriangle
+                                                  className="h-3 w-3 flex-shrink-0"
+                                                  title={`Orphaned offset — parent transaction "${offset.parentExpense?.vendor || offset.parentExpense?.description || "unknown"}" is not tagged`}
+                                                />
                                               </span>
                                             </td>
                                             <td className="py-1">
@@ -229,13 +276,13 @@ export function TagsPage() {
                                                 {offset.account.isJoint ? "J" : "P"}
                                               </span>
                                             </td>
-                                            <td className="py-1 text-right tabular-nums">
+                                            <td className="py-1 text-right tabular-nums text-amber-600 dark:text-amber-400">
                                               {formatCurrency(parseFloat(offset.amount))}
                                             </td>
                                           </tr>
-                                        ))}
-                                      </>
-                                    ))}
+                                        );
+                                      }
+                                    })}
                                   </tbody>
                                 </table>
                               )}

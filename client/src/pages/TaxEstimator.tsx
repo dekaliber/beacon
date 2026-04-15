@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Settings, Layers, Landmark, Briefcase, TrendingUp, Activity } from "lucide-react";
+import { ArrowLeft, CalendarCheck2, Check, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Settings, Layers, Landmark, Briefcase, TrendingUp, Activity } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
@@ -63,6 +63,73 @@ const FILING_STATUS_LABELS: Record<FilingStatus, string> = {
   MFJ: "Married Filing Jointly",
   HoH: "Head of Household",
   MFS: "Married Filing Separately",
+};
+
+// ── 2025 California Tax Data ───────────────────────────────────────────────────
+// (2026 CA brackets not yet released by FTB; 2025 figures used)
+// CA taxes all capital gains as ordinary income — no preferential rate.
+
+const CA_ORDINARY_BRACKETS: Record<FilingStatus, Bracket[]> = {
+  SINGLE: [
+    { rate: 0.01,  threshold: 0 },       { rate: 0.02,  threshold: 11079 },
+    { rate: 0.04,  threshold: 26264 },   { rate: 0.06,  threshold: 41452 },
+    { rate: 0.08,  threshold: 57542 },   { rate: 0.093, threshold: 72724 },
+    { rate: 0.103, threshold: 371479 },  { rate: 0.113, threshold: 445771 },
+    { rate: 0.123, threshold: 742953 },
+  ],
+  MFJ: [
+    { rate: 0.01,  threshold: 0 },       { rate: 0.02,  threshold: 22158 },
+    { rate: 0.04,  threshold: 52528 },   { rate: 0.06,  threshold: 82904 },
+    { rate: 0.08,  threshold: 115084 },  { rate: 0.093, threshold: 145448 },
+    { rate: 0.103, threshold: 742958 },  { rate: 0.113, threshold: 891542 },
+    { rate: 0.123, threshold: 1485906 },
+  ],
+  HoH: [
+    { rate: 0.01,  threshold: 0 },       { rate: 0.02,  threshold: 22173 },
+    { rate: 0.04,  threshold: 52530 },   { rate: 0.06,  threshold: 67716 },
+    { rate: 0.08,  threshold: 83805 },   { rate: 0.093, threshold: 98990 },
+    { rate: 0.103, threshold: 505208 },  { rate: 0.113, threshold: 606251 },
+    { rate: 0.123, threshold: 1010417 },
+  ],
+  MFS: [
+    { rate: 0.01,  threshold: 0 },       { rate: 0.02,  threshold: 11079 },
+    { rate: 0.04,  threshold: 26264 },   { rate: 0.06,  threshold: 41452 },
+    { rate: 0.08,  threshold: 57542 },   { rate: 0.093, threshold: 72724 },
+    { rate: 0.103, threshold: 371479 },  { rate: 0.113, threshold: 445771 },
+    { rate: 0.123, threshold: 742953 },
+  ],
+};
+
+const CA_STANDARD_DEDUCTION: Record<FilingStatus, number> = {
+  SINGLE: 5706, MFJ: 11412, HoH: 11412, MFS: 5706,
+};
+
+const CA_MHST_THRESHOLD = 1_000_000; // Mental Health Services Tax: +1% above this
+
+// ── 2025 California AMT Data (Schedule P 540, Part II, Line 22) ───────────────
+// Exemption phases out at 25¢ per dollar of AMTI above the threshold.
+// CA taxes all gains as ordinary income — single flat 7% rate on taxable AMTI.
+
+const CA_AMT_EXEMPTION: Record<FilingStatus, number> = {
+  SINGLE: 92749, MFJ: 123667, HoH: 92749, MFS: 61830,
+};
+const CA_AMT_PHASE_OUT: Record<FilingStatus, number> = {
+  SINGLE: 347808, MFJ: 463745, HoH: 347808, MFS: 231868,
+};
+
+// ── 2026 Federal AMT Data (Rev. Proc. 2025-32 / OBBBA) ────────────────────────
+// Phase-out rate doubled to 50¢/$ (from 25¢ under TCJA) by the OBBBA.
+// Phase-out thresholds were also reset from higher TCJA levels to $500k / $1M.
+
+const AMT_EXEMPTION: Record<FilingStatus, number> = {
+  SINGLE: 90100, MFJ: 140200, HoH: 90100, MFS: 70100,
+};
+const AMT_PHASE_OUT_THRESHOLD: Record<FilingStatus, number> = {
+  SINGLE: 500000, MFJ: 1_000_000, HoH: 500000, MFS: 500000,
+};
+// 28% AMT rate applies above this AMTI amount (half for MFS)
+const AMT_28_THRESHOLD: Record<FilingStatus, number> = {
+  SINGLE: 244500, MFJ: 244500, HoH: 244500, MFS: 122250,
 };
 
 // ── Tax calculation functions ──────────────────────────────────────────────────
@@ -240,8 +307,34 @@ export function TaxEstimatorPage() {
   const [withheld, setWithheld] = useState(
     () => localStorage.getItem("beacon-tax-withheld") ?? ""
   );
+  const [taxBreakdownTab, setTaxBreakdownTab] = useState<"federal" | "ca">("federal");
+  const [useTmt, setUseTmt] = useState(() => localStorage.getItem("beacon-tax-use-tmt") === "true");
+  const [useCaTmt, setUseCaTmt] = useState(() => localStorage.getItem("beacon-tax-use-ca-tmt") === "true");
   const [assumptionsOpen, setAssumptionsOpen] = useState(false);
+  const [paymentScheduleOpen, setPaymentScheduleOpen] = useState(false);
+  const [caPaymentScheduleOpen, setCaPaymentScheduleOpen] = useState(false);
   const [focusOnOpen, setFocusOnOpen] = useState<"ordinary" | "ltcg" | false>(false);
+  const [qPaid, setQPaid] = useState<[string, string, string, string]>(() => {
+    const y = new Date().getFullYear();
+    return [
+      localStorage.getItem(`beacon-tax-qpaid-${y}-q1`) ?? "",
+      localStorage.getItem(`beacon-tax-qpaid-${y}-q2`) ?? "",
+      localStorage.getItem(`beacon-tax-qpaid-${y}-q3`) ?? "",
+      localStorage.getItem(`beacon-tax-qpaid-${y}-q4`) ?? "",
+    ];
+  });
+  const [caWithheld, setCaWithheld] = useState(
+    () => localStorage.getItem("beacon-tax-ca-withheld") ?? ""
+  );
+  const [caQPaid, setCaQPaid] = useState<[string, string, string, string]>(() => {
+    const y = new Date().getFullYear();
+    return [
+      localStorage.getItem(`beacon-tax-ca-qpaid-${y}-q1`) ?? "",
+      localStorage.getItem(`beacon-tax-ca-qpaid-${y}-q2`) ?? "",
+      localStorage.getItem(`beacon-tax-ca-qpaid-${y}-q3`) ?? "",
+      localStorage.getItem(`beacon-tax-ca-qpaid-${y}-q4`) ?? "",
+    ];
+  });
   const otherOrdinaryRef = useRef<HTMLInputElement>(null);
   const otherLTCGRef = useRef<HTMLInputElement>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
@@ -271,6 +364,43 @@ export function TaxEstimatorPage() {
     setWithheld(v);
     localStorage.setItem("beacon-tax-withheld", v);
   };
+  const updateQPaid = (idx: 0 | 1 | 2 | 3, v: string) => {
+    setQPaid((prev) => {
+      const next = [...prev] as [string, string, string, string];
+      next[idx] = v;
+      return next;
+    });
+    localStorage.setItem(`beacon-tax-qpaid-${year}-q${idx + 1}`, v);
+  };
+
+  const updateCaWithheld = (v: string) => {
+    setCaWithheld(v);
+    localStorage.setItem("beacon-tax-ca-withheld", v);
+  };
+  const updateCaQPaid = (idx: 0 | 1 | 2 | 3, v: string) => {
+    setCaQPaid((prev) => {
+      const next = [...prev] as [string, string, string, string];
+      next[idx] = v;
+      return next;
+    });
+    localStorage.setItem(`beacon-tax-ca-qpaid-${year}-q${idx + 1}`, v);
+  };
+
+  // Reload per-quarter paid values whenever the selected year changes
+  useEffect(() => {
+    setQPaid([
+      localStorage.getItem(`beacon-tax-qpaid-${year}-q1`) ?? "",
+      localStorage.getItem(`beacon-tax-qpaid-${year}-q2`) ?? "",
+      localStorage.getItem(`beacon-tax-qpaid-${year}-q3`) ?? "",
+      localStorage.getItem(`beacon-tax-qpaid-${year}-q4`) ?? "",
+    ]);
+    setCaQPaid([
+      localStorage.getItem(`beacon-tax-ca-qpaid-${year}-q1`) ?? "",
+      localStorage.getItem(`beacon-tax-ca-qpaid-${year}-q2`) ?? "",
+      localStorage.getItem(`beacon-tax-ca-qpaid-${year}-q3`) ?? "",
+      localStorage.getItem(`beacon-tax-ca-qpaid-${year}-q4`) ?? "",
+    ]);
+  }, [year]);
 
   const toggleSection = (key: string) => {
     setExpandedSections((prev) => {
@@ -298,6 +428,28 @@ export function TaxEstimatorPage() {
   const otherOrdinaryNum = parseFloat(otherOrdinary) || 0;
   const otherLTCGNum = parseFloat(otherLTCG) || 0;
   const withheldNum = parseFloat(withheld) || 0;
+  const qPaidNums = qPaid.map((v) => parseFloat(v) || 0) as [number, number, number, number];
+  const totalQPaid = qPaidNums.reduce((s, v) => s + v, 0);
+  const caWithheldNum = parseFloat(caWithheld) || 0;
+  const caQPaidNums = caQPaid.map((v) => parseFloat(v) || 0) as [number, number, number, number];
+  const totalCAQPaid = caQPaidNums.reduce((s, v) => s + v, 0);
+
+  // Federal quarterly schedule: equal 25/25/25/25 installments
+  const quarters: { label: string; period: string; dueLabel: string; dueDate: Date }[] = useMemo(() => [
+    { label: "Q1", period: "Jan – Mar", dueLabel: `Apr 15, ${year}`,     dueDate: new Date(year, 3, 15) },
+    { label: "Q2", period: "Apr – May", dueLabel: `Jun 15, ${year}`,     dueDate: new Date(year, 5, 15) },
+    { label: "Q3", period: "Jun – Aug", dueLabel: `Sep 15, ${year}`,     dueDate: new Date(year, 8, 15) },
+    { label: "Q4", period: "Sep – Dec", dueLabel: `Jan 15, ${year + 1}`, dueDate: new Date(year + 1, 0, 15) },
+  ], [year]);
+
+  // CA quarterly schedule: 30% / 40% / 0% / 30% (cumulative targets: 30/70/70/100)
+  // Q3 has no CA estimated payment due.
+  const caQuarters: { label: string; period: string; dueLabel: string; dueDate: Date | null; cumulativePct: number; noDue: boolean }[] = useMemo(() => [
+    { label: "Q1", period: "Jan – Mar", dueLabel: `Apr 15, ${year}`,     dueDate: new Date(year, 3, 15),     cumulativePct: 0.30, noDue: false },
+    { label: "Q2", period: "Apr – May", dueLabel: `Jun 15, ${year}`,     dueDate: new Date(year, 5, 15),     cumulativePct: 0.70, noDue: false },
+    { label: "Q3", period: "Jun – Aug", dueLabel: "—",                   dueDate: null,                      cumulativePct: 0.70, noDue: true  },
+    { label: "Q4", period: "Sep – Dec", dueLabel: `Jan 15, ${year + 1}`, dueDate: new Date(year + 1, 0, 15), cumulativePct: 1.00, noDue: false },
+  ], [year]);
 
   // Classify records into tax buckets
   const classified = useMemo(() => {
@@ -406,6 +558,90 @@ export function TaxEstimatorPage() {
       hasCapLoss, capLossDeduction,
     };
   }, [classified, otherOrdinaryNum, otherLTCGNum, filingStatus, snapshots]);
+
+  // CA taxes all capital gains as ordinary income; no NIIT equivalent.
+  // CA gross income = federal MAGI (same income pool, same cap-loss netting).
+  const caCalc = useMemo(() => {
+    const caBrackets   = CA_ORDINARY_BRACKETS[filingStatus];
+    const caStdDed     = CA_STANDARD_DEDUCTION[filingStatus];
+    const caGross      = calc.magi;
+    const caTaxable    = Math.max(0, caGross - caStdDed);
+    const caOrdTax     = calcOrdinaryTax(caTaxable, caBrackets);
+    const caMhstBase   = Math.max(0, caTaxable - CA_MHST_THRESHOLD);
+    const caMhstTax    = caMhstBase * 0.01;
+    const caTotalTax   = caOrdTax + caMhstTax;
+    const caEffRate    = caGross > 0 ? caTotalTax / caGross : 0;
+    const caMargRate   = marginalOrdinaryRate(caTaxable, caBrackets) + (caTaxable > CA_MHST_THRESHOLD ? 0.01 : 0);
+    return { caGross, caTaxable, caStdDed, caOrdTax, caMhstBase, caMhstTax, caTotalTax, caEffRate, caMargRate };
+  }, [calc.magi, filingStatus]);
+
+  // AMT uses MAGI as starting income (no standard deduction; own exemption instead).
+  // LTCG/QD retain preferential rates in AMT — only ordinary AMTI is taxed at 26/28%.
+  const amtCalc = useMemo(() => {
+    const exemptionBase  = AMT_EXEMPTION[filingStatus];
+    const phaseOutStart  = AMT_PHASE_OUT_THRESHOLD[filingStatus];
+    // OBBBA: 50¢ phase-out per $1 of AMTI above threshold
+    const phaseOutRedux  = Math.max(0, calc.magi - phaseOutStart) * 0.50;
+    const effectiveExemp = Math.max(0, exemptionBase - phaseOutRedux);
+
+    const amtiGross = calc.magi;
+    const amti      = Math.max(0, amtiGross - effectiveExemp);
+
+    const amtBrackets: Bracket[] = [
+      { rate: 0.26, threshold: 0 },
+      { rate: 0.28, threshold: AMT_28_THRESHOLD[filingStatus] },
+    ];
+
+    // Preferential income stacks on top of ordinary AMTI (same as regular tax)
+    const preferentialPool = calc.ltcgContrib + calc.qdContrib;
+    const collectiblePool  = calc.collectibleContrib;
+    const amtiOrdinary     = Math.max(0, amti - preferentialPool - collectiblePool);
+    const amtiCollectible  = Math.max(0, Math.min(collectiblePool,  amti - amtiOrdinary));
+    const amtiPreferential = Math.max(0, amti - amtiOrdinary - amtiCollectible);
+
+    const amtOrdTax        = calcOrdinaryTax(amtiOrdinary, amtBrackets);
+    const amtMargOrdRate   = marginalOrdinaryRate(amtiOrdinary, amtBrackets);
+    const amtCollRate      = Math.min(0.28, amtMargOrdRate);
+    const amtCollTax       = amtiCollectible * amtCollRate;
+    // Preferential income: LTCG rates, stacked on top of ordinary + collectible AMTI
+    const amtPrefTax       = calcLTCGTax(amtiPreferential, amtiOrdinary + amtiCollectible, LTCG_BRACKETS[filingStatus]);
+
+    const tmt            = amtOrdTax + amtCollTax + amtPrefTax;
+    // NIIT (§1411) is a separate tax that applies on top of whichever income tax regime
+    // is binding — it is not part of AMT and not displaced by it.
+    // Correct comparison: TMT vs. pre-NIIT regular income tax only.
+    const preNiitTax     = calc.totalTax - calc.niitTax;
+    const potentialCredit = Math.max(0, preNiitTax - tmt);
+    const amtSurcharge   = Math.max(0, tmt - preNiitTax);
+    // Total federal liability in TMT mode: TMT income tax + NIIT (same as regular mode)
+    const tmtTotal       = tmt + calc.niitTax;
+
+    return {
+      effectiveExemp, amtiGross, amti,
+      amtiOrdinary, amtiCollectible, amtiPreferential,
+      amtOrdTax, amtMargOrdRate, amtCollRate, amtCollTax, amtPrefTax,
+      tmt, tmtTotal, potentialCredit, amtSurcharge,
+    };
+  }, [calc, filingStatus]);
+
+  // CA AMT — flat 7% on CA AMTI after exemption.
+  // CA AMTI = caGross (standard deduction is added back; no preferential-rate split since CA taxes all gains as ordinary).
+  const caTmtCalc = useMemo(() => {
+    const exemptionBase = CA_AMT_EXEMPTION[filingStatus];
+    const phaseOutStart = CA_AMT_PHASE_OUT[filingStatus];
+    const caAmti = caCalc.caGross;
+    const phaseOutRedux = Math.max(0, caAmti - phaseOutStart) * 0.25;
+    const effectiveExemp = Math.max(0, exemptionBase - phaseOutRedux);
+    const taxableCaAmti = Math.max(0, caAmti - effectiveExemp);
+    const caTmt = taxableCaAmti * 0.07;
+    const amtSurcharge = Math.max(0, caTmt - caCalc.caTotalTax);
+    const potentialCredit = Math.max(0, caCalc.caTotalTax - caTmt);
+    return { caAmti, effectiveExemp, taxableCaAmti, caTmt, amtSurcharge, potentialCredit };
+  }, [caCalc, filingStatus]);
+
+  // When TMT mode is on, model federal liability as TMT (crediting prior-year AMT credits)
+  const effectiveFederalTax = useTmt ? amtCalc.tmtTotal : calc.totalTax;
+  const effectiveCaTax = useCaTmt ? caTmtCalc.caTmt : caCalc.caTotalTax;
 
   // Build category sections for detailed breakdown
   const categorySections = useMemo((): CategorySection[] => {
@@ -560,7 +796,7 @@ export function TaxEstimatorPage() {
             inputRef={otherOrdinaryRef}
           />
           <NumberInput
-            label="Income Tax Withheld"
+            label="Federal Income Tax Withheld"
             value={withheld}
             onChange={updateWithheld}
             placeholder="0"
@@ -574,12 +810,284 @@ export function TaxEstimatorPage() {
             inputRef={otherLTCGRef}
           />
         </div>
+        <div className="mt-4 border-t border-border pt-4">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">California</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <NumberInput
+              label="CA Income Tax Withheld"
+              value={caWithheld}
+              onChange={updateCaWithheld}
+              placeholder="0"
+            />
+          </div>
+        </div>
         <p className="mt-4 text-xs text-muted-foreground">
-          Federal only · 2026 brackets · Standard deduction ({formatCurrency(STANDARD_DEDUCTION[filingStatus])}) applied · Does not account for tax-advantaged accounts, EITC, child tax credits, or QBI deductions
+          Federal: 2026 brackets · Standard deduction ({formatCurrency(STANDARD_DEDUCTION[filingStatus])}) applied · Does not account for tax-advantaged accounts, EITC, child tax credits, or QBI deductions
+          <br />California: 2025 brackets · Standard deduction ({formatCurrency(CA_STANDARD_DEDUCTION[filingStatus])}) applied · All capital gains taxed as ordinary income · State only, does not include SDI
         </p>
         <div className="mt-5 flex justify-end">
           <Button onClick={() => setAssumptionsOpen(false)}>Done</Button>
         </div>
+      </Modal>
+
+      {/* Payment Schedule Modal */}
+      <Modal
+        open={paymentScheduleOpen}
+        onClose={() => setPaymentScheduleOpen(false)}
+        title={`${useTmt ? "TMT " : ""}Payment Schedule · ${year}`}
+        className="max-w-3xl"
+      >
+        {(() => {
+          const netEstimated = Math.max(0, effectiveFederalTax - withheldNum);
+          // Each quarter's suggested payment brings cumulative paid up to 25%/50%/75%/100%
+          // of the current annual estimate, catching up automatically as income grows.
+          const suggested = [0, 1, 2, 3].map((i) => {
+            const priorPaid = qPaidNums.slice(0, i).reduce((s, v) => s + v, 0);
+            return Math.max(0, netEstimated * (i + 1) / 4 - priorPaid);
+          });
+          const today = new Date();
+          const totalPaid = withheldNum + totalQPaid;
+          const netOwed = effectiveFederalTax - totalPaid;
+          const safeHarborPct = effectiveFederalTax > 0 ? totalPaid / effectiveFederalTax : 1;
+          const onTrack = safeHarborPct >= 0.9;
+
+          return (
+            <div className="space-y-5">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                    <th className="pb-2 font-medium">Quarter</th>
+                    <th className="pb-2 font-medium">Income Period</th>
+                    <th className="pb-2 font-medium">Due Date</th>
+                    <th className="pb-2 text-right font-medium">Suggested</th>
+                    <th className="pb-2 text-right font-medium w-36">Paid</th>
+                    <th className="pb-2 text-right font-medium">Balance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {quarters.map((q, i) => {
+                    const paid = qPaidNums[i];
+                    const balance = suggested[i] - paid;
+                    const isPast = today > q.dueDate;
+                    return (
+                      <tr key={q.label} className={isPast && balance > 0.005 ? "text-amber-700" : ""}>
+                        <td className="py-2.5 font-medium">{q.label}</td>
+                        <td className="py-2.5 text-muted-foreground">{q.period}</td>
+                        <td className={`py-2.5 ${isPast ? "text-muted-foreground line-through" : ""}`}>{q.dueLabel}</td>
+                        <td className="py-2.5 text-right tabular-nums">{formatCurrency(suggested[i])}</td>
+                        <td className="py-2.5 text-right">
+                          <div className="relative inline-flex items-center">
+                            <span className="pointer-events-none absolute left-2 text-xs text-muted-foreground">$</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={qPaid[i]}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === "" || /^\d*\.?\d{0,2}$/.test(v)) updateQPaid(i as 0|1|2|3, v);
+                              }}
+                              placeholder="0"
+                              className="w-32 rounded-md border border-border py-1 pl-5 pr-2 text-right text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          </div>
+                        </td>
+                        <td className={`py-2.5 text-right tabular-nums font-medium ${balance < -0.005 ? "text-emerald-600" : balance > 0.005 && isPast ? "text-amber-600" : ""}`}>
+                          {balance < -0.005
+                            ? <span className="inline-flex items-center justify-end gap-1" title="Quarter satisfied — overpayment reduces final balance"><Check className="h-3 w-3" />{formatCurrency(0)}</span>
+                            : formatCurrency(Math.max(0, balance))}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-border font-semibold">
+                    <td className="pt-2.5" colSpan={3}>Annual estimate</td>
+                    <td className="pt-2.5 text-right tabular-nums">{formatCurrency(netEstimated)}</td>
+                    <td className="pt-2.5 text-right tabular-nums">{formatCurrency(totalQPaid)}</td>
+                    <td className="pt-2.5 text-right tabular-nums">{formatCurrency(Math.max(0, netEstimated - totalQPaid))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              {/* Summary */}
+              <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-1.5 text-sm">
+                {withheldNum > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Tax Withheld (W-2 / other)</span>
+                    <span className="tabular-nums">{formatCurrency(withheldNum)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Estimated Payments Made</span>
+                  <span className="tabular-nums">{formatCurrency(totalQPaid)}</span>
+                </div>
+                <div className="flex justify-between font-semibold border-t border-border pt-1.5 mt-1.5">
+                  <span>{netOwed >= 0 ? "Remaining Tax Owed" : "Estimated Refund"}</span>
+                  <span className="tabular-nums">{formatCurrency(Math.abs(netOwed))}</span>
+                </div>
+              </div>
+
+              {/* Safe harbor status */}
+              <div className={`flex items-start gap-2 rounded-md px-3 py-2.5 text-xs ${onTrack ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                <span className="mt-0.5 shrink-0">{onTrack ? "✓" : "!"}</span>
+                <span>
+                  {onTrack
+                    ? `Total payments (${formatCurrency(totalPaid)}) cover ${(safeHarborPct * 100).toFixed(0)}% of estimated tax — IRS 90% safe harbor met.`
+                    : `Total payments (${formatCurrency(totalPaid)}) cover ${(safeHarborPct * 100).toFixed(0)}% of estimated tax. Completing all suggested payments reaches 100%, satisfying the 90% safe harbor.`}
+                </span>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Suggested amounts assume four equal installments of your estimated balance after withholding.
+                If your income is uneven across the year, the IRS annualized income installment method
+                (Form 2210, Schedule AI) may reduce required early-quarter payments.
+                Underpayment penalties accrue quarterly at the federal short-term rate + 3%.
+              </p>
+
+              <div className="flex justify-end">
+                <Button onClick={() => setPaymentScheduleOpen(false)}>Done</Button>
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
+
+      {/* CA Payment Schedule Modal */}
+      <Modal
+        open={caPaymentScheduleOpen}
+        onClose={() => setCaPaymentScheduleOpen(false)}
+        title={`${useCaTmt ? "CA TMT " : "CA "}Payment Schedule · ${year}`}
+        className="max-w-3xl"
+      >
+        {(() => {
+          const caNetEstimated = Math.max(0, effectiveCaTax - caWithheldNum);
+          // CA schedule: cumulative targets 30% / 70% / 70% (no Q3 payment) / 100%
+          const caSuggested = caQuarters.map((q, i) => {
+            if (q.noDue) return 0;
+            const priorPaid = caQPaidNums.slice(0, i).reduce((s, v) => s + v, 0);
+            return Math.max(0, caNetEstimated * q.cumulativePct - priorPaid);
+          });
+          const today = new Date();
+          const caTotalPaid = caWithheldNum + totalCAQPaid;
+          const caNetOwed = effectiveCaTax - caTotalPaid;
+          const caSafeHarborPct = effectiveCaTax > 0 ? caTotalPaid / effectiveCaTax : 1;
+          const caOnTrack = caSafeHarborPct >= 0.9;
+
+          return (
+            <div className="space-y-5">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                    <th className="pb-2 font-medium">Quarter</th>
+                    <th className="pb-2 font-medium">Income Period</th>
+                    <th className="pb-2 font-medium">Due Date</th>
+                    <th className="pb-2 text-right font-medium">Suggested</th>
+                    <th className="pb-2 text-right font-medium w-36">Paid</th>
+                    <th className="pb-2 text-right font-medium">Balance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {caQuarters.map((q, i) => {
+                    const paid = caQPaidNums[i];
+                    const suggested = caSuggested[i];
+                    const balance = suggested - paid;
+                    const isPast = q.dueDate ? today > q.dueDate : false;
+                    return (
+                      <tr key={q.label} className={!q.noDue && isPast && balance > 0.005 ? "text-amber-700" : q.noDue ? "text-muted-foreground" : ""}>
+                        <td className="py-2.5 font-medium">{q.label}</td>
+                        <td className="py-2.5 text-muted-foreground">{q.period}</td>
+                        <td className={`py-2.5 ${!q.noDue && isPast ? "text-muted-foreground line-through" : ""}`}>
+                          {q.noDue ? <span className="italic">No payment due</span> : q.dueLabel}
+                        </td>
+                        <td className="py-2.5 text-right tabular-nums">
+                          {q.noDue ? <span className="text-muted-foreground">—</span> : formatCurrency(suggested)}
+                        </td>
+                        <td className="py-2.5 text-right">
+                          {q.noDue ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : (
+                            <div className="relative inline-flex items-center">
+                              <span className="pointer-events-none absolute left-2 text-xs text-muted-foreground">$</span>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={caQPaid[i]}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (v === "" || /^\d*\.?\d{0,2}$/.test(v)) updateCaQPaid(i as 0|1|2|3, v);
+                                }}
+                                placeholder="0"
+                                className="w-32 rounded-md border border-border py-1 pl-5 pr-2 text-right text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                              />
+                            </div>
+                          )}
+                        </td>
+                        <td className={`py-2.5 text-right tabular-nums font-medium ${!q.noDue && balance < -0.005 ? "text-emerald-600" : !q.noDue && balance > 0.005 && isPast ? "text-amber-600" : ""}`}>
+                          {q.noDue ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : balance < -0.005 ? (
+                            <span className="inline-flex items-center justify-end gap-1" title="Quarter satisfied — overpayment reduces final balance">
+                              <Check className="h-3 w-3" />{formatCurrency(0)}
+                            </span>
+                          ) : (
+                            formatCurrency(Math.max(0, balance))
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-border font-semibold">
+                    <td className="pt-2.5" colSpan={3}>Annual estimate</td>
+                    <td className="pt-2.5 text-right tabular-nums">{formatCurrency(caNetEstimated)}</td>
+                    <td className="pt-2.5 text-right tabular-nums">{formatCurrency(totalCAQPaid)}</td>
+                    <td className="pt-2.5 text-right tabular-nums">{formatCurrency(Math.max(0, caNetEstimated - totalCAQPaid))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              {/* Summary */}
+              <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-1.5 text-sm">
+                {caWithheldNum > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>CA Tax Withheld</span>
+                    <span className="tabular-nums">{formatCurrency(caWithheldNum)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Estimated Payments Made</span>
+                  <span className="tabular-nums">{formatCurrency(totalCAQPaid)}</span>
+                </div>
+                <div className="flex justify-between font-semibold border-t border-border pt-1.5 mt-1.5">
+                  <span>{caNetOwed >= 0 ? "Remaining Tax Owed" : "Estimated Refund"}</span>
+                  <span className="tabular-nums">{formatCurrency(Math.abs(caNetOwed))}</span>
+                </div>
+              </div>
+
+              {/* Safe harbor status */}
+              <div className={`flex items-start gap-2 rounded-md px-3 py-2.5 text-xs ${caOnTrack ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                <span className="mt-0.5 shrink-0">{caOnTrack ? "✓" : "!"}</span>
+                <span>
+                  {caOnTrack
+                    ? `Total payments (${formatCurrency(caTotalPaid)}) cover ${(caSafeHarborPct * 100).toFixed(0)}% of estimated CA tax — 90% safe harbor met.`
+                    : `Total payments (${formatCurrency(caTotalPaid)}) cover ${(caSafeHarborPct * 100).toFixed(0)}% of estimated CA tax. Completing all suggested payments reaches 100%, satisfying the 90% safe harbor.`}
+                </span>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                California's installment schedule is 30% / 40% / 0% / 30% — no payment is due in Q3 (September).
+                Suggested amounts use the cumulative catch-up method, so future quarters automatically adjust
+                as additional income is recorded. Safe harbor: 90% of current-year CA tax or 100% of prior-year CA tax.
+              </p>
+
+              <div className="flex justify-end">
+                <Button onClick={() => setCaPaymentScheduleOpen(false)}>Done</Button>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
 
       {/* Stat strip */}
@@ -589,22 +1097,44 @@ export function TaxEstimatorPage() {
           <p className="mt-1 text-xl font-bold tabular-nums">{formatCurrency(calc.magi)}</p>
         </div>
         <div className="rounded-lg border border-border px-4 py-3">
-          <p className="text-xs text-muted-foreground">Estimated Federal Tax</p>
-          <p className="mt-1 text-xl font-bold tabular-nums">{formatCurrency(calc.totalTax)}</p>
-          {withheldNum > 0 && (() => {
-            const netOwed = calc.totalTax - withheldNum;
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+            Estimated Federal Tax
+            {useTmt && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-100 text-violet-700">TMT</span>}
+          </p>
+          <p className="mt-1 text-xl font-bold tabular-nums">{formatCurrency(effectiveFederalTax)}</p>
+          {(withheldNum > 0 || totalQPaid > 0) && (() => {
+            const netOwed = effectiveFederalTax - withheldNum - totalQPaid;
+            const suffix = withheldNum > 0 && totalQPaid > 0
+              ? "after withholding & payments"
+              : totalQPaid > 0 ? "after est. payments" : "after withholding";
             return (
               <p className={`mt-1 text-xs font-medium tabular-nums ${netOwed >= 0 ? "text-amber-600" : "text-emerald-600"}`}>
                 {netOwed >= 0
-                  ? `${formatCurrency(netOwed)} owed after withholding`
-                  : `${formatCurrency(Math.abs(netOwed))} refund after withholding`}
+                  ? `${formatCurrency(netOwed)} owed ${suffix}`
+                  : `${formatCurrency(Math.abs(netOwed))} refund ${suffix}`}
               </p>
             );
           })()}
         </div>
         <div className="rounded-lg border border-border px-4 py-3">
-          <p className="text-xs text-muted-foreground">Effective Tax Rate</p>
-          <p className="mt-1 text-xl font-bold tabular-nums">{(calc.effectiveRate * 100).toFixed(1)}%</p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+            Estimated State Tax <span className="text-muted-foreground/60">(CA)</span>
+            {useCaTmt && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-100 text-violet-700">TMT</span>}
+          </p>
+          <p className="mt-1 text-xl font-bold tabular-nums">{formatCurrency(effectiveCaTax)}</p>
+          {(caWithheldNum > 0 || totalCAQPaid > 0) && (() => {
+            const netOwed = effectiveCaTax - caWithheldNum - totalCAQPaid;
+            const suffix = caWithheldNum > 0 && totalCAQPaid > 0
+              ? "after withholding & payments"
+              : totalCAQPaid > 0 ? "after est. payments" : "after withholding";
+            return (
+              <p className={`mt-1 text-xs font-medium tabular-nums ${netOwed >= 0 ? "text-amber-600" : "text-emerald-600"}`}>
+                {netOwed >= 0
+                  ? `${formatCurrency(netOwed)} owed ${suffix}`
+                  : `${formatCurrency(Math.abs(netOwed))} refund ${suffix}`}
+              </p>
+            );
+          })()}
         </div>
       </div>
 
@@ -630,22 +1160,6 @@ export function TaxEstimatorPage() {
                   </span>
                 </div>
                 <div className="flex-1 border-l-2 border-amber-300 pl-3">
-                  {otherOrdinaryNum !== 0 && (
-                    <div className="flex items-baseline gap-1.5 py-1.5">
-                      <span className="shrink-0">
-                        Other Ordinary Income
-                        <button
-                          type="button"
-                          onClick={() => { setFocusOnOpen("ordinary"); setAssumptionsOpen(true); }}
-                          className="ml-1.5 text-xs text-primary hover:underline"
-                        >
-                          Edit
-                        </button>
-                      </span>
-                      <span className="flex-1 h-0.5 mb-0.5" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize: "5px 100%", backgroundRepeat: "repeat-x" }} />
-                      <span className="shrink-0 tabular-nums">{formatCurrency(otherOrdinaryNum)}</span>
-                    </div>
-                  )}
                   {calc.ordinaryFromApp !== 0 && (
                     <div className="flex items-baseline gap-1.5 py-1.5">
                       <span className="shrink-0">Ordinary Income</span>
@@ -676,6 +1190,22 @@ export function TaxEstimatorPage() {
                       <span className={`shrink-0 tabular-nums ${calc.rawCollectibleLTCG < 0 ? "text-destructive" : ""}`}>
                         {calc.rawCollectibleLTCG < 0 ? "-" : ""}{formatCurrency(Math.abs(calc.rawCollectibleLTCG))}
                       </span>
+                    </div>
+                  )}
+                  {otherOrdinaryNum !== 0 && (
+                    <div className="flex items-baseline gap-1.5 py-1.5">
+                      <span className="shrink-0">
+                        Other Ordinary Income
+                        <button
+                          type="button"
+                          onClick={() => { setFocusOnOpen("ordinary"); setAssumptionsOpen(true); }}
+                          className="ml-1.5 text-xs text-primary hover:underline"
+                        >
+                          Edit
+                        </button>
+                      </span>
+                      <span className="flex-1 h-0.5 mb-0.5" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize: "5px 100%", backgroundRepeat: "repeat-x" }} />
+                      <span className="shrink-0 tabular-nums">{formatCurrency(otherOrdinaryNum)}</span>
                     </div>
                   )}
                 </div>
@@ -767,17 +1297,53 @@ export function TaxEstimatorPage() {
 
           </div>
 
-          {/* Standard deduction + total */}
-          <div className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
-            <div className="flex justify-between text-muted-foreground">
-              <span>Standard Deduction</span>
-              <span className="text-destructive">-{formatCurrency(calc.stdDeduction)}</span>
-            </div>
-            <div className="flex justify-between font-semibold">
-              <span>Total Taxable Income</span>
-              <span>{formatCurrency(calc.taxableOrdinary + calc.taxablePreferential)}</span>
-            </div>
-          </div>
+          {/* Standard deduction + total — adapts to active tab and TMT mode */}
+          {(() => {
+            const isCa = taxBreakdownTab === "ca";
+            const isCaTmt = isCa && useCaTmt;
+            const isFedTmt = !isCa && useTmt;
+
+            const deductionLabel = isCaTmt ? "AMT Exemption"
+              : isFedTmt ? "AMT Exemption"
+              : "Standard Deduction";
+            const deductionAmt = isCaTmt ? caTmtCalc.effectiveExemp
+              : isFedTmt ? amtCalc.effectiveExemp
+              : isCa ? caCalc.caStdDed
+              : calc.stdDeduction;
+            const isPhaseOut = isCaTmt
+              ? caTmtCalc.effectiveExemp < CA_AMT_EXEMPTION[filingStatus]
+              : isFedTmt
+              ? amtCalc.effectiveExemp < AMT_EXEMPTION[filingStatus]
+              : false;
+
+            const totalLabel = (isCaTmt || isFedTmt) ? "Alternative Minimum Taxable Income" : "Total Taxable Income";
+            const totalAmt = isCaTmt ? caTmtCalc.taxableCaAmti
+              : isFedTmt ? amtCalc.amti
+              : isCa ? caCalc.caTaxable
+              : calc.taxableOrdinary + calc.taxablePreferential + calc.collectibleContrib;
+
+            return (
+              <div className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
+                <div className="flex justify-between text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    {deductionLabel}
+                    {isCa && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-sky-100 text-sky-700">CA</span>}
+                    {(isCaTmt || isFedTmt) && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-100 text-violet-700">TMT</span>}
+                    {isPhaseOut && <span className="text-xs italic">(partially phased out)</span>}
+                  </span>
+                  <span className="text-destructive">-{formatCurrency(deductionAmt)}</span>
+                </div>
+                <div className="flex justify-between font-semibold">
+                  <span className="flex items-center gap-1.5">
+                    {totalLabel}
+                    {isCa && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-sky-100 text-sky-700">CA</span>}
+                    {(isCaTmt || isFedTmt) && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-100 text-violet-700">TMT</span>}
+                  </span>
+                  <span>{formatCurrency(totalAmt)}</span>
+                </div>
+              </div>
+            );
+          })()}
 
           {calc.hasCapLoss && (
             <p className="mt-3 text-xs text-amber-600">
@@ -789,11 +1355,52 @@ export function TaxEstimatorPage() {
 
         {/* Tax breakdown */}
         <Card>
-          <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold">
-            <Landmark className="h-4 w-4 text-muted-foreground" />
-            Estimated Federal Tax
-          </h3>
-          <table className="w-full text-sm">
+          {/* Tab strip */}
+          <div className="mb-4 flex items-center gap-3">
+            <Landmark className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5 text-xs font-medium">
+              <button
+                type="button"
+                onClick={() => setTaxBreakdownTab("federal")}
+                className={`rounded-md px-2.5 py-1 transition-colors ${taxBreakdownTab === "federal" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Federal
+              </button>
+              <button
+                type="button"
+                onClick={() => setTaxBreakdownTab("ca")}
+                className={`rounded-md px-2.5 py-1 transition-colors ${taxBreakdownTab === "ca" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                California
+              </button>
+            </div>
+            {taxBreakdownTab === "federal" && (
+              <button
+                type="button"
+                onClick={() => setUseTmt((v) => { const next = !v; localStorage.setItem("beacon-tax-use-tmt", String(next)); return next; })}
+                className={`ml-auto flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${useTmt ? "border-violet-300 bg-violet-50 text-violet-700" : "border-border text-muted-foreground hover:border-violet-300 hover:text-violet-700"}`}
+              >
+                <span className={`inline-block h-3.5 w-6 rounded-full transition-colors ${useTmt ? "bg-violet-500" : "bg-muted-foreground/30"}`}>
+                  <span className={`block h-3 w-3 translate-y-[1px] rounded-full bg-white shadow transition-transform ${useTmt ? "translate-x-[13px]" : "translate-x-[1px]"}`} />
+                </span>
+                Use TMT
+              </button>
+            )}
+            {taxBreakdownTab === "ca" && (
+              <button
+                type="button"
+                onClick={() => setUseCaTmt((v) => { const next = !v; localStorage.setItem("beacon-tax-use-ca-tmt", String(next)); return next; })}
+                className={`ml-auto flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${useCaTmt ? "border-violet-300 bg-violet-50 text-violet-700" : "border-border text-muted-foreground hover:border-violet-300 hover:text-violet-700"}`}
+              >
+                <span className={`inline-block h-3.5 w-6 rounded-full transition-colors ${useCaTmt ? "bg-violet-500" : "bg-muted-foreground/30"}`}>
+                  <span className={`block h-3 w-3 translate-y-[1px] rounded-full bg-white shadow transition-transform ${useCaTmt ? "translate-x-[13px]" : "translate-x-[1px]"}`} />
+                </span>
+                Use TMT
+              </button>
+            )}
+          </div>
+          {/* ── Federal tab ── */}
+          {taxBreakdownTab === "federal" && <>{!useTmt && <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
                 <th className="pb-2 font-medium">Component</th>
@@ -820,7 +1427,7 @@ export function TaxEstimatorPage() {
                   <td className="py-2">
                     <div className="flex items-center gap-2">
                       <TrendingUp className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                      Capital Gains / Qualified Dividends
+                      Capital Gains / Qualified Dividends Tax
                     </div>
                     <div className="ml-[1.375rem] text-xs text-muted-foreground">{formatCurrency(calc.taxablePreferential)} taxable</div>
                   </td>
@@ -880,22 +1487,243 @@ export function TaxEstimatorPage() {
                 <td className="pt-2 text-right">{formatCurrency(calc.totalTax)}</td>
               </tr>
             </tbody>
-          </table>
-          {withheldNum > 0 && (() => {
-            const netOwed = calc.totalTax - withheldNum;
+          </table>}
+          {useTmt && <>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                  <th className="pb-2 font-medium">Component</th>
+                  <th className="pb-2 text-right font-medium">Rate</th>
+                  <th className="pb-2 text-right font-medium">Tax</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {amtCalc.amtiOrdinary > 0 && (
+                  <tr>
+                    <td className="py-2">
+                      <div className="flex items-center gap-2">
+                        <Briefcase className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                        Ordinary AMT Income Tax
+                      </div>
+                      <div className="ml-[1.375rem] text-xs text-muted-foreground">{formatCurrency(amtCalc.amtiOrdinary)} taxable</div>
+                    </td>
+                    <td className="py-2 text-right text-muted-foreground">up to {fmtPct(amtCalc.amtMargOrdRate)}</td>
+                    <td className="py-2 text-right font-medium">{formatCurrency(amtCalc.amtOrdTax)}</td>
+                  </tr>
+                )}
+                {amtCalc.amtiPreferential > 0 && (
+                  <tr>
+                    <td className="py-2">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                        Capital Gains / Qualified Dividends Tax
+                      </div>
+                      <div className="ml-[1.375rem] text-xs text-muted-foreground">{formatCurrency(amtCalc.amtiPreferential)} taxable</div>
+                    </td>
+                    <td className="py-2 text-right text-muted-foreground">up to {fmtPct(marginalLTCGRate(amtCalc.amtiOrdinary + amtCalc.amtiPreferential, LTCG_BRACKETS[filingStatus]))}</td>
+                    <td className="py-2 text-right font-medium">{formatCurrency(amtCalc.amtPrefTax)}</td>
+                  </tr>
+                )}
+                {amtCalc.amtiCollectible > 0 && (
+                  <tr>
+                    <td className="py-2">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="h-3.5 w-3.5 shrink-0 text-orange-400" />
+                        Collectible Gains Tax
+                      </div>
+                      <div className="ml-[1.375rem] text-xs text-muted-foreground">{formatCurrency(amtCalc.amtiCollectible)} taxable</div>
+                    </td>
+                    <td className="py-2 text-right text-muted-foreground">{fmtPct(amtCalc.amtCollRate)}</td>
+                    <td className="py-2 text-right font-medium">{formatCurrency(amtCalc.amtCollTax)}</td>
+                  </tr>
+                )}
+                {calc.niitBase > 0 && (
+                  <tr>
+                    <td className="py-2">
+                      <div className="flex items-center gap-1.5">
+                        <Activity className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+                        Net Investment Income Tax
+                      </div>
+                      <div className="ml-[1.375rem] text-xs text-muted-foreground">{formatCurrency(calc.niitBase)} subject to NIIT</div>
+                    </td>
+                    <td className="py-2 text-right text-muted-foreground">3.8%</td>
+                    <td className="py-2 text-right font-medium">{formatCurrency(calc.niitTax)}</td>
+                  </tr>
+                )}
+                <tr className="border-t-2 border-border font-bold text-base">
+                  <td className="pt-2">Total Estimated Tax</td>
+                  <td className="pt-2 text-right text-sm font-medium text-muted-foreground">
+                    {amtCalc.amtiGross > 0 ? `${((amtCalc.tmtTotal / amtCalc.amtiGross) * 100).toFixed(1)}% eff.` : "—"}
+                  </td>
+                  <td className="pt-2 text-right">{formatCurrency(amtCalc.tmtTotal)}</td>
+                </tr>
+              </tbody>
+            </table>
+            {/* Comparison note */}
+            <div className={`mt-3 rounded-md px-3 py-2.5 text-xs ${amtCalc.potentialCredit > 0 ? "bg-violet-50 text-violet-700" : "bg-amber-50 text-amber-700"}`}>
+              {amtCalc.potentialCredit > 0
+                ? <>TMT income tax ({formatCurrency(amtCalc.tmt)}) is <span className="font-semibold">{formatCurrency(amtCalc.potentialCredit)}</span> less than regular income tax ({formatCurrency(calc.totalTax - calc.niitTax)}). With sufficient prior-year AMT credits, your federal liability could be reduced to <span className="font-semibold">{formatCurrency(amtCalc.tmtTotal)}</span>{calc.niitTax > 0 ? <> ({formatCurrency(amtCalc.tmt)} TMT + {formatCurrency(calc.niitTax)} NIIT)</> : ""}.</>
+                : <>TMT income tax ({formatCurrency(amtCalc.tmt)}) exceeds regular income tax ({formatCurrency(calc.totalTax - calc.niitTax)}) by <span className="font-semibold">{formatCurrency(amtCalc.amtSurcharge)}</span>. AMT applies this year — prior-year credits cannot be used.</>}
+            </div>
+          </>}
+          {(withheldNum > 0 || totalQPaid > 0) && (() => {
+            const netOwed = effectiveFederalTax - withheldNum - totalQPaid;
             return (
               <div className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Less: Tax Withheld</span>
-                  <span className="text-destructive">-{formatCurrency(withheldNum)}</span>
-                </div>
+                {withheldNum > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Less: Tax Withheld</span>
+                    <span className="text-destructive">-{formatCurrency(withheldNum)}</span>
+                  </div>
+                )}
+                {totalQPaid > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Less: Estimated Payments</span>
+                    <span className="text-destructive">-{formatCurrency(totalQPaid)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between font-semibold">
-                  <span>{netOwed >= 0 ? "Net Tax Owed" : "Estimated Refund"}</span>
+                  <span>{netOwed >= 0 ? (useTmt ? "Net TMT Owed" : "Net Tax Owed") : "Estimated Refund"}</span>
                   <span className="text-foreground">{formatCurrency(Math.abs(netOwed))}</span>
                 </div>
               </div>
             );
           })()}
+          <div className="mt-3 border-t border-border pt-3">
+            <button
+              type="button"
+              onClick={() => setPaymentScheduleOpen(true)}
+              className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+            >
+              <CalendarCheck2 className="h-3.5 w-3.5" />
+              Payment schedule
+            </button>
+          </div></>}
+
+          {/* ── California tab ── */}
+          {taxBreakdownTab === "ca" && <>
+            {/* Regular CA tax table */}
+            {!useCaTmt && <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                  <th className="pb-2 font-medium">Component</th>
+                  <th className="pb-2 text-right font-medium">Rate</th>
+                  <th className="pb-2 text-right font-medium">Tax</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                <tr>
+                  <td className="py-2">
+                    <div className="flex items-center gap-2">
+                      <Briefcase className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                      CA Income Tax
+                    </div>
+                    <div className="ml-[1.375rem] text-xs text-muted-foreground">{formatCurrency(caCalc.caTaxable)} taxable</div>
+                  </td>
+                  <td className="py-2 text-right text-muted-foreground">
+                    up to {fmtPct(marginalOrdinaryRate(caCalc.caTaxable, CA_ORDINARY_BRACKETS[filingStatus]))}
+                  </td>
+                  <td className="py-2 text-right font-medium">{formatCurrency(caCalc.caOrdTax)}</td>
+                </tr>
+                {caCalc.caMhstBase > 0 && (
+                  <tr>
+                    <td className="py-2">
+                      <div className="flex items-center gap-2">
+                        <Activity className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+                        Mental Health Services Tax
+                      </div>
+                      <div className="ml-[1.375rem] text-xs text-muted-foreground">{formatCurrency(caCalc.caMhstBase)} above $1M threshold</div>
+                    </td>
+                    <td className="py-2 text-right text-muted-foreground">1%</td>
+                    <td className="py-2 text-right font-medium">{formatCurrency(caCalc.caMhstTax)}</td>
+                  </tr>
+                )}
+                <tr className="border-t-2 border-border font-bold text-base">
+                  <td className="pt-2">Total Estimated Tax</td>
+                  <td className="pt-2 text-right text-sm font-medium text-muted-foreground">
+                    {(caCalc.caEffRate * 100).toFixed(1)}% eff.
+                  </td>
+                  <td className="pt-2 text-right">{formatCurrency(caCalc.caTotalTax)}</td>
+                </tr>
+              </tbody>
+            </table>}
+            {/* CA TMT table */}
+            {useCaTmt && <>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                    <th className="pb-2 font-medium">Component</th>
+                    <th className="pb-2 text-right font-medium">Rate</th>
+                    <th className="pb-2 text-right font-medium">Tax</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  <tr>
+                    <td className="py-2">
+                      <div className="flex items-center gap-2">
+                        <Briefcase className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                        CA AMT Income Tax
+                      </div>
+                      <div className="ml-[1.375rem] text-xs text-muted-foreground">
+                        {formatCurrency(caTmtCalc.taxableCaAmti)} taxable
+                      </div>
+                    </td>
+                    <td className="py-2 text-right text-muted-foreground">7%</td>
+                    <td className="py-2 text-right font-medium">{formatCurrency(caTmtCalc.caTmt)}</td>
+                  </tr>
+                  <tr className="border-t-2 border-border font-bold text-base">
+                    <td className="pt-2">Tentative Minimum Tax</td>
+                    <td className="pt-2 text-right text-sm font-medium text-muted-foreground">
+                      {caTmtCalc.caAmti > 0 ? `${((caTmtCalc.caTmt / caTmtCalc.caAmti) * 100).toFixed(1)}% eff.` : "—"}
+                    </td>
+                    <td className="pt-2 text-right">{formatCurrency(caTmtCalc.caTmt)}</td>
+                  </tr>
+                </tbody>
+              </table>
+              {/* Comparison note */}
+              <div className={`mt-3 rounded-md px-3 py-2.5 text-xs ${caTmtCalc.potentialCredit > 0 ? "bg-violet-50 text-violet-700" : "bg-amber-50 text-amber-700"}`}>
+                {caTmtCalc.potentialCredit > 0
+                  ? <>CA TMT is <span className="font-semibold">{formatCurrency(caTmtCalc.potentialCredit)}</span> less than your regular CA tax of {formatCurrency(caCalc.caTotalTax)}. With sufficient prior-year CA AMT credits, your state liability could be reduced to <span className="font-semibold">{formatCurrency(caTmtCalc.caTmt)}</span>.</>
+                  : <>CA TMT ({formatCurrency(caTmtCalc.caTmt)}) exceeds regular CA tax ({formatCurrency(caCalc.caTotalTax)}) by <span className="font-semibold">{formatCurrency(caTmtCalc.amtSurcharge)}</span>. CA AMT applies this year — prior-year CA AMT credits cannot be used.</>}
+              </div>
+            </>}
+            {(caWithheldNum > 0 || totalCAQPaid > 0) && (() => {
+              const netOwed = effectiveCaTax - caWithheldNum - totalCAQPaid;
+              return (
+                <div className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
+                  {caWithheldNum > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Less: CA Tax Withheld</span>
+                      <span className="text-destructive">-{formatCurrency(caWithheldNum)}</span>
+                    </div>
+                  )}
+                  {totalCAQPaid > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Less: Estimated Payments</span>
+                      <span className="text-destructive">-{formatCurrency(totalCAQPaid)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-semibold">
+                    <span>{netOwed >= 0 ? (useCaTmt ? "Net CA TMT Owed" : "Net Tax Owed") : "Estimated Refund"}</span>
+                    <span className="text-foreground">{formatCurrency(Math.abs(netOwed))}</span>
+                  </div>
+                </div>
+              );
+            })()}
+            <div className="mt-3 border-t border-border pt-3 flex items-center justify-between gap-4">
+              <button
+                type="button"
+                onClick={() => setCaPaymentScheduleOpen(true)}
+                className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+              >
+                <CalendarCheck2 className="h-3.5 w-3.5" />
+                Payment schedule
+              </button>
+              <p className="text-xs text-muted-foreground text-right">
+                2025 CA brackets · All capital gains taxed as ordinary income
+              </p>
+            </div>
+          </>}
         </Card>
       </div>
 

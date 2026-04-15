@@ -181,6 +181,11 @@ async function buildProjection(
   const startBalance = parseFloat(account.balance.toString());
   const rawEvents: Omit<CashFlowEvent, "runningBalance">[] = [];
 
+  // Events dated after balanceUpdatedAt have not yet been reflected in the
+  // stored balance. Fall back to windowStart (today) when the user has never
+  // manually updated the balance.
+  const settledThrough = account.balanceUpdatedAt ?? windowStart;
+
   const accountName = (id: string) =>
     allAccounts.find((a) => a.id === id)?.name ?? "Unknown";
 
@@ -188,7 +193,7 @@ async function buildProjection(
   const upcomingExpenses = await prisma.expense.findMany({
     where: {
       accountId: account.id,
-      date: { gte: windowStart, lte: windowEnd },
+      date: { gte: settledThrough, lte: windowEnd },
     },
     select: { id: true, date: true, description: true, vendor: true, amount: true, recurrenceRuleId: true },
   });
@@ -218,7 +223,7 @@ async function buildProjection(
       accountId: account.id,
       isActive: true,
       startDate: { lte: windowEnd },
-      OR: [{ endDate: null }, { endDate: { gte: windowStart } }],
+      OR: [{ endDate: null }, { endDate: { gte: settledThrough } }],
     },
     select: { id: true, description: true, vendor: true, amount: true, frequency: true, interval: true, startDate: true, endDate: true, nextOccurrence: true },
   });
@@ -233,7 +238,7 @@ async function buildProjection(
       rule.endDate,
       rule.frequency as Frequency,
       rule.interval,
-      windowStart,
+      settledThrough,
       windowEnd,
     );
     for (const occ of occurrences) {
@@ -252,7 +257,7 @@ async function buildProjection(
 
   // 2. Transfers from this account (already-generated records)
   const transfersFrom = await prisma.transfer.findMany({
-    where: { fromAccountId: account.id, date: { gte: windowStart, lte: windowEnd } },
+    where: { fromAccountId: account.id, date: { gte: settledThrough, lte: windowEnd } },
     select: { id: true, date: true, description: true, amount: true, isConfirmed: true, toAccountId: true, transferRuleId: true },
   });
   const seenTransferRuleDatesFrom = new Map<string, Set<string>>();
@@ -282,7 +287,7 @@ async function buildProjection(
       fromAccountId: account.id,
       isActive: true,
       startDate: { lte: windowEnd },
-      OR: [{ endDate: null }, { endDate: { gte: windowStart } }],
+      OR: [{ endDate: null }, { endDate: { gte: settledThrough } }],
     },
     select: { id: true, description: true, amount: true, frequency: true, interval: true, startDate: true, endDate: true, toAccountId: true },
   });
@@ -293,7 +298,7 @@ async function buildProjection(
       rule.endDate,
       rule.frequency as Frequency,
       rule.interval,
-      windowStart,
+      settledThrough,
       windowEnd,
     );
     for (const occ of occurrences) {
@@ -314,7 +319,7 @@ async function buildProjection(
 
   // 3. Transfers to this account (already-generated records)
   const transfersTo = await prisma.transfer.findMany({
-    where: { toAccountId: account.id, date: { gte: windowStart, lte: windowEnd } },
+    where: { toAccountId: account.id, date: { gte: settledThrough, lte: windowEnd } },
     select: { id: true, date: true, description: true, amount: true, isConfirmed: true, fromAccountId: true, transferRuleId: true },
   });
   const seenTransferRuleDatesTo = new Map<string, Set<string>>();
@@ -344,7 +349,7 @@ async function buildProjection(
       toAccountId: account.id,
       isActive: true,
       startDate: { lte: windowEnd },
-      OR: [{ endDate: null }, { endDate: { gte: windowStart } }],
+      OR: [{ endDate: null }, { endDate: { gte: settledThrough } }],
     },
     select: { id: true, description: true, amount: true, frequency: true, interval: true, startDate: true, endDate: true, fromAccountId: true },
   });
@@ -355,7 +360,7 @@ async function buildProjection(
       rule.endDate,
       rule.frequency as Frequency,
       rule.interval,
-      windowStart,
+      settledThrough,
       windowEnd,
     );
     for (const occ of occurrences) {
@@ -379,7 +384,7 @@ async function buildProjection(
   const incomeRecords = await prisma.income.findMany({
     where: {
       accountId: account.id,
-      date: { gte: windowStart, lte: windowEnd },
+      date: { gte: settledThrough, lte: windowEnd },
       isCashReceived: true,
       subtype: { not: "DIVIDEND" },
     },
@@ -417,16 +422,17 @@ async function buildProjection(
       where: {
         accountId: inv.id,
         status: { in: ["PENDING", "CONFIRMED"] },
-        // Exclude confirmed dividends whose payment has already settled before
-        // the window — those are reflected in the stored account balance and
-        // would be double-counted. paymentDate is always updated to the actual
-        // payment date at confirmation time, so it is the authoritative field.
-        NOT: { activityId: { not: null }, paymentDate: { lt: windowStart } },
+        // Exclude confirmed dividends whose payment settled before the last
+        // time the user updated their account balance — those are already
+        // reflected in the stored balance and would be double-counted.
+        // Fall back to windowStart (today) if the balance has never been
+        // manually updated, so we don't surface stale historical dividends.
+        NOT: { activityId: { not: null }, paymentDate: { lt: settledThrough } },
         // PENDING dividends always appear until the user confirms/dismisses
         // them. CONFIRMED dividends are date-windowed so settled ones drop off.
         OR: [
           { status: "PENDING" },
-          { paymentDate: { gte: windowStart, lte: windowEnd } },
+          { paymentDate: { gte: settledThrough, lte: windowEnd } },
           { paymentDate: null },
         ],
       },
@@ -465,7 +471,7 @@ async function buildProjection(
 
       const ccPaymentEvents = await computeCCPaymentEvents(
         cc as { id: string; name: string; closingDay: number; dueDay: number },
-        windowStart,
+        settledThrough,
         windowEnd,
         statementOverrides.filter((o) => o.accountId === cc.id),
       );
@@ -475,7 +481,7 @@ async function buildProjection(
 
   // 6. User-entered balance adjustments (e.g. planned cash injections)
   const adjustments = await prisma.balanceAdjustment.findMany({
-    where: { accountId: account.id, date: { gte: windowStart, lte: windowEnd } },
+    where: { accountId: account.id, date: { gte: settledThrough, lte: windowEnd } },
     orderBy: { date: "asc" },
   });
   for (const adj of adjustments) {

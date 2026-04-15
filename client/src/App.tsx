@@ -35,7 +35,7 @@ function App() {
           <Route path="/budgets/monthly-spending" element={<MonthlySpending />} />
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/categories" element={<Categories />} />
-          <Route path="/tags" element={<TagsPage />} />
+          <Route path="/expenses/tags" element={<TagsPage />} />
           <Route path="/recurring" element={<Recurring />} />
           <Route path="/cash-flow" element={<CashFlow />} />
           <Route path="/expenses/reimbursements" element={<ReimbursementsPage />} />
