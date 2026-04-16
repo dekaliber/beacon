@@ -1909,8 +1909,8 @@ export function Expenses() {
       // Sort members: primary first, then non-fully-offset (date desc), then fully-offset (date desc)
       const isFullyOffset = (m: Expense) => {
         if (!m.offsets?.length) return false;
-        const offsetTotal = m.offsets.reduce((sum, o) => sum + Math.abs(o.amount), 0);
-        return offsetTotal >= Math.abs(m.amount);
+        const offsetTotal = m.offsets.reduce((sum, o) => sum + Math.abs(parseFloat(o.amount)), 0);
+        return offsetTotal >= Math.abs(parseFloat(m.amount));
       };
       const sortedMembers = [...members].sort((a, b) => {
         const aIsPrimary = primaryExpenseId ? a.id === primaryExpenseId : false;
@@ -3269,7 +3269,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
 
         <div>
           <label className="mb-1 block text-sm font-medium">Amount</label>
-          <CurrencyInput name="amount" defaultValue={isOffsetMode ? -Math.abs(parseFloat(offsetParent.amount)) : expense?.amount} required autoFocus onChange={(v) => !isOffsetMode && setAmountIsNegative(v < 0)} />
+          <CurrencyInput name="amount" defaultValue={isOffsetMode ? String(-Math.abs(parseFloat(offsetParent.amount))) : expense?.amount} required autoFocus onChange={(v) => !isOffsetMode && setAmountIsNegative(v < 0)} />
         </div>
 
         <div>

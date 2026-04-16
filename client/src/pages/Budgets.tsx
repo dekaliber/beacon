@@ -27,7 +27,7 @@ import { useApi } from "@/hooks/useApi";
 import { getBudgetOverview, getCategoryOutliersYtd, setAnnualBudget } from "@/api";
 import { CategoryOutliersChart } from "@/components/CategoryOutliersChart";
 import { formatCurrency } from "@/lib/utils";
-import type { BudgetPanel, BudgetOverview, CategoryOutliersData, ChartDay } from "@/types";
+import type { BudgetPanel, CategoryOutliersData, ChartDay } from "@/types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 

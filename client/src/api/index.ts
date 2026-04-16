@@ -6,8 +6,6 @@ import type {
   Transfer,
   TransferRule,
   AssetClass,
-  Budget,
-  BudgetDetail,
   BudgetOverview,
   CategoryOutliersData,
   CategoryTrendData,

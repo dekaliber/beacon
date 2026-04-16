@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Plus, Trash2, Pencil, Tags, TrendingUp, ChevronDown, ChevronRight, EyeOff } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
@@ -158,7 +159,7 @@ export function Categories() {
 interface CategoryListProps {
   categories: Category[];
   expanded: Set<string>;
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  icon: LucideIcon;
   onToggleExpand: (id: string) => void;
   onAddChild: (id: string) => void;
   onEdit: (cat: Category) => void;

@@ -58,8 +58,8 @@ export function scaleGrowthPoints(points: GrowthPoint[], f: number): GrowthPoint
   return points.map((p) => ({
     ...p,
     marketValue: p.marketValue * f,
-    costBasis: p.costBasis * f,
-    unrealizedGain: p.unrealizedGain * f,
+    costBasis: p.costBasis != null ? p.costBasis * f : null,
+    unrealizedGain: p.unrealizedGain != null ? p.unrealizedGain * f : null,
     // unrealizedGainPct is a ratio — unchanged
     events: p.events?.map((e) => ({
       ...e,

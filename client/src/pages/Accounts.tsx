@@ -33,8 +33,6 @@ const LIABILITY_GROUPS: GroupDef[] = [
   { key: "credit_cards", label: "Credit Cards", types: ["CREDIT_CARD"], icon: CreditCard },
 ];
 
-const ASSET_TYPES = new Set(ASSET_GROUPS.flatMap((g) => g.types));
-const LIABILITY_TYPES = new Set(LIABILITY_GROUPS.flatMap((g) => g.types));
 
 function nextDayOfMonth(day: number): string {
   const today = new Date();
@@ -336,7 +334,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
       isHidden,
     };
     if (!account && (accountType === "CHECKING" || accountType === "SAVINGS")) {
-      data.balance = parseFloat(form.get("balance") as string) || 0;
+      data.balance = String(parseFloat(form.get("balance") as string) || 0);
     }
     // Credit card settings
     if (accountType === "CREDIT_CARD") {

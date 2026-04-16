@@ -63,7 +63,7 @@ export function ReimbursementsPage() {
                           <span className="font-medium">{expense.description}</span>
                         </div>
                       </td>
-                      <td className="py-3">{expense.category.name}</td>
+                      <td className="py-3">{expense.category?.name}</td>
                       <td className="py-3">{expense.account.name}</td>
                       <td className="py-3 text-muted-foreground">
                         {expense.reimbursementNote ?? <span className="text-border">—</span>}
@@ -94,7 +94,7 @@ export function ReimbursementsPage() {
                     <div className="min-w-0">
                       <p className="truncate font-medium">{expense.description}</p>
                       <p className="text-sm text-muted-foreground">
-                        {expense.category.name} &middot; {formatDate(expense.date)}
+                        {expense.category?.name} &middot; {formatDate(expense.date)}
                       </p>
                       {expense.reimbursementNote && (
                         <p className="mt-0.5 text-xs text-muted-foreground">{expense.reimbursementNote}</p>

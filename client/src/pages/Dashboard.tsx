@@ -398,7 +398,7 @@ export function Dashboard() {
                   dataKey="amount"
                   radius={[0, 4, 4, 0]}
                   className="cursor-pointer"
-                  onClick={(data) => {
+                  onClick={(data: any) => {
                     if (data?.categoryId) goToExpenses({ categoryIds: [data.categoryId], y: year, m: month });
                   }}
                 >
@@ -408,7 +408,7 @@ export function Dashboard() {
                   <LabelList
                     dataKey="amount"
                     position="right"
-                    formatter={(v: number) => formatCurrency(v)}
+                    formatter={(v: any) => formatCurrency(Number(v ?? 0))}
                     style={{ fontSize: 12 }}
                   />
                 </Bar>
@@ -457,7 +457,7 @@ export function Dashboard() {
                     axisLine={false}
                     tickLine={false}
                   />
-                  <Tooltip formatter={(value: number, name: string) => [formatCurrency(value), name]} cursor={{ fill: "#F8FAFC" }} />
+                  <Tooltip formatter={(value: number | undefined, name: string | undefined) => [formatCurrency(value ?? 0), name ?? ""]} cursor={{ fill: "#F8FAFC" }} />
                   <Legend
                     align="center"
                     wrapperStyle={{ paddingTop: 12 }}
@@ -468,7 +468,7 @@ export function Dashboard() {
                     name="Personal"
                     stackId="a"
                     fill="#9CA3AF"
-                    onClick={(data) => { if (data?.year && data?.month) goToExpenses({ y: data.year, m: data.month }); }}
+                    onClick={(data: any) => { if (data?.year && data?.month) goToExpenses({ y: data.year, m: data.month }); }}
                   />
                   <Bar
                     dataKey="jointSpent"
@@ -476,7 +476,7 @@ export function Dashboard() {
                     stackId="a"
                     fill="#3B82F6"
                     radius={[4, 4, 0, 0]}
-                    onClick={(data) => { if (data?.year && data?.month) goToExpenses({ y: data.year, m: data.month }); }}
+                    onClick={(data: any) => { if (data?.year && data?.month) goToExpenses({ y: data.year, m: data.month }); }}
                   />
                   {budgetAmount !== null && (
                     <ReferenceLine

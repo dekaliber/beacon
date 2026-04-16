@@ -206,7 +206,7 @@ export function SecuritiesPage() {
             {!isComplete && (
               <AlertTriangle
                 className="h-3.5 w-3.5 shrink-0 text-amber-500"
-                title={instrument.weights.length === 0 ? "No allocation defined" : `Only ${Math.round(total)}% allocated`}
+                aria-label={instrument.weights.length === 0 ? "No allocation defined" : `Only ${Math.round(total)}% allocated`}
               />
             )}
           </div>

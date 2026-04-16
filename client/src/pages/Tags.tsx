@@ -263,7 +263,7 @@ export function TagsPage() {
                                                 <span className="truncate">{offset.vendor || offset.description}</span>
                                                 <AlertTriangle
                                                   className="h-3 w-3 flex-shrink-0"
-                                                  title={`Orphaned offset — parent transaction "${offset.parentExpense?.vendor || offset.parentExpense?.description || "unknown"}" is not tagged`}
+                                                  aria-label={`Orphaned offset — parent transaction "${offset.parentExpense?.vendor || offset.parentExpense?.description || "unknown"}" is not tagged`}
                                                 />
                                               </span>
                                             </td>

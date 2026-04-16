@@ -25,9 +25,9 @@ interface BulkEditBarProps {
   /** Patch key for the free-text field (default: "description") */
   textFieldKey?: string;
   /** Override the bulk-update API call (default: bulkUpdateExpenses) */
-  onApply?: (patch: Record<string, unknown>) => Promise<void>;
+  onApply?: (patch: Record<string, unknown>) => Promise<unknown>;
   /** Override the bulk-delete API call (default: bulkDeleteExpenses) */
-  onBulkDelete?: () => Promise<void>;
+  onBulkDelete?: () => Promise<unknown>;
   /** When true, shows the Edit Tax Status popover */
   showTaxStatus?: boolean;
   /** When true, the Delete button is shown but disabled */
@@ -132,7 +132,7 @@ export function BulkEditBar({
   const handleGroupAction = async () => {
     setGroupLoading(true);
     try {
-      await onGroupAction();
+      if (onGroupAction) await onGroupAction();
       onClear();
     } finally {
       setGroupLoading(false);

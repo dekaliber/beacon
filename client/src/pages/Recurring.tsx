@@ -451,7 +451,7 @@ const AnnualCostPanel = memo(function AnnualCostPanel({
             <LabelList
               dataKey="value"
               position="right"
-              formatter={(v: number) => formatCurrency(v)}
+              formatter={(v: any) => formatCurrency(Number(v ?? 0))}
               style={CHART_LABEL_STYLE}
             />
           </Bar>
@@ -483,9 +483,9 @@ function YoYPanel({ history }: { history: RecurringHistoryMonth[] }) {
             tickFormatter={(v: number) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
           />
           <Tooltip
-            formatter={(v: number, key: string) => [
-              formatCurrency(v),
-              key === "thisYear" ? String(currYear) : String(prevYear),
+            formatter={(v: number | undefined, key: string | undefined) => [
+              formatCurrency(v ?? 0),
+              (key ?? "") === "thisYear" ? String(currYear) : String(prevYear),
             ]}
             contentStyle={{ fontSize: 12 }}
             cursor={{ fill: CHART_HOVER_FILL }}

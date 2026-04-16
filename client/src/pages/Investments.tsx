@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { TrendingUp, TrendingDown, Landmark, LineChart, ChevronRight, Pencil, Library, Target, ArrowUpRight, Sliders } from "lucide-react";
+import { TrendingUp, TrendingDown, Landmark, LineChart, ChevronRight, Library, Target, ArrowUpRight, Sliders } from "lucide-react";
 import { Card } from "@/components/Card";
-import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
-import { getInvestmentAccounts, getAllocationSummary, refreshPrices, updateAccount, getWithdrawalSummary, getInvestmentSettings } from "@/api";
+import { getInvestmentAccounts, getAllocationSummary, refreshPrices, getWithdrawalSummary, getInvestmentSettings } from "@/api";
 import { formatCurrency } from "@/lib/utils";
 import { isPriceRefreshNeeded } from "@/lib/priceUtils";
 import { useNotifications } from "@/context/NotificationContext";

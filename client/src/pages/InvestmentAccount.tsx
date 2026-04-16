@@ -10,7 +10,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip as RechartsTooltip,
-  ReferenceLine,
 } from "recharts";
 import {
   ArrowLeft,
@@ -73,7 +72,7 @@ import {
   dismissPendingDividend,
   getFlatCategories,
 } from "@/api";
-import type { SellPreviewResult, SellRequest } from "@/api";
+import type { SellPreviewResult } from "@/api";
 import { ApiError } from "@/api/client";
 import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/utils";
 import { useNotifications } from "@/context/NotificationContext";
@@ -261,7 +260,7 @@ function TickerSearch({
   // Track the query that produced the current empty result so we only show
   // the fallback option when the search has settled on a stable empty state.
   const [emptyQuery, setEmptyQuery] = useState("");
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
@@ -3857,8 +3856,6 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
   const [result, setResult] = useState<{ imported: number; total: number; dividendsImported: number; dividendsSkipped: number } | null>(null);
   const [importDividends, setImportDividends] = useState(true);
   const [dividendStartDate, setDividendStartDate] = useState(`${new Date().getFullYear()}-01-01`);
-  const { notify } = useNotifications();
-
   const filteredDividends = parsed && importDividends
     ? parsed.dividends.filter((d) => d.date >= dividendStartDate)
     : [];
@@ -3899,9 +3896,8 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
       const parts = [];
       if (txnRes.imported > 0) parts.push(`${txnRes.imported} transaction${txnRes.imported !== 1 ? "s" : ""}`);
       if (divRes.imported > 0) parts.push(`${divRes.imported} dividend${divRes.imported !== 1 ? "s" : ""}`);
-      notify({ type: "success", message: parts.length > 0 ? `Imported ${parts.join(" and ")}` : "No new records (all already imported)" });
     } catch (err) {
-      notify({ type: "error", message: err instanceof Error ? err.message : "Import failed" });
+      setParseError(err instanceof Error ? err.message : "Import failed");
     } finally {
       setImporting(false);
     }

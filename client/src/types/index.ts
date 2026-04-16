@@ -38,6 +38,7 @@ export interface Category {
   kind: "EXPENSE" | "INCOME";
   isDefault: boolean;
   ignoreInBudget: boolean;
+  isHidden?: boolean;
   parentId: string | null;
   parent?: Category | null;
   children?: Category[];
@@ -736,6 +737,8 @@ export interface MonthlyTrend {
   label: string;
   spent: string | number;
   budget: string | number | null;
+  personalSpent?: string | number;
+  jointSpent?: string | number;
 }
 
 export interface DashboardData {

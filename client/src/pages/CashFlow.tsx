@@ -153,8 +153,8 @@ function BalanceChart({ data }: BalanceChartProps) {
             border: "1px solid hsl(var(--border))",
             borderRadius: 6,
           }}
-          formatter={(v: number) => [formatCurrency(v), "Balance"]}
-          labelFormatter={fmtDate}
+          formatter={(v: number | undefined) => [formatCurrency(v ?? 0), "Balance" as const]}
+          labelFormatter={(label) => fmtDate(label as string)}
         />
         {hasNegative && (
           <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="4 2" strokeWidth={1.5} />
@@ -1108,7 +1108,7 @@ export function CashFlow() {
     // UTC date, which can be a day ahead for users west of UTC in the evening.
     const d = new Date();
     const localDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    await updateAccount(id, { balance, balanceUpdatedAt: `${localDate}T00:00:00.000Z` });
+    await updateAccount(id, { balance: String(balance), balanceUpdatedAt: `${localDate}T00:00:00.000Z` });
     setEditingBalance(null);
     refetchAccounts();
     refetch();
@@ -1170,7 +1170,7 @@ export function CashFlow() {
       >
         <span>{p.accountName}</span>
         {hasNegative && (
-          <AlertTriangle className="h-3 w-3 text-red-500 shrink-0" title="Projected negative balance" />
+          <AlertTriangle className="h-3 w-3 text-red-500 shrink-0" aria-label="Projected negative balance" />
         )}
       </button>
     );

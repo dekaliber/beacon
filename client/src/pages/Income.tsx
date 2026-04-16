@@ -1456,7 +1456,7 @@ export function IncomePage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {incomes.map((income, idx) => (
-                    <tr key={income.id} className={`hover:bg-muted/50 ${selectedIds.has(income.id) ? "bg-primary/5" : ""}`}>
+                    <tr key={income.id} className={`hover:bg-muted/50 ${selectedIds.has(income.id) ? "bg-primary/5" : !income.isCashReceived ? "bg-muted/40" : ""}`}>
                       <td className="w-[44px] py-2 pr-2 text-center">
                         <input
                           type="checkbox"
@@ -1465,10 +1465,10 @@ export function IncomePage() {
                           className="h-4 w-4 rounded border-border"
                         />
                       </td>
-                      <td className="w-[70px] py-2 pr-3">
+                      <td className={`w-[70px] py-2 pr-3 ${!income.isCashReceived ? "text-muted-foreground" : ""}`}>
                         <EditableCell value={income.date} type="date" onSave={(v) => handleInlineUpdate(income.id, "date", v)} />
                       </td>
-                      <td className="py-2 pr-3">
+                      <td className={`py-2 pr-3 ${!income.isCashReceived ? "text-muted-foreground" : ""}`}>
                         <div className="flex items-center gap-1.5">
                           <EditableCell value={income.source ?? ""} onSave={(v) => handleInlineUpdate(income.id, "source", v)} />
                           {income.subtype === "DIVIDEND" && (
@@ -1479,7 +1479,7 @@ export function IncomePage() {
                           )}
                         </div>
                       </td>
-                      <td className="w-[130px] py-2 pr-3">
+                      <td className={`w-[130px] py-2 pr-3 ${!income.isCashReceived ? "text-muted-foreground" : ""}`}>
                         <EditableCategoryCell
                           value={income.categoryId}
                           label={income.category?.name ?? ""}
@@ -1490,7 +1490,7 @@ export function IncomePage() {
                       <td className="w-[115px] py-2 pr-3">
                         <EditableTaxStatusCell value={income.taxClassification} onSave={(v) => handleInlineUpdate(income.id, "taxClassification", v)} />
                       </td>
-                      <td className="w-[185px] py-2 pr-3">
+                      <td className={`w-[185px] py-2 pr-3 ${!income.isCashReceived ? "text-muted-foreground" : ""}`}>
                         <EditableTypeaheadCell
                           value={income.accountId}
                           label={income.account.name}
@@ -1504,7 +1504,7 @@ export function IncomePage() {
                           {income.account.isJoint ? "J" : "P"}
                         </span>
                       </td>
-                      <td className="w-[90px] py-2 text-right font-semibold text-green-600">
+                      <td className={`w-[90px] py-2 text-right font-semibold ${!income.isCashReceived ? "text-muted-foreground" : "text-green-600"}`}>
                         <EditableAmountCell
                           value={income.amount}
                           positive
@@ -1524,7 +1524,7 @@ export function IncomePage() {
 
             <div className="divide-y divide-border md:hidden">
               {incomes.map((income, idx) => (
-                <div key={income.id} className={`flex items-center gap-2 py-3 ${selectedIds.has(income.id) ? "bg-primary/5" : ""}`}>
+                <div key={income.id} className={`flex items-center gap-2 py-3 ${selectedIds.has(income.id) ? "bg-primary/5" : !income.isCashReceived ? "bg-muted/40" : ""}`}>
                   <input
                     type="checkbox"
                     checked={selectedIds.has(income.id)}
@@ -1533,7 +1533,7 @@ export function IncomePage() {
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 truncate">
-                      <p className="truncate font-medium">{income.category?.name ?? "—"}{income.source ? ` · ${income.source}` : ""}</p>
+                      <p className={`truncate font-medium ${!income.isCashReceived ? "text-muted-foreground" : ""}`}>{income.category?.name ?? "—"}{income.source ? ` · ${income.source}` : ""}</p>
                       {income.subtype === "DIVIDEND" && (
                         <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700">Dividend</span>
                       )}
@@ -1547,7 +1547,7 @@ export function IncomePage() {
                     </div>
                   </div>
                   <div className="ml-2 flex items-center gap-2">
-                    <span className="font-semibold text-green-600">+{formatCurrency(income.amount)}</span>
+                    <span className={`font-semibold ${!income.isCashReceived ? "text-muted-foreground" : "text-green-600"}`}>+{formatCurrency(income.amount)}</span>
                     <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1 hover:bg-accent"><Pencil className="h-4 w-4 text-muted-foreground" /></button>
                   </div>
                 </div>
