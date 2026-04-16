@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { resolve } from "path";
 import { prisma } from "./db/client.js";
 import { accountRoutes } from "./routes/accounts.js";
 import { categoryRoutes } from "./routes/categories.js";
@@ -55,11 +54,10 @@ app.get("/api/health", (_req, res) => {
 
 // Serve static frontend in production
 if (process.env.NODE_ENV === "production") {
-  const __dirname = dirname(fileURLToPath(import.meta.url));
-  const publicPath = join(__dirname, "..", "public");
+  const publicPath = resolve("public");
   app.use(express.static(publicPath));
   app.get("*", (_req, res) => {
-    res.sendFile(join(publicPath, "index.html"));
+    res.sendFile(resolve("public", "index.html"));
   });
 }
 
