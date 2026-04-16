@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 import { prisma } from "./db/client.js";
 import { accountRoutes } from "./routes/accounts.js";
 import { categoryRoutes } from "./routes/categories.js";
@@ -50,6 +52,16 @@ app.use("/api/withdrawals", withdrawalRoutes);
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
 });
+
+// Serve static frontend in production
+if (process.env.NODE_ENV === "production") {
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const publicPath = join(__dirname, "..", "public");
+  app.use(express.static(publicPath));
+  app.get("*", (_req, res) => {
+    res.sendFile(join(publicPath, "index.html"));
+  });
+}
 
 const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
