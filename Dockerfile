@@ -10,6 +10,7 @@ RUN npm run build
 FROM node:20-alpine AS server-builder
 WORKDIR /app
 COPY server/package*.json ./
+COPY server/prisma ./prisma
 RUN npm ci
 COPY server/ ./
 RUN npm run build
