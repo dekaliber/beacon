@@ -4,7 +4,7 @@ WORKDIR /app
 COPY client/package*.json ./
 RUN npm ci
 COPY client/ ./
-RUN npm run build
+RUN npx vite build
 
 # Build server
 FROM node:20-alpine AS server-builder
