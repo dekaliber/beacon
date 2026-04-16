@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../db/client.js";
+import { getUserId } from "../middleware/auth.js";
 
 export const cashFlowRoutes = Router();
 
@@ -644,6 +645,7 @@ async function computeCCPaymentEvents(
 // ── Balance adjustment CRUD ───────────────────────────────────────────────────
 
 cashFlowRoutes.post("/adjustments", async (req, res) => {
+  const userId = getUserId(req);
   try {
     const { accountId, date, amount, description, notes } = req.body as {
       accountId: string;
@@ -656,6 +658,9 @@ cashFlowRoutes.post("/adjustments", async (req, res) => {
     if (!accountId || !date || amount == null) {
       return res.status(400).json({ error: "accountId, date, and amount are required" });
     }
+
+    const account = await prisma.account.findFirst({ where: { id: accountId, userId } });
+    if (!account) return res.status(400).json({ error: "Account not found" });
 
     const today = new Date(Date.UTC(
       new Date().getUTCFullYear(),
@@ -684,6 +689,7 @@ cashFlowRoutes.post("/adjustments", async (req, res) => {
 });
 
 cashFlowRoutes.patch("/adjustments/:id", async (req, res) => {
+  const userId = getUserId(req);
   try {
     const { id } = req.params;
     const { date, amount, description, notes } = req.body as {
@@ -692,6 +698,9 @@ cashFlowRoutes.patch("/adjustments/:id", async (req, res) => {
       description?: string;
       notes?: string;
     };
+
+    const existing = await prisma.balanceAdjustment.findFirst({ where: { id, account: { userId } } });
+    if (!existing) return res.status(404).json({ error: "Adjustment not found" });
 
     if (date !== undefined) {
       const today = new Date(Date.UTC(
@@ -722,8 +731,9 @@ cashFlowRoutes.patch("/adjustments/:id", async (req, res) => {
 });
 
 cashFlowRoutes.delete("/adjustments/:id", async (req, res) => {
+  const userId = getUserId(req);
   try {
-    await prisma.balanceAdjustment.delete({ where: { id: req.params.id } });
+    await prisma.balanceAdjustment.deleteMany({ where: { id: req.params.id, account: { userId } } });
     return res.status(204).send();
   } catch (err) {
     console.error("Delete balance adjustment error:", err);
@@ -734,6 +744,7 @@ cashFlowRoutes.delete("/adjustments/:id", async (req, res) => {
 // ── Projection route ──────────────────────────────────────────────────────────
 
 cashFlowRoutes.get("/", async (req, res) => {
+  const userId = getUserId(req);
   try {
     const windowDays = Math.min(
       parseInt((req.query.windowDays as string) ?? "45", 10) || 45,
@@ -752,6 +763,7 @@ cashFlowRoutes.get("/", async (req, res) => {
     // Fetch all non-hidden checking accounts
     const accounts = await prisma.account.findMany({
       where: {
+        userId,
         isHidden: false,
         isActive: true,
         type: "CHECKING",
@@ -772,6 +784,7 @@ cashFlowRoutes.get("/", async (req, res) => {
     });
 
     const allAccounts = await prisma.account.findMany({
+      where: { userId },
       select: { id: true, name: true, color: true, type: true },
     });
 
@@ -779,6 +792,7 @@ cashFlowRoutes.get("/", async (req, res) => {
     // checking accounts in this window (not just the checking accounts themselves).
     const linkedCcIds = await prisma.account.findMany({
       where: {
+        userId,
         type: "CREDIT_CARD",
         linkedBankAccountId: { in: accounts.map((a) => a.id) },
       },

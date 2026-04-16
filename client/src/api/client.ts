@@ -1,3 +1,5 @@
+import { getAuthToken } from "../lib/authToken";
+
 const BASE_URL = "/api";
 
 export class ApiError extends Error {
@@ -12,8 +14,12 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = await getAuthToken();
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     ...options,
   });
 

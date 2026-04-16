@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { resolve } from "path";
+import { clerkMiddleware, getAuth } from "@clerk/express";
 import { prisma } from "./db/client.js";
 import { accountRoutes } from "./routes/accounts.js";
 import { categoryRoutes } from "./routes/categories.js";
@@ -26,6 +27,15 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
+app.use(clerkMiddleware());
+
+// All /api routes require authentication (except /api/health)
+app.use("/api", (req, res, next) => {
+  if (req.path === "/health") return next();
+  const { userId } = getAuth(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+  return next();
+});
 
 // Routes
 app.use("/api/accounts", accountRoutes);

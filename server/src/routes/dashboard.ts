@@ -1,17 +1,19 @@
 import { Router } from "express";
 import { prisma } from "../db/client.js";
+import { getUserId } from "../middleware/auth.js";
 
 export const dashboardRoutes = Router();
 
 /** Return the effective monthly budget amount for a given month/year using the
  *  AnnualBudget + MonthlyBudget hierarchy. */
 async function getEffectiveMonthlyBudget(
+  userId: string,
   type: "PERSONAL" | "JOINT",
   year: number,
   month: number,
 ): Promise<number | null> {
   const annual = await prisma.annualBudget.findUnique({
-    where: { type_year: { type, year } },
+    where: { userId_type_year: { userId, type, year } },
     include: { monthlyOverrides: { where: { month } } },
   });
   if (!annual) return null;
@@ -41,6 +43,7 @@ function budgetExpenseFilter(ignoredCategoryIds: string[]): Record<string, unkno
 
 // Spending by category over 13 months (spaghetti chart data)
 dashboardRoutes.get("/category-trend", async (req, res) => {
+  const userId = getUserId(req);
   const now = new Date();
   const year             = parseInt(req.query.year  as string) || now.getFullYear();
   const month            = parseInt(req.query.month as string) || now.getMonth() + 1;
@@ -51,11 +54,11 @@ dashboardRoutes.get("/category-trend", async (req, res) => {
   const windowEnd   = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
 
   const [accounts, ignoredCategories, settings, allCats] = await Promise.all([
-    prisma.account.findMany({ where: { isActive: true }, select: { id: true, isJoint: true } }),
-    prisma.category.findMany({ where: { ignoreInBudget: true }, select: { id: true } }),
-    prisma.budgetSettings.findFirst(),
+    prisma.account.findMany({ where: { userId, isActive: true }, select: { id: true, isJoint: true } }),
+    prisma.category.findMany({ where: { userId, ignoreInBudget: true }, select: { id: true } }),
+    prisma.budgetSettings.findFirst({ where: { userId } }),
     // Fetch all categories to determine which ones have children
-    prisma.category.findMany({ select: { id: true, parentId: true } }),
+    prisma.category.findMany({ where: { userId }, select: { id: true, parentId: true } }),
   ]);
 
   const personalAccountIds = accounts.filter((a) => !a.isJoint).map((a) => a.id);
@@ -63,7 +66,6 @@ dashboardRoutes.get("/category-trend", async (req, res) => {
   const ignoredCategoryIds = ignoredCategories.map((c) => c.id);
   const splitRatio         = settings ? Number(settings.jointSplitRatio) : 0.5;
 
-  // Set of category IDs that have at least one child category
   const categoryIdsWithChildren = new Set(
     allCats.filter((c) => c.parentId !== null).map((c) => c.parentId!)
   );
@@ -164,6 +166,7 @@ dashboardRoutes.get("/category-trend", async (req, res) => {
 
 // Main dashboard data
 dashboardRoutes.get("/", async (req, res) => {
+  const userId = getUserId(req);
   const now = new Date();
   const year = parseInt(req.query.year as string) || now.getFullYear();
   const month = parseInt(req.query.month as string) || now.getMonth() + 1;
@@ -173,9 +176,9 @@ dashboardRoutes.get("/", async (req, res) => {
 
   // ── Shared setup: accounts, ignored categories, split ratio ──────────────
   const [accounts, ignoredCategories, settings] = await Promise.all([
-    prisma.account.findMany({ where: { isActive: true }, select: { id: true, isJoint: true } }),
-    prisma.category.findMany({ where: { ignoreInBudget: true }, select: { id: true } }),
-    prisma.budgetSettings.findFirst(),
+    prisma.account.findMany({ where: { userId, isActive: true }, select: { id: true, isJoint: true } }),
+    prisma.category.findMany({ where: { userId, ignoreInBudget: true }, select: { id: true } }),
+    prisma.budgetSettings.findFirst({ where: { userId } }),
   ]);
 
   const personalAccountIds  = accounts.filter((a) => !a.isJoint).map((a) => a.id);
@@ -214,8 +217,8 @@ dashboardRoutes.get("/", async (req, res) => {
   // The joint budget entered by the user is already their intended share.
   // splitRatio is applied only to raw spend figures (see budgets.ts line 440-444).
   const [personalMonthly, jointMonthly] = await Promise.all([
-    getEffectiveMonthlyBudget("PERSONAL", year, month),
-    getEffectiveMonthlyBudget("JOINT", year, month),
+    getEffectiveMonthlyBudget(userId, "PERSONAL", year, month),
+    getEffectiveMonthlyBudget(userId, "JOINT", year, month),
   ]);
 
   let totalBudget: number | null = null;
@@ -313,8 +316,8 @@ dashboardRoutes.get("/", async (req, res) => {
         },
         _sum: { amount: true },
       }),
-      getEffectiveMonthlyBudget("PERSONAL", trendYear, trendMonth),
-      getEffectiveMonthlyBudget("JOINT", trendYear, trendMonth),
+      getEffectiveMonthlyBudget(userId, "PERSONAL", trendYear, trendMonth),
+      getEffectiveMonthlyBudget(userId, "JOINT", trendYear, trendMonth),
     ]);
 
     // Budget: personal + joint (no ratio — joint budget is already user's share)
@@ -341,6 +344,7 @@ dashboardRoutes.get("/", async (req, res) => {
   // ── Recent expenses — completed only (no future-dated recurring instances) ──
   const recentTransactions = await prisma.expense.findMany({
     where: {
+      account: { userId },
       parentExpenseId: null,          // exclude offset children
       date: { lte: new Date() },      // completed only — excludes future recurring instances
     },

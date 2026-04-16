@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
+import { getUserId } from "../middleware/auth.js";
 
 export const incomeRoutes = Router();
 
@@ -67,11 +68,12 @@ const incomeSchema = z.object({
 
 // List incomes with optional filtering and pagination
 incomeRoutes.get("/", async (req, res) => {
+  const userId = getUserId(req);
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 50;
   const skip = (page - 1) * limit;
 
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = { account: { userId } };
   if (req.query.showOnlyReceived !== "false") where.isCashReceived = true;
   if (req.query.accountIds) {
     const ids = (req.query.accountIds as string).split(",").filter(Boolean);
@@ -145,8 +147,9 @@ incomeRoutes.get("/", async (req, res) => {
 
 // Get single income
 incomeRoutes.get("/:id", async (req, res) => {
-  const income = await prisma.income.findUnique({
-    where: { id: req.params.id },
+  const userId = getUserId(req);
+  const income = await prisma.income.findFirst({
+    where: { id: req.params.id, account: { userId } },
     include: INCOME_INCLUDE,
   });
   if (!income) return res.status(404).json({ error: "Income not found" });
@@ -156,13 +159,14 @@ incomeRoutes.get("/:id", async (req, res) => {
 
 // Create income
 incomeRoutes.post("/", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = incomeSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   const { tagIds, taxClassification, ...data } = parsed.data;
 
   // Validate account type allows income
-  const account = await prisma.account.findUnique({ where: { id: data.accountId } });
+  const account = await prisma.account.findFirst({ where: { id: data.accountId, userId } });
   if (!account) return res.status(400).json({ error: "Account not found" });
   if (!INCOME_ALLOWED_ACCOUNT_TYPES.includes(account.type)) {
     return res.status(400).json({
@@ -188,6 +192,7 @@ incomeRoutes.post("/", async (req, res) => {
 
 // Update income
 incomeRoutes.put("/:id", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = incomeSchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
@@ -195,7 +200,7 @@ incomeRoutes.put("/:id", async (req, res) => {
 
   // Validate account type if accountId is being changed
   if (data.accountId) {
-    const account = await prisma.account.findUnique({ where: { id: data.accountId } });
+    const account = await prisma.account.findFirst({ where: { id: data.accountId, userId } });
     if (!account) return res.status(400).json({ error: "Account not found" });
     if (!INCOME_ALLOWED_ACCOUNT_TYPES.includes(account.type)) {
       return res.status(400).json({
@@ -216,11 +221,14 @@ incomeRoutes.put("/:id", async (req, res) => {
       if (data.amount !== undefined) {
         taxableAmount = data.amount;
       } else {
-        const existing = await prisma.income.findUnique({ where: { id: req.params.id }, select: { amount: true } });
+        const existing = await prisma.income.findFirst({ where: { id: req.params.id, account: { userId } }, select: { amount: true } });
         taxableAmount = existing ? Number(existing.amount) : undefined;
       }
     }
   }
+
+  const owned = await prisma.income.findFirst({ where: { id: req.params.id, account: { userId } }, select: { id: true } });
+  if (!owned) return res.status(404).json({ error: "Income not found" });
 
   const income = await prisma.income.update({
     where: { id: req.params.id },
@@ -244,17 +252,19 @@ incomeRoutes.put("/:id", async (req, res) => {
 
 // Bulk delete income
 incomeRoutes.delete("/bulk", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = z.object({ ids: z.array(z.string()).min(1) }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   const { ids } = parsed.data;
-  await prisma.income.deleteMany({ where: { id: { in: ids } } });
-  res.json({ deleted: ids.length });
+  const result = await prisma.income.deleteMany({ where: { id: { in: ids }, account: { userId } } });
+  res.json({ deleted: result.count });
 });
 
 // Delete income
 incomeRoutes.delete("/:id", async (req, res) => {
-  await prisma.income.delete({ where: { id: req.params.id } });
+  const userId = getUserId(req);
+  await prisma.income.deleteMany({ where: { id: req.params.id, account: { userId } } });
   res.status(204).send();
 });
 
@@ -270,10 +280,19 @@ const bulkEditIncomeSchema = z.object({
 });
 
 incomeRoutes.patch("/bulk", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = bulkEditIncomeSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   const { ids, source, categoryId, taxClassification } = parsed.data;
+
+  // Resolve only IDs owned by this user
+  const owned = await prisma.income.findMany({
+    where: { id: { in: ids }, account: { userId } },
+    select: { id: true },
+  });
+  const ownedIds = owned.map((o) => o.id);
+  if (ownedIds.length === 0) return res.json({ updated: 0 });
 
   const scalarUpdate: Record<string, unknown> = {};
   if (source !== undefined) scalarUpdate.source = source;
@@ -291,13 +310,13 @@ incomeRoutes.patch("/bulk", async (req, res) => {
       await prisma.$executeRawUnsafe(
         `UPDATE incomes SET "taxClassification" = $1::"TaxClassification", "taxableAmount" = 0 WHERE id = ANY($2::text[])`,
         taxClassification,
-        ids
+        ownedIds
       );
     } else {
       await prisma.$executeRawUnsafe(
         `UPDATE incomes SET "taxClassification" = $1::"TaxClassification", "taxableAmount" = amount WHERE id = ANY($2::text[])`,
         taxClassification,
-        ids
+        ownedIds
       );
     }
     // Apply any other scalar updates (source, categoryId) separately
@@ -305,19 +324,19 @@ incomeRoutes.patch("/bulk", async (req, res) => {
     if (source !== undefined) otherUpdate.source = source;
     if (categoryId !== undefined) otherUpdate.categoryId = categoryId;
     if (Object.keys(otherUpdate).length > 0) {
-      await prisma.income.updateMany({ where: { id: { in: ids } }, data: otherUpdate });
+      await prisma.income.updateMany({ where: { id: { in: ownedIds } }, data: otherUpdate });
     }
   } else if (taxClassification === null) {
     // Clearing taxClassification also clears taxableAmount
     await prisma.income.updateMany({
-      where: { id: { in: ids } },
+      where: { id: { in: ownedIds } },
       data: { ...scalarUpdate, taxableAmount: null },
     });
   } else {
-    await prisma.income.updateMany({ where: { id: { in: ids } }, data: scalarUpdate });
+    await prisma.income.updateMany({ where: { id: { in: ownedIds } }, data: scalarUpdate });
   }
 
-  res.json({ updated: ids.length });
+  res.json({ updated: ownedIds.length });
 });
 
 // Bulk import income
@@ -334,6 +353,7 @@ const importSchema = z.object({
 });
 
 incomeRoutes.post("/import", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = importSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
@@ -344,7 +364,7 @@ incomeRoutes.post("/import", async (req, res) => {
   for (let i = 0; i < rows.length; i++) {
     try {
       const row = rows[i];
-      const account = await prisma.account.findUnique({ where: { id: row.accountId } });
+      const account = await prisma.account.findFirst({ where: { id: row.accountId, userId } });
       if (!account || !INCOME_ALLOWED_ACCOUNT_TYPES.includes(account.type)) {
         errors.push({ row: i + 1, message: `Invalid account` });
         continue;

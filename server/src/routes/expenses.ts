@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { generateUpcomingExpenses, computeNextOccurrence } from "./recurrence.js";
+import { getUserId } from "../middleware/auth.js";
 
 export const expenseRoutes = Router();
 
@@ -27,6 +28,8 @@ const expenseSchema = z.object({
 
 // List expenses with filtering and pagination
 expenseRoutes.get("/", async (req, res) => {
+  const userId = getUserId(req);
+
   // Auto-generate upcoming recurring expenses (best-effort, don't block listing)
   try {
     await generateUpcomingExpenses();
@@ -34,11 +37,16 @@ expenseRoutes.get("/", async (req, res) => {
     console.error("Failed to generate upcoming expenses:", err);
   }
 
+  // Resolve user's account IDs once for both Prisma and raw SQL paths
+  const userAccounts = await prisma.account.findMany({ where: { userId }, select: { id: true } });
+  const userAccountIds = userAccounts.map((a) => a.id);
+
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 50;
   const skip = (page - 1) * limit;
 
   const where: Record<string, unknown> = {
+    account: { userId },
     parentExpenseId: null, // Exclude offset rows from main list
   };
 
@@ -111,6 +119,10 @@ expenseRoutes.get("/", async (req, res) => {
     const conds: string[] = [`e."parentExpenseId" IS NULL`];
     const params: unknown[] = [];
     let p = 1;
+
+    // Always scope to user's accounts
+    conds.push(`e."accountId" = ANY($${p++}::text[])`);
+    params.push(userAccountIds);
 
     if (req.query.categoryId === "uncategorized") {
       conds.push(`e."categoryId" IS NULL`);
@@ -272,9 +284,10 @@ expenseRoutes.get("/", async (req, res) => {
 });
 
 // Get distinct vendors for autocomplete
-expenseRoutes.get("/vendors", async (_req, res) => {
+expenseRoutes.get("/vendors", async (req, res) => {
+  const userId = getUserId(req);
   const expenses = await prisma.expense.findMany({
-    where: { vendor: { not: "" } },
+    where: { account: { userId }, vendor: { not: "" } },
     select: { vendor: true },
     distinct: ["vendor"],
     orderBy: { vendor: "asc" },
@@ -284,11 +297,12 @@ expenseRoutes.get("/vendors", async (_req, res) => {
 
 // Get the last-used categoryId for a given vendor
 expenseRoutes.get("/vendor-category", async (req, res) => {
+  const userId = getUserId(req);
   const vendor = req.query.vendor as string;
   if (!vendor) return res.json({ categoryId: null });
 
   const expense = await prisma.expense.findFirst({
-    where: { vendor: { equals: vendor, mode: "insensitive" } },
+    where: { account: { userId }, vendor: { equals: vendor, mode: "insensitive" } },
     orderBy: { date: "desc" },
     select: { categoryId: true },
   });
@@ -296,17 +310,19 @@ expenseRoutes.get("/vendor-category", async (req, res) => {
 });
 
 // Count uncategorized expenses (exclude offsets)
-expenseRoutes.get("/uncategorized-count", async (_req, res) => {
+expenseRoutes.get("/uncategorized-count", async (req, res) => {
+  const userId = getUserId(req);
   const count = await prisma.expense.count({
-    where: { categoryId: null, parentExpenseId: null },
+    where: { account: { userId }, categoryId: null, parentExpenseId: null },
   });
   res.json({ count });
 });
 
 // Get single expense
 expenseRoutes.get("/:id", async (req, res) => {
-  const expense = await prisma.expense.findUnique({
-    where: { id: req.params.id },
+  const userId = getUserId(req);
+  const expense = await prisma.expense.findFirst({
+    where: { id: req.params.id, account: { userId } },
     include: {
       category: true,
       account: true,
@@ -329,13 +345,14 @@ expenseRoutes.get("/:id", async (req, res) => {
 
 // Create expense
 expenseRoutes.post("/", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = expenseSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   const { tagIds, ...data } = parsed.data;
 
-  // Validate account type allows expenses
-  const account = await prisma.account.findUnique({ where: { id: data.accountId } });
+  // Validate account ownership and type
+  const account = await prisma.account.findFirst({ where: { id: data.accountId, userId } });
   if (!account) return res.status(400).json({ error: "Account not found" });
   if (!EXPENSE_ALLOWED_ACCOUNT_TYPES.includes(account.type)) {
     return res.status(400).json({
@@ -379,6 +396,7 @@ const importSchema = z.object({
 });
 
 expenseRoutes.post("/import", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = importSchema.safeParse(req.body);
   if (!parsed.success) {
     console.error("[import] Zod validation failed:", JSON.stringify(parsed.error.flatten()));
@@ -392,8 +410,8 @@ expenseRoutes.post("/import", async (req, res) => {
   for (let i = 0; i < rows.length; i++) {
     try {
       const row = rows[i];
-      // Validate account type
-      const account = await prisma.account.findUnique({ where: { id: row.accountId } });
+      // Validate account ownership and type
+      const account = await prisma.account.findFirst({ where: { id: row.accountId, userId } });
       if (!account || !EXPENSE_ALLOWED_ACCOUNT_TYPES.includes(account.type)) {
         errors.push({ row: i + 1, message: `Invalid account` });
         continue;
@@ -418,10 +436,19 @@ const bulkEditSchema = z.object({
 });
 
 expenseRoutes.patch("/bulk", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = bulkEditSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   const { ids, description, categoryId, tagIds, tagMode } = parsed.data;
+
+  // Resolve only IDs owned by this user
+  const owned = await prisma.expense.findMany({
+    where: { id: { in: ids }, account: { userId } },
+    select: { id: true },
+  });
+  const ownedIds = owned.map((e) => e.id);
+  if (ownedIds.length === 0) return res.json({ updated: 0 });
 
   const scalarUpdate: Record<string, unknown> = {};
   if (description !== undefined) scalarUpdate.description = description;
@@ -430,31 +457,31 @@ expenseRoutes.patch("/bulk", async (req, res) => {
   await prisma.$transaction(async (tx) => {
     if (Object.keys(scalarUpdate).length > 0) {
       await tx.expense.updateMany({
-        where: { id: { in: ids } },
+        where: { id: { in: ownedIds } },
         data: scalarUpdate,
       });
     }
 
     if (tagIds !== undefined) {
       if (tagMode === "replace") {
-        await tx.expenseTag.deleteMany({ where: { expenseId: { in: ids } } });
+        await tx.expenseTag.deleteMany({ where: { expenseId: { in: ownedIds } } });
         if (tagIds.length > 0) {
           await tx.expenseTag.createMany({
-            data: ids.flatMap((expenseId) => tagIds.map((tagId) => ({ expenseId, tagId }))),
+            data: ownedIds.flatMap((expenseId) => tagIds.map((tagId) => ({ expenseId, tagId }))),
             skipDuplicates: true,
           });
         }
       } else if (tagMode === "remove") {
         if (tagIds.length > 0) {
           await tx.expenseTag.deleteMany({
-            where: { expenseId: { in: ids }, tagId: { in: tagIds } },
+            where: { expenseId: { in: ownedIds }, tagId: { in: tagIds } },
           });
         }
       } else {
         // add
         if (tagIds.length > 0) {
           await tx.expenseTag.createMany({
-            data: ids.flatMap((expenseId) => tagIds.map((tagId) => ({ expenseId, tagId }))),
+            data: ownedIds.flatMap((expenseId) => tagIds.map((tagId) => ({ expenseId, tagId }))),
             skipDuplicates: true,
           });
         }
@@ -462,24 +489,25 @@ expenseRoutes.patch("/bulk", async (req, res) => {
     }
   });
 
-  res.json({ updated: ids.length });
+  res.json({ updated: ownedIds.length });
 });
 
 // Update expense
 expenseRoutes.put("/:id", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = expenseSchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   const { tagIds, ...data } = parsed.data;
   const updateFuture = req.query.updateFuture === "true";
 
-  // Get original expense to check recurrence rule linkage
-  const original = await prisma.expense.findUnique({ where: { id: req.params.id } });
+  // Get original expense to check ownership and recurrence rule linkage
+  const original = await prisma.expense.findFirst({ where: { id: req.params.id, account: { userId } } });
   if (!original) return res.status(404).json({ error: "Expense not found" });
 
-  // Validate account type if accountId is being changed
+  // Validate account ownership and type if accountId is being changed
   if (data.accountId) {
-    const account = await prisma.account.findUnique({ where: { id: data.accountId } });
+    const account = await prisma.account.findFirst({ where: { id: data.accountId, userId } });
     if (!account) return res.status(400).json({ error: "Account not found" });
     if (!EXPENSE_ALLOWED_ACCOUNT_TYPES.includes(account.type)) {
       return res.status(400).json({
@@ -581,17 +609,19 @@ expenseRoutes.put("/:id", async (req, res) => {
 
 // Bulk delete expenses
 expenseRoutes.delete("/bulk", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = z.object({ ids: z.array(z.string()).min(1) }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   const { ids } = parsed.data;
-  await prisma.expense.deleteMany({ where: { id: { in: ids } } });
-  res.json({ deleted: ids.length });
+  const result = await prisma.expense.deleteMany({ where: { id: { in: ids }, account: { userId } } });
+  res.json({ deleted: result.count });
 });
 
 // Delete expense
 expenseRoutes.delete("/:id", async (req, res) => {
-  const expense = await prisma.expense.findUnique({ where: { id: req.params.id } });
+  const userId = getUserId(req);
+  const expense = await prisma.expense.findFirst({ where: { id: req.params.id, account: { userId } } });
   if (!expense) return res.status(404).json({ error: "Expense not found" });
   const deleteFuture = req.query.deleteFuture === "true";
 

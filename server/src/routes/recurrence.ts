@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
+import { getUserId } from "../middleware/auth.js";
 
 export const recurrenceRoutes = Router();
 
@@ -209,8 +210,9 @@ export async function generateUpcomingExpenses() {
 // id, date, amount, description, and the account name.
 // Ordered by date ascending so the caller can split past vs. future easily.
 recurrenceRoutes.get("/:id/expenses", async (req, res) => {
+  const userId = getUserId(req);
   const expenses = await prisma.expense.findMany({
-    where: { recurrenceRuleId: req.params.id },
+    where: { recurrenceRuleId: req.params.id, account: { userId } },
     select: {
       id: true,
       date: true,
@@ -228,6 +230,7 @@ recurrenceRoutes.get("/:id/expenses", async (req, res) => {
 // the same months one year prior, using only expenses linked to a recurrence rule.
 // Only positive (debit/cost) amounts are included so the chart reflects spend.
 recurrenceRoutes.get("/history", async (req, res) => {
+  const userId = getUserId(req);
   const months = Math.min(parseInt(req.query.months as string) || 6, 24);
   const now = new Date();
 
@@ -248,11 +251,11 @@ recurrenceRoutes.get("/history", async (req, res) => {
 
   const [thisYearRows, lastYearRows] = await Promise.all([
     prisma.expense.findMany({
-      where: { recurrenceRuleId: { not: null }, date: { gte: startThisYear, lte: endThisYear }, ...notIgnored },
+      where: { account: { userId }, recurrenceRuleId: { not: null }, date: { gte: startThisYear, lte: endThisYear }, ...notIgnored },
       select: { date: true, amount: true },
     }),
     prisma.expense.findMany({
-      where: { recurrenceRuleId: { not: null }, date: { gte: startLastYear, lte: endLastYear }, ...notIgnored },
+      where: { account: { userId }, recurrenceRuleId: { not: null }, date: { gte: startLastYear, lte: endLastYear }, ...notIgnored },
       select: { date: true, amount: true },
     }),
   ]);
@@ -293,6 +296,7 @@ recurrenceRoutes.get("/history", async (req, res) => {
 // Returns only the scalar fields needed by the UpcomingStrip component.
 // Must be declared before the parameterised /:id routes.
 recurrenceRoutes.get("/upcoming", async (req, res) => {
+  const userId = getUserId(req);
   const days = Math.min(parseInt(req.query.days as string) || 14, 60);
 
   const today = new Date();
@@ -304,6 +308,7 @@ recurrenceRoutes.get("/upcoming", async (req, res) => {
 
   const expenses = await prisma.expense.findMany({
     where: {
+      account: { userId },
       date: { gte: today, lte: end },
       recurrenceRuleId: { not: null },
     },
@@ -330,11 +335,12 @@ recurrenceRoutes.get("/upcoming", async (req, res) => {
 // generation window after expenses are created, which would cause the UI to
 // skip the already-generated (but not-yet-occurred) instances.
 recurrenceRoutes.get("/", async (req, res) => {
+  const userId = getUserId(req);
   const includeInactive = req.query.includeInactive === "true";
 
   if (includeInactive) {
     const rules = await prisma.recurrenceRule.findMany({
-      where: { isActive: false },
+      where: { userId, isActive: false },
       orderBy: { endDate: "desc" },
     });
     return res.json(rules);
@@ -344,7 +350,7 @@ recurrenceRoutes.get("/", async (req, res) => {
   today.setUTCHours(0, 0, 0, 0);
 
   const rules = await prisma.recurrenceRule.findMany({
-    where: { isActive: true },
+    where: { userId, isActive: true },
     orderBy: { startDate: "desc" },
     include: {
       expenses: {
@@ -368,6 +374,7 @@ recurrenceRoutes.get("/", async (req, res) => {
 
 // Create recurrence rule
 recurrenceRoutes.post("/", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = recurrenceSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
@@ -382,6 +389,7 @@ recurrenceRoutes.post("/", async (req, res) => {
   const rule = await prisma.recurrenceRule.create({
     data: {
       ...parsed.data,
+      userId,
       nextOccurrence: firstNext,
     },
   });
@@ -394,6 +402,7 @@ recurrenceRoutes.post("/", async (req, res) => {
 
 // Update recurrence rule
 recurrenceRoutes.put("/:id", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = recurrenceUpdateSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
@@ -412,7 +421,7 @@ recurrenceRoutes.put("/:id", async (req, res) => {
   }
 
   const rule = await prisma.recurrenceRule.update({
-    where: { id: req.params.id },
+    where: { id: req.params.id, userId },
     data,
   });
 
@@ -454,11 +463,12 @@ recurrenceRoutes.put("/:id", async (req, res) => {
 // Sets endDate = today and isActive = false, removes future pending expenses,
 // and leaves past recorded expenses intact and linked.
 recurrenceRoutes.post("/:id/archive", async (req, res) => {
+  const userId = getUserId(req);
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
 
   await prisma.recurrenceRule.update({
-    where: { id: req.params.id },
+    where: { id: req.params.id, userId },
     data: { endDate: today, isActive: false },
   });
 
@@ -474,8 +484,13 @@ recurrenceRoutes.post("/:id/archive", async (req, res) => {
 // Future pending expenses are permanently removed.
 // PostgreSQL's default Restrict FK means we must unlink expenses before deleting the rule.
 recurrenceRoutes.delete("/:id", async (req, res) => {
+  const userId = getUserId(req);
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
+
+  // Verify ownership before destructive operations
+  const rule = await prisma.recurrenceRule.findFirst({ where: { id: req.params.id, userId } });
+  if (!rule) return res.status(404).json({ error: "Rule not found" });
 
   // 1. Remove future pending instances — they should not exist without an active rule.
   await prisma.expense.deleteMany({

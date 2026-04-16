@@ -1,15 +1,16 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/client.js";
+import { getUserId } from "../middleware/auth.js";
 
 export const withdrawalRoutes = Router();
 
 // ── Investment settings (singleton) ──────────────────────────────────────────
 
-async function getOrCreateInvestmentSettings() {
-  const existing = await prisma.investmentSettings.findFirst();
+async function getOrCreateInvestmentSettings(userId: string) {
+  const existing = await prisma.investmentSettings.findFirst({ where: { userId } });
   if (existing) return existing;
-  return prisma.investmentSettings.create({ data: {} });
+  return prisma.investmentSettings.create({ data: { userId } });
 }
 
 const investmentSettingsSchema = z.object({
@@ -18,8 +19,9 @@ const investmentSettingsSchema = z.object({
 });
 
 // GET /api/withdrawals/settings
-withdrawalRoutes.get("/settings", async (_req, res) => {
-  const settings = await getOrCreateInvestmentSettings();
+withdrawalRoutes.get("/settings", async (req, res) => {
+  const userId = getUserId(req);
+  const settings = await getOrCreateInvestmentSettings(userId);
   res.json({
     withdrawalRateDenominator: settings.withdrawalRateDenominator
       ? parseFloat(settings.withdrawalRateDenominator.toString())
@@ -32,10 +34,11 @@ withdrawalRoutes.get("/settings", async (_req, res) => {
 
 // PATCH /api/withdrawals/settings
 withdrawalRoutes.patch("/settings", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = investmentSettingsSchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const settings = await getOrCreateInvestmentSettings();
+  const settings = await getOrCreateInvestmentSettings(userId);
   const updated = await prisma.investmentSettings.update({
     where: { id: settings.id },
     data: {
@@ -86,13 +89,14 @@ const INTEREST_CATEGORY = "Interest";
 const CAP_GAINS_DIST_CATEGORY = "Cap Gains Distribution";
 
 // Fetch the IDs of the special income categories
-async function getSpecialCategoryIds(): Promise<{
+async function getSpecialCategoryIds(userId: string): Promise<{
   dividendId: string | null;
   interestId: string | null;
   capGainsDivId: string | null;
 }> {
   const cats = await prisma.category.findMany({
     where: {
+      userId,
       name: { in: [DIVIDEND_CATEGORY, INTEREST_CATEGORY, CAP_GAINS_DIST_CATEGORY] },
       kind: "INCOME",
     },
@@ -108,7 +112,7 @@ async function getSpecialCategoryIds(): Promise<{
 // Process any unconfirmed portfolio↔banking transfers whose date has passed.
 // INVESTMENT→BANKING: debit cashBalance (non-managed only), credit banking balance.
 // BANKING→INVESTMENT: debit banking balance, credit cashBalance (non-managed only).
-async function processPendingWithdrawalTransfers(): Promise<void> {
+async function processPendingWithdrawalTransfers(userId: string): Promise<void> {
   const now = new Date();
   const bankingTypes = ["CHECKING" as const, "SAVINGS" as const];
 
@@ -117,8 +121,8 @@ async function processPendingWithdrawalTransfers(): Promise<void> {
     where: {
       isConfirmed: false,
       date: { lte: now },
-      fromAccount: { type: "INVESTMENT", isJoint: false },
-      toAccount: { type: { in: bankingTypes }, isJoint: false },
+      fromAccount: { type: "INVESTMENT", isJoint: false, userId },
+      toAccount: { type: { in: bankingTypes }, isJoint: false, userId },
     },
     include: {
       fromAccount: { select: { id: true, isManaged: true } },
@@ -148,8 +152,8 @@ async function processPendingWithdrawalTransfers(): Promise<void> {
     where: {
       isConfirmed: false,
       date: { lte: now },
-      fromAccount: { type: { in: bankingTypes }, isJoint: false },
-      toAccount: { type: "INVESTMENT", isJoint: false },
+      fromAccount: { type: { in: bankingTypes }, isJoint: false, userId },
+      toAccount: { type: "INVESTMENT", isJoint: false, userId },
     },
     include: {
       fromAccount: { select: { id: true } },
@@ -178,11 +182,12 @@ async function processPendingWithdrawalTransfers(): Promise<void> {
 // ── GET /api/withdrawals/summary ─────────────────────────────────────────────
 
 withdrawalRoutes.get("/summary", async (req, res) => {
+  const userId = getUserId(req);
   const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
 
-  await processPendingWithdrawalTransfers();
+  await processPendingWithdrawalTransfers(userId);
 
-  const { dividendId, interestId, capGainsDivId } = await getSpecialCategoryIds();
+  const { dividendId, interestId, capGainsDivId } = await getSpecialCategoryIds(userId);
 
   const startOfYear = new Date(`${year}-01-01T00:00:00.000Z`);
   const endOfYear = new Date(`${year}-12-31T23:59:59.999Z`);
@@ -191,7 +196,7 @@ withdrawalRoutes.get("/summary", async (req, res) => {
   const incomeRows = await prisma.income.findMany({
     where: {
       date: { gte: startOfYear, lte: endOfYear },
-      account: { isJoint: false },
+      account: { isJoint: false, userId },
       OR: [
         // Auto-confirmed dividends
         { subtype: "DIVIDEND", isCashReceived: true },
@@ -220,8 +225,8 @@ withdrawalRoutes.get("/summary", async (req, res) => {
     where: {
       date: { gte: startOfYear, lte: endOfYear },
       isConfirmed: true,
-      fromAccount: { type: "INVESTMENT", isJoint: false },
-      toAccount: { type: { in: ["CHECKING", "SAVINGS"] }, isJoint: false },
+      fromAccount: { type: "INVESTMENT", isJoint: false, userId },
+      toAccount: { type: { in: ["CHECKING", "SAVINGS"] }, isJoint: false, userId },
     },
     select: { amount: true, date: true },
   });
@@ -231,8 +236,8 @@ withdrawalRoutes.get("/summary", async (req, res) => {
     where: {
       date: { gte: startOfYear, lte: endOfYear },
       isConfirmed: true,
-      fromAccount: { type: { in: ["CHECKING", "SAVINGS"] }, isJoint: false },
-      toAccount: { type: "INVESTMENT", isJoint: false },
+      fromAccount: { type: { in: ["CHECKING", "SAVINGS"] }, isJoint: false, userId },
+      toAccount: { type: "INVESTMENT", isJoint: false, userId },
     },
     select: { amount: true, date: true },
   });
@@ -274,11 +279,12 @@ withdrawalRoutes.get("/summary", async (req, res) => {
 // ── GET /api/withdrawals ─────────────────────────────────────────────────────
 
 withdrawalRoutes.get("/", async (req, res) => {
+  const userId = getUserId(req);
   const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
 
-  await processPendingWithdrawalTransfers();
+  await processPendingWithdrawalTransfers(userId);
 
-  const { dividendId, interestId, capGainsDivId } = await getSpecialCategoryIds();
+  const { dividendId, interestId, capGainsDivId } = await getSpecialCategoryIds(userId);
 
   const startOfYear = new Date(`${year}-01-01T00:00:00.000Z`);
   const endOfYear = new Date(`${year}-12-31T23:59:59.999Z`);
@@ -289,7 +295,7 @@ withdrawalRoutes.get("/", async (req, res) => {
   const incomeRows = await prisma.income.findMany({
     where: {
       date: { gte: startOfYear, lte: endOfYear },
-      account: { isJoint: false },
+      account: { isJoint: false, userId },
       OR: [
         { subtype: "DIVIDEND", isCashReceived: true },
         ...(dividendId
@@ -313,8 +319,8 @@ withdrawalRoutes.get("/", async (req, res) => {
     where: {
       date: { gte: startOfYear, lte: endOfYear },
       isConfirmed: true,
-      fromAccount: { type: "INVESTMENT", isJoint: false },
-      toAccount: { type: { in: ["CHECKING", "SAVINGS"] }, isJoint: false },
+      fromAccount: { type: "INVESTMENT", isJoint: false, userId },
+      toAccount: { type: { in: ["CHECKING", "SAVINGS"] }, isJoint: false, userId },
     },
     include: {
       fromAccount: { select: accountSelect },
@@ -328,8 +334,8 @@ withdrawalRoutes.get("/", async (req, res) => {
     where: {
       date: { gte: startOfYear, lte: endOfYear },
       isConfirmed: true,
-      fromAccount: { type: { in: ["CHECKING", "SAVINGS"] }, isJoint: false },
-      toAccount: { type: "INVESTMENT", isJoint: false },
+      fromAccount: { type: { in: ["CHECKING", "SAVINGS"] }, isJoint: false, userId },
+      toAccount: { type: "INVESTMENT", isJoint: false, userId },
     },
     include: {
       fromAccount: { select: accountSelect },

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
+import { getUserId } from "../middleware/auth.js";
 
 export const accountRoutes = Router();
 
@@ -32,9 +33,10 @@ const accountSchema = z.object({
 
 // List all accounts
 accountRoutes.get("/", async (req, res) => {
+  const userId = getUserId(req);
   const includeHidden = req.query.includeHidden === "true";
   const accounts = await prisma.account.findMany({
-    where: { isActive: true, ...(includeHidden ? {} : { isHidden: false }) },
+    where: { userId, isActive: true, ...(includeHidden ? {} : { isHidden: false }) },
     orderBy: { createdAt: "asc" },
   });
   res.json(accounts);
@@ -42,8 +44,9 @@ accountRoutes.get("/", async (req, res) => {
 
 // Get single account
 accountRoutes.get("/:id", async (req, res) => {
-  const account = await prisma.account.findUnique({
-    where: { id: req.params.id },
+  const userId = getUserId(req);
+  const account = await prisma.account.findFirst({
+    where: { id: req.params.id, userId },
   });
   if (!account) return res.status(404).json({ error: "Account not found" });
   res.json(account);
@@ -51,15 +54,17 @@ accountRoutes.get("/:id", async (req, res) => {
 
 // Create account
 accountRoutes.post("/", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = accountSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const account = await prisma.account.create({ data: parsed.data });
+  const account = await prisma.account.create({ data: { ...parsed.data, userId } });
   res.status(201).json(account);
 });
 
 // Update account
 accountRoutes.put("/:id", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = accountSchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
@@ -80,17 +85,20 @@ accountRoutes.put("/:id", async (req, res) => {
     data.cashBalanceUpdatedAt = new Date();
   }
 
-  const account = await prisma.account.update({
-    where: { id: req.params.id },
+  const account = await prisma.account.updateMany({
+    where: { id: req.params.id, userId },
     data,
   });
-  res.json(account);
+  if (account.count === 0) return res.status(404).json({ error: "Account not found" });
+  const updated = await prisma.account.findUnique({ where: { id: req.params.id } });
+  res.json(updated);
 });
 
 // Delete (soft) account
 accountRoutes.delete("/:id", async (req, res) => {
-  await prisma.account.update({
-    where: { id: req.params.id },
+  const userId = getUserId(req);
+  await prisma.account.updateMany({
+    where: { id: req.params.id, userId },
     data: { isActive: false },
   });
   res.status(204).send();

@@ -73,6 +73,7 @@ enum QfxTransactionType {
 
 model Account {
   id        String      @id @default(cuid())
+  userId    String?
   name      String
   type      AccountType
   balance   Decimal     @default(0) @db.Decimal(12, 2)
@@ -104,6 +105,8 @@ model Account {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
+  @@index([userId])
+
   expenses              Expense[]
   incomes               Income[]
   holdings              InvestmentHolding[]
@@ -130,6 +133,7 @@ model Account {
 
 model Category {
   id        String       @id @default(cuid())
+  userId    String?
   name      String
   icon      String?
   color     String?
@@ -139,6 +143,8 @@ model Category {
   parentId       String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+
+  @@index([userId])
 
   parent   Category?  @relation("CategoryToSubcategory", fields: [parentId], references: [id])
   children Category[] @relation("CategoryToSubcategory")
@@ -219,7 +225,8 @@ model Income {
 
 model Tag {
   id        String   @id @default(cuid())
-  name      String   @unique
+  userId    String?
+  name      String
   color     String?
   group     String?
   createdAt DateTime @default(now())
@@ -228,6 +235,8 @@ model Tag {
   expenses ExpenseTag[]
   incomes  IncomeTag[]
 
+  @@unique([userId, name])
+  @@index([userId])
   @@map("tags")
 }
 
@@ -269,6 +278,7 @@ model TransactionGroup {
 
 model RecurrenceRule {
   id            String    @id @default(cuid())
+  userId        String?
   description   String
   vendor        String    @default("")
   amount        Decimal   @db.Decimal(12, 2)
@@ -286,6 +296,7 @@ model RecurrenceRule {
 
   expenses Expense[]
 
+  @@index([userId])
   @@map("recurrence_rules")
 }
 
@@ -301,6 +312,7 @@ enum BudgetType {
 
 model AnnualBudget {
   id           String    @id @default(cuid())
+  userId       String?
   type         BudgetType
   year         Int
   // Nullable: users who prefer month-by-month control may leave this unset,
@@ -311,7 +323,8 @@ model AnnualBudget {
 
   monthlyOverrides MonthlyBudget[]
 
-  @@unique([type, year])
+  @@unique([userId, type, year])
+  @@index([userId])
   @@map("annual_budgets")
 }
 
@@ -331,17 +344,20 @@ model MonthlyBudget {
 
 model BudgetSettings {
   id              String   @id @default(cuid())
+  userId          String?
   // Fraction of joint expenses counted toward the user's Total budget (default 50/50).
   // Stored as a decimal (0.5 = 50%).  Future UI will expose this as editable.
   jointSplitRatio Decimal  @default(0.5) @db.Decimal(4, 3)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  @@index([userId])
   @@map("budget_settings")
 }
 
 model InvestmentSettings {
   id                        String   @id @default(cuid())
+  userId                    String?
   // Portfolio value used as the denominator for withdrawal rate calculations.
   // Null = use the live portfolio value from investment accounts.
   withdrawalRateDenominator Decimal? @db.Decimal(14, 2)
@@ -351,6 +367,7 @@ model InvestmentSettings {
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
 
+  @@index([userId])
   @@map("investment_settings")
 }
 
@@ -524,6 +541,7 @@ model QfxTransaction {
 
 model AssetClass {
   id           String   @id @default(cuid())
+  userId       String?  // null for system classes, set for user-created classes
   name         String
   slug         String?  @unique  // set for system classes (e.g. "us-large-cap")
   isSystem     Boolean  @default(false)
@@ -533,21 +551,25 @@ model AssetClass {
   parent       AssetClass?  @relation("AssetClassHierarchy", fields: [parentId], references: [id])
   children     AssetClass[] @relation("AssetClassHierarchy")
   instrumentWeights InstrumentAssetClassWeight[]
-  target       AssetClassTarget?
+  targets      AssetClassTarget[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  @@index([userId])
   @@map("asset_classes")
 }
 
 model AssetClassTarget {
   id           String     @id @default(cuid())
-  assetClassId String     @unique
+  userId       String?
+  assetClassId String
   assetClass   AssetClass @relation(fields: [assetClassId], references: [id], onDelete: Cascade)
   targetPct    Decimal    @db.Decimal(5, 2)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
+  @@unique([userId, assetClassId])
+  @@index([userId])
   @@map("asset_class_targets")
 }
 
@@ -636,6 +658,7 @@ model PendingDividend {
 // RecurrenceRule → Expense.
 model TransferRule {
   id             String    @id @default(cuid())
+  userId         String?
   description    String
   amount         Decimal   @db.Decimal(12, 2)
   frequency      Frequency
@@ -653,6 +676,7 @@ model TransferRule {
   toAccount   Account    @relation("TransferRuleTo", fields: [toAccountId], references: [id])
   transfers   Transfer[]
 
+  @@index([userId])
   @@map("transfer_rules")
 }
 

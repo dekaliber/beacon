@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db/client.js";
 import { getMetadata as getTiingoMeta, getDividendScanResult } from "../services/tiingo.js";
 import { deactivateIfOrphaned } from "./instruments.js";
+import { getUserId } from "../middleware/auth.js";
 
 export const investmentRoutes = Router();
 
@@ -303,12 +304,17 @@ function computeHoldingFields(
 
 investmentRoutes.get("/allocation", async (req, res) => {
   try {
+    const userId = getUserId(req);
     // 1. Asset class hierarchy with targets ──────────────────────────────────
     const topLevelClasses = await prisma.assetClass.findMany({
-      where: { parentId: null },
+      where: { parentId: null, OR: [{ userId: null }, { userId }] },
       include: {
-        target: true,
-        children: { include: { target: true }, orderBy: { displayOrder: "asc" } },
+        targets: { where: { userId } },
+        children: {
+          where: { OR: [{ userId: null }, { userId }] },
+          include: { targets: { where: { userId } } },
+          orderBy: { displayOrder: "asc" },
+        },
       },
       orderBy: { displayOrder: "asc" },
     });
@@ -326,29 +332,34 @@ investmentRoutes.get("/allocation", async (req, res) => {
     const duToTopLevelId = new Map<string, string>();     // duId → top-level assetClassId
 
     for (const top of topLevelClasses) {
-      const children = top.children ?? [];
-      const childrenWithTarget = children.filter((c) => c.target != null);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const children = (top as any).children ?? [];
+      const topTarget = (top as any).targets?.[0] ?? null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const childrenWithTarget = children.filter((c: any) => c.targets?.[0] != null);
 
       if (childrenWithTarget.length > 0) {
         // Show each child that has a target as its own display unit.
-        for (const child of childrenWithTarget) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const child of childrenWithTarget as any[]) {
           const duId = child.id;
           displayUnitOrder.push(duId);
           displayUnitInfo.set(duId, {
             id: duId,
             name: child.name,
             color: child.color ?? top.color,
-            targetPct: parseFloat(child.target!.targetPct.toString()),
+            targetPct: parseFloat(child.targets[0].targetPct.toString()),
           });
           classToDisplayUnit.set(child.id, duId);
           duToTopLevelId.set(duId, top.id);
         }
         // Children without a target, and the parent itself, are unclassified.
-        for (const child of children.filter((c) => c.target == null)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const child of children.filter((c: any) => c.targets?.[0] == null)) {
           classToDisplayUnit.set(child.id, "UNCLASSIFIED");
         }
         classToDisplayUnit.set(top.id, "UNCLASSIFIED");
-      } else if (top.target) {
+      } else if (topTarget) {
         // No children with targets → show the parent as the display unit.
         const duId = top.id;
         displayUnitOrder.push(duId);
@@ -356,7 +367,7 @@ investmentRoutes.get("/allocation", async (req, res) => {
           id: duId,
           name: top.name,
           color: top.color,
-          targetPct: parseFloat(top.target.targetPct.toString()),
+          targetPct: parseFloat(topTarget.targetPct.toString()),
         });
         classToDisplayUnit.set(top.id, duId);
         for (const child of children) {
@@ -383,6 +394,7 @@ investmentRoutes.get("/allocation", async (req, res) => {
       where: {
         type: "INVESTMENT",
         isActive: true,
+        userId,
         ...(taxFilter !== undefined && { isTaxAdvantaged: taxFilter }),
       },
       select: { id: true, cashBalance: true },
@@ -486,7 +498,7 @@ investmentRoutes.get("/allocation", async (req, res) => {
     // Credit banking (checking/savings) balances — consistent with how the
     // Asset Composition section on the client counts them as cash.
     const bankingAccounts = await prisma.account.findMany({
-      where: { type: { in: ["CHECKING", "SAVINGS"] }, isActive: true },
+      where: { type: { in: ["CHECKING", "SAVINGS"] }, isActive: true, userId },
       select: { balance: true },
     });
     for (const acct of bankingAccounts) {
@@ -532,11 +544,15 @@ investmentRoutes.get("/allocation", async (req, res) => {
     const topLevelItems = topLevelClasses
       .filter((top) => topLevelIdsWithDus.has(top.id))
       .map((top) => {
-        const children = top.children ?? [];
-        const childrenWithTarget = children.filter((c) => c.target != null);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const children = (top as any).children ?? [];
+        const topTarget = (top as any).targets?.[0] ?? null;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const childrenWithTarget = children.filter((c: any) => c.targets?.[0] != null);
         const effectiveTargetPct = childrenWithTarget.length > 0
-          ? childrenWithTarget.reduce((sum, c) => sum + parseFloat(c.target!.targetPct.toString()), 0)
-          : top.target ? parseFloat(top.target.targetPct.toString()) : null;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ? childrenWithTarget.reduce((sum: number, c: any) => sum + parseFloat(c.targets[0].targetPct.toString()), 0)
+          : topTarget ? parseFloat(topTarget.targetPct.toString()) : null;
         const actualValue = topLevelActualValues.get(top.id) ?? 0;
         return {
           id: top.id,
@@ -567,8 +583,9 @@ investmentRoutes.get("/allocation", async (req, res) => {
 // ── GET /api/investments/accounts ──────────────────────────────────────────
 // Returns INVESTMENT, CHECKING, SAVINGS accounts with portfolio summaries
 
-investmentRoutes.get("/accounts", async (_req, res) => {
+investmentRoutes.get("/accounts", async (req, res) => {
   try {
+    const userId = getUserId(req);
     // Find all asset class ids whose name is "Cash" (case-insensitive) so we can
     // identify cash-classified holdings via their instrument weights.
     const cashAssetClasses = await prisma.assetClass.findMany({
@@ -582,6 +599,7 @@ investmentRoutes.get("/accounts", async (_req, res) => {
         isActive: true,
         isHidden: false,
         type: { in: ["INVESTMENT", "CHECKING", "SAVINGS"] },
+        userId,
       },
       include: {
         holdings: {
@@ -771,10 +789,11 @@ investmentRoutes.get("/accounts", async (_req, res) => {
 
 investmentRoutes.get("/holdings/:accountId", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const { accountId } = req.params;
 
     const account = await prisma.account.findFirst({
-      where: { id: accountId, isActive: true },
+      where: { id: accountId, isActive: true, userId },
     });
     if (!account) return res.status(404).json({ error: { message: "Account not found" } });
 
@@ -860,10 +879,11 @@ const createHoldingSchema = z.object({
 
 investmentRoutes.post("/holdings", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const body = createHoldingSchema.parse(req.body);
 
     const account = await prisma.account.findFirst({
-      where: { id: body.accountId, isActive: true, type: "INVESTMENT" },
+      where: { id: body.accountId, isActive: true, type: "INVESTMENT", userId },
     });
     if (!account) return res.status(404).json({ error: { message: "Investment account not found" } });
 
@@ -901,7 +921,14 @@ const patchHoldingSchema = z.object({
 
 investmentRoutes.patch("/holdings/:id", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const body = patchHoldingSchema.parse(req.body);
+
+    const existing = await prisma.investmentHolding.findFirst({
+      where: { id: req.params.id, account: { userId } },
+    });
+    if (!existing) return res.status(404).json({ error: { message: "Holding not found" } });
+
     const holding = await prisma.investmentHolding.update({
       where: { id: req.params.id },
       data: { name: body.name, assetClass: body.group },
@@ -922,6 +949,7 @@ investmentRoutes.patch("/holdings/:id", async (req, res) => {
 
 investmentRoutes.delete("/holdings/:id", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const holdingId = req.params.id;
     const force = req.query.force === "true";
 
@@ -938,10 +966,11 @@ investmentRoutes.delete("/holdings/:id", async (req, res) => {
       });
     }
 
-    const holding = await prisma.investmentHolding.findUnique({
-      where: { id: holdingId },
+    const holding = await prisma.investmentHolding.findFirst({
+      where: { id: holdingId, account: { userId } },
       select: { instrumentId: true },
     });
+    if (!holding) return res.status(404).json({ error: { message: "Holding not found" } });
 
     await prisma.$transaction(async (tx) => {
       // If no sales, delete the associated purchase activities (user correcting a mistake)
@@ -972,10 +1001,11 @@ const createLotSchema = z.object({
 
 investmentRoutes.post("/lots", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const body = createLotSchema.parse(req.body);
 
-    const holding = await prisma.investmentHolding.findUnique({
-      where: { id: body.holdingId },
+    const holding = await prisma.investmentHolding.findFirst({
+      where: { id: body.holdingId, account: { userId } },
       select: { accountId: true, ticker: true },
     });
     if (!holding) return res.status(404).json({ error: { message: "Holding not found" } });
@@ -1034,12 +1064,13 @@ const updateLotSchema = z.object({
 
 investmentRoutes.put("/lots/:id", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const lotId = req.params.id;
     const body = updateLotSchema.parse(req.body);
 
     // Fetch the current lot and its holding so we can sync the activity
-    const existingLot = await prisma.investmentLot.findUnique({
-      where: { id: lotId },
+    const existingLot = await prisma.investmentLot.findFirst({
+      where: { id: lotId, holding: { account: { userId } } },
       select: {
         holdingId: true,
         acquiredDate: true,
@@ -1129,12 +1160,13 @@ investmentRoutes.put("/lots/:id", async (req, res) => {
 
 investmentRoutes.delete("/lots/:id", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const lotId = req.params.id;
     const force = req.query.force === "true";
 
     // Find the lot + its holding (to scope sale check to this holding)
-    const lot = await prisma.investmentLot.findUnique({
-      where: { id: lotId },
+    const lot = await prisma.investmentLot.findFirst({
+      where: { id: lotId, holding: { account: { userId } } },
       select: { holdingId: true },
     });
     if (!lot) return res.status(404).json({ error: { message: "Lot not found" } });
@@ -1279,9 +1311,17 @@ investmentRoutes.post("/holdings/backfill-meta", async (_req, res) => {
 
 investmentRoutes.post("/prices/refresh", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const source: string = req.body?.source ?? "unknown";
 
+    const userAccounts = await prisma.account.findMany({
+      where: { type: "INVESTMENT", userId },
+      select: { id: true },
+    });
+    const userAccountIds = userAccounts.map((a) => a.id);
+
     const holdings = await prisma.investmentHolding.findMany({
+      where: { accountId: { in: userAccountIds } },
       select: { ticker: true },
     });
 
@@ -1392,10 +1432,11 @@ const importInvestmentsSchema = z.object({
 
 investmentRoutes.post("/import", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const body = importInvestmentsSchema.parse(req.body);
 
     const account = await prisma.account.findFirst({
-      where: { id: body.accountId, isActive: true, type: "INVESTMENT" },
+      where: { id: body.accountId, isActive: true, type: "INVESTMENT", userId },
     });
     if (!account)
       return res.status(404).json({ error: { message: "Investment account not found" } });
@@ -1658,9 +1699,10 @@ const qfxImportSchema = z.object({
 
 investmentRoutes.post("/qfx-import/:accountId", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const { accountId } = req.params;
     const account = await prisma.account.findFirst({
-      where: { id: accountId, isActive: true, type: "INVESTMENT", isManaged: true },
+      where: { id: accountId, isActive: true, type: "INVESTMENT", isManaged: true, userId },
     });
     if (!account) {
       return res.status(404).json({ error: { message: "Managed investment account not found" } });
@@ -1721,10 +1763,11 @@ investmentRoutes.post("/qfx-import/:accountId", async (req, res) => {
 
 investmentRoutes.get("/growth/:accountId", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const { accountId } = req.params;
 
     const account = await prisma.account.findFirst({
-      where: { id: accountId, isActive: true, type: "INVESTMENT" },
+      where: { id: accountId, isActive: true, type: "INVESTMENT", userId },
     });
     if (!account) return res.status(404).json({ error: { message: "Account not found" } });
 
@@ -2154,9 +2197,10 @@ const qfxDividendsSchema = z.object({
 
 investmentRoutes.post("/qfx-dividends/:accountId", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const { accountId } = req.params;
     const account = await prisma.account.findFirst({
-      where: { id: accountId, isActive: true, type: "INVESTMENT", isManaged: true },
+      where: { id: accountId, isActive: true, type: "INVESTMENT", isManaged: true, userId },
     });
     if (!account) {
       return res.status(404).json({ error: { message: "Managed investment account not found" } });
@@ -2280,6 +2324,12 @@ const updateManualSchema = z.object({
 // GET /api/investments/manual/:accountId
 investmentRoutes.get("/manual/:accountId", async (req, res) => {
   try {
+    const userId = getUserId(req);
+    const account = await prisma.account.findFirst({
+      where: { id: req.params.accountId, userId },
+    });
+    if (!account) return res.status(404).json({ error: { message: "Account not found" } });
+
     const entries = await prisma.manualInvestment.findMany({
       where: { accountId: req.params.accountId },
       orderBy: { createdAt: "asc" },
@@ -2294,9 +2344,10 @@ investmentRoutes.get("/manual/:accountId", async (req, res) => {
 // POST /api/investments/manual
 investmentRoutes.post("/manual", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const body = createManualSchema.parse(req.body);
     const account = await prisma.account.findFirst({
-      where: { id: body.accountId, isActive: true, type: "INVESTMENT" },
+      where: { id: body.accountId, isActive: true, type: "INVESTMENT", userId },
     });
     if (!account)
       return res.status(404).json({ error: { message: "Investment account not found" } });
@@ -2321,7 +2372,14 @@ investmentRoutes.post("/manual", async (req, res) => {
 // PUT /api/investments/manual/:id
 investmentRoutes.put("/manual/:id", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const body = updateManualSchema.parse(req.body);
+
+    const existing = await prisma.manualInvestment.findFirst({
+      where: { id: req.params.id, account: { userId } },
+    });
+    if (!existing) return res.status(404).json({ error: { message: "Manual investment not found" } });
+
     const entry = await prisma.manualInvestment.update({
       where: { id: req.params.id },
       data: {
@@ -2346,10 +2404,13 @@ investmentRoutes.put("/manual/:id", async (req, res) => {
 // DELETE /api/investments/manual/:id
 investmentRoutes.delete("/manual/:id", async (req, res) => {
   try {
-    const manual = await prisma.manualInvestment.findUnique({
-      where: { id: req.params.id },
+    const userId = getUserId(req);
+    const manual = await prisma.manualInvestment.findFirst({
+      where: { id: req.params.id, account: { userId } },
       select: { instrumentId: true },
     });
+    if (!manual) return res.status(404).json({ error: { message: "Manual investment not found" } });
+
     await prisma.$transaction(async (tx) => {
       await tx.manualInvestment.delete({ where: { id: req.params.id } });
       await deactivateIfOrphaned(tx, manual?.instrumentId);
@@ -2398,11 +2459,12 @@ const patchSaleActivitySchema = z.object({
 
 investmentRoutes.patch("/activity/:id", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const { id } = req.params;
     const body = patchSaleActivitySchema.parse(req.body);
 
-    const activity = await prisma.investmentActivity.findUnique({
-      where: { id },
+    const activity = await prisma.investmentActivity.findFirst({
+      where: { id, account: { userId } },
       include: { incomes: true },
     });
     if (!activity) return res.status(404).json({ error: { message: "Activity not found" } });
@@ -2475,8 +2537,9 @@ investmentRoutes.patch("/activity/:id", async (req, res) => {
 
 investmentRoutes.get("/activity/:accountId", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const { accountId } = req.params;
-    const account = await prisma.account.findUnique({ where: { id: accountId } });
+    const account = await prisma.account.findFirst({ where: { id: accountId, userId } });
     if (!account) return res.status(404).json({ error: { message: "Account not found" } });
 
     const activities = await prisma.investmentActivity.findMany({
@@ -2648,13 +2711,14 @@ function computeSell(
 
 investmentRoutes.post("/sell/preview", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const body = sellInputSchema.parse(req.body);
     if (!body.costBasisMethod && !body.lotAllocations) {
       return res.status(400).json({ error: { message: "Either costBasisMethod or lotAllocations must be provided" } });
     }
 
-    const holding = await prisma.investmentHolding.findUnique({
-      where: { id: body.holdingId },
+    const holding = await prisma.investmentHolding.findFirst({
+      where: { id: body.holdingId, account: { userId } },
       include: { lots: true },
     });
     if (!holding) return res.status(404).json({ error: { message: "Holding not found" } });
@@ -2728,21 +2792,22 @@ const sellCommitSchema = sellInputSchema.extend({
 
 investmentRoutes.post("/sell", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const body = sellCommitSchema.parse(req.body);
     if (!body.costBasisMethod && !body.lotAllocations) {
       return res.status(400).json({ error: { message: "Either costBasisMethod or lotAllocations must be provided" } });
     }
 
     // Validate holding exists
-    const holding = await prisma.investmentHolding.findUnique({
-      where: { id: body.holdingId },
+    const holding = await prisma.investmentHolding.findFirst({
+      where: { id: body.holdingId, account: { userId } },
       include: { lots: true, account: { select: { isTaxAdvantaged: true } } },
     });
     if (!holding) return res.status(404).json({ error: { message: "Holding not found" } });
 
     // Validate destination account
-    const destAccount = await prisma.account.findUnique({
-      where: { id: body.destinationAccountId },
+    const destAccount = await prisma.account.findFirst({
+      where: { id: body.destinationAccountId, userId },
     });
     if (!destAccount)
       return res.status(404).json({ error: { message: "Destination account not found" } });
@@ -2944,9 +3009,10 @@ function serializeSnapshot(s: any) {
 // GET /api/investments/gain-snapshots?year=2026 — all snapshots for a given year
 investmentRoutes.get("/gain-snapshots", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const year = req.query.year ? parseInt(req.query.year as string, 10) : new Date().getFullYear();
     const snapshots = await prisma.realizedGainSnapshot.findMany({
-      where: { year },
+      where: { year, account: { userId } },
       include: { account: { select: { id: true, name: true, color: true } } },
       orderBy: { account: { name: "asc" } },
     });
@@ -2960,9 +3026,14 @@ investmentRoutes.get("/gain-snapshots", async (req, res) => {
 // GET /api/investments/gain-snapshot/:accountId?year=2026
 investmentRoutes.get("/gain-snapshot/:accountId", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const { accountId } = req.params;
     const year = req.query.year ? parseInt(req.query.year as string, 10) : new Date().getFullYear();
     if (isNaN(year)) return res.status(400).json({ error: { message: "Invalid year" } });
+
+    // Verify account ownership
+    const account = await prisma.account.findFirst({ where: { id: accountId, userId } });
+    if (!account) return res.status(404).json({ error: { message: "Account not found" } });
 
     const snapshot = await prisma.realizedGainSnapshot.findUnique({
       where: { accountId_year: { accountId, year } },
@@ -2990,10 +3061,11 @@ const upsertSnapshotSchema = z.object({
 
 investmentRoutes.put("/gain-snapshot", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const body = upsertSnapshotSchema.parse(req.body);
 
     const account = await prisma.account.findFirst({
-      where: { id: body.accountId, isActive: true },
+      where: { id: body.accountId, isActive: true, userId },
     });
     if (!account) return res.status(404).json({ error: { message: "Account not found" } });
 
@@ -3016,8 +3088,13 @@ investmentRoutes.put("/gain-snapshot", async (req, res) => {
 // DELETE /api/investments/gain-snapshot/:accountId/:year
 investmentRoutes.delete("/gain-snapshot/:accountId/:year", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const year = parseInt(req.params.year, 10);
     if (isNaN(year)) return res.status(400).json({ error: { message: "Invalid year" } });
+
+    // Verify account ownership before deleting
+    const account = await prisma.account.findFirst({ where: { id: req.params.accountId, userId } });
+    if (!account) return res.status(404).json({ error: { message: "Snapshot not found" } });
 
     await prisma.realizedGainSnapshot.delete({
       where: { accountId_year: { accountId: req.params.accountId, year } },

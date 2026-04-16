@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { computeNextOccurrence } from "./recurrence.js";
+import { getUserId } from "../middleware/auth.js";
 
 export const budgetRoutes = Router();
 
@@ -351,28 +352,30 @@ async function buildMonthlyComparison(
   });
 }
 
-/** Get or create the singleton BudgetSettings row. */
-async function getOrCreateSettings() {
-  const existing = await prisma.budgetSettings.findFirst();
+/** Get or create the per-user BudgetSettings row. */
+async function getOrCreateSettings(userId: string) {
+  const existing = await prisma.budgetSettings.findFirst({ where: { userId } });
   if (existing) return existing;
-  return prisma.budgetSettings.create({ data: {} });
+  return prisma.budgetSettings.create({ data: { userId } });
 }
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
 
 // GET /api/budgets/settings
-budgetRoutes.get("/settings", async (_req, res) => {
-  const settings = await getOrCreateSettings();
+budgetRoutes.get("/settings", async (req, res) => {
+  const userId = getUserId(req);
+  const settings = await getOrCreateSettings(userId);
   res.json({ jointSplitRatio: Number(settings.jointSplitRatio) });
 });
 
 // PUT /api/budgets/settings
 budgetRoutes.put("/settings", async (req, res) => {
+  const userId = getUserId(req);
   const schema = z.object({ jointSplitRatio: z.number().min(0).max(1) });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const settings = await getOrCreateSettings();
+  const settings = await getOrCreateSettings(userId);
   const updated = await prisma.budgetSettings.update({
     where: { id: settings.id },
     data: { jointSplitRatio: parsed.data.jointSplitRatio },
@@ -382,6 +385,7 @@ budgetRoutes.put("/settings", async (req, res) => {
 
 // GET /api/budgets/:year  — full budget overview (Personal, Joint, Total panels)
 budgetRoutes.get("/:year", async (req, res) => {
+  const userId = getUserId(req);
   const year = parseInt(req.params.year);
   if (isNaN(year)) return res.status(400).json({ error: "Invalid year" });
 
@@ -404,11 +408,11 @@ budgetRoutes.get("/:year", async (req, res) => {
   // Account IDs split by isJoint
   const [accounts, ignoredCategories] = await Promise.all([
     prisma.account.findMany({
-      where: { isActive: true },
+      where: { userId, isActive: true },
       select: { id: true, isJoint: true },
     }),
     prisma.category.findMany({
-      where: { ignoreInBudget: true },
+      where: { userId, ignoreInBudget: true },
       select: { id: true },
     }),
   ]);
@@ -418,9 +422,9 @@ budgetRoutes.get("/:year", async (req, res) => {
 
   // Budget records and settings
   const [settings, annualBudgets] = await Promise.all([
-    getOrCreateSettings(),
+    getOrCreateSettings(userId),
     prisma.annualBudget.findMany({
-      where: { year },
+      where: { userId, year },
       include: { monthlyOverrides: true },
     }),
   ]);
@@ -583,6 +587,7 @@ budgetRoutes.get("/:year", async (req, res) => {
 // comparing current-month-to-date vs the same day range in the prior month.
 // Applies the same joint split-ratio and ignoreInBudget filters as the main route.
 budgetRoutes.get("/:year/category-outliers", async (req, res) => {
+  const userId = getUserId(req);
   const year = parseInt(req.params.year);
   if (isNaN(year)) return res.status(400).json({ error: "Invalid year" });
 
@@ -597,10 +602,10 @@ budgetRoutes.get("/:year/category-outliers", async (req, res) => {
         : today;
 
   const [accounts, ignoredCategories, settings, annualBudgets] = await Promise.all([
-    prisma.account.findMany({ where: { isActive: true }, select: { id: true, isJoint: true } }),
-    prisma.category.findMany({ where: { ignoreInBudget: true }, select: { id: true } }),
-    getOrCreateSettings(),
-    prisma.annualBudget.findMany({ where: { year }, include: { monthlyOverrides: true } }),
+    prisma.account.findMany({ where: { userId, isActive: true }, select: { id: true, isJoint: true } }),
+    prisma.category.findMany({ where: { userId, ignoreInBudget: true }, select: { id: true } }),
+    getOrCreateSettings(userId),
+    prisma.annualBudget.findMany({ where: { userId, year }, include: { monthlyOverrides: true } }),
   ]);
 
   const splitRatio        = Number(settings.jointSplitRatio);
@@ -714,6 +719,7 @@ budgetRoutes.get("/:year/category-outliers", async (req, res) => {
 // comparing Jan 1–today of :year vs Jan 1–same-day of :year-1.
 // Applies the same joint split-ratio and ignoreInBudget filters as the main route.
 budgetRoutes.get("/:year/category-outliers-ytd", async (req, res) => {
+  const userId = getUserId(req);
   const year = parseInt(req.params.year);
   if (isNaN(year)) return res.status(400).json({ error: "Invalid year" });
 
@@ -728,10 +734,10 @@ budgetRoutes.get("/:year/category-outliers-ytd", async (req, res) => {
         : today;
 
   const [accounts, ignoredCategories, settings, annualBudgets] = await Promise.all([
-    prisma.account.findMany({ where: { isActive: true }, select: { id: true, isJoint: true } }),
-    prisma.category.findMany({ where: { ignoreInBudget: true }, select: { id: true } }),
-    getOrCreateSettings(),
-    prisma.annualBudget.findMany({ where: { year }, include: { monthlyOverrides: true } }),
+    prisma.account.findMany({ where: { userId, isActive: true }, select: { id: true, isJoint: true } }),
+    prisma.category.findMany({ where: { userId, ignoreInBudget: true }, select: { id: true } }),
+    getOrCreateSettings(userId),
+    prisma.annualBudget.findMany({ where: { userId, year }, include: { monthlyOverrides: true } }),
   ]);
 
   const splitRatio         = Number(settings.jointSplitRatio);
@@ -844,6 +850,7 @@ budgetRoutes.get("/:year/category-outliers-ytd", async (req, res) => {
 // PUT /api/budgets/:year/personal  |  PUT /api/budgets/:year/joint
 // Set or update the annual budget for a budget type.
 budgetRoutes.put("/:year/:type(personal|joint)", async (req, res) => {
+  const userId = getUserId(req);
   const year = parseInt(req.params.year);
   if (isNaN(year)) return res.status(400).json({ error: "Invalid year" });
 
@@ -853,9 +860,9 @@ budgetRoutes.put("/:year/:type(personal|joint)", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   const budget = await prisma.annualBudget.upsert({
-    where:  { type_year: { type, year } },
+    where:  { userId_type_year: { userId, type, year } },
     update: { annualAmount: parsed.data.annualAmount },
-    create: { type, year, annualAmount: parsed.data.annualAmount },
+    create: { userId, type, year, annualAmount: parsed.data.annualAmount },
     include: { monthlyOverrides: true },
   });
 
@@ -872,6 +879,7 @@ budgetRoutes.put("/:year/:type(personal|joint)", async (req, res) => {
 
 // PUT /api/budgets/:year/:type/monthly/:month  — add or update a monthly override
 budgetRoutes.put("/:year/:type(personal|joint)/monthly/:month", async (req, res) => {
+  const userId = getUserId(req);
   const year  = parseInt(req.params.year);
   const month = parseInt(req.params.month);
   if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
@@ -885,9 +893,9 @@ budgetRoutes.put("/:year/:type(personal|joint)/monthly/:month", async (req, res)
 
   // Ensure the parent AnnualBudget exists (create with null annualAmount if not)
   const annualBudget = await prisma.annualBudget.upsert({
-    where:  { type_year: { type, year } },
+    where:  { userId_type_year: { userId, type, year } },
     update: {},
-    create: { type, year, annualAmount: null },
+    create: { userId, type, year, annualAmount: null },
   });
 
   const override = await prisma.monthlyBudget.upsert({
@@ -901,6 +909,7 @@ budgetRoutes.put("/:year/:type(personal|joint)/monthly/:month", async (req, res)
 
 // DELETE /api/budgets/:year/:type/monthly/:month  — remove a monthly override
 budgetRoutes.delete("/:year/:type(personal|joint)/monthly/:month", async (req, res) => {
+  const userId = getUserId(req);
   const year  = parseInt(req.params.year);
   const month = parseInt(req.params.month);
   if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
@@ -909,7 +918,7 @@ budgetRoutes.delete("/:year/:type(personal|joint)/monthly/:month", async (req, r
 
   const type         = (req.params as Record<string, string>).type.toUpperCase() as "PERSONAL" | "JOINT";
   const annualBudget = await prisma.annualBudget.findUnique({
-    where: { type_year: { type, year } },
+    where: { userId_type_year: { userId, type, year } },
   });
   if (!annualBudget) return res.status(404).json({ error: "Budget not found" });
 
@@ -924,6 +933,7 @@ budgetRoutes.delete("/:year/:type(personal|joint)/monthly/:month", async (req, r
 
 budgetRoutes.get("/:year/monthly-spending", async (req, res) => {
   try {
+    const userId = getUserId(req);
     const year = Number(req.params.year);
     if (!Number.isFinite(year)) return res.status(400).json({ error: "Invalid year" });
 
@@ -935,16 +945,16 @@ budgetRoutes.get("/:year/monthly-spending", async (req, res) => {
 
     const [accounts, ignoredCategories, settings, annualBudgets] = await Promise.all([
       prisma.account.findMany({
-        where: { isActive: true },
+        where: { userId, isActive: true },
         select: { id: true, isJoint: true },
       }),
       prisma.category.findMany({
-        where: { ignoreInBudget: true },
+        where: { userId, ignoreInBudget: true },
         select: { id: true },
       }),
-      getOrCreateSettings(),
+      getOrCreateSettings(userId),
       prisma.annualBudget.findMany({
-        where: { year },
+        where: { userId, year },
         include: { monthlyOverrides: true },
       }),
     ]);

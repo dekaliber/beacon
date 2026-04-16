@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
+import { getUserId } from "../middleware/auth.js";
 
 export const categoryRoutes = Router();
 
@@ -15,7 +16,8 @@ const categorySchema = z.object({
 
 // List all categories (tree structure)
 categoryRoutes.get("/", async (req, res) => {
-  const where: Record<string, unknown> = { parentId: null };
+  const userId = getUserId(req);
+  const where: Record<string, unknown> = { userId, parentId: null };
   if (req.query.kind) where.kind = req.query.kind;
 
   const categories = await prisma.category.findMany({
@@ -28,7 +30,8 @@ categoryRoutes.get("/", async (req, res) => {
 
 // List flat categories (for dropdowns)
 categoryRoutes.get("/flat", async (req, res) => {
-  const where: Record<string, unknown> = {};
+  const userId = getUserId(req);
+  const where: Record<string, unknown> = { userId };
   if (req.query.kind) where.kind = req.query.kind;
 
   const categories = await prisma.category.findMany({
@@ -41,8 +44,9 @@ categoryRoutes.get("/flat", async (req, res) => {
 
 // Get usage count for a category (how many expenses/incomes reference it)
 categoryRoutes.get("/:id/usage", async (req, res) => {
-  const category = await prisma.category.findUnique({
-    where: { id: req.params.id },
+  const userId = getUserId(req);
+  const category = await prisma.category.findFirst({
+    where: { id: req.params.id, userId },
     include: { children: true },
   });
   if (!category) return res.status(404).json({ error: "Category not found" });
@@ -64,6 +68,7 @@ const syncSchema = z.object({
 });
 
 categoryRoutes.post("/sync", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = syncSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
@@ -71,7 +76,7 @@ categoryRoutes.post("/sync", async (req, res) => {
 
   // Get all existing expense categories
   const existingParents = await prisma.category.findMany({
-    where: { parentId: null, kind: "EXPENSE" },
+    where: { userId, parentId: null, kind: "EXPENSE" },
     include: { children: true },
   });
 
@@ -83,7 +88,7 @@ categoryRoutes.post("/sync", async (req, res) => {
     let parent = parentMap.get(parentName);
     if (!parent) {
       parent = await prisma.category.create({
-        data: { name: parentName, kind: "EXPENSE" },
+        data: { userId, name: parentName, kind: "EXPENSE" },
         include: { children: true },
       });
     }
@@ -95,7 +100,7 @@ categoryRoutes.post("/sync", async (req, res) => {
       let child = childMap.get(subName);
       if (!child) {
         child = await prisma.category.create({
-          data: { name: subName, parentId: parent.id, kind: "EXPENSE" },
+          data: { userId, name: subName, parentId: parent.id, kind: "EXPENSE" },
         });
       } else if (child.parentId !== parent.id) {
         child = await prisma.category.update({
@@ -136,7 +141,7 @@ categoryRoutes.post("/sync", async (req, res) => {
 
   // Return the updated tree
   const updated = await prisma.category.findMany({
-    where: { parentId: null, kind: "EXPENSE" },
+    where: { userId, parentId: null, kind: "EXPENSE" },
     include: { children: true },
     orderBy: { name: "asc" },
   });
@@ -146,31 +151,36 @@ categoryRoutes.post("/sync", async (req, res) => {
 
 // Create category
 categoryRoutes.post("/", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = categorySchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const category = await prisma.category.create({ data: parsed.data });
+  const category = await prisma.category.create({ data: { ...parsed.data, userId } });
   res.status(201).json(category);
 });
 
 // Update category
 categoryRoutes.put("/:id", async (req, res) => {
+  const userId = getUserId(req);
   const parsed = categorySchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const category = await prisma.category.update({
-    where: { id: req.params.id },
+  const category = await prisma.category.updateMany({
+    where: { id: req.params.id, userId },
     data: parsed.data,
   });
-  res.json(category);
+  if (category.count === 0) return res.status(404).json({ error: "Category not found" });
+  const updated = await prisma.category.findUnique({ where: { id: req.params.id } });
+  res.json(updated);
 });
 
 // Delete category with optional reassignment
 categoryRoutes.delete("/:id", async (req, res) => {
+  const userId = getUserId(req);
   const reassignTo = req.query.reassignTo as string | undefined;
 
-  const category = await prisma.category.findUnique({
-    where: { id: req.params.id },
+  const category = await prisma.category.findFirst({
+    where: { id: req.params.id, userId },
     include: { children: true },
   });
 

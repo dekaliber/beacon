@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
+import { getUserId } from "../middleware/auth.js";
 
 export const transactionGroupRoutes = Router();
 
@@ -23,8 +24,10 @@ async function cleanupGroup(groupId: string): Promise<void> {
 }
 
 // GET / — lightweight list used by the client for group metadata
-transactionGroupRoutes.get("/", async (_req, res) => {
+transactionGroupRoutes.get("/", async (req, res) => {
+  const userId = getUserId(req);
   const groups = await prisma.transactionGroup.findMany({
+    where: { expenses: { some: { account: { userId } } } },
     select: { id: true, primaryExpenseId: true, notes: true, createdAt: true, updatedAt: true },
     orderBy: { createdAt: "desc" },
   });
@@ -36,6 +39,7 @@ transactionGroupRoutes.get("/", async (_req, res) => {
 // • Removes each expense from any pre-existing group first
 // • Defaults primaryExpenseId to the oldest expense in the set
 transactionGroupRoutes.post("/", async (req, res) => {
+  const userId = getUserId(req);
   const schema = z.object({
     expenseIds: z.array(z.string()).min(2, "A group requires at least 2 expenses"),
   });
@@ -46,7 +50,7 @@ transactionGroupRoutes.post("/", async (req, res) => {
 
   // Fetch the expenses to find the oldest (default primary) and check existing groups
   const expenses = await prisma.expense.findMany({
-    where: { id: { in: expenseIds }, parentExpenseId: null },
+    where: { id: { in: expenseIds }, parentExpenseId: null, account: { userId } },
     select: { id: true, date: true, transactionGroupId: true },
     orderBy: { date: "asc" },
   });
@@ -95,6 +99,7 @@ transactionGroupRoutes.post("/", async (req, res) => {
 // • Adding expenses removes them from their existing groups first
 // • After removals, auto-deletes the group if ≤ 1 member remains
 transactionGroupRoutes.patch("/:id", async (req, res) => {
+  const userId = getUserId(req);
   const schema = z.object({
     primaryExpenseId: z.string().optional(),
     addExpenseIds: z.array(z.string()).optional(),
@@ -107,7 +112,9 @@ transactionGroupRoutes.patch("/:id", async (req, res) => {
   const { primaryExpenseId, addExpenseIds = [], removeExpenseIds = [] } = parsed.data;
   const groupId = req.params.id;
 
-  const group = await prisma.transactionGroup.findUnique({ where: { id: groupId } });
+  const group = await prisma.transactionGroup.findFirst({
+    where: { id: groupId, expenses: { some: { account: { userId } } } },
+  });
   if (!group) return res.status(404).json({ error: "Transaction group not found" });
 
   await prisma.$transaction(async (tx) => {
@@ -188,7 +195,10 @@ transactionGroupRoutes.patch("/:id", async (req, res) => {
 
 // DELETE /:id — dissolve a group entirely; member expenses are kept, just unlinked
 transactionGroupRoutes.delete("/:id", async (req, res) => {
-  const group = await prisma.transactionGroup.findUnique({ where: { id: req.params.id } });
+  const userId = getUserId(req);
+  const group = await prisma.transactionGroup.findFirst({
+    where: { id: req.params.id, expenses: { some: { account: { userId } } } },
+  });
   if (!group) return res.status(404).json({ error: "Transaction group not found" });
   // Deleting the group cascades transactionGroupId → null on all member expenses (SET NULL FK)
   await prisma.transactionGroup.delete({ where: { id: req.params.id } });

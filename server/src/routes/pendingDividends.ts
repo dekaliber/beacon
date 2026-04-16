@@ -3,6 +3,7 @@ import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { getDividendScanResult, type DividendEvent } from "../services/tiingo.js";
 import { backfillUnlinkedHoldings } from "./instruments.js";
+import { getUserId } from "../middleware/auth.js";
 
 export const pendingDividendRoutes = Router();
 
@@ -337,10 +338,11 @@ async function runScan(): Promise<void> {
 // ── GET /:accountId — scan + return pending dividends ────────────────────────
 
 pendingDividendRoutes.get("/:accountId", async (req, res) => {
+  const userId = getUserId(req);
   const { accountId } = req.params;
 
-  // Verify account exists
-  const account = await prisma.account.findUnique({ where: { id: accountId } });
+  // Verify account exists and belongs to user
+  const account = await prisma.account.findFirst({ where: { id: accountId, userId } });
   if (!account) return res.status(404).json({ error: "Account not found" });
 
   const pending = await prisma.pendingDividend.findMany({
@@ -377,9 +379,10 @@ pendingDividendRoutes.get("/:accountId", async (req, res) => {
 // ── POST /:id/dismiss ────────────────────────────────────────────────────────
 
 pendingDividendRoutes.post("/:id/dismiss", async (req, res) => {
+  const userId = getUserId(req);
   const { id } = req.params;
 
-  const existing = await prisma.pendingDividend.findUnique({ where: { id } });
+  const existing = await prisma.pendingDividend.findFirst({ where: { id, account: { userId } } });
   if (!existing) return res.status(404).json({ error: "Pending dividend not found" });
 
   const updated = await prisma.pendingDividend.update({
@@ -407,11 +410,12 @@ const confirmSchema = z.object({
 });
 
 pendingDividendRoutes.post("/:id/confirm", async (req, res) => {
+  const userId = getUserId(req);
   const { id } = req.params;
   const parsed = confirmSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const pending = await prisma.pendingDividend.findUnique({ where: { id } });
+  const pending = await prisma.pendingDividend.findFirst({ where: { id, account: { userId } } });
   if (!pending) return res.status(404).json({ error: "Pending dividend not found" });
   if (pending.status !== "PENDING") {
     return res.status(400).json({ error: "Dividend has already been confirmed or dismissed" });
@@ -511,11 +515,12 @@ const confirmReinvestSchema = z.object({
 });
 
 pendingDividendRoutes.post("/:id/confirm-reinvest", async (req, res) => {
+  const userId = getUserId(req);
   const { id } = req.params;
   const parsed = confirmReinvestSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const pending = await prisma.pendingDividend.findUnique({ where: { id } });
+  const pending = await prisma.pendingDividend.findFirst({ where: { id, account: { userId } } });
   if (!pending) return res.status(404).json({ error: "Pending dividend not found" });
   if (pending.status !== "PENDING") {
     return res.status(400).json({ error: "Dividend has already been confirmed or dismissed" });
