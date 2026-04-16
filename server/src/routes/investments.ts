@@ -2222,7 +2222,7 @@ investmentRoutes.post("/qfx-dividends/:accountId", async (req, res) => {
             date: paymentDate,
             source: div.ticker,
             subtype: "DIVIDEND",
-            isCashReceived: true,
+            isCashReceived: holdingId !== null,
             activityId: activity.id,
             updatedAt: new Date(),
           },
