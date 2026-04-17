@@ -33,4 +33,4 @@ COPY --from=client-builder /app/dist ./public
 ENV NODE_ENV=production
 EXPOSE 3001
 
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/index.js"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && npx prisma db seed && node dist/index.js"]

@@ -13,8 +13,6 @@
 
 import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
-
 const taxonomy = [
   {
     name: "US Stocks",
@@ -80,7 +78,7 @@ const taxonomy = [
   },
 ];
 
-async function main() {
+export async function seedAssetClasses(prisma: PrismaClient) {
   console.log("Seeding system asset classes...");
 
   for (const top of taxonomy) {
@@ -115,6 +113,9 @@ async function main() {
   console.log(`Done. ${count} system asset classes in database.`);
 }
 
-main()
-  .catch((e) => { console.error(e); process.exit(1); })
-  .finally(() => prisma.$disconnect());
+if (require.main === module) {
+  const prisma = new PrismaClient();
+  seedAssetClasses(prisma)
+    .catch((e) => { console.error(e); process.exit(1); })
+    .finally(() => prisma.$disconnect());
+}

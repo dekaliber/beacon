@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { seedAssetClasses } from "./seedAssetClasses";
 
 const prisma = new PrismaClient();
 
@@ -58,6 +59,8 @@ async function main() {
   await prisma.account.create({
     data: { name: "Cash", type: "CASH" },
   });
+
+  await seedAssetClasses(prisma);
 
   console.log("Seeding complete.");
 }
