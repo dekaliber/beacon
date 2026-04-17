@@ -7,7 +7,6 @@ import {
   Landmark,
   Tags,
   Repeat,
-  Settings,
   LineChart,
   Bell,
   ChevronRight,
@@ -246,13 +245,33 @@ export function UserMenu() {
           <div className="px-3 py-2 border-b border-border">
             <p className="text-xs font-medium truncate">{user?.emailAddresses?.[0]?.emailAddress}</p>
           </div>
-          <button
-            onClick={() => signOut({ redirectUrl: "/login" })}
-            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors rounded-b-md"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </button>
+          {configItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              onClick={() => setOpen(false)}
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                )
+              }
+            >
+              <item.icon className="h-4 w-4" />
+              {item.label}
+            </NavLink>
+          ))}
+          <div className="border-t border-border">
+            <button
+              onClick={() => signOut({ redirectUrl: "/login" })}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors rounded-b-md"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -260,18 +279,6 @@ export function UserMenu() {
 }
 
 export function Layout() {
-  const [configOpen, setConfigOpen] = useState(false);
-  const configRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (configRef.current && !configRef.current.contains(e.target as Node)) {
-        setConfigOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -307,45 +314,7 @@ export function Layout() {
           {/* Notification bell */}
           <NotificationBell />
 
-          {/* Config gear menu */}
-          <div className="relative ml-2" ref={configRef}>
-            <button
-              onClick={() => setConfigOpen((o) => !o)}
-              className={cn(
-                "flex items-center justify-center rounded-md p-2 transition-colors",
-                configOpen
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              )}
-              aria-label="Configure"
-            >
-              <Settings className="h-4 w-4" />
-            </button>
-            {configOpen && (
-              <div className="absolute right-0 top-full mt-1 w-44 rounded-md border border-border bg-background shadow-md z-50">
-                {configItems.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    onClick={() => setConfigOpen(false)}
-                    className={({ isActive }) =>
-                      cn(
-                        "flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors first:rounded-t-md last:rounded-b-md",
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                      )
-                    }
-                  >
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
-                  </NavLink>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* User avatar / sign out */}
+          {/* User avatar / settings / sign out */}
           <UserMenu />
         </div>
       </header>
