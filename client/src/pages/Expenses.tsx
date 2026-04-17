@@ -2229,7 +2229,7 @@ export function Expenses() {
                             </p>
                           </div>
                           <div className="ml-4 flex items-center gap-2">
-                            <span className="font-semibold text-destructive">-{formatCurrency(expense.amount)}</span>
+                            <span className={`font-semibold ${parseFloat(expense.amount) < 0 ? "text-green-600" : ""}`}>{formatCurrency(expense.amount)}</span>
                             <button onClick={() => openEdit(expense)} className="rounded p-1 hover:bg-accent"><Pencil className="h-4 w-4 text-muted-foreground" /></button>
                           </div>
                         </div>

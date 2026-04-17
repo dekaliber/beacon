@@ -1013,7 +1013,7 @@ function WithdrawalRateCard({
             {/* Target withdrawal rate line */}
             {targetLinePct != null && (
               <div
-                className="absolute inset-x-0 border-t-2 border-dashed border-red-500 pointer-events-none z-10"
+                className="absolute inset-x-0 border-t border-dashed border-destructive opacity-50 pointer-events-none z-10"
                 style={{ bottom: `${13 + targetLinePct * 104}px` }}
               />
             )}

@@ -204,7 +204,7 @@ function NotificationBell() {
   );
 }
 
-function UserMenu() {
+export function UserMenu() {
   const { signOut } = useClerk();
   const { user } = useUser();
   const [open, setOpen] = useState(false);
@@ -281,6 +281,7 @@ export function Layout() {
           <Link to="/" className="mr-8 text-lg font-bold text-primary hover:opacity-80 transition-opacity">
             Beacon
           </Link>
+
           <nav className="flex flex-1 gap-1 overflow-x-auto">
             {navItems.map((item) => (
               <NavLink
@@ -296,12 +297,11 @@ export function Layout() {
                 }
               >
                 <item.icon className="h-4 w-4" />
-                <span className="hidden sm:inline">{item.label}</span>
+                {item.label}
               </NavLink>
             ))}
           </nav>
 
-          {/* Keyboard shortcuts */}
           <KeyboardShortcutsButton />
 
           {/* Notification bell */}

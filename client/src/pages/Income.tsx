@@ -1523,14 +1523,8 @@ export function IncomePage() {
             </div>
 
             <div className="divide-y divide-border md:hidden">
-              {incomes.map((income, idx) => (
-                <div key={income.id} className={`flex items-center gap-2 py-3 ${selectedIds.has(income.id) ? "bg-primary/5" : !income.isCashReceived ? "bg-muted/40" : ""}`}>
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(income.id)}
-                    onChange={(e) => handleCheckboxChange(income.id, idx, e)}
-                    className="h-4 w-4 shrink-0 rounded border-border"
-                  />
+              {incomes.map((income) => (
+                <div key={income.id} className={`flex items-center gap-2 py-3 ${!income.isCashReceived ? "bg-muted/40" : ""}`}>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 truncate">
                       <p className={`truncate font-medium ${!income.isCashReceived ? "text-muted-foreground" : ""}`}>{income.category?.name ?? "—"}{income.source ? ` · ${income.source}` : ""}</p>
@@ -1603,6 +1597,7 @@ export function IncomePage() {
       )}
 
       {selectedIds.size > 0 && (
+        <div className="hidden md:block">
         <BulkEditBar
           ids={[...selectedIds]}
           categories={categories}
@@ -1616,6 +1611,7 @@ export function IncomePage() {
           showTaxStatus
           deleteDisabledTitle="Deselect investment-linked transactions (Div / Sale) to enable delete"
         />
+        </div>
       )}
     </div>
   );
