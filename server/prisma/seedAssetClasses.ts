@@ -11,7 +11,7 @@
  *   Cash              (leaf — no children)
  */
 
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 
 const taxonomy = [
   {
@@ -113,9 +113,3 @@ export async function seedAssetClasses(prisma: PrismaClient) {
   console.log(`Done. ${count} system asset classes in database.`);
 }
 
-if (require.main === module) {
-  const prisma = new PrismaClient();
-  seedAssetClasses(prisma)
-    .catch((e) => { console.error(e); process.exit(1); })
-    .finally(() => prisma.$disconnect());
-}
