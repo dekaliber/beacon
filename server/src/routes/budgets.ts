@@ -491,16 +491,22 @@ budgetRoutes.get("/:year", async (req, res) => {
       budget > 0
         ? metrics.projectedAnnual / budget - 1
         : 0;
-    // Remaining = budget minus all known recurring costs for the year minus
-    // discretionary spend that has already happened.  This tells the user how
-    // much they can still freely spend rather than a projection-based estimate.
+    // Remaining (discretionary) = budget minus all known recurring costs for
+    // the year minus discretionary spend that has already happened.  This tells
+    // the user how much they can still freely spend.
     const remaining = budget - metrics.recurringExpectedAnnual - metrics.actualDiscretionaryYTD;
+    // Remaining (full) = budget minus everything actually spent so far
+    // (completed months + MTD).  Dividing by months remaining gives the user a
+    // concrete total-spend cap per future month, including upcoming recurring.
+    const totalActualSpend = metrics.ytdCompletedMonths + metrics.mtdTotal;
+    const remainingFull = budget - totalActualSpend;
     return {
       ytdCompletedMonths: Math.round(metrics.ytdCompletedMonths * 100) / 100,
       mtdTotal:           Math.round(metrics.mtdTotal           * 100) / 100,
       normalizedYTD:      Math.round(metrics.normalizedYTD      * 100) / 100,
       projectedAnnual:    Math.round(metrics.projectedAnnual    * 100) / 100,
       remaining:          Math.round(remaining                  * 100) / 100,
+      remainingFull:      Math.round(remainingFull              * 100) / 100,
       percentAboveBelow:  Math.round(percentAboveBelow          * 10000) / 10000, // 4dp
     };
   }

@@ -223,6 +223,7 @@ export interface BudgetPanel {
   normalizedYTD: number;             // timing-adjusted figure for run-rate
   projectedAnnual: number;           // expected full-year spend
   remaining: number;                 // budget - recurring annual costs - discretionary spent (can be negative)
+  remainingFull: number;             // budget - total actual spend to date (can be negative)
   percentAboveBelow: number;         // run-rate ratio minus 1 (e.g. 0.032 = 3.2% over)
   chart: BudgetChart;
 }

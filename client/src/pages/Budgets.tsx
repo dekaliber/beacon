@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import {
   LineChart,
   Line,
@@ -14,15 +14,16 @@ import {
   PiggyBank,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Pencil,
+  Check,
   X,
   Info,
   CalendarDays,
-  Pencil,
 } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
-import { Modal } from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
 import { getBudgetOverview, getCategoryOutliersYtd, setAnnualBudget } from "@/api";
 import { CategoryOutliersChart } from "@/components/CategoryOutliersChart";
@@ -44,7 +45,6 @@ function pctLabel(v: number): string {
   return `${Math.abs(Math.round(v * 1000) / 10).toFixed(1)}%`;
 }
 
-/** Merge current/previous/priorYear series into a single recharts data array. */
 function mergeChartData(
   current: ChartDay[],
   previous: ChartDay[],
@@ -59,104 +59,82 @@ function mergeChartData(
   }));
 }
 
-// ── Budget settings modal ─────────────────────────────────────────────────────
+// ── Inline budget editor ──────────────────────────────────────────────────────
 
-interface BudgetSettingsModalProps {
-  open: boolean;
-  onClose: () => void;
-  personalBudget: number | null;
-  jointBudget: number | null;
-  jointSplitRatio: number;
-  onSave: (personal: number | null, joint: number | null) => Promise<void>;
+interface BudgetEditorProps {
+  value: number | null;
+  onSave: (v: number) => void;
+  helperText?: string;
 }
 
-function BudgetSettingsModal({
-  open,
-  onClose,
-  personalBudget,
-  jointBudget,
-  jointSplitRatio,
-  onSave,
-}: BudgetSettingsModalProps) {
-  const [personal, setPersonal] = useState(personalBudget?.toString() ?? "");
-  const [joint, setJoint]       = useState(jointBudget?.toString() ?? "");
-  const [saving, setSaving]     = useState(false);
+function BudgetEditor({ value, onSave, helperText }: BudgetEditorProps) {
+  const [editing, setEditing] = useState(false);
+  const [input, setInput]     = useState("");
 
-  useEffect(() => {
-    if (open) {
-      setPersonal(personalBudget?.toString() ?? "");
-      setJoint(jointBudget?.toString() ?? "");
-    }
-  }, [open, personalBudget, jointBudget]);
-
-  const handleSave = async () => {
-    const p = personal.trim() === "" ? null : parseFloat(personal);
-    const j = joint.trim() === ""    ? null : parseFloat(joint);
-    if ((p !== null && (isNaN(p) || p < 0)) || (j !== null && (isNaN(j) || j < 0))) return;
-    setSaving(true);
-    try {
-      await onSave(p, j);
-      onClose();
-    } finally {
-      setSaving(false);
+  const handleSave = () => {
+    const n = parseFloat(input);
+    if (!isNaN(n) && n >= 0) {
+      onSave(n);
+      setEditing(false);
     }
   };
 
-  const inputClass =
-    "flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+  if (editing) {
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <span className="text-lg text-muted-foreground">$</span>
+          <input
+            type="number"
+            min="0"
+            step="100"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSave();
+              if (e.key === "Escape") setEditing(false);
+            }}
+            className="w-36 rounded-md border border-border px-2 py-1 text-xl font-bold focus:border-primary focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            autoFocus
+          />
+          <button
+            onClick={handleSave}
+            className="rounded p-1 text-success hover:bg-success/10"
+            title="Save"
+          >
+            <Check className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setEditing(false)}
+            className="rounded p-1 text-muted-foreground hover:bg-accent"
+            title="Cancel"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        {helperText && (
+          <p className="text-xs text-muted-foreground">{helperText}</p>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <Modal open={open} onClose={onClose} title="Edit Budget">
-      <div className="space-y-5">
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium">Personal Annual Budget</label>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">$</span>
-            <input
-              type="number"
-              min="0"
-              step="100"
-              value={personal}
-              onChange={(e) => setPersonal(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-              placeholder="Not set"
-              className={inputClass}
-              autoFocus
-            />
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium">Joint Annual Budget</label>
-          <p className="text-xs text-muted-foreground">
-            Enter your share of joint expenses. Actual joint spending is automatically
-            divided by your {Math.round(jointSplitRatio * 100)}% split ratio.
-          </p>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">$</span>
-            <input
-              type="number"
-              min="0"
-              step="100"
-              value={joint}
-              onChange={(e) => setJoint(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-              placeholder="Not set"
-              className={inputClass}
-            />
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="secondary" onClick={onClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
-          </Button>
-        </div>
-      </div>
-    </Modal>
+    <div className="flex items-center gap-2">
+      <span className="text-2xl font-bold">
+        {value != null ? fmt(value) : "Not set"}
+      </span>
+      <button
+        onClick={() => {
+          setInput(value?.toString() ?? "");
+          setEditing(true);
+        }}
+        className="rounded p-1 text-muted-foreground hover:bg-accent"
+        title="Edit budget"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+    </div>
   );
 }
 
@@ -178,14 +156,12 @@ function PaceBar({ normalizedYTD, budget, pctElapsed }: PaceBarProps) {
   return (
     <div className="space-y-1">
       <div className="relative h-3 overflow-hidden rounded-full bg-secondary">
-        {/* Spent fill */}
         <div
           className={`h-full rounded-full transition-all ${
             overBudget ? "bg-destructive" : overPace ? "bg-warning" : "bg-success"
           }`}
           style={{ width: `${spentPct}%` }}
         />
-        {/* Pace marker */}
         <div
           className="absolute top-0 h-full w-0.5 bg-foreground/40"
           style={{ left: `${Math.min(pctElapsed * 100, 100)}%` }}
@@ -278,9 +254,7 @@ function ProjectionModal({ onClose }: { onClose: () => void }) {
             <p className="text-muted-foreground leading-relaxed">
               If a recurring expense has an end date before December 31st, the projection only
               counts the portion of the year it's active — and the pace calculation only measures
-              you against the budget for that window. For example, a $100/month subscription
-              ending in June projects to $600 for the year, and the pace bar treats $600 as the
-              relevant target while it's active, rather than $1,200.
+              you against the budget for that window.
             </p>
           </section>
 
@@ -306,8 +280,9 @@ interface ComparisonChartProps {
   currentMonthName: string;
   prevMonthName: string;
   priorYearMonthName: string;
-  /** Day-of-month for "today" — splits current line into solid (past) + dashed (future). */
   todayDay?: number;
+  /** Monthly budget target — draws a horizontal reference line when set. */
+  monthlyBudget?: number;
 }
 
 function ComparisonChart({
@@ -316,16 +291,13 @@ function ComparisonChart({
   prevMonthName,
   priorYearMonthName,
   todayDay,
+  monthlyBudget,
 }: ComparisonChartProps) {
   const rawData = useMemo(
     () => mergeChartData(chart.current, chart.previous, chart.priorYear),
     [chart],
   );
 
-  // Split current month into solid (days 1–today) and dashed (today–end).
-  // Both series include todayDay so the segments connect visually; the custom
-  // tooltip content renderer below drops `currentFuture` from the payload to
-  // avoid showing the same value twice.
   const data = useMemo(() => {
     if (!todayDay) {
       return rawData.map((d) => ({ ...d, currentSolid: d.current, currentFuture: null }));
@@ -340,15 +312,30 @@ function ComparisonChart({
   const hasData = rawData.some((d) => d.current || d.previous || d.priorYear);
   if (!hasData) return null;
 
-  // Tailwind v4 defines colors as --color-* with full hex values, so
-  // reference them directly without an hsl() wrapper.
+  // Compute a clean Y-axis domain and tick count so gridlines always land on
+  // whole $1k/$2k/etc. boundaries. The key is to drive both the axis labels and
+  // CartesianGrid from the same recharts-generated tick set (via tickCount +
+  // domain) rather than passing explicit ticks — recharts uses explicit ticks
+  // only for labels but generates gridlines from its own internal set, so the
+  // two can diverge and produce missing or misaligned guidelines.
+  const rawDataMax = Math.max(
+    0,
+    ...rawData.flatMap((d) => [d.current ?? 0, d.previous ?? 0, d.priorYear ?? 0]),
+  );
+  const yMax = Math.ceil((rawDataMax + 500) / 1000) * 1000;
+  // Smallest increment where yMax / increment ≤ 5 (at most 5 intervals / 6 ticks).
+  const yIncrement = [1000, 2000, 5000, 10000, 20000, 50000].find((i) => yMax / i <= 5) ?? 50000;
+  // tickCount drives recharts' internal D3 tick generator, which also feeds
+  // CartesianGrid. With a clean domain (yMax = N × yIncrement) D3 reliably
+  // produces exactly these N+1 evenly-spaced values.
+  const yTickCount = Math.round(yMax / yIncrement) + 1;
+
   const colorPrimary = "var(--color-primary)";
   const colorMuted   = "var(--color-muted-foreground)";
 
   return (
-    <div className="mt-4">
-      <p className="mb-3 text-sm font-medium text-card-foreground">Monthly Spending</p>
-      <ResponsiveContainer width="100%" height={180}>
+    <div>
+      <ResponsiveContainer width="100%" height={160}>
         <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
           <XAxis
@@ -363,6 +350,9 @@ function ComparisonChart({
             tickLine={false}
             axisLine={false}
             width={40}
+            domain={[0, yMax]}
+            tickCount={yTickCount}
+            interval={0}
           />
           <Tooltip
             content={({ active, payload, label }) => {
@@ -373,7 +363,6 @@ function ComparisonChart({
                 previous:      prevMonthName,
                 priorYear:     priorYearMonthName,
               };
-              // Drop `currentFuture` — it duplicates `currentSolid` at the pivot day.
               const items = payload.filter((p) => p.dataKey !== "currentFuture");
               return (
                 <div className="rounded border border-border bg-background p-3 text-xs shadow-md">
@@ -387,56 +376,24 @@ function ComparisonChart({
               );
             }}
           />
-          {/* Current month (past) — primary solid */}
-          <Line
-            type="monotone"
-            dataKey="currentSolid"
-            stroke={colorPrimary}
-            strokeWidth={2}
-            dot={false}
-            connectNulls
-            name="currentSolid"
-          />
-          {/* Current month (future) — primary dashed */}
-          <Line
-            type="monotone"
-            dataKey="currentFuture"
-            stroke={colorPrimary}
-            strokeWidth={2}
-            dot={false}
-            connectNulls
-            strokeDasharray="6 3"
-            name="currentFuture"
-          />
-          {/* Previous month — muted solid */}
-          <Line
-            type="monotone"
-            dataKey="previous"
-            stroke={colorMuted}
-            strokeWidth={1.5}
-            dot={false}
-            connectNulls
-            strokeOpacity={0.6}
-            name="previous"
-          />
-          {/* Same month prior year — primary at 30% opacity */}
-          <Line
-            type="monotone"
-            dataKey="priorYear"
-            stroke={colorPrimary}
-            strokeWidth={1.5}
-            dot={false}
-            connectNulls
-            strokeOpacity={0.3}
-            name="priorYear"
-          />
+          <Line type="monotone" dataKey="currentSolid"  stroke={colorPrimary} strokeWidth={2}   dot={false} connectNulls name="currentSolid" />
+          <Line type="monotone" dataKey="currentFuture" stroke={colorPrimary} strokeWidth={2}   dot={false} connectNulls strokeDasharray="6 3" name="currentFuture" />
+          <Line type="monotone" dataKey="previous"      stroke={colorMuted}   strokeWidth={1.5} dot={false} connectNulls strokeOpacity={0.6} name="previous" />
+          <Line type="monotone" dataKey="priorYear"     stroke={colorPrimary} strokeWidth={1.5} dot={false} connectNulls strokeOpacity={0.3} name="priorYear" />
           <ReferenceLine y={0} stroke="var(--color-border)" />
+          {monthlyBudget != null && monthlyBudget > 0 && (
+            <ReferenceLine
+              y={monthlyBudget}
+              stroke="var(--color-destructive)"
+              strokeWidth={1}
+              strokeDasharray="3 3"
+              strokeOpacity={0.5}
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
-      {/* Legend */}
       <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          {/* Solid segment + dashed segment to represent split current line */}
           <svg width="28" height="8">
             <line x1="0" y1="4" x2="14" y2="4" stroke={colorPrimary} strokeWidth="2" />
             <line x1="14" y1="4" x2="28" y2="4" stroke={colorPrimary} strokeWidth="2" strokeDasharray="4 3" />
@@ -453,246 +410,6 @@ function ComparisonChart({
         </span>
       </div>
     </div>
-  );
-}
-
-// ── Budget panel ──────────────────────────────────────────────────────────────
-
-interface PanelProps {
-  title: string;
-  subtitle?: string;
-  panel: BudgetPanel;
-  pctElapsed: number;
-  completedMonthCount: number;
-  monthsRemaining: number;
-  /** Label for the budget row: "Annual Budget" or "Annual Budget (derived)" */
-  budgetLabel?: string;
-  currentMonthName: string;
-  prevMonthName: string;
-  priorYearMonthName: string;
-  today: Date;
-  /** Day-of-month for the current viewing year (undefined for past/future years). */
-  todayDay?: number;
-  outliers?: CategoryOutliersData;
-}
-
-function BudgetPanelCard({
-  title,
-  subtitle,
-  panel,
-  pctElapsed,
-  completedMonthCount,
-  monthsRemaining,
-  budgetLabel = "Annual Budget",
-  currentMonthName,
-  prevMonthName,
-  priorYearMonthName,
-  today,
-  todayDay,
-  outliers,
-}: PanelProps) {
-  const [showModal, setShowModal] = useState(false);
-  const { projectedAnnual, remaining } = panel;
-  const isOverPace = panel.percentAboveBelow > 0;
-  const isNoBudget = panel.effectiveAnnualBudget === 0;
-  // For historical/future years use the chart month (Dec / Jan); for the
-  // current year use today so days-remaining stays accurate.
-  const isCurrentYear = today.getFullYear() === parseInt(currentMonthName.split(" ")[1]);
-  const mtdMonthLabel = currentMonthName.split(" ")[0];   // e.g. "Mar", "Dec"
-  const daysLeft = isCurrentYear
-    ? new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() - today.getDate()
-    : 0;
-
-  // ── Derived metrics ────────────────────────────────────────────────────────
-  const avgMonthly =
-    completedMonthCount > 0
-      ? panel.ytdCompletedMonths / completedMonthCount
-      : null;
-
-  const remainingPerMonth =
-    panel.effectiveAnnualBudget > 0 && monthsRemaining > 0
-      ? remaining / monthsRemaining
-      : null;
-
-  // Completed months label: "Jan–Feb" / "Jan–Nov" / "Full year" / "Jan"
-  const completedLabel =
-    completedMonthCount === 0
-      ? "No completed months yet"
-      : completedMonthCount === 12
-        ? "Full year"
-        : completedMonthCount === 1
-          ? "January"
-          : `Jan–${SHORT_MONTHS[completedMonthCount - 1]}`;
-
-  // Core metrics + pace bar block, shared between layouts
-  const metricsBlock = (
-    <>
-      {/* Metrics — 3 columns × 2 rows */}
-      <div className="grid grid-cols-3 gap-3">
-        {/* Row 1 */}
-        <Metric
-          label={`${mtdMonthLabel} so far`}
-          value={completedMonthCount > 0 || isCurrentYear ? fmt(panel.mtdTotal) : "—"}
-          sub={isCurrentYear && daysLeft > 0 ? `${daysLeft} days remaining` : "month complete"}
-        />
-        <Metric
-          label={completedLabel}
-          value={completedMonthCount > 0 ? fmt(panel.ytdCompletedMonths) : "—"}
-          sub="completed months"
-        />
-        <Metric
-          label="Avg monthly spend"
-          value={avgMonthly != null ? fmt(avgMonthly) : "—"}
-          sub={completedMonthCount > 0 ? `over ${completedMonthCount} month${completedMonthCount !== 1 ? "s" : ""}` : "no completed months"}
-        />
-
-        {/* Row 2 */}
-        <Metric
-          label="Annual projection"
-          value={fmt(projectedAnnual)}
-          valueClass={
-            panel.effectiveAnnualBudget > 0 && projectedAnnual > panel.effectiveAnnualBudget
-              ? "text-destructive"
-              : undefined
-          }
-          sub={
-            <span className="flex items-center gap-1">
-              adjusted rate
-              <button
-                onClick={() => setShowModal(true)}
-                className="inline-flex items-center text-muted-foreground hover:text-foreground"
-                title="How is this calculated?"
-              >
-                <Info className="h-3 w-3" />
-              </button>
-            </span>
-          }
-        />
-        <Metric
-          label="Remaining budget"
-          value={
-            panel.effectiveAnnualBudget > 0
-              ? (remaining < 0 ? "−" : "") + fmt(remaining)
-              : "—"
-          }
-          valueClass={
-            panel.effectiveAnnualBudget > 0
-              ? remaining < 0
-                ? "text-destructive"
-                : "text-success"
-              : undefined
-          }
-          sub={remaining < 0 ? "over budget" : "available to spend"}
-        />
-        <Metric
-          label="Remaining / month"
-          value={
-            remainingPerMonth != null
-              ? (remainingPerMonth < 0 ? "−" : "") + fmt(remainingPerMonth)
-              : "—"
-          }
-          valueClass={
-            remainingPerMonth != null
-              ? remainingPerMonth < 0
-                ? "text-destructive"
-                : "text-success"
-              : undefined
-          }
-          sub={
-            monthsRemaining > 0
-              ? `${monthsRemaining} month${monthsRemaining !== 1 ? "s" : ""} remaining`
-              : "year complete"
-          }
-        />
-      </div>
-
-      {/* Progress bar */}
-      {!isNoBudget && (
-        <PaceBar
-          normalizedYTD={panel.normalizedYTD}
-          budget={panel.effectiveAnnualBudget}
-          pctElapsed={pctElapsed}
-        />
-      )}
-    </>
-  );
-
-  // Shared header block
-  const headerBlock = (
-    <div className="flex items-start justify-between gap-4">
-      <div>
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            {title}
-          </p>
-          {subtitle && (
-            <span className="text-xs text-muted-foreground">· {subtitle}</span>
-          )}
-        </div>
-        <div className="mt-1">
-          <p className="text-xs text-muted-foreground mb-0.5">{budgetLabel}</p>
-          <p className="text-2xl font-bold">
-            {panel.effectiveAnnualBudget > 0 ? fmt(panel.effectiveAnnualBudget) : "—"}
-          </p>
-        </div>
-      </div>
-
-      {/* Run-rate badge */}
-      {!isNoBudget && (
-        <div
-          className={`flex-shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${
-            isOverPace
-              ? "bg-destructive/10 text-destructive"
-              : "bg-success/10 text-success"
-          }`}
-        >
-          {pctLabel(panel.percentAboveBelow)} {isOverPace ? "over" : "under"} budget
-        </div>
-      )}
-    </div>
-  );
-
-  return (
-    <>
-      {showModal && <ProjectionModal onClose={() => setShowModal(false)} />}
-
-      {outliers ? (
-        /* ── Total panel: 2-column layout ── */
-        <Card className="flex flex-col gap-5">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* Left: budget summary + monthly chart (half-width, matching Personal/Joint) */}
-            <div className="flex flex-col gap-5">
-              {headerBlock}
-              {metricsBlock}
-              <ComparisonChart
-                chart={panel.chart}
-                currentMonthName={currentMonthName}
-                prevMonthName={prevMonthName}
-                priorYearMonthName={priorYearMonthName}
-                todayDay={todayDay}
-              />
-            </div>
-            {/* Right: category outliers, vertically centered */}
-            <div className="flex flex-col justify-center">
-              <CategoryOutliersChart data={outliers} />
-            </div>
-          </div>
-        </Card>
-      ) : (
-        /* ── Personal / Joint panel: original single-column layout ── */
-        <Card className="flex flex-col gap-5">
-          {headerBlock}
-          {metricsBlock}
-          <ComparisonChart
-            chart={panel.chart}
-            currentMonthName={currentMonthName}
-            prevMonthName={prevMonthName}
-            priorYearMonthName={priorYearMonthName}
-            todayDay={todayDay}
-          />
-        </Card>
-      )}
-    </>
   );
 }
 
@@ -718,12 +435,332 @@ function Metric({
   );
 }
 
+// ── Band separator ────────────────────────────────────────────────────────────
+
+function BandLabel({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+        {children}
+      </span>
+      <div className="flex-1 h-px bg-border" />
+      {action}
+    </div>
+  );
+}
+
+// ── Budget panel ──────────────────────────────────────────────────────────────
+
+interface PanelProps {
+  title: string;
+  subtitle?: string;
+  panel: BudgetPanel;
+  pctElapsed: number;
+  completedMonthCount: number;
+  monthsRemaining: number;
+  showDiscretionary: boolean;
+  onToggleDiscretionary: () => void;
+  editable?: boolean;
+  budgetHelperText?: string;
+  onSaveBudget?: (amount: number) => void;
+  currentMonthName: string;
+  prevMonthName: string;
+  priorYearMonthName: string;
+  today: Date;
+  todayDay?: number;
+  outliers?: CategoryOutliersData;
+}
+
+function BudgetPanelCard({
+  title,
+  subtitle,
+  panel,
+  pctElapsed,
+  completedMonthCount,
+  monthsRemaining,
+  showDiscretionary,
+  onToggleDiscretionary,
+  editable = false,
+  budgetHelperText,
+  onSaveBudget,
+  currentMonthName,
+  prevMonthName,
+  priorYearMonthName,
+  today,
+  todayDay,
+  outliers,
+}: PanelProps) {
+  const [showModal, setShowModal] = useState(false);
+
+  const isOverPace = panel.percentAboveBelow > 0;
+  const isNoBudget = panel.effectiveAnnualBudget === 0;
+  const isCurrentYear = today.getFullYear() === parseInt(currentMonthName.split(" ")[1]);
+  const mtdMonthLabel = currentMonthName.split(" ")[0];
+  const daysLeft = isCurrentYear
+    ? new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() - today.getDate()
+    : 0;
+
+  // ── Derived metrics ──────────────────────────────────────────────────────
+  const avgMonthly =
+    completedMonthCount > 0 ? panel.ytdCompletedMonths / completedMonthCount : null;
+
+  const paceVariance =
+    panel.effectiveAnnualBudget > 0 && avgMonthly != null
+      ? avgMonthly - panel.effectiveAnnualBudget / 12
+      : null;
+
+  // Toggle between full remaining (default) and discretionary-only
+  const remainingValue = showDiscretionary ? panel.remaining : panel.remainingFull;
+  const monthlyTarget  = monthsRemaining > 0 ? remainingValue / monthsRemaining : null;
+
+  const completedLabel =
+    completedMonthCount === 0
+      ? "No completed months"
+      : completedMonthCount === 12
+        ? "Full year avg"
+        : completedMonthCount === 1
+          ? "January"
+          : `Jan–${SHORT_MONTHS[completedMonthCount - 1]}`;
+
+  // ── Bands ────────────────────────────────────────────────────────────────
+
+  const pastBand = (
+    <div className="space-y-2">
+      <BandLabel>Past</BandLabel>
+      <div className="grid grid-cols-3 gap-3">
+        <Metric
+          label={completedLabel}
+          value={completedMonthCount > 0 ? fmt(panel.ytdCompletedMonths) : "—"}
+          sub="completed months total"
+        />
+        <Metric
+          label="Avg monthly"
+          value={avgMonthly != null ? fmt(avgMonthly) : "—"}
+          sub={
+            completedMonthCount > 0
+              ? `over ${completedMonthCount} month${completedMonthCount !== 1 ? "s" : ""}`
+              : "no completed months"
+          }
+        />
+        <Metric
+          label="vs budget pace"
+          value={
+            paceVariance != null
+              ? (paceVariance > 0 ? "+" : "−") + fmt(paceVariance) + "/mo"
+              : "—"
+          }
+          valueClass={
+            paceVariance != null
+              ? paceVariance > 0 ? "text-destructive" : "text-success"
+              : undefined
+          }
+          sub={
+            paceVariance != null
+              ? paceVariance > 0 ? "running over" : "running under"
+              : isNoBudget ? "no budget set" : "no completed months"
+          }
+        />
+      </div>
+    </div>
+  );
+
+  const thisMonthBand = (
+    <div className="space-y-2">
+      <BandLabel>This month</BandLabel>
+      <div className="flex gap-4 items-start">
+        <div className="w-40 shrink-0">
+          <Metric
+            label={`${mtdMonthLabel} so far`}
+            value={completedMonthCount > 0 || isCurrentYear ? fmt(panel.mtdTotal) : "—"}
+            valueClass={
+              panel.effectiveAnnualBudget > 0 && (completedMonthCount > 0 || isCurrentYear)
+                ? panel.mtdTotal > panel.effectiveAnnualBudget / 12
+                  ? "text-destructive"
+                  : "text-success"
+                : undefined
+            }
+            sub={isCurrentYear && daysLeft > 0 ? `${daysLeft} days remaining` : "month complete"}
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <ComparisonChart
+            chart={panel.chart}
+            currentMonthName={currentMonthName}
+            prevMonthName={prevMonthName}
+            priorYearMonthName={priorYearMonthName}
+            todayDay={todayDay}
+            monthlyBudget={panel.effectiveAnnualBudget > 0 ? panel.effectiveAnnualBudget / 12 : undefined}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const restOfYearBand = (
+    <div className="space-y-2">
+      <BandLabel
+        action={
+          <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5 text-xs font-medium">
+            <button
+              type="button"
+              onClick={() => showDiscretionary && onToggleDiscretionary()}
+              className={`rounded-md px-2.5 py-1 transition-colors ${
+                !showDiscretionary
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Total remaining
+            </button>
+            <button
+              type="button"
+              onClick={() => !showDiscretionary && onToggleDiscretionary()}
+              className={`rounded-md px-2.5 py-1 transition-colors ${
+                showDiscretionary
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Discretionary only
+            </button>
+          </div>
+        }
+      >
+        Rest of year
+      </BandLabel>
+      <div className="grid grid-cols-3 gap-3">
+        <Metric
+          label="Annual projection"
+          value={fmt(panel.projectedAnnual)}
+          valueClass={
+            panel.effectiveAnnualBudget > 0 && panel.projectedAnnual > panel.effectiveAnnualBudget
+              ? "text-destructive"
+              : undefined
+          }
+          sub={
+            <span className="flex items-center gap-1">
+              adjusted rate
+              <button
+                onClick={() => setShowModal(true)}
+                className="inline-flex items-center text-muted-foreground hover:text-foreground"
+                title="How is this calculated?"
+              >
+                <Info className="h-3 w-3" />
+              </button>
+            </span>
+          }
+        />
+        <Metric
+          label={showDiscretionary ? "Discretionary left" : "Remaining budget"}
+          value={
+            panel.effectiveAnnualBudget > 0
+              ? (remainingValue < 0 ? "−" : "") + fmt(remainingValue)
+              : "—"
+          }
+          sub={remainingValue < 0 ? "over budget" : "available to spend"}
+        />
+        <Metric
+          label={showDiscretionary ? "Discretionary / mo" : "Monthly target"}
+          value={
+            monthlyTarget != null && panel.effectiveAnnualBudget > 0
+              ? (monthlyTarget < 0 ? "−" : "") + fmt(monthlyTarget) + "/mo"
+              : "—"
+          }
+          sub={
+            monthsRemaining > 0
+              ? `${monthsRemaining} month${monthsRemaining !== 1 ? "s" : ""} remaining`
+              : "year complete"
+          }
+        />
+      </div>
+      {!isNoBudget && (
+        <PaceBar
+          normalizedYTD={panel.normalizedYTD}
+          budget={panel.effectiveAnnualBudget}
+          pctElapsed={pctElapsed}
+        />
+      )}
+    </div>
+  );
+
+  const header = (
+    <div className="flex items-start justify-between gap-4">
+      <div>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            {title}
+          </p>
+          {subtitle && (
+            <span className="text-xs text-muted-foreground">· {subtitle}</span>
+          )}
+        </div>
+        {editable && onSaveBudget ? (
+          <div className="mt-1">
+            <p className="text-xs text-muted-foreground mb-0.5">Annual Budget</p>
+            <BudgetEditor value={panel.annualBudget} onSave={onSaveBudget} helperText={budgetHelperText} />
+          </div>
+        ) : (
+          <div className="mt-1">
+            <p className="text-xs text-muted-foreground mb-0.5">Annual Budget (derived)</p>
+            <p className="text-2xl font-bold">
+              {panel.effectiveAnnualBudget > 0 ? fmt(panel.effectiveAnnualBudget) : "—"}
+            </p>
+          </div>
+        )}
+      </div>
+      {!isNoBudget && (
+        <div
+          className={`flex-shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${
+            isOverPace
+              ? "bg-destructive/10 text-destructive"
+              : "bg-success/10 text-success"
+          }`}
+        >
+          {pctLabel(panel.percentAboveBelow)} {isOverPace ? "over" : "under"} budget
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <>
+      {showModal && <ProjectionModal onClose={() => setShowModal(false)} />}
+
+      {outliers ? (
+        <Card className="flex flex-col gap-5">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="flex flex-col gap-5">
+              {header}
+              {pastBand}
+              {thisMonthBand}
+              {restOfYearBand}
+            </div>
+            <div className="flex flex-col justify-center">
+              <CategoryOutliersChart data={outliers} />
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <Card className="flex flex-col gap-5">
+          {header}
+          {pastBand}
+          {thisMonthBand}
+          {restOfYearBand}
+        </Card>
+      )}
+    </>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function Budgets() {
   const now   = new Date();
-  const [year, setYear]               = useState(now.getFullYear());
-  const [budgetModalOpen, setBudgetModalOpen] = useState(false);
+  const [year, setYear] = useState(now.getFullYear());
+  const [showDiscretionary, setShowDiscretionary] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(
+    () => localStorage.getItem("budget-show-breakdown") === "true",
+  );
 
   const { data, loading, refetch } = useApi(
     () => getBudgetOverview(year),
@@ -735,29 +772,32 @@ export function Budgets() {
     [year],
   );
 
-  const handleSaveBudgets = async (personal: number | null, joint: number | null) => {
-    const promises: Promise<unknown>[] = [];
-    if (personal !== null) promises.push(setAnnualBudget(year, "personal", personal));
-    if (joint !== null)    promises.push(setAnnualBudget(year, "joint", joint));
-    await Promise.all(promises);
+  const handleSaveBudget = async (type: "personal" | "joint", amount: number) => {
+    await setAnnualBudget(year, type, amount);
     refetch();
   };
 
-  // Completed-month / months-remaining counts derived from the viewed year
-  const curYear      = now.getFullYear();
-  const curMonthIdx  = now.getMonth();                      // 0-indexed
+  const toggleBreakdown = () => {
+    const next = !showBreakdown;
+    setShowBreakdown(next);
+    localStorage.setItem("budget-show-breakdown", String(next));
+  };
+
+  const curYear     = now.getFullYear();
+  const curMonthIdx = now.getMonth(); // 0-indexed
 
   const completedMonthCount =
     year < curYear ? 12 :
     year > curYear ? 0  :
-    curMonthIdx;                                            // e.g. March → 2
+    curMonthIdx;
 
+  // Exclude the current in-progress month: remaining full months are those
+  // strictly after the current one (e.g. April → May–Dec = 8 months).
   const monthsRemaining =
     year < curYear ? 0  :
     year > curYear ? 12 :
-    12 - curMonthIdx;                                       // e.g. March → 10
+    11 - curMonthIdx;
 
-  // Chart month labels — anchored to the same month used on the server
   const chartMonthIdx    = year < curYear ? 11 : year > curYear ? 0 : curMonthIdx;
   const chartYear        = year < curYear ? year : year > curYear ? year : curYear;
   const prevChartIdx     = chartMonthIdx === 0 ? 11 : chartMonthIdx - 1;
@@ -767,10 +807,19 @@ export function Budgets() {
   const prevMonthName      = `${SHORT_MONTHS[prevChartIdx]} ${prevChartYear}`;
   const priorYearMonthName = `${SHORT_MONTHS[chartMonthIdx]} ${chartYear - 1}`;
 
-  // todayDay is only meaningful when viewing the current year
   const todayDay = year === curYear ? now.getDate() : undefined;
-  const sharedChartProps = { currentMonthName, prevMonthName, priorYearMonthName, today: now, todayDay };
-  const sharedPanelProps = { completedMonthCount, monthsRemaining, ...sharedChartProps };
+
+  const sharedPanelProps = {
+    completedMonthCount,
+    monthsRemaining,
+    showDiscretionary,
+    onToggleDiscretionary: () => setShowDiscretionary((v) => !v),
+    currentMonthName,
+    prevMonthName,
+    priorYearMonthName,
+    today: now,
+    todayDay,
+  };
 
   const hasAnyBudget =
     data && (data.personal.annualBudget != null || data.joint.annualBudget != null);
@@ -781,13 +830,6 @@ export function Budgets() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Budget</h2>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setBudgetModalOpen(true)}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          >
-            <Pencil className="h-4 w-4" />
-            Edit Budget
-          </button>
           <Link
             to="/budgets/monthly-spending"
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -815,13 +857,7 @@ export function Budgets() {
         <EmptyState
           icon={PiggyBank}
           title="No budget set"
-          description="Set a Personal or Joint annual budget to start tracking your spending."
-          action={
-            <Button onClick={() => setBudgetModalOpen(true)}>
-              <Pencil className="h-4 w-4" />
-              Set Budget
-            </Button>
-          }
+          description="Set a Personal or Joint annual budget below to start tracking your spending."
         />
       )}
 
@@ -833,96 +869,47 @@ export function Budgets() {
             subtitle={`Personal + ${Math.round(data.settings.jointSplitRatio * 100)}% of Joint`}
             panel={data.total}
             pctElapsed={data.pctElapsed}
-            budgetLabel="Annual Budget (derived)"
+            editable={false}
             outliers={outliersData ?? undefined}
             {...sharedPanelProps}
           />
 
-          {/* Personal + Joint — side by side */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <BudgetPanelCard
-              title="Personal"
-              panel={data.personal}
-              pctElapsed={data.pctElapsed}
-              {...sharedPanelProps}
+          {/* Personal & Joint breakdown toggle */}
+          <button
+            onClick={toggleBreakdown}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <span>{showBreakdown ? "Hide" : "Show"} Personal & Joint breakdown</span>
+            <ChevronDown
+              className={`h-4 w-4 transition-transform duration-200 ${showBreakdown ? "rotate-180" : ""}`}
             />
-            <BudgetPanelCard
-              title="Joint"
-              subtitle={`your ${Math.round(data.settings.jointSplitRatio * 100)}% share`}
-              panel={data.joint}
-              pctElapsed={data.pctElapsed}
-              {...sharedPanelProps}
-            />
-          </div>
+          </button>
+
+          {/* Personal + Joint side by side when expanded */}
+          {showBreakdown && (
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <BudgetPanelCard
+                title="Personal"
+                panel={data.personal}
+                pctElapsed={data.pctElapsed}
+                editable
+                onSaveBudget={(amount) => handleSaveBudget("personal", amount)}
+                {...sharedPanelProps}
+              />
+              <BudgetPanelCard
+                title="Joint"
+                subtitle={`your ${Math.round(data.settings.jointSplitRatio * 100)}% share`}
+                panel={data.joint}
+                pctElapsed={data.pctElapsed}
+                editable
+                budgetHelperText={`Enter your share of joint expenses. Actual joint spending is automatically divided by your ${Math.round(data.settings.jointSplitRatio * 100)}% split ratio.`}
+                onSaveBudget={(amount) => handleSaveBudget("joint", amount)}
+                {...sharedPanelProps}
+              />
+            </div>
+          )}
         </>
       )}
-
-      <BudgetSettingsModal
-        open={budgetModalOpen}
-        onClose={() => setBudgetModalOpen(false)}
-        personalBudget={data?.personal.annualBudget ?? null}
-        jointBudget={data?.joint.annualBudget ?? null}
-        jointSplitRatio={data?.settings.jointSplitRatio ?? 0.5}
-        onSave={handleSaveBudgets}
-      />
-
-      {/* ── Category breakdown (commented out — will be revisited in a later iteration) ──
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Spending by Category</CardTitle>
-        </CardHeader>
-        {categoryData.length > 0 ? (
-          <div className="space-y-6">
-            <ResponsiveContainer width="100%" height={Math.max(250, categoryData.length * 40)}>
-              <BarChart data={categoryData} layout="vertical" margin={{ left: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                <XAxis type="number" tickFormatter={(v) => `$${v}`} fontSize={12} />
-                <YAxis type="category" dataKey="shortName" width={120} fontSize={12} />
-                <Tooltip
-                  formatter={(value: number) => formatCurrency(value)}
-                  labelFormatter={(label) => {
-                    const item = categoryData.find((c) => c.shortName === label);
-                    return item?.name ?? label;
-                  }}
-                />
-                <Bar dataKey="amount" radius={[0, 4, 4, 0]}>
-                  {categoryData.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-            <div className="divide-y divide-border">
-              {categoryData.map((cat) => (
-                <div key={cat.name} className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: cat.color }} />
-                    <span className="text-sm">{cat.name}</span>
-                    <span className="text-xs text-muted-foreground">({cat.count} transactions)</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-medium">{formatCurrency(cat.amount)}</span>
-                    {budgetAmount && (
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        ({Math.round((cat.amount / budgetAmount) * 100)}%)
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <EmptyState
-            icon={PiggyBank}
-            title="No spending data"
-            description="Add expenses to see how your spending breaks down by category."
-          />
-        )}
-      </Card>
-
-      ── End category breakdown ── */}
     </div>
   );
 }
