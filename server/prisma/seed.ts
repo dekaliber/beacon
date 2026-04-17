@@ -27,38 +27,30 @@ const defaultCategories = [
 async function main() {
   console.log("Seeding database...");
 
-  for (const cat of defaultCategories) {
-    const parent = await prisma.category.create({
-      data: {
-        name: cat.name,
-        isDefault: true,
-      },
-    });
-
-    for (const childName of cat.children) {
-      await prisma.category.create({
-        data: {
-          name: childName,
-          parentId: parent.id,
-          isDefault: true,
-        },
+  const categoryCount = await prisma.category.count({ where: { isDefault: true } });
+  if (categoryCount === 0) {
+    for (const cat of defaultCategories) {
+      const parent = await prisma.category.create({
+        data: { name: cat.name, isDefault: true },
       });
+      for (const childName of cat.children) {
+        await prisma.category.create({
+          data: { name: childName, parentId: parent.id, isDefault: true },
+        });
+      }
     }
   }
 
-  // Create default accounts
-  await prisma.account.create({
-    data: { name: "Checking Account", type: "CHECKING" },
-  });
-  await prisma.account.create({
-    data: { name: "Savings Account", type: "SAVINGS" },
-  });
-  await prisma.account.create({
-    data: { name: "Credit Card", type: "CREDIT_CARD" },
-  });
-  await prisma.account.create({
-    data: { name: "Cash", type: "CASH" },
-  });
+  const accountCount = await prisma.account.count();
+  if (accountCount === 0) {
+    await prisma.account.createMany({
+      data: [
+        { name: "Checking Account", type: "CHECKING" },
+        { name: "Savings Account", type: "SAVINGS" },
+        { name: "Credit Card", type: "CREDIT_CARD" },
+      ],
+    });
+  }
 
   await seedAssetClasses(prisma);
 
