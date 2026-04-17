@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   LineChart,
   Line,
@@ -14,15 +14,15 @@ import {
   PiggyBank,
   ChevronLeft,
   ChevronRight,
-  Pencil,
-  Check,
   X,
   Info,
   CalendarDays,
+  Pencil,
 } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
+import { Modal } from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
 import { getBudgetOverview, getCategoryOutliersYtd, setAnnualBudget } from "@/api";
 import { CategoryOutliersChart } from "@/components/CategoryOutliersChart";
@@ -59,82 +59,104 @@ function mergeChartData(
   }));
 }
 
-// ── Inline budget editor ──────────────────────────────────────────────────────
+// ── Budget settings modal ─────────────────────────────────────────────────────
 
-interface BudgetEditorProps {
-  value: number | null;
-  onSave: (v: number) => void;
-  helperText?: string;
+interface BudgetSettingsModalProps {
+  open: boolean;
+  onClose: () => void;
+  personalBudget: number | null;
+  jointBudget: number | null;
+  jointSplitRatio: number;
+  onSave: (personal: number | null, joint: number | null) => Promise<void>;
 }
 
-function BudgetEditor({ value, onSave, helperText }: BudgetEditorProps) {
-  const [editing, setEditing] = useState(false);
-  const [input, setInput]     = useState("");
+function BudgetSettingsModal({
+  open,
+  onClose,
+  personalBudget,
+  jointBudget,
+  jointSplitRatio,
+  onSave,
+}: BudgetSettingsModalProps) {
+  const [personal, setPersonal] = useState(personalBudget?.toString() ?? "");
+  const [joint, setJoint]       = useState(jointBudget?.toString() ?? "");
+  const [saving, setSaving]     = useState(false);
 
-  const handleSave = () => {
-    const n = parseFloat(input);
-    if (!isNaN(n) && n >= 0) {
-      onSave(n);
-      setEditing(false);
+  useEffect(() => {
+    if (open) {
+      setPersonal(personalBudget?.toString() ?? "");
+      setJoint(jointBudget?.toString() ?? "");
+    }
+  }, [open, personalBudget, jointBudget]);
+
+  const handleSave = async () => {
+    const p = personal.trim() === "" ? null : parseFloat(personal);
+    const j = joint.trim() === ""    ? null : parseFloat(joint);
+    if ((p !== null && (isNaN(p) || p < 0)) || (j !== null && (isNaN(j) || j < 0))) return;
+    setSaving(true);
+    try {
+      await onSave(p, j);
+      onClose();
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (editing) {
-    return (
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-2">
-          <span className="text-lg text-muted-foreground">$</span>
-          <input
-            type="number"
-            min="0"
-            step="100"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSave();
-              if (e.key === "Escape") setEditing(false);
-            }}
-            className="w-36 rounded-md border border-border px-2 py-1 text-xl font-bold focus:border-primary focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            autoFocus
-          />
-          <button
-            onClick={handleSave}
-            className="rounded p-1 text-success hover:bg-success/10"
-            title="Save"
-          >
-            <Check className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setEditing(false)}
-            className="rounded p-1 text-muted-foreground hover:bg-accent"
-            title="Cancel"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        {helperText && (
-          <p className="text-xs text-muted-foreground">{helperText}</p>
-        )}
-      </div>
-    );
-  }
+  const inputClass =
+    "flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-2xl font-bold">
-        {value != null ? fmt(value) : "Not set"}
-      </span>
-      <button
-        onClick={() => {
-          setInput(value?.toString() ?? "");
-          setEditing(true);
-        }}
-        className="rounded p-1 text-muted-foreground hover:bg-accent"
-        title="Edit budget"
-      >
-        <Pencil className="h-3.5 w-3.5" />
-      </button>
-    </div>
+    <Modal open={open} onClose={onClose} title="Edit Budget">
+      <div className="space-y-5">
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Personal Annual Budget</label>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">$</span>
+            <input
+              type="number"
+              min="0"
+              step="100"
+              value={personal}
+              onChange={(e) => setPersonal(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
+              placeholder="Not set"
+              className={inputClass}
+              autoFocus
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Joint Annual Budget</label>
+          <p className="text-xs text-muted-foreground">
+            Enter your share of joint expenses. Actual joint spending is automatically
+            divided by your {Math.round(jointSplitRatio * 100)}% split ratio.
+          </p>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">$</span>
+            <input
+              type="number"
+              min="0"
+              step="100"
+              value={joint}
+              onChange={(e) => setJoint(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
+              placeholder="Not set"
+              className={inputClass}
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -443,9 +465,8 @@ interface PanelProps {
   pctElapsed: number;
   completedMonthCount: number;
   monthsRemaining: number;
-  editable?: boolean;
-  budgetHelperText?: string;
-  onSaveBudget?: (amount: number) => void;
+  /** Label for the budget row: "Annual Budget" or "Annual Budget (derived)" */
+  budgetLabel?: string;
   currentMonthName: string;
   prevMonthName: string;
   priorYearMonthName: string;
@@ -462,9 +483,7 @@ function BudgetPanelCard({
   pctElapsed,
   completedMonthCount,
   monthsRemaining,
-  editable = false,
-  budgetHelperText,
-  onSaveBudget,
+  budgetLabel = "Annual Budget",
   currentMonthName,
   prevMonthName,
   priorYearMonthName,
@@ -610,19 +629,12 @@ function BudgetPanelCard({
             <span className="text-xs text-muted-foreground">· {subtitle}</span>
           )}
         </div>
-        {editable && onSaveBudget ? (
-          <div className="mt-1">
-            <p className="text-xs text-muted-foreground mb-0.5">Annual Budget</p>
-            <BudgetEditor value={panel.annualBudget} onSave={onSaveBudget} helperText={budgetHelperText} />
-          </div>
-        ) : (
-          <div className="mt-1">
-            <p className="text-xs text-muted-foreground mb-0.5">Annual Budget (derived)</p>
-            <p className="text-2xl font-bold">
-              {panel.effectiveAnnualBudget > 0 ? fmt(panel.effectiveAnnualBudget) : "—"}
-            </p>
-          </div>
-        )}
+        <div className="mt-1">
+          <p className="text-xs text-muted-foreground mb-0.5">{budgetLabel}</p>
+          <p className="text-2xl font-bold">
+            {panel.effectiveAnnualBudget > 0 ? fmt(panel.effectiveAnnualBudget) : "—"}
+          </p>
+        </div>
       </div>
 
       {/* Run-rate badge */}
@@ -710,7 +722,8 @@ function Metric({
 
 export function Budgets() {
   const now   = new Date();
-  const [year, setYear] = useState(now.getFullYear());
+  const [year, setYear]               = useState(now.getFullYear());
+  const [budgetModalOpen, setBudgetModalOpen] = useState(false);
 
   const { data, loading, refetch } = useApi(
     () => getBudgetOverview(year),
@@ -722,8 +735,11 @@ export function Budgets() {
     [year],
   );
 
-  const handleSaveBudget = async (type: "personal" | "joint", amount: number) => {
-    await setAnnualBudget(year, type, amount);
+  const handleSaveBudgets = async (personal: number | null, joint: number | null) => {
+    const promises: Promise<unknown>[] = [];
+    if (personal !== null) promises.push(setAnnualBudget(year, "personal", personal));
+    if (joint !== null)    promises.push(setAnnualBudget(year, "joint", joint));
+    await Promise.all(promises);
     refetch();
   };
 
@@ -765,6 +781,13 @@ export function Budgets() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Budget</h2>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setBudgetModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <Pencil className="h-4 w-4" />
+            Edit Budget
+          </button>
           <Link
             to="/budgets/monthly-spending"
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -772,15 +795,15 @@ export function Budgets() {
             <CalendarDays className="h-4 w-4" />
             Monthly Spending
           </Link>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="min-w-[4rem] text-center font-semibold">{year}</span>
-          <Button variant="ghost" size="sm" onClick={() => setYear((y) => y + 1)}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="min-w-[4rem] text-center font-semibold">{year}</span>
+            <Button variant="ghost" size="sm" onClick={() => setYear((y) => y + 1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -792,7 +815,13 @@ export function Budgets() {
         <EmptyState
           icon={PiggyBank}
           title="No budget set"
-          description="Set a Personal or Joint annual budget below to start tracking your spending."
+          description="Set a Personal or Joint annual budget to start tracking your spending."
+          action={
+            <Button onClick={() => setBudgetModalOpen(true)}>
+              <Pencil className="h-4 w-4" />
+              Set Budget
+            </Button>
+          }
         />
       )}
 
@@ -804,7 +833,7 @@ export function Budgets() {
             subtitle={`Personal + ${Math.round(data.settings.jointSplitRatio * 100)}% of Joint`}
             panel={data.total}
             pctElapsed={data.pctElapsed}
-            editable={false}
+            budgetLabel="Annual Budget (derived)"
             outliers={outliersData ?? undefined}
             {...sharedPanelProps}
           />
@@ -815,8 +844,6 @@ export function Budgets() {
               title="Personal"
               panel={data.personal}
               pctElapsed={data.pctElapsed}
-              editable
-              onSaveBudget={(amount) => handleSaveBudget("personal", amount)}
               {...sharedPanelProps}
             />
             <BudgetPanelCard
@@ -824,14 +851,20 @@ export function Budgets() {
               subtitle={`your ${Math.round(data.settings.jointSplitRatio * 100)}% share`}
               panel={data.joint}
               pctElapsed={data.pctElapsed}
-              editable
-              budgetHelperText={`Enter your share of joint expenses. Actual joint spending is automatically divided by your ${Math.round(data.settings.jointSplitRatio * 100)}% split ratio.`}
-              onSaveBudget={(amount) => handleSaveBudget("joint", amount)}
               {...sharedPanelProps}
             />
           </div>
         </>
       )}
+
+      <BudgetSettingsModal
+        open={budgetModalOpen}
+        onClose={() => setBudgetModalOpen(false)}
+        personalBudget={data?.personal.annualBudget ?? null}
+        jointBudget={data?.joint.annualBudget ?? null}
+        jointSplitRatio={data?.settings.jointSplitRatio ?? 0.5}
+        onSave={handleSaveBudgets}
+      />
 
       {/* ── Category breakdown (commented out — will be revisited in a later iteration) ──
 

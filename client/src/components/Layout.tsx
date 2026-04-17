@@ -14,7 +14,9 @@ import {
   PieChart,
   Keyboard,
   Waves,
+  LogOut,
 } from "lucide-react";
+import { useClerk, useUser } from "@clerk/react";
 import { cn } from "@/lib/utils";
 import { useNotifications } from "@/context/NotificationContext";
 
@@ -202,6 +204,61 @@ function NotificationBell() {
   );
 }
 
+function UserMenu() {
+  const { signOut } = useClerk();
+  const { user } = useUser();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const initials = user?.firstName?.[0] ?? user?.emailAddresses?.[0]?.emailAddress?.[0] ?? "?";
+
+  return (
+    <div className="relative ml-2" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "flex items-center justify-center rounded-full w-8 h-8 text-xs font-semibold transition-colors",
+          open
+            ? "bg-primary text-primary-foreground"
+            : "bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        )}
+        aria-label="User menu"
+      >
+        {user?.imageUrl ? (
+          <img src={user.imageUrl} alt="avatar" className="w-8 h-8 rounded-full object-cover" />
+        ) : (
+          initials.toUpperCase()
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-48 rounded-md border border-border bg-background shadow-md z-50">
+          <div className="px-3 py-2 border-b border-border">
+            <p className="text-xs font-medium truncate">{user?.emailAddresses?.[0]?.emailAddress}</p>
+          </div>
+          <button
+            onClick={() => signOut({ redirectUrl: "/login" })}
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors rounded-b-md"
+          >
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Layout() {
   const [configOpen, setConfigOpen] = useState(false);
   const configRef = useRef<HTMLDivElement>(null);
@@ -287,6 +344,9 @@ export function Layout() {
               </div>
             )}
           </div>
+
+          {/* User avatar / sign out */}
+          <UserMenu />
         </div>
       </header>
 
