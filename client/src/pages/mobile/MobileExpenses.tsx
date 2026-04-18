@@ -653,9 +653,15 @@ function MobileExpenseModal({
 
                       {/* Frequency picker — only for new recurring expenses */}
                       {isRecurring && !expense?.recurrenceRuleId && (
-                        <div className="mt-2 space-y-2 rounded-md border border-border p-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-muted-foreground shrink-0">Repeats every</span>
+                        <div className="mt-2 rounded-md border border-border p-3">
+                          {/*
+                            Single grid: col 1 = label (auto, sized to widest),
+                            col 2 = w-14 number input, col 3 = 1fr select/date, col 4 = auto dismiss.
+                            Both rows share these columns so inputs align naturally.
+                          */}
+                          <div className="grid items-center gap-x-2 gap-y-2" style={{ gridTemplateColumns: "auto 3.5rem 1fr auto" }}>
+                            {/* Row 1: Repeats every [n] [freq] */}
+                            <span className="text-sm text-muted-foreground">Repeats every</span>
                             <input
                               type="number"
                               min="1"
@@ -663,9 +669,9 @@ function MobileExpenseModal({
                               value={recurringInterval}
                               onChange={(e) => setRecurringInterval(e.target.value)}
                               placeholder="1"
-                              className="w-14 rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+                              className="w-full rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
                             />
-                            <div className="relative flex-1">
+                            <div className="relative">
                               <select
                                 name="frequency"
                                 value={recurringFrequency}
@@ -679,32 +685,39 @@ function MobileExpenseModal({
                               </select>
                               <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                             </div>
-                          </div>
-                          {!showEndDate ? (
-                            <button type="button" onClick={() => setShowEndDate(true)} className="text-xs text-primary">
-                              + Add end date
-                            </button>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-muted-foreground shrink-0">Until</span>
-                              <div className="relative flex-1">
-                                <input
-                                  name="endDate"
-                                  type="date"
-                                  className="w-full appearance-none rounded-md border border-border px-2 py-1.5 pr-8 text-sm text-foreground focus:border-primary focus:outline-none"
-                                />
-                                <Calendar className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                              </div>
+                            <div /> {/* placeholder for col 4 */}
+
+                            {/* Row 2: Until [date] or "+ Add end date" link */}
+                            {!showEndDate ? (
                               <button
                                 type="button"
-                                onClick={() => setShowEndDate(false)}
-                                className="text-muted-foreground hover:text-foreground"
-                                aria-label="Remove end date"
+                                onClick={() => setShowEndDate(true)}
+                                className="col-span-4 justify-self-start text-xs text-primary"
                               >
-                                <X className="h-4 w-4" />
+                                + Add end date
                               </button>
-                            </div>
-                          )}
+                            ) : (
+                              <>
+                                <span className="text-sm text-muted-foreground">Until</span>
+                                <div className="relative col-span-2">
+                                  <input
+                                    name="endDate"
+                                    type="date"
+                                    className="w-full appearance-none rounded-md border border-border px-2 py-1.5 pr-8 text-sm text-foreground focus:border-primary focus:outline-none"
+                                  />
+                                  <Calendar className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowEndDate(false)}
+                                  className="text-muted-foreground hover:text-foreground"
+                                  aria-label="Remove end date"
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
