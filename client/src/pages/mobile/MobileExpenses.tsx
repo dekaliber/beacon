@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Plus, X, ChevronDown, ChevronRight, AlertCircle, Check, CornerDownRight, ArrowUp, Trash2 } from "lucide-react";
+import { Plus, X, ChevronDown, ChevronRight, AlertCircle, Check, CornerDownRight, ArrowUp, Trash2, Calendar } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
 import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, deleteExpense, getExpenseVendors, getTags, createTag, createRecurrenceRule } from "@/api";
 import { formatCurrency, formatDate, localToday } from "@/lib/utils";
@@ -491,13 +491,16 @@ function MobileExpenseModal({
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium">Date</label>
-              <input
-                name="date"
-                type="date"
-                required
-                defaultValue={expense?.date?.slice(0, 10) ?? today}
-                className="w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
-              />
+              <div className="relative">
+                <input
+                  name="date"
+                  type="date"
+                  required
+                  defaultValue={expense?.date?.slice(0, 10) ?? today}
+                  className="w-full appearance-none rounded-md border border-border px-3 py-2.5 pr-8 text-sm text-foreground focus:border-primary focus:outline-none"
+                />
+                <Calendar className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              </div>
             </div>
           </div>
 
@@ -684,11 +687,14 @@ function MobileExpenseModal({
                           ) : (
                             <div className="flex items-center gap-2">
                               <span className="text-sm text-muted-foreground shrink-0">Until</span>
-                              <input
-                                name="endDate"
-                                type="date"
-                                className="flex-1 rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
-                              />
+                              <div className="relative flex-1">
+                                <input
+                                  name="endDate"
+                                  type="date"
+                                  className="w-full appearance-none rounded-md border border-border px-2 py-1.5 pr-8 text-sm text-foreground focus:border-primary focus:outline-none"
+                                />
+                                <Calendar className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                              </div>
                               <button
                                 type="button"
                                 onClick={() => setShowEndDate(false)}
