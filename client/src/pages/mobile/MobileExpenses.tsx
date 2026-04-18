@@ -1,11 +1,18 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Plus, X, ChevronDown, AlertCircle, Check, CornerDownRight, ArrowUp, Trash2 } from "lucide-react";
+import { Plus, X, ChevronDown, ChevronRight, AlertCircle, Check, CornerDownRight, ArrowUp, Trash2 } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
-import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, deleteExpense, getExpenseVendors } from "@/api";
+import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, deleteExpense, getExpenseVendors, getTags, createTag, createRecurrenceRule } from "@/api";
 import { formatCurrency, formatDate, localToday } from "@/lib/utils";
-import type { Account, Category, Expense } from "@/types";
+import type { Account, Category, Expense, Tag } from "@/types";
 
 const EXPENSE_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH"];
+
+const FREQUENCY_OPTIONS = [
+  { value: "DAILY",   singular: "day",   plural: "days"   },
+  { value: "WEEKLY",  singular: "week",  plural: "weeks"  },
+  { value: "MONTHLY", singular: "month", plural: "months" },
+  { value: "YEARLY",  singular: "year",  plural: "years"  },
+];
 
 // ── Vendor input with suggestions ─────────────────────────────────────────────
 
@@ -16,8 +23,11 @@ function VendorInput({ vendors, initialValue = "" }: { vendors: string[]; initia
 
   const suggestions = useMemo(() => {
     if (!value.trim()) return [];
-    const q = value.toLowerCase();
-    return vendors.filter((v) => v.toLowerCase().includes(q)).slice(0, 8);
+    const terms = value.toLowerCase().split(/\s+/);
+    return vendors.filter((v) => {
+      const words = v.toLowerCase().split(/\s+/);
+      return terms.every((t) => words.some((w) => w.startsWith(t)));
+    }).slice(0, 8);
   }, [value, vendors]);
 
   useEffect(() => {
@@ -185,6 +195,147 @@ function CategoryPicker({ categories, initialId = "" }: { categories: Category[]
   );
 }
 
+// ── Tag picker (multi-select) ─────────────────────────────────────────────────
+
+function TagPicker({
+  tags,
+  selectedIds,
+  onChange,
+  onCreateTag,
+}: {
+  tags: Tag[];
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+  onCreateTag: (name: string) => Promise<Tag>;
+}) {
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [localTags, setLocalTags] = useState<Tag[]>([]);
+  const ref = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const allTags = useMemo(() => {
+    const ids = new Set(tags.map((t) => t.id));
+    return [...tags, ...localTags.filter((t) => !ids.has(t.id))];
+  }, [tags, localTags]);
+
+  const sortedTags = useMemo(() => [...allTags].sort((a, b) => a.name.localeCompare(b.name)), [allTags]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return sortedTags;
+    const terms = search.toLowerCase().split(/\s+/);
+    return sortedTags.filter((t) => {
+      const words = t.name.toLowerCase().split(/\s+/);
+      return terms.every((term) => words.some((w) => w.startsWith(term)));
+    });
+  }, [search, sortedTags]);
+
+  const showCreate = !!search.trim() && filtered.length === 0;
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearch("");
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const toggleTag = (id: string) => {
+    onChange(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
+  };
+
+  const handleCreate = async () => {
+    const name = search.trim();
+    if (!name || creating) return;
+    setCreating(true);
+    try {
+      const newTag = await onCreateTag(name);
+      setLocalTags((prev) => [...prev, newTag]);
+      onChange([...selectedIds, newTag.id]);
+      setSearch("");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const selectedTags = sortedTags.filter((t) => selectedIds.includes(t.id));
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => { setOpen(true); setTimeout(() => searchRef.current?.focus(), 50); }}
+        className="flex w-full min-h-[42px] items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+      >
+        {selectedTags.length === 0 ? (
+          <span className="text-muted-foreground">No tags</span>
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {selectedTags.map((t) => (
+              <span
+                key={t.id}
+                className="rounded-full px-2 py-0.5 text-xs font-medium"
+                style={t.color ? { backgroundColor: t.color, color: "#fff" } : { backgroundColor: "hsl(var(--primary))", color: "#fff" }}
+              >
+                {t.name}
+              </span>
+            ))}
+          </div>
+        )}
+        <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-md border border-border bg-background shadow-md">
+          <div className="border-b border-border p-2">
+            <input
+              ref={searchRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search or create tag…"
+              className="w-full rounded-md bg-muted px-3 py-1.5 text-sm focus:outline-none"
+            />
+          </div>
+          <div className="max-h-52 overflow-y-auto">
+            {showCreate ? (
+              <button
+                type="button"
+                className="block w-full px-3 py-2.5 text-left text-sm hover:bg-accent disabled:opacity-50"
+                onClick={handleCreate}
+                disabled={creating}
+              >
+                {creating ? "Creating…" : `Create tag: "${search.trim()}"`}
+              </button>
+            ) : filtered.length === 0 ? (
+              <p className="px-3 py-2.5 text-sm text-muted-foreground">No tags yet</p>
+            ) : (
+              filtered.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm hover:bg-accent"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => toggleTag(t.id)}
+                >
+                  <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selectedIds.includes(t.id) ? "bg-primary border-primary" : "border-border"}`}>
+                    {selectedIds.includes(t.id) && <Check className="h-3 w-3 text-white" />}
+                  </span>
+                  {t.name}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Add / Edit Expense Modal ───────────────────────────────────────────────────
 
 function MobileExpenseModal({
@@ -194,6 +345,8 @@ function MobileExpenseModal({
   accounts,
   categories,
   vendors,
+  tags,
+  onCreateTag,
   expense = null,
 }: {
   open: boolean;
@@ -202,12 +355,24 @@ function MobileExpenseModal({
   accounts: Account[];
   categories: Category[];
   vendors: string[];
+  tags: Tag[];
+  onCreateTag: (name: string) => Promise<Tag>;
   expense?: Expense | null;
 }) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(() => expense?.tags.map((t) => t.tagId) ?? []);
+  const [isReimbursementExpected, setIsReimbursementExpected] = useState(expense?.isReimbursementExpected ?? false);
+  const [ignoreInBudget, setIgnoreInBudget] = useState(expense?.ignoreInBudget ?? false);
+  const [isRecurring, setIsRecurring] = useState(!!expense?.recurrenceRuleId);
+  const [recurringInterval, setRecurringInterval] = useState("1");
+  const [recurringFrequency, setRecurringFrequency] = useState("MONTHLY");
+  const [showEndDate, setShowEndDate] = useState(false);
+  const [showMore, setShowMore] = useState(
+    !!(expense?.notes || expense?.isReimbursementExpected || expense?.recurrenceRuleId || expense?.ignoreInBudget)
+  );
   const today = localToday();
   const isEditing = expense != null;
 
@@ -235,17 +400,39 @@ function MobileExpenseModal({
     e.preventDefault();
     setError(null);
     const fd = new FormData(e.currentTarget);
-    const data: Record<string, unknown> = {
-      amount: parseFloat(fd.get("amount") as string),
-      description: fd.get("description") as string,
-      vendor: fd.get("vendor") as string,
-      date: fd.get("date") as string,
-      accountId: fd.get("accountId") as string,
-      categoryId: (fd.get("categoryId") as string) || null,
-      notes: (fd.get("notes") as string) || undefined,
-    };
     setSaving(true);
     try {
+      let recurrenceRuleId: string | null | undefined = isRecurring
+        ? (expense?.recurrenceRuleId ?? null)
+        : null;
+      if (isRecurring && !recurrenceRuleId) {
+        const rule = await createRecurrenceRule({
+          description: fd.get("description") as string,
+          vendor: fd.get("vendor") as string,
+          amount: parseFloat(fd.get("amount") as string),
+          frequency: recurringFrequency,
+          interval: parseInt(recurringInterval) || 1,
+          startDate: fd.get("date") as string,
+          endDate: (fd.get("endDate") as string) || undefined,
+          categoryId: (fd.get("categoryId") as string) || undefined,
+          accountId: fd.get("accountId") as string,
+        });
+        recurrenceRuleId = rule.id;
+      }
+      const data: Record<string, unknown> = {
+        amount: parseFloat(fd.get("amount") as string),
+        description: fd.get("description") as string,
+        vendor: fd.get("vendor") as string,
+        date: fd.get("date") as string,
+        accountId: fd.get("accountId") as string,
+        categoryId: (fd.get("categoryId") as string) || null,
+        notes: (fd.get("notes") as string) || undefined,
+        tagIds: selectedTagIds,
+        isReimbursementExpected,
+        reimbursementNote: isReimbursementExpected ? (fd.get("reimbursementNote") as string) || undefined : null,
+        ignoreInBudget,
+        recurrenceRuleId,
+      };
       if (isEditing) {
         await updateExpense(expense.id, data);
       } else {
@@ -283,21 +470,33 @@ function MobileExpenseModal({
             </div>
           )}
 
-          <div>
-            <label className="mb-1.5 block text-sm font-medium">Amount</label>
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                $
-              </span>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">Amount</label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  $
+                </span>
+                <input
+                  name="amount"
+                  type="number"
+                  step="0.01"
+                  required
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  defaultValue={expense ? parseFloat(expense.amount).toFixed(2) : undefined}
+                  className="w-full rounded-md border border-border py-2.5 pl-7 pr-3 text-sm focus:border-primary focus:outline-none"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">Date</label>
               <input
-                name="amount"
-                type="number"
-                step="0.01"
+                name="date"
+                type="date"
                 required
-                inputMode="decimal"
-                placeholder="0.00"
-                defaultValue={expense ? parseFloat(expense.amount).toFixed(2) : undefined}
-                className="w-full rounded-md border border-border py-2.5 pl-7 pr-3 text-sm focus:border-primary focus:outline-none"
+                defaultValue={expense?.date?.slice(0, 10) ?? today}
+                className="w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
               />
             </div>
           </div>
@@ -317,17 +516,6 @@ function MobileExpenseModal({
           <div>
             <label className="mb-1.5 block text-sm font-medium">Vendor</label>
             <VendorInput vendors={vendors} initialValue={expense?.vendor ?? ""} />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium">Date</label>
-            <input
-              name="date"
-              type="date"
-              required
-              defaultValue={expense?.date?.slice(0, 10) ?? today}
-              className="w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
-            />
           </div>
 
           <div>
@@ -354,16 +542,170 @@ function MobileExpenseModal({
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium">
-              Notes <span className="font-normal text-muted-foreground">(optional)</span>
-            </label>
-            <textarea
-              name="notes"
-              rows={3}
-              placeholder="Additional notes…"
-              defaultValue={expense?.notes ?? ""}
-              className="w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
+            <label className="mb-1.5 block text-sm font-medium">Tags</label>
+            <TagPicker
+              tags={tags}
+              selectedIds={selectedTagIds}
+              onChange={setSelectedTagIds}
+              onCreateTag={onCreateTag}
             />
+          </div>
+
+          {/* Collapsible "More options" section */}
+          <div className="border-t border-border pt-4">
+            <button
+              type="button"
+              onClick={() => setShowMore((v) => !v)}
+              className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground"
+            >
+              {showMore
+                ? <ChevronDown className="h-4 w-4" />
+                : <ChevronRight className="h-4 w-4" />}
+              More options
+            </button>
+
+            {showMore && (
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">Notes</label>
+                  <textarea
+                    name="notes"
+                    rows={3}
+                    placeholder="Additional notes…"
+                    defaultValue={expense?.notes ?? ""}
+                    className="w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
+                  />
+                </div>
+
+                {/* Toggle tiles */}
+                <div className="space-y-2">
+                  {/* Reimbursement tile */}
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setIsReimbursementExpected((v) => !v)}
+                      className={`flex w-full items-center gap-3 rounded-md border px-3 py-3 text-left text-sm transition-colors ${
+                        isReimbursementExpected
+                          ? "border-primary bg-primary/5"
+                          : "border-border"
+                      }`}
+                    >
+                      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                        isReimbursementExpected ? "border-primary bg-primary" : "border-border"
+                      }`}>
+                        {isReimbursementExpected && <Check className="h-3 w-3 text-white" />}
+                      </span>
+                      <span className={isReimbursementExpected ? "font-medium text-primary" : ""}>
+                        Expecting reimbursement or refund
+                      </span>
+                    </button>
+                    {isReimbursementExpected && (
+                      <input
+                        name="reimbursementNote"
+                        type="text"
+                        defaultValue={expense?.reimbursementNote ?? ""}
+                        placeholder="e.g. Return pending, or expecting $25 from John"
+                        className="mt-2 w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
+                      />
+                    )}
+                  </div>
+
+                  {/* Ignore in budget tile */}
+                  <button
+                    type="button"
+                    onClick={() => setIgnoreInBudget((v) => !v)}
+                    className={`flex w-full items-center gap-3 rounded-md border px-3 py-3 text-left text-sm transition-colors ${
+                      ignoreInBudget ? "border-primary bg-primary/5" : "border-border"
+                    }`}
+                  >
+                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                      ignoreInBudget ? "border-primary bg-primary" : "border-border"
+                    }`}>
+                      {ignoreInBudget && <Check className="h-3 w-3 text-white" />}
+                    </span>
+                    <span className={ignoreInBudget ? "font-medium text-primary" : ""}>
+                      Ignore in budget
+                    </span>
+                  </button>
+
+                  {/* Recurring tile — hidden for offset children */}
+                  {!expense?.parentExpenseId && (
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => !expense?.recurrenceRuleId && setIsRecurring((v) => !v)}
+                        className={`flex w-full items-center gap-3 rounded-md border px-3 py-3 text-left text-sm transition-colors ${
+                          isRecurring ? "border-primary bg-primary/5" : "border-border"
+                        }`}
+                      >
+                        <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                          isRecurring ? "border-primary bg-primary" : "border-border"
+                        }`}>
+                          {isRecurring && <Check className="h-3 w-3 text-white" />}
+                        </span>
+                        <span className={isRecurring ? "font-medium text-primary" : ""}>
+                          Recurring expense
+                        </span>
+                      </button>
+
+                      {/* Frequency picker — only for new recurring expenses */}
+                      {isRecurring && !expense?.recurrenceRuleId && (
+                        <div className="mt-2 space-y-2 rounded-md border border-border p-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground shrink-0">Repeats every</span>
+                            <input
+                              type="number"
+                              min="1"
+                              max="99"
+                              value={recurringInterval}
+                              onChange={(e) => setRecurringInterval(e.target.value)}
+                              placeholder="1"
+                              className="w-14 rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+                            />
+                            <div className="relative flex-1">
+                              <select
+                                name="frequency"
+                                value={recurringFrequency}
+                                onChange={(e) => setRecurringFrequency(e.target.value)}
+                                className="appearance-none w-full rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                              >
+                                {FREQUENCY_OPTIONS.map(({ value, singular, plural }) => {
+                                  const n = parseInt(recurringInterval) || 1;
+                                  return <option key={value} value={value}>{n === 1 ? singular : plural}</option>;
+                                })}
+                              </select>
+                              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                            </div>
+                          </div>
+                          {!showEndDate ? (
+                            <button type="button" onClick={() => setShowEndDate(true)} className="text-xs text-primary">
+                              + Add end date
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-muted-foreground shrink-0">Until</span>
+                              <input
+                                name="endDate"
+                                type="date"
+                                className="flex-1 rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowEndDate(false)}
+                                className="text-muted-foreground hover:text-foreground"
+                                aria-label="Remove end date"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </form>
@@ -605,6 +947,7 @@ export function MobileExpenses() {
   const { data: accounts } = useApi(() => getAccounts({ includeHidden: true }), [], "accounts");
   const { data: categories } = useApi(() => getFlatCategories("EXPENSE"), [], "categories-EXPENSE");
   const { data: vendors } = useApi(() => getExpenseVendors(), [], "expense-vendors");
+  const { data: tags, refetch: refetchTags } = useApi(() => getTags(), [], "tags");
 
   const eligibleAccounts = useMemo(
     () => (accounts ?? []).filter((a) => EXPENSE_ACCOUNT_TYPES.includes(a.type)),
@@ -760,6 +1103,8 @@ export function MobileExpenses() {
         accounts={eligibleAccounts}
         categories={categories ?? []}
         vendors={vendors ?? []}
+        tags={tags ?? []}
+        onCreateTag={async (name) => { const t = await createTag({ name }); refetchTags(); return t; }}
         expense={editingExpense}
       />
     </>
