@@ -903,9 +903,11 @@ function ExpenseRow({
             {expense.tags.slice(0, 4).map(({ tag }) => (
               <span
                 key={tag.id}
-                className="inline-block h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: tag.color ?? "hsl(var(--primary))" }}
-              />
+                className="inline-flex h-3.5 w-3.5 items-center justify-center rounded font-bold leading-none text-white"
+                style={{ backgroundColor: tag.color ?? "hsl(var(--primary))", fontSize: "8px" }}
+              >
+                {tag.name.charAt(0).toUpperCase()}
+              </span>
             ))}
           </span>
         )}
