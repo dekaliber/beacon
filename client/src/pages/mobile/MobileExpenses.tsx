@@ -235,12 +235,12 @@ function MobileExpenseModal({
     const fd = new FormData(e.currentTarget);
     const data: Record<string, unknown> = {
       amount: parseFloat(fd.get("amount") as string),
-      description: fd.get("description"),
-      vendor: fd.get("vendor") || "",
-      date: fd.get("date"),
-      accountId: fd.get("accountId"),
-      categoryId: fd.get("categoryId") || null,
-      notes: (fd.get("notes") as string)?.trim() || null,
+      description: fd.get("description") as string,
+      vendor: fd.get("vendor") as string,
+      date: fd.get("date") as string,
+      accountId: fd.get("accountId") as string,
+      categoryId: (fd.get("categoryId") as string) || null,
+      notes: (fd.get("notes") as string) || undefined,
     };
     setSaving(true);
     try {
