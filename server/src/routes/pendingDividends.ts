@@ -335,6 +335,145 @@ async function runScan(): Promise<void> {
   );
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Returns true if the confirmed dividend activity was a DRIP reinvestment.
+ * Primary signal: linked Income record has isCashReceived=false.
+ * Fallback for tax-advantaged accounts (no Income record): look for a PURCHASE
+ * activity with a lot on the same holding within 60 days after the dividend.
+ */
+async function isDripDividend(activityId: string): Promise<boolean> {
+  const income = await prisma.income.findFirst({
+    where: { activityId },
+    select: { isCashReceived: true },
+  });
+  if (income !== null) return income.isCashReceived === false;
+
+  const dividendActivity = await prisma.investmentActivity.findUnique({
+    where: { id: activityId },
+    select: { holdingId: true, date: true },
+  });
+  if (!dividendActivity?.holdingId) return false;
+
+  const sixtyDaysMs = 60 * 24 * 60 * 60 * 1000;
+  const drip = await prisma.investmentActivity.findFirst({
+    where: {
+      holdingId: dividendActivity.holdingId,
+      type: "PURCHASE",
+      lotId: { not: null },
+      date: {
+        gte: dividendActivity.date,
+        lte: new Date(dividendActivity.date.getTime() + sixtyDaysMs),
+      },
+    },
+  });
+  return drip !== null;
+}
+
+// ── GET /confirmed/:activityId — fetch confirmed dividend info ────────────────
+
+pendingDividendRoutes.get("/confirmed/:activityId", async (req, res) => {
+  const userId = getUserId(req);
+  const { activityId } = req.params;
+
+  const pending = await prisma.pendingDividend.findFirst({
+    where: { activityId, account: { userId } },
+  });
+  if (!pending || pending.status !== "CONFIRMED" || !pending.activityId) {
+    return res.status(404).json({ error: "Confirmed dividend not found" });
+  }
+
+  const activity = await prisma.investmentActivity.findUnique({
+    where: { id: activityId },
+    select: { date: true, amount: true },
+  });
+  if (!activity) return res.status(404).json({ error: "Activity not found" });
+
+  const drip = await isDripDividend(activityId);
+
+  res.json({
+    pendingDividendId: pending.id,
+    isDrip: drip,
+    paymentDate: activity.date.toISOString(),
+    amount: Number(activity.amount),
+    exDate: pending.exDate.toISOString(),
+    ticker: pending.ticker,
+    perShareAmount: Number(pending.perShareAmount),
+    sharesAtExDate: Number(pending.sharesAtExDate),
+  });
+});
+
+// ── PATCH /:id — edit paymentDate / amount for confirmed non-DRIP dividends ──
+
+const updateConfirmedSchema = z.object({
+  paymentDate: z.string().optional(),
+  amount: z.number().positive().optional(),
+});
+
+pendingDividendRoutes.patch("/:id", async (req, res) => {
+  const userId = getUserId(req);
+  const { id } = req.params;
+  const parsed = updateConfirmedSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const { paymentDate, amount } = parsed.data;
+  if (!paymentDate && amount === undefined) {
+    return res.status(400).json({ error: "At least one of paymentDate or amount must be provided" });
+  }
+
+  const pending = await prisma.pendingDividend.findFirst({ where: { id, account: { userId } } });
+  if (!pending) return res.status(404).json({ error: "Pending dividend not found" });
+  if (pending.status !== "CONFIRMED" || !pending.activityId) {
+    return res.status(400).json({ error: "Dividend is not confirmed" });
+  }
+
+  const drip = await isDripDividend(pending.activityId);
+  if (drip) {
+    return res.status(400).json({ error: "DRIP dividends cannot be edited after confirmation" });
+  }
+
+  const newDate = paymentDate ? new Date(paymentDate) : undefined;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const updatedPending = await tx.pendingDividend.update({
+      where: { id },
+      data: { ...(newDate && { paymentDate: newDate }) },
+    });
+
+    const updatedActivity = await tx.investmentActivity.update({
+      where: { id: pending.activityId! },
+      data: {
+        ...(newDate && { date: newDate }),
+        ...(amount !== undefined && { amount }),
+      },
+    });
+
+    let updatedIncome = null;
+    const income = await tx.income.findFirst({
+      where: { activityId: pending.activityId! },
+      select: { id: true, taxClassification: true },
+    });
+    if (income) {
+      const incomeData: Record<string, unknown> = {};
+      if (newDate) incomeData.date = newDate;
+      if (amount !== undefined) {
+        incomeData.amount = amount;
+        incomeData.taxableAmount = income.taxClassification === "RETURN_OF_CAPITAL" ? 0 : amount;
+      }
+      updatedIncome = await tx.income.update({
+        where: { id: income.id },
+        data: incomeData,
+        include: INCOME_INCLUDE,
+      });
+    }
+
+    return { pendingDividend: updatedPending, activity: updatedActivity, income: updatedIncome };
+  });
+
+  res.json(result);
+});
+
 // ── GET /:accountId — scan + return pending dividends ────────────────────────
 
 pendingDividendRoutes.get("/:accountId", async (req, res) => {

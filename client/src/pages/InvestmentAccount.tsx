@@ -70,6 +70,8 @@ import {
   confirmPendingDividend,
   confirmReinvestDividend,
   dismissPendingDividend,
+  getConfirmedDividend,
+  updateConfirmedDividend,
   getFlatCategories,
 } from "@/api";
 import type { SellPreviewResult } from "@/api";
@@ -79,7 +81,7 @@ import { useNotifications } from "@/context/NotificationContext";
 import { isPriceRefreshNeeded } from "@/lib/priceUtils";
 import { useDemo } from "@/context/DemoContext";
 import { scaleGrowthPoints, scaleManuals, scaleHolding } from "@/lib/demo";
-import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity, GrowthPoint, GrowthEvent, PendingDividend, TaxClassification, Category } from "@/types";
+import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity, GrowthPoint, GrowthEvent, PendingDividend, TaxClassification, Category, ConfirmedDividendInfo } from "@/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -3073,6 +3075,137 @@ function ReviewDividendModal({
   );
 }
 
+// ── Edit Confirmed Dividend Modal ─────────────────────────────────────────────
+
+function EditConfirmedDividendModal({
+  activityId,
+  onClose,
+  onSaved,
+}: {
+  activityId: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [dividendInfo, setDividendInfo] = useState<ConfirmedDividendInfo | null>(null);
+  const [paymentDate, setPaymentDate] = useState("");
+  const [amount, setAmount] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getConfirmedDividend(activityId)
+      .then((info) => {
+        setDividendInfo(info);
+        setPaymentDate(info.paymentDate.split("T")[0]);
+        setAmount(info.amount.toFixed(2));
+      })
+      .catch(() => setFetchError("Failed to load dividend information."))
+      .finally(() => setLoading(false));
+  }, [activityId]);
+
+  const handleSave = async () => {
+    if (!dividendInfo) return;
+    const parsedAmount = parseFloat(amount);
+    if (!paymentDate || isNaN(parsedAmount) || parsedAmount <= 0) {
+      setError("Please enter a valid payment date and amount.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await updateConfirmedDividend(dividendInfo.pendingDividendId, { paymentDate, amount: parsedAmount });
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save changes.");
+      setSaving(false);
+    }
+  };
+
+  const inputCls = "w-full border border-border rounded-md px-3 py-2 text-sm bg-background";
+  const readonlyCls = `${inputCls} opacity-60 cursor-default`;
+
+  return (
+    <Modal open onClose={onClose} title="Edit Confirmed Dividend">
+      {loading ? (
+        <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
+      ) : fetchError ? (
+        <div className="space-y-4">
+          <p className="text-sm text-red-500">{fetchError}</p>
+          <div className="flex justify-end">
+            <Button variant="ghost" onClick={onClose}>Close</Button>
+          </div>
+        </div>
+      ) : dividendInfo ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-3 bg-muted/40 rounded-lg">
+            <p className="text-sm font-semibold">{dividendInfo.ticker}</p>
+            <p className="text-sm text-muted-foreground">Ex-date: {formatDate(dividendInfo.exDate)}</p>
+          </div>
+
+          {dividendInfo.isDrip && (
+            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+              <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <p>DRIP reinvestments cannot be edited after confirmation. Dismiss and re-confirm to make changes.</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Per Share Amount</label>
+              <input readOnly value={dividendInfo.perShareAmount.toFixed(6)} className={readonlyCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Shares at Ex-Date</label>
+              <input readOnly value={dividendInfo.sharesAtExDate.toLocaleString(undefined, { maximumFractionDigits: 6 })} className={readonlyCls} />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">
+              {dividendInfo.isDrip ? "Reinvest Date" : "Payment Date"}
+            </label>
+            <input
+              type={dividendInfo.isDrip ? "text" : "date"}
+              value={dividendInfo.isDrip ? paymentDate : paymentDate}
+              onChange={(e) => setPaymentDate(e.target.value)}
+              readOnly={dividendInfo.isDrip}
+              className={dividendInfo.isDrip ? readonlyCls : inputCls}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Total Amount</label>
+            <input
+              type={dividendInfo.isDrip ? "text" : "number"}
+              step="0.01"
+              min="0"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              readOnly={dividendInfo.isDrip}
+              className={dividendInfo.isDrip ? readonlyCls : inputCls}
+            />
+          </div>
+
+          {error && <p className="text-sm text-red-500">{error}</p>}
+
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={onClose} disabled={saving}>
+              {dividendInfo.isDrip ? "Close" : "Cancel"}
+            </Button>
+            {!dividendInfo.isDrip && (
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? "Saving…" : "Save Changes"}
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </Modal>
+  );
+}
+
 // ── Activity Tab ──────────────────────────────────────────────────────────────
 
 function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHoldingsChanged?: () => void }) {
@@ -3088,6 +3221,7 @@ function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHo
   const { refetch: refetchNotifications } = useNotifications();
 
   const [editingActivity, setEditingActivity] = useState<InvestmentActivity | null>(null);
+  const [editingDividendActivityId, setEditingDividendActivityId] = useState<string | null>(null);
   const [reviewingDividend, setReviewingDividend] = useState<PendingDividend | null>(null);
 
   // Filter state — empty Set means "no filter / show all"
@@ -3382,11 +3516,14 @@ function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHo
                         {a.notes ?? ""}
                       </td>
                       <td className="py-3 pl-2 pr-4 text-right">
-                        {isSale && (
+                        {(isSale || (!isSale && !isPurchase)) && (
                           <button
-                            onClick={() => setEditingActivity(a)}
+                            onClick={() => isSale
+                              ? setEditingActivity(a)
+                              : setEditingDividendActivityId(a.id)
+                            }
                             className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                            title="Edit sale"
+                            title={isSale ? "Edit sale" : "Edit dividend"}
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
@@ -3407,6 +3544,17 @@ function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHo
           onClose={() => setEditingActivity(null)}
           onSaved={() => {
             setEditingActivity(null);
+            refetchActivities();
+          }}
+        />
+      )}
+
+      {editingDividendActivityId && (
+        <EditConfirmedDividendModal
+          activityId={editingDividendActivityId}
+          onClose={() => setEditingDividendActivityId(null)}
+          onSaved={() => {
+            setEditingDividendActivityId(null);
             refetchActivities();
           }}
         />

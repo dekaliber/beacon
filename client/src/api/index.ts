@@ -396,6 +396,17 @@ export const confirmPendingDividend = (id: string, data: {
 export const dismissPendingDividend = (id: string) =>
   api.post<PendingDividend>(`/pending-dividends/${id}/dismiss`, {});
 
+export const getConfirmedDividend = (activityId: string) =>
+  api.get<import("../types").ConfirmedDividendInfo>(`/pending-dividends/confirmed/${activityId}`);
+
+export const updateConfirmedDividend = (pendingDividendId: string, data: {
+  paymentDate?: string;
+  amount?: number;
+}) => api.patch<{ pendingDividend: PendingDividend; activity: InvestmentActivity; income: Income | null }>(
+  `/pending-dividends/${pendingDividendId}`,
+  data,
+);
+
 export const confirmReinvestDividend = (id: string, data: {
   exDate: string;
   reinvestDate: string;

@@ -424,6 +424,17 @@ export interface PendingDividend {
   lastTaxClassification: TaxClassification | null;
 }
 
+export interface ConfirmedDividendInfo {
+  pendingDividendId: string;
+  isDrip: boolean;
+  paymentDate: string;
+  amount: number;
+  exDate: string;
+  ticker: string;
+  perShareAmount: number;
+  sharesAtExDate: number;
+}
+
 export interface ManualInvestment {
   id: string;
   accountId: string;
