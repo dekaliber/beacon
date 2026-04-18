@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Plus, X, ChevronDown, ChevronRight, AlertCircle, Check, CornerDownRight, ArrowUp, Trash2, Calendar, Search } from "lucide-react";
+import { Plus, X, ChevronDown, ChevronRight, AlertCircle, Check, CornerDownRight, ArrowUp, Trash2, Calendar, Search, Filter } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
 import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, deleteExpense, getExpenseVendors, getTags, createTag, createRecurrenceRule } from "@/api";
 import { formatCurrency, formatDate, localToday } from "@/lib/utils";
@@ -916,6 +916,441 @@ function ExpenseRow({
   );
 }
 
+// ── Filter state ─────────────────────────────────────────────────────────────
+
+interface ExpenseFilterState {
+  accountIds: string[];
+  categoryIds: string[];
+  tagIds: string[];
+  startDate: string;
+  endDate: string;
+  datePreset: string;
+}
+
+const EXPENSE_DEFAULT_FILTERS: ExpenseFilterState = {
+  accountIds: [],
+  categoryIds: [],
+  tagIds: [],
+  startDate: `${new Date().getFullYear()}-01-01`,
+  endDate: "",
+  datePreset: "This year",
+};
+
+function loadExpenseFilters(): ExpenseFilterState {
+  try {
+    const get = (key: string) => {
+      const item = localStorage.getItem(`beacon-expenses-${key}`);
+      return item !== null ? JSON.parse(item) : null;
+    };
+    return {
+      accountIds: get("accountIds") ?? EXPENSE_DEFAULT_FILTERS.accountIds,
+      categoryIds: get("categoryIds") ?? EXPENSE_DEFAULT_FILTERS.categoryIds,
+      tagIds: get("tagIds") ?? EXPENSE_DEFAULT_FILTERS.tagIds,
+      startDate: get("startDate") ?? EXPENSE_DEFAULT_FILTERS.startDate,
+      endDate: get("endDate") ?? EXPENSE_DEFAULT_FILTERS.endDate,
+      datePreset: get("datePreset") ?? EXPENSE_DEFAULT_FILTERS.datePreset,
+    };
+  } catch {
+    return { ...EXPENSE_DEFAULT_FILTERS };
+  }
+}
+
+function saveExpenseFilters(filters: ExpenseFilterState) {
+  localStorage.setItem("beacon-expenses-accountIds", JSON.stringify(filters.accountIds));
+  localStorage.setItem("beacon-expenses-categoryIds", JSON.stringify(filters.categoryIds));
+  localStorage.setItem("beacon-expenses-tagIds", JSON.stringify(filters.tagIds));
+  localStorage.setItem("beacon-expenses-startDate", JSON.stringify(filters.startDate));
+  localStorage.setItem("beacon-expenses-endDate", JSON.stringify(filters.endDate));
+  localStorage.setItem("beacon-expenses-datePreset", JSON.stringify(filters.datePreset));
+}
+
+// ── Filter sheet ──────────────────────────────────────────────────────────────
+
+function MobileFilterSheet({
+  open,
+  onClose,
+  staged,
+  setStaged,
+  onApply,
+  onReset,
+  accounts,
+  categories,
+  tags,
+  dateRangePresets,
+  todayStr,
+}: {
+  open: boolean;
+  onClose: () => void;
+  staged: ExpenseFilterState;
+  setStaged: React.Dispatch<React.SetStateAction<ExpenseFilterState>>;
+  onApply: () => void;
+  onReset: () => void;
+  accounts: Account[];
+  categories: Category[];
+  tags: Tag[];
+  dateRangePresets: { label: string; start: string; end: string }[];
+  todayStr: string;
+}) {
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [tagOpen, setTagOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(true);
+  const [catSearch, setCatSearch] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    const scrollY = window.scrollY;
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      window.scrollTo(0, scrollY);
+    };
+  }, [open]);
+
+  const personalAccounts = accounts.filter((a) => !a.isJoint);
+  const jointAccounts = accounts.filter((a) => a.isJoint);
+
+  const flatCatOptions = useMemo(() => {
+    const parents = categories.filter((c) => !c.parentId);
+    const children = categories.filter((c) => c.parentId);
+    const opts: { id: string; label: string; parentLabel?: string }[] = [];
+    for (const parent of parents) {
+      const kids = children.filter((c) => c.parentId === parent.id);
+      if (kids.length === 0) {
+        opts.push({ id: parent.id, label: parent.name });
+      } else {
+        for (const child of kids) {
+          opts.push({ id: child.id, label: child.name, parentLabel: parent.name });
+        }
+      }
+    }
+    return opts;
+  }, [categories]);
+
+  const filteredCats = useMemo(() => {
+    const q = catSearch.toLowerCase().trim();
+    if (!q) return flatCatOptions;
+    return flatCatOptions.filter((o) => {
+      const text = (o.parentLabel ? o.parentLabel + " " : "") + o.label;
+      return text.toLowerCase().includes(q);
+    });
+  }, [catSearch, flatCatOptions]);
+
+  const toggleAccount = (id: string) =>
+    setStaged((s) => ({
+      ...s,
+      accountIds: s.accountIds.includes(id)
+        ? s.accountIds.filter((x) => x !== id)
+        : [...s.accountIds, id],
+    }));
+
+  const toggleCategory = (id: string) =>
+    setStaged((s) => ({
+      ...s,
+      categoryIds: s.categoryIds.includes(id)
+        ? s.categoryIds.filter((x) => x !== id)
+        : [...s.categoryIds, id],
+    }));
+
+  const toggleTag = (id: string) =>
+    setStaged((s) => ({
+      ...s,
+      tagIds: s.tagIds.includes(id)
+        ? s.tagIds.filter((x) => x !== id)
+        : [...s.tagIds, id],
+    }));
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col justify-end">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+
+      <div className="relative flex flex-col bg-background rounded-t-2xl max-h-[85vh] overflow-hidden">
+        {/* Drag handle */}
+        <div className="flex justify-center pt-3 pb-1 shrink-0">
+          <div className="h-1 w-10 rounded-full bg-muted-foreground/30" />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
+          <h2 className="text-base font-semibold">Filters</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-2 text-muted-foreground hover:bg-accent"
+            aria-label="Close filters"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto overscroll-contain divide-y divide-border">
+
+          {/* Account */}
+          <div>
+            <div
+              className="flex cursor-pointer items-center px-4 py-3"
+              onClick={() => setAccountOpen((v) => !v)}
+            >
+              <span className="flex-1 text-sm font-medium">Account</span>
+              {accountOpen && (
+                <div className="mr-3 flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <button type="button" onClick={() => setStaged((s) => ({ ...s, accountIds: accounts.map((a) => a.id) }))} className="text-xs text-primary">All</button>
+                  <span className="text-xs text-muted-foreground/40">·</span>
+                  <button type="button" onClick={() => setStaged((s) => ({ ...s, accountIds: [] }))} className="text-xs text-muted-foreground">None</button>
+                </div>
+              )}
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-150 ${accountOpen ? "rotate-180" : ""}`} />
+            </div>
+            {accountOpen && (
+              <div className="px-4 pb-3">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                  <div className="space-y-1.5">
+                    {personalAccounts.length > 0 && (
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Personal</p>
+                    )}
+                    {personalAccounts.map((a) => {
+                      const sel = staged.accountIds.includes(a.id);
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => toggleAccount(a.id)}
+                          className={`flex w-full items-center gap-2 rounded-md border px-2.5 py-2 text-left text-sm transition-colors ${
+                            sel ? "border-primary bg-primary/5" : "border-border"
+                          }`}
+                        >
+                          <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${sel ? "border-primary bg-primary" : "border-border"}`}>
+                            {sel && <Check className="h-2.5 w-2.5 text-white" />}
+                          </span>
+                          <span className={`truncate text-xs ${sel ? "font-medium text-primary" : ""}`}>{a.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="space-y-1.5">
+                    {jointAccounts.length > 0 && (
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Joint</p>
+                    )}
+                    {jointAccounts.map((a) => {
+                      const sel = staged.accountIds.includes(a.id);
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => toggleAccount(a.id)}
+                          className={`flex w-full items-center gap-2 rounded-md border px-2.5 py-2 text-left text-sm transition-colors ${
+                            sel ? "border-primary bg-primary/5" : "border-border"
+                          }`}
+                        >
+                          <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${sel ? "border-primary bg-primary" : "border-border"}`}>
+                            {sel && <Check className="h-2.5 w-2.5 text-white" />}
+                          </span>
+                          <span className={`truncate text-xs ${sel ? "font-medium text-primary" : ""}`}>{a.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Categories */}
+          <div>
+            <div
+              className="flex cursor-pointer items-center px-4 py-3"
+              onClick={() => setCategoryOpen((v) => !v)}
+            >
+              <span className="flex-1 text-sm font-medium">Categories</span>
+              {categoryOpen && (
+                <div className="mr-3 flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <button type="button" onClick={() => setStaged((s) => ({ ...s, categoryIds: flatCatOptions.map((o) => o.id) }))} className="text-xs text-primary">All</button>
+                  <span className="text-xs text-muted-foreground/40">·</span>
+                  <button type="button" onClick={() => setStaged((s) => ({ ...s, categoryIds: [] }))} className="text-xs text-muted-foreground">None</button>
+                </div>
+              )}
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-150 ${categoryOpen ? "rotate-180" : ""}`} />
+            </div>
+            {categoryOpen && (
+              <div className="px-4 pb-3 space-y-2">
+                <input
+                  type="text"
+                  value={catSearch}
+                  onChange={(e) => setCatSearch(e.target.value)}
+                  placeholder="Search categories…"
+                  className="w-full rounded-md bg-muted px-3 py-2 text-sm focus:outline-none"
+                />
+                <div className="max-h-44 overflow-y-auto rounded-md border border-border">
+                  {filteredCats.length === 0 ? (
+                    <p className="px-3 py-2 text-sm text-muted-foreground">No categories found</p>
+                  ) : (
+                    filteredCats.map((o) => {
+                      const sel = staged.categoryIds.includes(o.id);
+                      return (
+                        <button
+                          key={o.id}
+                          type="button"
+                          onClick={() => toggleCategory(o.id)}
+                          className={`flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-accent ${sel ? "bg-primary/5" : ""}`}
+                        >
+                          <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${sel ? "border-primary bg-primary" : "border-border"}`}>
+                            {sel && <Check className="h-2.5 w-2.5 text-white" />}
+                          </span>
+                          <span className="flex min-w-0 flex-col">
+                            {o.parentLabel && (
+                              <span className="text-xs leading-tight text-muted-foreground">{o.parentLabel}</span>
+                            )}
+                            <span className={`text-sm ${sel ? "font-medium text-primary" : ""}`}>{o.label}</span>
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Tags */}
+          <div>
+            <div
+              className="flex cursor-pointer items-center px-4 py-3"
+              onClick={() => setTagOpen((v) => !v)}
+            >
+              <span className="flex-1 text-sm font-medium">Tag</span>
+              {tagOpen && (
+                <div className="mr-3 flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <button type="button" onClick={() => setStaged((s) => ({ ...s, tagIds: tags.map((t) => t.id) }))} className="text-xs text-primary">All</button>
+                  <span className="text-xs text-muted-foreground/40">·</span>
+                  <button type="button" onClick={() => setStaged((s) => ({ ...s, tagIds: [] }))} className="text-xs text-muted-foreground">None</button>
+                </div>
+              )}
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-150 ${tagOpen ? "rotate-180" : ""}`} />
+            </div>
+            {tagOpen && (
+              <div className="px-4 pb-3">
+                {tags.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No tags available</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {tags.map((t) => {
+                      const sel = staged.tagIds.includes(t.id);
+                      const color = t.color ?? "hsl(var(--primary))";
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => toggleTag(t.id)}
+                          className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-opacity"
+                          style={{
+                            backgroundColor: sel ? color : "transparent",
+                            color: sel ? "#fff" : color,
+                            border: `1.5px solid ${color}`,
+                            opacity: sel ? 1 : 0.55,
+                          }}
+                        >
+                          {t.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Date Range */}
+          <div>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between px-4 py-3"
+              onClick={() => setDateOpen((v) => !v)}
+            >
+              <span className="text-sm font-medium">Date Range</span>
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-150 ${dateOpen ? "rotate-180" : ""}`} />
+            </button>
+            {dateOpen && (
+              <div className="px-4 pb-3 space-y-3">
+                <div className="relative">
+                  <select
+                    value={staged.datePreset}
+                    onChange={(e) => {
+                      const label = e.target.value;
+                      if (label === "Custom") {
+                        setStaged((s) => ({ ...s, datePreset: "Custom" }));
+                      } else {
+                        const preset = dateRangePresets.find((p) => p.label === label);
+                        if (preset) setStaged((s) => ({ ...s, datePreset: label, startDate: preset.start, endDate: preset.end }));
+                      }
+                    }}
+                    className="appearance-none w-full rounded-md border border-border py-2.5 pl-3 pr-8 text-sm text-foreground focus:border-primary focus:outline-none"
+                  >
+                    {dateRangePresets.map((p) => (
+                      <option key={p.label} value={p.label}>{p.label}</option>
+                    ))}
+                    <option value="Custom">Custom</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={staged.startDate}
+                      onChange={(e) => setStaged((s) => ({ ...s, startDate: e.target.value, datePreset: "Custom" }))}
+                      className="w-full appearance-none rounded-md border border-border px-3 py-2.5 pr-8 text-sm text-foreground focus:border-primary focus:outline-none"
+                    />
+                    <Calendar className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={staged.endDate || todayStr}
+                      onChange={(e) => setStaged((s) => ({ ...s, endDate: e.target.value, datePreset: "Custom" }))}
+                      className="w-full appearance-none rounded-md border border-border px-3 py-2.5 pr-8 text-sm text-foreground focus:border-primary focus:outline-none"
+                    />
+                    <Calendar className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        {/* Bottom action buttons */}
+        <div className="shrink-0 border-t border-border p-4">
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => { onReset(); onClose(); }}
+              className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent"
+            >
+              Reset to defaults
+            </button>
+            <button
+              type="button"
+              onClick={() => { onApply(); onClose(); }}
+              className="flex-1 rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground"
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const UPCOMING_PREVIEW = 4;
@@ -935,6 +1370,11 @@ export function MobileExpenses() {
   // Ref keeps applied search available inside the fetch effect without adding it
   // to deps (which would cause a double-fetch when committing a new search).
   const appliedSearchRef = useRef("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [staged, setStaged] = useState<ExpenseFilterState>(() => loadExpenseFilters());
+  const [applied, setApplied] = useState<ExpenseFilterState>(() => loadExpenseFilters());
+  // Mirrors applied state for use inside the fetch effect (same pattern as appliedSearchRef).
+  const appliedFiltersRef = useRef<ExpenseFilterState>(loadExpenseFilters());
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingMoreRef = useRef(false);
   const today = localToday();
@@ -944,10 +1384,33 @@ export function MobileExpenses() {
     return d.toISOString().slice(0, 10);
   }, [today]);
 
-  const upcomingParams = useMemo(
-    () => ({ startDate: tomorrow, sortBy: "date", sortOrder: "asc", limit: "100" }),
-    [tomorrow]
-  );
+  const dateRangePresets = useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const pastYear = new Date(now); pastYear.setFullYear(pastYear.getFullYear() - 1); pastYear.setDate(pastYear.getDate() + 1);
+    const past90 = new Date(now); past90.setDate(past90.getDate() - 90);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    return [
+      { label: "This year", start: `${year}-01-01`, end: "" },
+      { label: String(year - 1), start: `${year - 1}-01-01`, end: `${year - 1}-12-31` },
+      { label: "Past year", start: fmt(pastYear), end: "" },
+      { label: "Past 90 days", start: fmt(past90), end: "" },
+      { label: "This month", start: `${year}-${pad(now.getMonth() + 1)}-01`, end: "" },
+      { label: "Last month", start: fmt(lastMonthStart), end: fmt(lastMonthEnd) },
+    ];
+  }, []);
+
+  const upcomingParams = useMemo(() => {
+    const params: Record<string, string> = { startDate: tomorrow, sortBy: "date", sortOrder: "asc", limit: "100" };
+    if (applied.categoryIds.length > 0) params.categoryIds = applied.categoryIds.join(",");
+    if (applied.accountIds.length > 0) params.accountIds = applied.accountIds.join(",");
+    if (applied.tagIds.length > 0) params.tagIds = applied.tagIds.join(",");
+    if (appliedSearch.trim()) params.search = appliedSearch.trim();
+    return params;
+  }, [tomorrow, applied, appliedSearch]);
 
   // Direct fetch with cancellation — avoids useApi's object-reference instability
   // under React 18 concurrent mode which can cause duplicate page appends.
@@ -957,13 +1420,27 @@ export function MobileExpenses() {
     let cancelled = false;
     setLoadingExpenses(true);
     const q = appliedSearchRef.current;
+    const f = appliedFiltersRef.current;
+    const isDefaultDateFilter = (
+      f.startDate === EXPENSE_DEFAULT_FILTERS.startDate &&
+      f.endDate === EXPENSE_DEFAULT_FILTERS.endDate
+    );
     const params: Record<string, string> = {
       sortBy: "date", sortOrder: "desc",
-      endDate: today,
       limit: q ? "100" : "50",
       page: currentPage.toString(),
       ...(q ? { search: q } : {}),
     };
+    if (f.categoryIds.length > 0) params.categoryIds = f.categoryIds.join(",");
+    if (f.accountIds.length > 0) params.accountIds = f.accountIds.join(",");
+    if (f.tagIds.length > 0) params.tagIds = f.tagIds.join(",");
+    if (q && isDefaultDateFilter) {
+      params.endDate = today;
+    } else {
+      params.startDate = f.startDate || EXPENSE_DEFAULT_FILTERS.startDate;
+      const endDate = f.endDate || today;
+      params.endDate = endDate > today ? today : endDate;
+    }
     getExpenses(params)
       .then((result) => {
         if (cancelled || !result) return;
@@ -1058,6 +1535,38 @@ export function MobileExpenses() {
     setRefreshKey((k) => k + 1);
   }, []);
 
+  const applyFilters = useCallback((filters: ExpenseFilterState) => {
+    appliedFiltersRef.current = filters;
+    setApplied(filters);
+    saveExpenseFilters(filters);
+    setCurrentPage(1);
+    setAllExpenses([]);
+    setHasMore(false);
+    loadingMoreRef.current = false;
+    setRefreshKey((k) => k + 1);
+  }, []);
+
+  const resetFilters = useCallback(() => {
+    const defaults = { ...EXPENSE_DEFAULT_FILTERS };
+    appliedFiltersRef.current = defaults;
+    setApplied(defaults);
+    setStaged(defaults);
+    saveExpenseFilters(defaults);
+    setCurrentPage(1);
+    setAllExpenses([]);
+    setHasMore(false);
+    loadingMoreRef.current = false;
+    setRefreshKey((k) => k + 1);
+  }, []);
+
+  const hasActiveFilters = !!(
+    applied.accountIds.length > 0 ||
+    applied.categoryIds.length > 0 ||
+    applied.tagIds.length > 0 ||
+    applied.startDate !== EXPENSE_DEFAULT_FILTERS.startDate ||
+    (applied.endDate && applied.endDate !== today)
+  );
+
   const handleSaved = useCallback(() => {
     setCurrentPage(1);
     setAllExpenses([]);
@@ -1070,9 +1579,9 @@ export function MobileExpenses() {
   return (
     <>
       <div className="space-y-6">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <h1 className="flex-1 text-2xl font-bold">Expenses</h1>
-          <div className="relative w-1/2">
+          <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="search"
@@ -1089,6 +1598,18 @@ export function MobileExpenses() {
               className="h-9 w-full rounded-md border border-border bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
             />
           </div>
+          <button
+            type="button"
+            onClick={() => setFilterOpen(true)}
+            aria-label="Filters"
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border transition-colors ${
+              hasActiveFilters
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-background text-foreground"
+            }`}
+          >
+            <Filter className="h-4 w-4" />
+          </button>
         </div>
 
         {upcomingExpenses.length > 0 && (
@@ -1201,6 +1722,20 @@ export function MobileExpenses() {
         tags={tags ?? []}
         onCreateTag={async (name) => { const t = await createTag({ name }); refetchTags(); return t; }}
         expense={editingExpense}
+      />
+
+      <MobileFilterSheet
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        staged={staged}
+        setStaged={setStaged}
+        onApply={() => applyFilters(staged)}
+        onReset={resetFilters}
+        accounts={eligibleAccounts}
+        categories={categories ?? []}
+        tags={tags ?? []}
+        dateRangePresets={dateRangePresets}
+        todayStr={today}
       />
     </>
   );
