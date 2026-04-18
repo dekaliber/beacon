@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Trash2, Pencil, ChevronRight, ChevronDown, Target, PieChart } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -87,7 +87,7 @@ export function AssetClassesPage() {
 
   const closeModal = () => setModalState({ open: false, editing: null, parentId: null });
 
-  const handleSave = async (data: { name: string; color?: string | null }) => {
+  const handleSave = async (data: { name?: string; color?: string | null }) => {
     if (modalState.editing) {
       await updateAssetClass(modalState.editing.id, data);
     } else {
@@ -363,7 +363,7 @@ function AssetClassRow({
 interface AssetClassModalProps {
   open: boolean;
   onClose: () => void;
-  onSave: (data: { name: string; color?: string | null }) => Promise<void>;
+  onSave: (data: { name?: string; color?: string | null }) => Promise<void>;
   editing: AssetClass | null;
   isChild: boolean;
 }
@@ -372,12 +372,19 @@ function AssetClassModal({ open, onClose, onSave, editing, isChild }: AssetClass
   const [saving, setSaving] = useState(false);
   const [color, setColor] = useState<string>(editing?.color ?? PRESET_COLORS[0]);
 
+  useEffect(() => {
+    if (open) {
+      setColor(editing?.color ?? PRESET_COLORS[0]);
+    }
+  }, [open, editing]);
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
     const form = new FormData(e.currentTarget);
     try {
-      await onSave({ name: form.get("name") as string, color });
+      const name = form.get("name") as string | null;
+      await onSave({ ...(name != null ? { name } : {}), color });
     } finally {
       setSaving(false);
     }

@@ -8,7 +8,7 @@ export const accountRoutes = Router();
 const accountSchema = z.object({
   name: z.string().min(1),
   type: z.enum(["CHECKING", "SAVINGS", "CREDIT_CARD", "INVESTMENT"]),
-  balance: z.number().default(0),
+  balance: z.coerce.number().default(0),
   currency: z.string().default("USD"),
   color: z.string().optional(),
   isJoint: z.boolean().optional(),
@@ -26,7 +26,7 @@ const accountSchema = z.object({
   dividendElection: z.enum(["REINVEST", "CASH"]).optional().nullable(),
   defaultCashAccountId: z.string().optional().nullable(),
   // Settlement cash (investment accounts only)
-  cashBalance: z.number().nonnegative().optional().nullable(),
+  cashBalance: z.coerce.number().nonnegative().optional().nullable(),
 });
 
 // ── Account routes ──
