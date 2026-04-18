@@ -12,7 +12,7 @@ const EXPENSE_ALLOWED_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "CREDIT_CARD", "CA
 const expenseSchema = z.object({
   amount: z.number().refine((v) => v !== 0, "Amount cannot be zero"),
   description: z.string().min(1),
-  vendor: z.string().min(1),
+  vendor: z.string(),
   date: z.string().transform((s) => new Date(s)),
   notes: z.string().optional(),
   categoryId: z.string().nullable().optional(),
