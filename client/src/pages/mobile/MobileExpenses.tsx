@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Plus, X, ChevronDown, AlertCircle, Check, CornerDownRight, ArrowUp } from "lucide-react";
+import { Plus, X, ChevronDown, AlertCircle, Check, CornerDownRight, ArrowUp, Trash2 } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
-import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, getExpenseVendors } from "@/api";
+import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, deleteExpense, getExpenseVendors } from "@/api";
 import { formatCurrency, formatDate, localToday } from "@/lib/utils";
 import type { Account, Category, Expense } from "@/types";
 
@@ -205,6 +205,8 @@ function MobileExpenseModal({
   expense?: Expense | null;
 }) {
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const today = localToday();
   const isEditing = expense != null;
@@ -369,9 +371,41 @@ function MobileExpenseModal({
       {/* Sticky footer */}
       <div className="shrink-0 border-t border-border p-4">
         <div className="flex gap-3">
+          {isEditing && (
+            confirmDelete ? (
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    await deleteExpense(expense.id);
+                    onSaved();
+                    onClose();
+                  } catch {
+                    setError("Failed to delete expense");
+                    setDeleting(false);
+                    setConfirmDelete(false);
+                  }
+                }}
+                className="rounded-md bg-destructive px-3 py-2.5 text-sm font-medium text-destructive-foreground disabled:opacity-50 transition-colors"
+              >
+                {deleting ? "Deleting…" : "Confirm?"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="rounded-md border border-border p-2.5 text-muted-foreground hover:border-destructive hover:text-destructive transition-colors"
+                aria-label="Delete expense"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )
+          )}
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => { onClose(); setConfirmDelete(false); }}
             className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent transition-colors"
           >
             Cancel
