@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
-import { Plus, X, ChevronDown, AlertCircle, Check, CornerDownRight } from "lucide-react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { Plus, X, ChevronDown, AlertCircle, Check, CornerDownRight, ArrowUp } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
-import { getExpenses, getAccounts, getFlatCategories, createExpense, getExpenseVendors } from "@/api";
+import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, getExpenseVendors } from "@/api";
 import { formatCurrency, formatDate, localToday } from "@/lib/utils";
 import type { Account, Category, Expense } from "@/types";
 
@@ -9,8 +9,8 @@ const EXPENSE_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH"];
 
 // ── Vendor input with suggestions ─────────────────────────────────────────────
 
-function VendorInput({ vendors }: { vendors: string[] }) {
-  const [value, setValue] = useState("");
+function VendorInput({ vendors, initialValue = "" }: { vendors: string[]; initialValue?: string }) {
+  const [value, setValue] = useState(initialValue);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -61,8 +61,8 @@ function VendorInput({ vendors }: { vendors: string[] }) {
 
 // ── Category picker with search ───────────────────────────────────────────────
 
-function CategoryPicker({ categories }: { categories: Category[] }) {
-  const [selectedId, setSelectedId] = useState("");
+function CategoryPicker({ categories, initialId = "" }: { categories: Category[]; initialId?: string }) {
+  const [selectedId, setSelectedId] = useState(initialId);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -185,15 +185,16 @@ function CategoryPicker({ categories }: { categories: Category[] }) {
   );
 }
 
-// ── Add Expense Modal ──────────────────────────────────────────────────────────
+// ── Add / Edit Expense Modal ───────────────────────────────────────────────────
 
-function MobileAddExpenseModal({
+function MobileExpenseModal({
   open,
   onClose,
   onSaved,
   accounts,
   categories,
   vendors,
+  expense = null,
 }: {
   open: boolean;
   onClose: () => void;
@@ -201,10 +202,30 @@ function MobileAddExpenseModal({
   accounts: Account[];
   categories: Category[];
   vendors: string[];
+  expense?: Expense | null;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const today = localToday();
+  const isEditing = expense != null;
+
+  // Lock body scroll while open — prevents iOS Safari from scrolling the page
+  // underneath when the address bar retracts.
+  useEffect(() => {
+    if (!open) return;
+    const scrollY = window.scrollY;
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      window.scrollTo(0, scrollY);
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -223,7 +244,11 @@ function MobileAddExpenseModal({
     };
     setSaving(true);
     try {
-      await createExpense(data);
+      if (isEditing) {
+        await updateExpense(expense.id, data);
+      } else {
+        await createExpense(data);
+      }
       onSaved();
       onClose();
     } catch (err) {
@@ -236,7 +261,7 @@ function MobileAddExpenseModal({
     <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       {/* Header */}
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-        <h2 className="text-base font-semibold">Add Expense</h2>
+        <h2 className="text-base font-semibold">{isEditing ? "Edit Expense" : "Add Expense"}</h2>
         <button
           type="button"
           onClick={onClose}
@@ -248,7 +273,7 @@ function MobileAddExpenseModal({
       </div>
 
       {/* Scrollable form */}
-      <form id="mobile-add-expense" onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+      <form id="mobile-expense-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto overscroll-contain">
         <div className="space-y-5 p-4">
           {error && (
             <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -266,10 +291,10 @@ function MobileAddExpenseModal({
                 name="amount"
                 type="number"
                 step="0.01"
-                min="0.01"
                 required
                 inputMode="decimal"
                 placeholder="0.00"
+                defaultValue={expense ? parseFloat(expense.amount).toFixed(2) : undefined}
                 className="w-full rounded-md border border-border py-2.5 pl-7 pr-3 text-sm focus:border-primary focus:outline-none"
               />
             </div>
@@ -282,13 +307,14 @@ function MobileAddExpenseModal({
               type="text"
               required
               placeholder="What did you spend on?"
+              defaultValue={expense?.description ?? ""}
               className="w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
             />
           </div>
 
           <div>
             <label className="mb-1.5 block text-sm font-medium">Vendor</label>
-            <VendorInput vendors={vendors} />
+            <VendorInput vendors={vendors} initialValue={expense?.vendor ?? ""} />
           </div>
 
           <div>
@@ -297,7 +323,7 @@ function MobileAddExpenseModal({
               name="date"
               type="date"
               required
-              defaultValue={today}
+              defaultValue={expense?.date?.slice(0, 10) ?? today}
               className="w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
             />
           </div>
@@ -308,7 +334,7 @@ function MobileAddExpenseModal({
               <select
                 name="accountId"
                 required
-                defaultValue=""
+                defaultValue={expense?.accountId ?? ""}
                 className="appearance-none w-full rounded-md border border-border py-2.5 pl-3 pr-8 text-sm text-foreground focus:border-primary focus:outline-none"
               >
                 <option value="" disabled>Select account…</option>
@@ -322,7 +348,7 @@ function MobileAddExpenseModal({
 
           <div>
             <label className="mb-1.5 block text-sm font-medium">Category</label>
-            <CategoryPicker categories={categories} />
+            <CategoryPicker categories={categories} initialId={expense?.categoryId ?? ""} />
           </div>
 
           <div>
@@ -333,6 +359,7 @@ function MobileAddExpenseModal({
               name="notes"
               rows={3}
               placeholder="Additional notes…"
+              defaultValue={expense?.notes ?? ""}
               className="w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
             />
           </div>
@@ -351,11 +378,11 @@ function MobileAddExpenseModal({
           </button>
           <button
             type="submit"
-            form="mobile-add-expense"
+            form="mobile-expense-form"
             disabled={saving}
             className="flex-1 rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
           >
-            {saving ? "Saving…" : "Add Expense"}
+            {saving ? "Saving…" : isEditing ? "Save Changes" : "Add Expense"}
           </button>
         </div>
       </div>
@@ -411,10 +438,14 @@ function ExpenseRow({
   expense,
   upcoming = false,
   isOffset = false,
+  parentFullyOffset = false,
+  onTap,
 }: {
   expense: Expense;
   upcoming?: boolean;
   isOffset?: boolean;
+  parentFullyOffset?: boolean;
+  onTap?: () => void;
 }) {
   const fullyOffset = isFullyOffset(expense);
   const isNegative = parseFloat(expense.amount) < 0;
@@ -424,22 +455,23 @@ function ExpenseRow({
     expense.recurrenceRuleId ? "bg-blue-50/50" :
     expense.isReimbursementExpected ? "bg-amber-50/50" : "";
 
-  // Fully-offset rows get the same grayed-out treatment as desktop
-  const mutedText = fullyOffset || isOffset ? "text-muted-foreground" : "";
+  const mutedText = fullyOffset ? "text-gray-300" : "";
 
   if (isOffset) {
+    const gray = parentFullyOffset ? "text-gray-300" : "text-muted-foreground";
+    const grayDim = parentFullyOffset ? "text-gray-300/70" : "text-muted-foreground/70";
     return (
       <div className="flex items-start gap-2 py-2">
-        <CornerDownRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <CornerDownRight className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${gray}`} />
         <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-xs text-muted-foreground">{expense.description}</p>
-            <p className="text-xs text-muted-foreground/70">
+            <p className={`truncate text-xs ${gray}`}>{expense.description}</p>
+            <p className={`text-xs ${grayDim}`}>
               {expense.vendor && <>{expense.vendor} &middot; </>}
               {expense.account.name}
             </p>
           </div>
-          <span className={`shrink-0 text-xs font-medium ${isNegative ? "text-green-600" : "text-muted-foreground"}`}>
+          <span className={`shrink-0 text-xs font-medium ${parentFullyOffset ? gray : isNegative ? "text-green-600" : gray}`}>
             {isNegative
               ? `+${formatCurrency(Math.abs(parseFloat(expense.amount)))}`
               : formatCurrency(parseFloat(expense.amount))}
@@ -456,15 +488,18 @@ function ExpenseRow({
           {!upcoming && expense.isReimbursementExpected && (
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
           )}
-          <p className={`truncate font-medium ${mutedText}`}>{expense.description}</p>
+          <p
+            className={`truncate font-medium ${mutedText} ${onTap ? "cursor-pointer active:opacity-60" : ""}`}
+            onClick={onTap}
+          >{expense.description}</p>
         </div>
-        <span className={`shrink-0 font-semibold ${fullyOffset ? "text-muted-foreground" : isNegative ? "text-green-600" : ""}`}>
+        <span className={`shrink-0 font-semibold ${fullyOffset ? "text-gray-300" : isNegative ? "text-green-600" : ""}`}>
           {isNegative
             ? `+${formatCurrency(Math.abs(parseFloat(expense.amount)))}`
             : formatCurrency(parseFloat(expense.amount))}
         </span>
       </div>
-      <p className="mt-0.5 text-sm text-muted-foreground">
+      <p className={`mt-0.5 text-sm ${fullyOffset ? "text-gray-300" : "text-muted-foreground"}`}>
         {!isOffset && <>{formatDate(expense.date)} &middot; </>}
         {expense.vendor && <>{expense.vendor} &middot; </>}
         {expense.account.name}
@@ -479,30 +514,55 @@ const UPCOMING_PREVIEW = 4;
 
 export function MobileExpenses() {
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [upcomingExpanded, setUpcomingExpanded] = useState(false);
-
+  const [currentPage, setCurrentPage] = useState(1);
+  const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const [loadingExpenses, setLoadingExpenses] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const loadingMoreRef = useRef(false);
   const today = localToday();
-  const startOfMonth = today.slice(0, 8) + "01";
   const tomorrow = useMemo(() => {
     const d = new Date(today.replace(/-/g, "/"));
     d.setDate(d.getDate() + 1);
     return d.toISOString().slice(0, 10);
   }, [today]);
 
-  const mainParams = useMemo(
-    () => ({ startDate: startOfMonth, endDate: today, sortBy: "date", sortOrder: "desc", limit: "200" }),
-    [startOfMonth, today]
-  );
   const upcomingParams = useMemo(
     () => ({ startDate: tomorrow, sortBy: "date", sortOrder: "asc", limit: "100" }),
     [tomorrow]
   );
 
-  const { data: expenseData, refetch: refetchExpenses } = useApi(
-    () => getExpenses(mainParams),
-    [mainParams],
-    `mobile-expenses-${JSON.stringify(mainParams)}`
-  );
+  // Direct fetch with cancellation — avoids useApi's object-reference instability
+  // under React 18 concurrent mode which can cause duplicate page appends.
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingExpenses(true);
+    getExpenses({ endDate: today, sortBy: "date", sortOrder: "desc", limit: "50", page: currentPage.toString() })
+      .then((result) => {
+        if (cancelled || !result) return;
+        const { data, pagination: pag } = result;
+        if (pag.page === 1) {
+          setAllExpenses(data ?? []);
+        } else {
+          setAllExpenses((prev) => [...prev, ...(data ?? [])]);
+        }
+        setHasMore(pag.page < pag.totalPages);
+        loadingMoreRef.current = false;
+        setLoadingExpenses(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          loadingMoreRef.current = false;
+          setLoadingExpenses(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [today, currentPage, refreshKey]);
+
   const { data: upcomingData, refetch: refetchUpcoming } = useApi(
     () => getExpenses(upcomingParams),
     [upcomingParams],
@@ -517,15 +577,42 @@ export function MobileExpenses() {
     [accounts]
   );
 
-  const expenses = expenseData?.data ?? [];
+  // Infinite scroll sentinel
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !loadingMoreRef.current) {
+          loadingMoreRef.current = true;
+          setCurrentPage((p) => p + 1);
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore]);
+
+  // Back to top button
+  useEffect(() => {
+    const handleScroll = () => setShowBackToTop(window.scrollY > 2500);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const upcomingExpenses = upcomingData?.data ?? [];
   const visibleUpcoming = upcomingExpanded ? upcomingExpenses : upcomingExpenses.slice(0, UPCOMING_PREVIEW);
   const hiddenUpcomingCount = upcomingExpenses.length - UPCOMING_PREVIEW;
 
-  const handleSaved = () => {
-    refetchExpenses();
+  const handleSaved = useCallback(() => {
+    setCurrentPage(1);
+    setAllExpenses([]);
+    setHasMore(false);
+    loadingMoreRef.current = false;
+    setRefreshKey((k) => k + 1);
     refetchUpcoming();
-  };
+  }, [refetchUpcoming]);
 
   return (
     <>
@@ -543,7 +630,7 @@ export function MobileExpenses() {
                   <React.Fragment key={expense.id}>
                     <ExpenseRow expense={expense} upcoming />
                     {expense.offsets?.map((offset) => (
-                      <ExpenseRow key={offset.id} expense={offset} upcoming isOffset />
+                      <ExpenseRow key={offset.id} expense={offset} upcoming isOffset parentFullyOffset={isFullyOffset(expense)} />
                     ))}
                   </React.Fragment>
                 ))}
@@ -567,19 +654,19 @@ export function MobileExpenses() {
 
         <section>
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            This Month
+            All Expenses
           </h2>
-          {expenses.length === 0 ? (
+          {allExpenses.length === 0 && !loadingExpenses ? (
             <p className="py-6 text-center text-sm text-muted-foreground">No expenses this month.</p>
           ) : (
             <div className="divide-y divide-border">
-              {buildRenderItems(expenses).map((item) => {
+              {buildRenderItems(allExpenses).map((item) => {
                 if (item.type === "single") {
                   return (
                     <React.Fragment key={item.expense.id}>
-                      <ExpenseRow expense={item.expense} />
+                      <ExpenseRow expense={item.expense} onTap={() => setEditingExpense(item.expense)} />
                       {item.expense.offsets?.map((offset) => (
-                        <ExpenseRow key={offset.id} expense={offset} isOffset />
+                        <ExpenseRow key={offset.id} expense={offset} isOffset parentFullyOffset={isFullyOffset(item.expense)} />
                       ))}
                     </React.Fragment>
                   );
@@ -591,9 +678,9 @@ export function MobileExpenses() {
                     <div className="divide-y divide-border">
                       {item.members.map(({ expense }) => (
                         <React.Fragment key={expense.id}>
-                          <ExpenseRow expense={expense} />
+                          <ExpenseRow expense={expense} onTap={() => setEditingExpense(expense)} />
                           {expense.offsets?.map((offset) => (
-                            <ExpenseRow key={offset.id} expense={offset} isOffset />
+                            <ExpenseRow key={offset.id} expense={offset} isOffset parentFullyOffset={isFullyOffset(expense)} />
                           ))}
                         </React.Fragment>
                       ))}
@@ -604,7 +691,23 @@ export function MobileExpenses() {
             </div>
           )}
         </section>
+
+        {loadingExpenses && currentPage > 1 && (
+          <p className="py-4 text-center text-sm text-muted-foreground">Loading more...</p>
+        )}
+        <div ref={sentinelRef} className="h-1" />
       </div>
+
+      {showBackToTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="fixed bottom-22 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg transition-opacity hover:opacity-90"
+          aria-label="Back to top"
+        >
+          <ArrowUp className="h-4 w-4" />
+          Back to top
+        </button>
+      )}
 
       {/* Floating add button */}
       <button
@@ -615,13 +718,15 @@ export function MobileExpenses() {
         <Plus className="h-6 w-6" />
       </button>
 
-      <MobileAddExpenseModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
+      <MobileExpenseModal
+        key={editingExpense?.id ?? "new"}
+        open={modalOpen || editingExpense != null}
+        onClose={() => { setModalOpen(false); setEditingExpense(null); }}
         onSaved={handleSaved}
         accounts={eligibleAccounts}
         categories={categories ?? []}
         vendors={vendors ?? []}
+        expense={editingExpense}
       />
     </>
   );
