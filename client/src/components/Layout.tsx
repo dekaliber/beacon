@@ -285,8 +285,8 @@ export function Layout() {
       {/* Top nav bar */}
       <header className="sticky top-0 z-50 border-b border-border bg-background">
         <div className="mx-auto flex h-14 max-w-7xl items-center px-4">
-          <Link to="/" className="mr-8 text-lg font-bold text-primary hover:opacity-80 transition-opacity">
-            Beacon
+          <Link to="/" className="mr-8 hover:opacity-80 transition-opacity">
+            <img src="/beacon-logo.png" alt="Beacon" width={108} height={30} />
           </Link>
 
           <nav className="flex flex-1 gap-1 overflow-x-auto">
