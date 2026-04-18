@@ -234,7 +234,7 @@ function MobileExpenseModal({
     setError(null);
     const fd = new FormData(e.currentTarget);
     const data: Record<string, unknown> = {
-      amount: fd.get("amount"),
+      amount: parseFloat(fd.get("amount") as string),
       description: fd.get("description"),
       vendor: fd.get("vendor") || "",
       date: fd.get("date"),
