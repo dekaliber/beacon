@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Plus, X, ChevronDown, ChevronRight, AlertCircle, Check, CornerDownRight, ArrowUp, Trash2, Calendar } from "lucide-react";
+import { Plus, X, ChevronDown, ChevronRight, AlertCircle, Check, CornerDownRight, ArrowUp, Trash2, Calendar, Search } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
 import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, deleteExpense, getExpenseVendors, getTags, createTag, createRecurrenceRule } from "@/api";
 import { formatCurrency, formatDate, localToday } from "@/lib/utils";
@@ -698,7 +698,7 @@ function MobileExpenseModal({
                               </button>
                             ) : (
                               <>
-                                <span className="text-sm text-muted-foreground">Until</span>
+                                <span className="text-right text-sm text-muted-foreground">Until</span>
                                 <div className="relative col-span-2">
                                   <input
                                     name="endDate"
@@ -877,16 +877,16 @@ function ExpenseRow({
   }
 
   return (
-    <div className={`py-3 ${upcoming ? "italic opacity-60" : ""} ${rowBg}`}>
+    <div
+      className={`py-3 ${upcoming ? "italic opacity-60" : ""} ${rowBg} ${onTap ? "cursor-pointer active:opacity-60" : ""}`}
+      onClick={onTap}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-start gap-1.5">
           {!upcoming && expense.isReimbursementExpected && (
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
           )}
-          <p
-            className={`truncate font-medium ${mutedText} ${onTap ? "cursor-pointer active:opacity-60" : ""}`}
-            onClick={onTap}
-          >{expense.description}</p>
+          <p className={`truncate font-medium ${mutedText}`}>{expense.description}</p>
         </div>
         <span className={`shrink-0 font-semibold ${fullyOffset ? "text-gray-300" : isNegative ? "text-green-600" : ""}`}>
           {isNegative
@@ -898,6 +898,17 @@ function ExpenseRow({
         {!isOffset && <>{formatDate(expense.date)} &middot; </>}
         {expense.vendor && <>{expense.vendor} &middot; </>}
         {expense.account.name}
+        {!fullyOffset && expense.tags.length > 0 && (
+          <span className="ml-1.5 inline-flex items-center gap-0.5 align-middle">
+            {expense.tags.slice(0, 4).map(({ tag }) => (
+              <span
+                key={tag.id}
+                className="inline-block h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: tag.color ?? "hsl(var(--primary))" }}
+              />
+            ))}
+          </span>
+        )}
       </p>
     </div>
   );
@@ -917,6 +928,11 @@ export function MobileExpenses() {
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [loadingExpenses, setLoadingExpenses] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  // Ref keeps applied search available inside the fetch effect without adding it
+  // to deps (which would cause a double-fetch when committing a new search).
+  const appliedSearchRef = useRef("");
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingMoreRef = useRef(false);
   const today = localToday();
@@ -933,10 +949,20 @@ export function MobileExpenses() {
 
   // Direct fetch with cancellation — avoids useApi's object-reference instability
   // under React 18 concurrent mode which can cause duplicate page appends.
+  // appliedSearch is read via ref so we don't add it to deps (commitSearch bumps
+  // refreshKey and resets page, which is what actually triggers a re-fetch).
   useEffect(() => {
     let cancelled = false;
     setLoadingExpenses(true);
-    getExpenses({ endDate: today, sortBy: "date", sortOrder: "desc", limit: "50", page: currentPage.toString() })
+    const q = appliedSearchRef.current;
+    const params: Record<string, string> = {
+      sortBy: "date", sortOrder: "desc",
+      endDate: today,
+      limit: q ? "100" : "50",
+      page: currentPage.toString(),
+      ...(q ? { search: q } : {}),
+    };
+    getExpenses(params)
       .then((result) => {
         if (cancelled || !result) return;
         const { data, pagination: pag } = result;
@@ -997,9 +1023,38 @@ export function MobileExpenses() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const upcomingExpenses = upcomingData?.data ?? [];
+  // Mirror desktop logic: deduplicate recurring to next instance only, then
+  // apply the same client-side search filter (description/vendor contains OR
+  // exact amount match) that desktop uses for the upcoming section.
+  const upcomingExpenses = useMemo(() => {
+    const seenRuleIds = new Set<string>();
+    const deduped = (upcomingData?.data ?? []).filter((e) => {
+      if (!e.recurrenceRuleId) return true;
+      if (seenRuleIds.has(e.recurrenceRuleId)) return false;
+      seenRuleIds.add(e.recurrenceRuleId);
+      return true;
+    });
+    if (!appliedSearch.trim()) return deduped;
+    const q = appliedSearch.trim().toLowerCase();
+    const asNumber = parseFloat(appliedSearch.trim());
+    return deduped.filter((e) =>
+      e.description.toLowerCase().includes(q) ||
+      e.vendor.toLowerCase().includes(q) ||
+      (!isNaN(asNumber) && asNumber > 0 && Math.abs(parseFloat(e.amount)) === asNumber)
+    );
+  }, [upcomingData, appliedSearch]);
   const visibleUpcoming = upcomingExpanded ? upcomingExpenses : upcomingExpenses.slice(0, UPCOMING_PREVIEW);
   const hiddenUpcomingCount = upcomingExpenses.length - UPCOMING_PREVIEW;
+
+  const commitSearch = useCallback((q: string) => {
+    appliedSearchRef.current = q;
+    setAppliedSearch(q);
+    setCurrentPage(1);
+    setAllExpenses([]);
+    setHasMore(false);
+    loadingMoreRef.current = false;
+    setRefreshKey((k) => k + 1);
+  }, []);
 
   const handleSaved = useCallback(() => {
     setCurrentPage(1);
@@ -1013,7 +1068,26 @@ export function MobileExpenses() {
   return (
     <>
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Expenses</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="flex-1 text-2xl font-bold">Expenses</h1>
+          <div className="relative w-1/2">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (!e.target.value.trim()) commitSearch("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitSearch(searchQuery);
+                if (e.key === "Escape") { setSearchQuery(""); commitSearch(""); }
+              }}
+              placeholder="Search…"
+              className="h-9 w-full rounded-md border border-border bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
+            />
+          </div>
+        </div>
 
         {upcomingExpenses.length > 0 && (
           <section>

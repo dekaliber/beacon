@@ -214,7 +214,7 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
       <>
         {/* Amount cell */}
         <td className={cn("py-2 pr-2 text-right tabular-nums font-medium", amountClassName)}>
-          {event.amount >= 0 ? "+" : ""}
+          {event.amount > 0 ? "+" : event.amount === 0 ? "-" : ""}
           {formatCurrency(event.amount)}
         </td>
         {/* Edit cell */}
@@ -723,7 +723,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                   <td className="py-2 pr-4 text-muted-foreground whitespace-nowrap">{fmtDate(event.date)}</td>
                   <td className="py-2 pr-4">
                     <div className="flex items-center gap-2">
-                      <span className={cn("shrink-0", event.amount >= 0 ? "text-green-600" : "text-red-500")}>
+                      <span className={cn("shrink-0", event.amount > 0 ? "text-green-600" : "text-red-500")}>
                         {eventIcon(event.type)}
                       </span>
                       <span className="font-medium">{event.description}</span>
@@ -755,7 +755,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                       event={event}
                       accountId={event.relatedAccountId ?? accountId}
                       onSaved={onRefetch}
-                      amountClassName={event.amount >= 0 ? "text-green-600" : "text-red-500"}
+                      amountClassName={event.amount > 0 ? "text-green-600" : "text-red-500"}
                       onDetailClick={onCCPaymentClick ? (rowMidY) => onCCPaymentClick(event, rowMidY) : undefined}
                       isDetailOpen={event.id === selectedCCPaymentId}
                     />
@@ -763,9 +763,9 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                     <>
                       <td className={cn(
                         "py-2 pr-2 text-right tabular-nums font-medium",
-                        event.amount >= 0 ? "text-green-600" : "text-red-500",
+                        event.amount > 0 ? "text-green-600" : "text-red-500",
                       )}>
-                        {event.amount >= 0 ? "+" : ""}
+                        {event.amount > 0 ? "+" : event.amount === 0 ? "-" : ""}
                         {formatCurrency(event.amount)}
                       </td>
                       <td className="py-2 pr-4 w-14">
