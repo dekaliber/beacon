@@ -163,7 +163,9 @@ assetClassRoutes.delete("/:id", async (req, res) => {
     if (!existing) return res.status(404).json({ error: { message: "Asset class not found" } });
     if (existing.isSystem) return res.status(400).json({ error: { message: "Cannot delete a system asset class" } });
     if (existing.userId !== userId) return res.status(403).json({ error: { message: "Forbidden" } });
-    if (existing.children.length > 0) return res.status(400).json({ error: { message: "Cannot delete an asset class that has sub-classes" } });
+    if (existing.children.length > 0) {
+      await prisma.assetClass.deleteMany({ where: { parentId: id, userId } });
+    }
 
     await prisma.assetClass.delete({ where: { id } });
     res.status(204).send();

@@ -598,7 +598,7 @@ function MobileExpenseModal({
                       }`}>
                         {isReimbursementExpected && <Check className="h-3 w-3 text-white" />}
                       </span>
-                      <span className={isReimbursementExpected ? "font-medium text-primary" : ""}>
+                      <span className={isReimbursementExpected ? "text-primary" : ""}>
                         Expecting reimbursement or refund
                       </span>
                     </button>
@@ -626,7 +626,7 @@ function MobileExpenseModal({
                     }`}>
                       {ignoreInBudget && <Check className="h-3 w-3 text-white" />}
                     </span>
-                    <span className={ignoreInBudget ? "font-medium text-primary" : ""}>
+                    <span className={ignoreInBudget ? "text-primary" : ""}>
                       Ignore in budget
                     </span>
                   </button>
@@ -646,7 +646,7 @@ function MobileExpenseModal({
                         }`}>
                           {isRecurring && <Check className="h-3 w-3 text-white" />}
                         </span>
-                        <span className={isRecurring ? "font-medium text-primary" : ""}>
+                        <span className={isRecurring ? "text-primary" : ""}>
                           Recurring expense
                         </span>
                       </button>

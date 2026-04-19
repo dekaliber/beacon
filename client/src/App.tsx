@@ -32,6 +32,9 @@ import { MobileIncome } from "@/pages/mobile/MobileIncome";
 import { MobileBudgets } from "@/pages/mobile/MobileBudgets";
 import { MobileInvestments } from "@/pages/mobile/MobileInvestments";
 import { MobileCashFlow } from "@/pages/mobile/MobileCashFlow";
+import { MobileAccounts } from "@/pages/mobile/MobileAccounts";
+import { MobileCategories } from "@/pages/mobile/MobileCategories";
+import { MobileAssetClasses } from "@/pages/mobile/MobileAssetClasses";
 import { MobileRecurring } from "@/pages/mobile/MobileRecurring";
 
 function AuthTokenBridge() {
@@ -84,8 +87,8 @@ function App() {
             <Route path="/income/tax-estimator" element={<ResponsivePage desktop={<TaxEstimatorPage />} />} />
             <Route path="/budgets" element={<ResponsivePage desktop={<Budgets />} mobile={<MobileBudgets />} />} />
             <Route path="/budgets/monthly-spending" element={<ResponsivePage desktop={<MonthlySpending />} />} />
-            <Route path="/accounts" element={<ResponsivePage desktop={<Accounts />} />} />
-            <Route path="/categories" element={<ResponsivePage desktop={<Categories />} />} />
+            <Route path="/accounts" element={<ResponsivePage desktop={<Accounts />} mobile={<MobileAccounts />} />} />
+            <Route path="/categories" element={<ResponsivePage desktop={<Categories />} mobile={<MobileCategories />} />} />
             <Route path="/expenses/tags" element={<ResponsivePage desktop={<TagsPage />} />} />
             <Route path="/recurring" element={<ResponsivePage desktop={<Recurring />} mobile={<MobileRecurring />} />} />
             <Route path="/cash-flow" element={<ResponsivePage desktop={<CashFlow />} mobile={<MobileCashFlow />} />} />
@@ -94,7 +97,7 @@ function App() {
             <Route path="/investments/securities" element={<ResponsivePage desktop={<SecuritiesPage />} />} />
             <Route path="/investments/withdrawals" element={<ResponsivePage desktop={<WithdrawalsPage />} />} />
             <Route path="/investments/:accountId" element={<ResponsivePage desktop={<InvestmentAccount />} />} />
-            <Route path="/asset-classes" element={<ResponsivePage desktop={<AssetClassesPage />} />} />
+            <Route path="/asset-classes" element={<ResponsivePage desktop={<AssetClassesPage />} mobile={<MobileAssetClasses />} />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

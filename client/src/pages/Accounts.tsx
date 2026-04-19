@@ -333,9 +333,6 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
       taxAdvantageType: accountType !== "CREDIT_CARD" && isTaxAdvantaged ? (taxAdvantageType || null) : null,
       isHidden,
     };
-    if (!account && (accountType === "CHECKING" || accountType === "SAVINGS")) {
-      data.balance = String(parseFloat(form.get("balance") as string) || 0);
-    }
     // Credit card settings
     if (accountType === "CREDIT_CARD") {
       data.closingDay = closingDay ? parseInt(closingDay) : null;
@@ -460,18 +457,6 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
           </div>
         </div>
 
-        {!account && (accountType === "CHECKING" || accountType === "SAVINGS") && (
-          <div>
-            <label className="mb-1 block text-sm font-medium">Starting Balance</label>
-            <input
-              name="balance"
-              type="number"
-              step="0.01"
-              defaultValue="0"
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-        )}
 
         <div>
           <label className="mb-1 block text-sm font-medium">Color</label>

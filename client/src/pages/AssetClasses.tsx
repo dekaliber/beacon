@@ -64,10 +64,6 @@ export function AssetClassesPage() {
     editing: AssetClass | null;
     parentId: string | null;
   }>({ open: false, editing: null, parentId: null });
-  const [targetModal, setTargetModal] = useState<{ open: boolean; assetClass: AssetClass | null }>({
-    open: false,
-    assetClass: null,
-  });
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -87,16 +83,21 @@ export function AssetClassesPage() {
 
   const closeModal = () => setModalState({ open: false, editing: null, parentId: null });
 
-  const handleSave = async (data: { name?: string; color?: string | null }) => {
+  const handleSave = async (data: { name?: string; color?: string | null; targetPct?: number | null }) => {
     if (modalState.editing) {
-      await updateAssetClass(modalState.editing.id, data);
+      await updateAssetClass(modalState.editing.id, { name: data.name, color: data.color });
+      if ("targetPct" in data) {
+        if (data.targetPct === null) {
+          await deleteAssetClassTarget(modalState.editing.id);
+        } else {
+          await setAssetClassTarget(modalState.editing.id, data.targetPct!);
+        }
+      }
     } else {
       const created = await createAssetClass({ ...data, parentId: modalState.parentId });
-      // Auto-expand parent if adding a child
       if (modalState.parentId) {
         setExpandedIds((prev) => new Set([...prev, modalState.parentId!]));
       }
-      // Auto-expand new top-level class
       if (!modalState.parentId) {
         setExpandedIds((prev) => new Set([...prev, (created as AssetClass).id]));
       }
@@ -106,27 +107,17 @@ export function AssetClassesPage() {
   };
 
   const handleDelete = async (ac: AssetClass) => {
-    const msg = ac.children?.length
-      ? `"${ac.name}" has sub-classes. Delete those first.`
-      : `Delete "${ac.name}"? This will remove it from any instrument allocations.`;
-    if (ac.children?.length) { alert(msg); return; }
-    if (!confirm(msg)) return;
+    if (ac.children?.length) {
+      alert(`"${ac.name}" has sub-classes. Delete those first.`);
+      return;
+    }
     try {
       await deleteAssetClass(ac.id);
+      closeModal();
       refetch();
     } catch (e) {
       alert(e instanceof Error ? e.message : "Failed to delete");
     }
-  };
-
-  const handleSetTarget = async (ac: AssetClass, pct: number | null) => {
-    if (pct === null) {
-      await deleteAssetClassTarget(ac.id);
-    } else {
-      await setAssetClassTarget(ac.id, pct);
-    }
-    setTargetModal({ open: false, assetClass: null });
-    refetch();
   };
 
   const leafTotal = assetClasses ? totalLeafTarget(assetClasses) : 0;
@@ -186,8 +177,6 @@ export function AssetClassesPage() {
                   derivedTarget={derived}
                   onToggle={() => toggleExpand(topClass.id)}
                   onEdit={() => openEdit(topClass)}
-                  onDelete={() => handleDelete(topClass)}
-                  onSetTarget={() => setTargetModal({ open: true, assetClass: topClass })}
                   onAddChild={() => { openAdd(topClass.id); setExpandedIds((p) => new Set([...p, topClass.id])); }}
                 />
                 {/* Children */}
@@ -200,8 +189,6 @@ export function AssetClassesPage() {
                     hasChildren={false}
                     onToggle={() => {}}
                     onEdit={() => openEdit(child)}
-                    onDelete={() => handleDelete(child)}
-                    onSetTarget={() => setTargetModal({ open: true, assetClass: child })}
                     onAddChild={() => {}}
                   />
                 ))}
@@ -228,15 +215,9 @@ export function AssetClassesPage() {
         open={modalState.open}
         onClose={closeModal}
         onSave={handleSave}
+        onDelete={handleDelete}
         editing={modalState.editing}
         isChild={modalState.parentId !== null}
-      />
-
-      <TargetModal
-        open={targetModal.open}
-        assetClass={targetModal.assetClass}
-        onClose={() => setTargetModal({ open: false, assetClass: null })}
-        onSave={handleSetTarget}
       />
     </div>
   );
@@ -253,8 +234,6 @@ interface RowProps {
   derivedTarget?: number | null;
   onToggle: () => void;
   onEdit: () => void;
-  onDelete: () => void;
-  onSetTarget: () => void;
   onAddChild: () => void;
 }
 
@@ -266,8 +245,6 @@ function AssetClassRow({
   derivedTarget,
   onToggle,
   onEdit,
-  onDelete,
-  onSetTarget,
   onAddChild,
 }: RowProps) {
   const ownTarget = assetClass.target ? parseFloat(assetClass.target.targetPct) : null;
@@ -310,7 +287,7 @@ function AssetClassRow({
         )}
       </div>
 
-      {/* Target badge — read-only derived vs. editable */}
+      {/* Target badge — always read-only */}
       {isTargetDerived ? (
         <span
           className="shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
@@ -320,18 +297,16 @@ function AssetClassRow({
           <span className="ml-1 opacity-60">∑</span>
         </span>
       ) : (
-        <button
-          onClick={onSetTarget}
+        <span
           className={cn(
-            "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors",
+            "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium",
             displayTarget != null
-              ? "bg-primary/10 text-primary hover:bg-primary/20"
-              : "border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary"
+              ? "bg-primary/10 text-primary"
+              : "text-muted-foreground"
           )}
-          title="Set target allocation"
         >
-          {displayTarget != null ? `${displayTarget.toFixed(1)}%` : "Set target"}
-        </button>
+          {displayTarget != null ? `${displayTarget.toFixed(1)}%` : "—"}
+        </span>
       )}
 
       {/* Action buttons */}
@@ -348,11 +323,6 @@ function AssetClassRow({
         <button onClick={onEdit} className="rounded p-1 hover:bg-accent" title="Edit">
           <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
         </button>
-        {!assetClass.isSystem && (
-          <button onClick={onDelete} className="rounded p-1 hover:bg-accent" title="Delete">
-            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-          </button>
-        )}
       </div>
     </div>
   );
@@ -363,18 +333,22 @@ function AssetClassRow({
 interface AssetClassModalProps {
   open: boolean;
   onClose: () => void;
-  onSave: (data: { name?: string; color?: string | null }) => Promise<void>;
+  onSave: (data: { name?: string; color?: string | null; targetPct?: number | null }) => Promise<void>;
+  onDelete: (ac: AssetClass) => Promise<void>;
   editing: AssetClass | null;
   isChild: boolean;
 }
 
-function AssetClassModal({ open, onClose, onSave, editing, isChild }: AssetClassModalProps) {
+function AssetClassModal({ open, onClose, onSave, onDelete, editing, isChild }: AssetClassModalProps) {
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [color, setColor] = useState<string>(editing?.color ?? PRESET_COLORS[0]);
 
   useEffect(() => {
     if (open) {
       setColor(editing?.color ?? PRESET_COLORS[0]);
+      setConfirmDelete(false);
     }
   }, [open, editing]);
 
@@ -384,17 +358,23 @@ function AssetClassModal({ open, onClose, onSave, editing, isChild }: AssetClass
     const form = new FormData(e.currentTarget);
     try {
       const name = form.get("name") as string | null;
-      await onSave({ ...(name != null ? { name } : {}), color });
+      const rawTarget = form.get("targetPct") as string | null;
+      const targetData: { targetPct?: number | null } = {};
+      if (rawTarget !== null) {
+        targetData.targetPct = rawTarget === "" ? null : parseFloat(rawTarget);
+      }
+      await onSave({ ...(name != null ? { name } : {}), color, ...targetData });
     } finally {
       setSaving(false);
     }
   };
 
-  const title = editing
-    ? `Edit ${editing.isSystem ? "Color for " : ""}"${editing.name}"`
-    : isChild
-    ? "Add Sub-Class"
-    : "Add Asset Class";
+  const title = editing ? `Edit "${editing.name}"` : isChild ? "Add Sub-Class" : "Add Asset Class";
+
+  const derivedVal = editing && isDerived(editing) ? effectiveTarget(editing) : undefined;
+  const showDerivedTarget = editing !== null && derivedVal !== undefined;
+  const showTargetInput = editing !== null && derivedVal === undefined;
+  const currentTarget = editing?.target ? parseFloat(editing.target.targetPct) : null;
 
   return (
     <Modal open={open} onClose={onClose} title={title}>
@@ -411,6 +391,38 @@ function AssetClassModal({ open, onClose, onSave, editing, isChild }: AssetClass
               className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               placeholder={isChild ? "e.g. Large Cap" : "e.g. Alternatives"}
             />
+          </div>
+        )}
+
+        {showDerivedTarget && (
+          <div>
+            <label className="mb-1 block text-sm font-medium">Target Allocation</label>
+            <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+              <span>{derivedVal != null ? `${derivedVal.toFixed(1)}%` : "—"}</span>
+              <span className="opacity-60">∑ derived from sub-classes</span>
+            </div>
+          </div>
+        )}
+
+        {showTargetInput && (
+          <div>
+            <label className="mb-1 block text-sm font-medium">Target Allocation</label>
+            <p className="mb-2 text-xs text-muted-foreground">
+              Percentage of your portfolio to allocate here. Leave blank to remove.
+            </p>
+            <div className="relative">
+              <input
+                name="targetPct"
+                type="number"
+                min={0}
+                max={100}
+                step={0.1}
+                defaultValue={currentTarget ?? ""}
+                placeholder="e.g. 40"
+                className="w-full rounded-md border border-border px-3 py-2 pr-8 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+            </div>
           </div>
         )}
 
@@ -433,83 +445,29 @@ function AssetClassModal({ open, onClose, onSave, editing, isChild }: AssetClass
           </div>
         )}
 
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={saving}>
-            {saving ? "Saving..." : editing ? "Update" : "Add"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-// ── TargetModal ────────────────────────────────────────────────────────────
-
-interface TargetModalProps {
-  open: boolean;
-  assetClass: AssetClass | null;
-  onClose: () => void;
-  onSave: (ac: AssetClass, pct: number | null) => Promise<void>;
-}
-
-function TargetModal({ open, assetClass, onClose, onSave }: TargetModalProps) {
-  const [saving, setSaving] = useState(false);
-  const current = assetClass?.target ? parseFloat(assetClass.target.targetPct) : null;
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!assetClass) return;
-    setSaving(true);
-    const form = new FormData(e.currentTarget);
-    const raw = form.get("targetPct") as string;
-    try {
-      await onSave(assetClass, raw === "" ? null : parseFloat(raw));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Modal open={open} onClose={onClose} title={`Target for ${assetClass?.name ?? ""}`}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Set the percentage of your portfolio you want allocated to this asset class.
-          Leave blank to remove the target.
-        </p>
-        <div>
-          <label className="mb-1 block text-sm font-medium">Target %</label>
-          <div className="relative">
-            <input
-              name="targetPct"
-              type="number"
-              min={0}
-              max={100}
-              step={0.1}
-              defaultValue={current ?? ""}
-              placeholder="e.g. 40"
-              className="w-full rounded-md border border-border px-3 py-2 pr-8 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
-          </div>
-        </div>
         <div className="flex justify-between gap-2 pt-2">
           <div>
-            {current != null && (
-              <Button
+            {editing && !editing.isSystem && (
+              <button
                 type="button"
-                variant="secondary"
-                onClick={async () => { if (!assetClass) return; setSaving(true); await onSave(assetClass, null); setSaving(false); }}
-                disabled={saving}
+                onClick={async () => {
+                  if (!confirmDelete) { setConfirmDelete(true); return; }
+                  setDeleting(true);
+                  await onDelete(editing);
+                  setDeleting(false);
+                }}
+                disabled={deleting}
+                className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
               >
-                Remove target
-              </Button>
+                <Trash2 className="h-4 w-4" />
+                {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}
+              </button>
             )}
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={saving}>
-              {saving ? "Saving..." : "Set Target"}
+              {saving ? "Saving..." : editing ? "Update" : "Add"}
             </Button>
           </div>
         </div>
@@ -517,3 +475,4 @@ function TargetModal({ open, assetClass, onClose, onSave }: TargetModalProps) {
     </Modal>
   );
 }
+

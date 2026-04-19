@@ -15,7 +15,6 @@ export function Categories() {
   const [parentId, setParentId] = useState<string | undefined>(undefined);
   const [modalKind, setModalKind] = useState<"EXPENSE" | "INCOME">("EXPENSE");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [deleteModal, setDeleteModal] = useState<{ category: Category; usageCount: number; categoryIds: string[] } | null>(null);
 
   const { data: categories, refetch } = useApi(() => getCategories(), []);
   const { data: flatCategories, refetch: refetchFlat } = useApi(() => getFlatCategories(), []);
@@ -31,10 +30,10 @@ export function Categories() {
     });
   };
 
-  const openAdd = (kind: "EXPENSE" | "INCOME") => {
+  const openAdd = () => {
     setEditing(null);
     setParentId(undefined);
-    setModalKind(kind);
+    setModalKind("EXPENSE");
     setModalOpen(true);
   };
 
@@ -65,26 +64,22 @@ export function Categories() {
     refetchFlat();
   };
 
-  const handleDeleteStart = async (cat: Category) => {
-    const usage = await getCategoryUsage(cat.id);
-    setDeleteModal({ category: cat, usageCount: usage.count, categoryIds: usage.categoryIds });
-  };
-
-  const handleDeleteConfirm = async (reassignTo?: string) => {
-    if (!deleteModal) return;
-    try {
-      await deleteCategory(deleteModal.category.id, reassignTo);
-      refetch();
-      refetchFlat();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Failed to delete");
-    }
-    setDeleteModal(null);
+  const handleDelete = async (reassignTo?: string) => {
+    if (!editing) return;
+    await deleteCategory(editing.id, reassignTo);
+    setModalOpen(false);
+    setEditing(null);
+    setParentId(undefined);
+    refetch();
+    refetchFlat();
   };
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Categories</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold">Categories</h2>
+        <Button onClick={openAdd}><Plus className="h-4 w-4" /> Add Category</Button>
+      </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {/* Expense Categories */}
@@ -93,9 +88,6 @@ export function Categories() {
             <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               <Tags className="h-4 w-4" /> Expense Categories
             </h3>
-            <Button size="sm" variant="secondary" onClick={() => openAdd("EXPENSE")}>
-              <Plus className="h-4 w-4" /> Add
-            </Button>
           </div>
           <CategoryList
             categories={expenseCategories}
@@ -104,7 +96,6 @@ export function Categories() {
             onToggleExpand={toggleExpand}
             onAddChild={(id) => openAddChild(id, "EXPENSE")}
             onEdit={openEdit}
-            onDelete={handleDeleteStart}
           />
         </div>
 
@@ -114,9 +105,6 @@ export function Categories() {
             <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               <TrendingUp className="h-4 w-4" /> Income Categories
             </h3>
-            <Button size="sm" variant="secondary" onClick={() => openAdd("INCOME")}>
-              <Plus className="h-4 w-4" /> Add
-            </Button>
           </div>
           <CategoryList
             categories={incomeCategories}
@@ -125,7 +113,6 @@ export function Categories() {
             onToggleExpand={toggleExpand}
             onAddChild={(id) => openAddChild(id, "INCOME")}
             onEdit={openEdit}
-            onDelete={handleDeleteStart}
           />
         </div>
       </div>
@@ -134,22 +121,12 @@ export function Categories() {
         open={modalOpen}
         onClose={() => { setModalOpen(false); setEditing(null); setParentId(undefined); }}
         onSave={handleSave}
+        onDelete={editing ? handleDelete : undefined}
         category={editing}
         parentId={parentId}
         kind={modalKind}
+        allFlatCategories={flatCategories ?? []}
       />
-
-      {deleteModal && (
-        <DeleteCategoryModal
-          category={deleteModal.category}
-          usageCount={deleteModal.usageCount}
-          allCategories={(flatCategories ?? []).filter(
-            (c) => !deleteModal.categoryIds.includes(c.id) && c.kind === deleteModal.category.kind
-          )}
-          onConfirm={handleDeleteConfirm}
-          onClose={() => setDeleteModal(null)}
-        />
-      )}
     </div>
   );
 }
@@ -163,10 +140,9 @@ interface CategoryListProps {
   onToggleExpand: (id: string) => void;
   onAddChild: (id: string) => void;
   onEdit: (cat: Category) => void;
-  onDelete: (cat: Category) => void;
 }
 
-function CategoryList({ categories, expanded, icon: Icon, onToggleExpand, onAddChild, onEdit, onDelete }: CategoryListProps) {
+function CategoryList({ categories, expanded, icon: Icon, onToggleExpand, onAddChild, onEdit }: CategoryListProps) {
   if (categories.length === 0) {
     return (
       <Card>
@@ -229,9 +205,6 @@ function CategoryList({ categories, expanded, icon: Icon, onToggleExpand, onAddC
                 >
                   <Pencil className="h-4 w-4 text-muted-foreground" />
                 </button>
-                <button onClick={() => onDelete(cat)} className="rounded p-1 hover:bg-accent">
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </button>
               </div>
             </div>
 
@@ -247,9 +220,6 @@ function CategoryList({ categories, expanded, icon: Icon, onToggleExpand, onAddC
                         className="rounded p-1 hover:bg-accent"
                       >
                         <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                      <button onClick={() => onDelete(child)} className="rounded p-1 hover:bg-accent">
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
                       </button>
                     </div>
                   </div>
@@ -278,22 +248,36 @@ interface CategoryModalProps {
   open: boolean;
   onClose: () => void;
   onSave: (data: Partial<Category>) => Promise<void>;
+  onDelete?: (reassignTo?: string) => Promise<void>;
   category: Category | null;
   parentId?: string;
   kind: "EXPENSE" | "INCOME";
+  allFlatCategories: Category[];
 }
 
-function CategoryModal({ open, onClose, onSave, category, parentId, kind }: CategoryModalProps) {
+function CategoryModal({ open, onClose, onSave, onDelete, category, parentId, kind, allFlatCategories }: CategoryModalProps) {
   const [saving, setSaving] = useState(false);
   const [selectedColor, setSelectedColor] = useState(category?.color ?? CATEGORY_COLORS[0]);
   const [ignoreInBudget, setIgnoreInBudget] = useState(category?.ignoreInBudget ?? false);
+  const [selectedKind, setSelectedKind] = useState<"EXPENSE" | "INCOME">(kind);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [fetchingUsage, setFetchingUsage] = useState(false);
+  const [usageInfo, setUsageInfo] = useState<{ count: number; categoryIds: string[] } | null>(null);
+  const [reassignTo, setReassignTo] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  const isTopLevelAdd = !category && !parentId;
 
   useEffect(() => {
     if (open) {
       setSelectedColor(category?.color ?? CATEGORY_COLORS[0]);
       setIgnoreInBudget(category?.ignoreInBudget ?? false);
+      setSelectedKind(kind);
+      setConfirmDelete(false);
+      setUsageInfo(null);
+      setReassignTo("");
     }
-  }, [open, category]);
+  }, [open, category, kind]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -304,20 +288,36 @@ function CategoryModal({ open, onClose, onSave, category, parentId, kind }: Cate
       color: (form.get("color") as string) || undefined,
       ignoreInBudget,
       parentId,
-      kind,
+      kind: selectedKind,
     } as Partial<Category>);
     setSaving(false);
   };
 
-  const kindLabel = kind === "INCOME" ? "Income " : "";
+  const kindLabel = selectedKind === "INCOME" ? "Income " : "";
 
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title={category ? `Edit ${kindLabel}Category` : parentId ? `Add ${kindLabel}Subcategory` : `Add ${kindLabel}Category`}
+      title={category ? `Edit ${kindLabel}Category` : parentId ? `Add ${kindLabel}Subcategory` : "Add Category"}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {isTopLevelAdd && (
+          <div>
+            <label className="mb-1 block text-sm font-medium">Type</label>
+            <div className="relative">
+              <select
+                value={selectedKind}
+                onChange={(e) => setSelectedKind(e.target.value as "EXPENSE" | "INCOME")}
+                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+              >
+                <option value="EXPENSE">Expense</option>
+                <option value="INCOME">Income</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+            </div>
+          </div>
+        )}
         <div>
           <label className="mb-1 block text-sm font-medium">Name</label>
           <input
@@ -364,100 +364,84 @@ function CategoryModal({ open, onClose, onSave, category, parentId, kind }: Cate
           </label>
         </div>
 
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={saving}>
-            {saving ? "Saving..." : category ? "Update" : "Add"}
-          </Button>
+        <div className="flex items-center justify-between pt-2">
+          <div>
+            {onDelete && (
+              confirmDelete ? (
+                <button
+                  type="button"
+                  disabled={deleting || fetchingUsage}
+                  onClick={async () => {
+                    setDeleting(true);
+                    await onDelete(reassignTo || undefined);
+                    setDeleting(false);
+                  }}
+                  className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                >
+                  {deleting ? "Deleting..." : "Confirm Delete"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={fetchingUsage}
+                  onClick={async () => {
+                    setFetchingUsage(true);
+                    const usage = await getCategoryUsage(category!.id);
+                    setUsageInfo(usage);
+                    setFetchingUsage(false);
+                    setConfirmDelete(true);
+                  }}
+                  className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {fetchingUsage ? "..." : "Delete"}
+                </button>
+              )
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving..." : category ? "Update" : "Add"}
+            </Button>
+          </div>
         </div>
-      </form>
-    </Modal>
-  );
-}
 
-// ── Delete category modal ──
-
-interface DeleteCategoryModalProps {
-  category: Category;
-  usageCount: number;
-  allCategories: Category[];
-  onConfirm: (reassignTo?: string) => void;
-  onClose: () => void;
-}
-
-function DeleteCategoryModal({ category, usageCount, allCategories, onConfirm, onClose }: DeleteCategoryModalProps) {
-  const [reassignTo, setReassignTo] = useState("");
-
-  const parentCategories = allCategories.filter((c) => !c.parentId);
-  const childCategories = allCategories.filter((c) => c.parentId);
-
-  const isIncome = category.kind === "INCOME";
-  const recordLabel = isIncome ? "income records" : "expenses";
-
-  return (
-    <Modal open={true} onClose={onClose} title="Delete Category">
-      <div className="space-y-4">
-        <p className="text-sm">
-          Are you sure you want to delete <strong>{category.name}</strong>
-          {category.children && category.children.length > 0 && (
-            <> and its {category.children.length} subcategories</>
-          )}
-          ?
-        </p>
-
-        {usageCount > 0 ? (
-          <>
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+        {confirmDelete && usageInfo && usageInfo.count > 0 && (() => {
+          const eligible = allFlatCategories.filter(
+            (c) => !usageInfo.categoryIds.includes(c.id) && c.kind === kind
+          );
+          const parents = eligible.filter((c) => !c.parentId);
+          const children = eligible.filter((c) => c.parentId);
+          const recordLabel = kind === "INCOME" ? "income records" : "expenses";
+          return (
+            <div className="space-y-3 rounded-md border border-amber-200 bg-amber-50 p-3">
               <p className="text-sm text-amber-800">
-                {usageCount} {recordLabel} currently use this category.
-                You can reassign them to a different category, or leave them uncategorized.
+                {usageInfo.count} {recordLabel} use this category. Reassign them or leave uncategorized.
               </p>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium">Reassign {recordLabel} to</label>
               <div className="relative">
-              <select
-                value={reassignTo}
-                onChange={(e) => setReassignTo(e.target.value)}
-                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
-              >
-                <option value="">Leave uncategorized</option>
-                {parentCategories.map((parent) => {
-                  const children = childCategories.filter((c) => c.parentId === parent.id);
-                  if (children.length === 0) {
-                    return <option key={parent.id} value={parent.id}>{parent.name}</option>;
-                  }
-                  return (
-                    <optgroup key={parent.id} label={parent.name}>
-                      {children.map((child) => (
-                        <option key={child.id} value={child.id}>{child.name}</option>
-                      ))}
-                    </optgroup>
-                  );
-                })}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+                <select
+                  value={reassignTo}
+                  onChange={(e) => setReassignTo(e.target.value)}
+                  className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground bg-background"
+                >
+                  <option value="">Leave uncategorized</option>
+                  {parents.map((parent) => {
+                    const kids = children.filter((c) => c.parentId === parent.id);
+                    if (kids.length === 0) return <option key={parent.id} value={parent.id}>{parent.name}</option>;
+                    return (
+                      <optgroup key={parent.id} label={parent.name}>
+                        {kids.map((child) => <option key={child.id} value={child.id}>{child.name}</option>)}
+                      </optgroup>
+                    );
+                  })}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
               </div>
             </div>
-          </>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            No {recordLabel} use this category.
-          </p>
-        )}
-
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={() => onConfirm(reassignTo || undefined)}
-          >
-            Delete
-          </Button>
-        </div>
-      </div>
+          );
+        })()}
+      </form>
     </Modal>
   );
 }
