@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Cell, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, LabelList,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList,
   LineChart, Line,
 } from "recharts";
 import { ArrowRight, TrendingUp, Receipt, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
@@ -443,11 +443,12 @@ export function Dashboard() {
               <CardTitle>Monthly Trend</CardTitle>
             </CardHeader>
             {trendData.some((t) => t.personalSpent > 0 || t.jointSpent > 0) ? (
+              <>
               <div className="cursor-pointer">
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart
                   data={trendData}
-                  margin={{ top: 4, right: 48, left: 0, bottom: 4 }}
+                  margin={{ top: 4, right: 16, left: 0, bottom: 4 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
                   <XAxis dataKey="label" fontSize={12} axisLine={false} tickLine={false} />
@@ -458,11 +459,6 @@ export function Dashboard() {
                     tickLine={false}
                   />
                   <Tooltip formatter={(value: number | undefined, name: string | undefined) => [formatCurrency(value ?? 0), name ?? ""]} cursor={{ fill: "#F8FAFC" }} />
-                  <Legend
-                    align="center"
-                    wrapperStyle={{ paddingTop: 12 }}
-                    formatter={(value: string) => <span style={{ paddingLeft: 2, paddingRight: 16, color: "#0F172A" }}>{value}</span>}
-                  />
                   <Bar
                     dataKey="personalSpent"
                     name="Personal"
@@ -482,14 +478,33 @@ export function Dashboard() {
                     <ReferenceLine
                       y={budgetAmount}
                       stroke="#EF4444"
-                      strokeDasharray="5 5"
-                      strokeWidth={2}
-                      label={{ value: "Budget", position: "right", fontSize: 11, fill: "#EF4444" }}
+                      strokeWidth={1}
+                      strokeDasharray="3 3"
+                      strokeOpacity={0.5}
                     />
                   )}
                 </BarChart>
               </ResponsiveContainer>
               </div>
+              <div className="mt-3 flex items-center justify-center gap-5">
+                <div className="flex items-center gap-1.5">
+                  <svg width={12} height={12}><rect width={12} height={12} rx={2} fill="#9CA3AF" /></svg>
+                  <span className="text-xs text-muted-foreground">Personal</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <svg width={12} height={12}><rect width={12} height={12} rx={2} fill="#3B82F6" /></svg>
+                  <span className="text-xs text-muted-foreground">Joint</span>
+                </div>
+                {budgetAmount !== null && (
+                  <div className="flex items-center gap-1.5">
+                    <svg width={20} height={8}>
+                      <line x1="0" y1="4" x2="20" y2="4" stroke="#EF4444" strokeWidth="1" strokeDasharray="3 3" strokeOpacity="0.5" />
+                    </svg>
+                    <span className="text-xs text-muted-foreground">Budget</span>
+                  </div>
+                )}
+              </div>
+              </>
             ) : (
               <EmptyState
                 icon={TrendingUp}

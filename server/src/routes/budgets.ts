@@ -552,6 +552,35 @@ budgetRoutes.get("/:year", async (req, res) => {
     priorYear: mergeChartSeries(personalChart.priorYear, jointChart.priorYear),
   };
 
+  // Per-month actual spend for the full year (used by the completed-year Monthly Spend chart).
+  const startOfYear = new Date(Date.UTC(year, 0, 1));
+  const endOfYear   = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
+  const [personalYearRows, jointYearRows] = await Promise.all([
+    personalIds.length > 0
+      ? prisma.expense.findMany({
+          where: { accountId: { in: personalIds }, date: { gte: startOfYear, lte: endOfYear }, ...ignoredExpenseFilter(ignoredCategoryIds) },
+          select: { date: true, amount: true },
+        })
+      : Promise.resolve([]),
+    jointIds.length > 0
+      ? prisma.expense.findMany({
+          where: { accountId: { in: jointIds }, date: { gte: startOfYear, lte: endOfYear }, ...ignoredExpenseFilter(ignoredCategoryIds) },
+          select: { date: true, amount: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const personalByMonth = new Array(12).fill(0);
+  const jointByMonth    = new Array(12).fill(0);
+  for (const e of personalYearRows) personalByMonth[new Date(e.date).getUTCMonth()] += Number(e.amount);
+  for (const e of jointYearRows)    jointByMonth[new Date(e.date).getUTCMonth()]    += Number(e.amount) * splitRatio;
+  const MONTH_LABELS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const monthlyTotals = Array.from({ length: 12 }, (_, i) => ({
+    month: i + 1,
+    label: MONTH_LABELS[i],
+    personalSpent: Math.round(personalByMonth[i] * 100) / 100,
+    jointSpent:    Math.round(jointByMonth[i]    * 100) / 100,
+  }));
+
   // Number of calendar months fully completed within the year as of effectiveToday.
   // For a past year Dec-31 is used as the anchor, and getUTCMonth() returns 11 (Dec index),
   // but all 12 months are complete — so clamp to 12 for any finished year.
@@ -564,6 +593,7 @@ budgetRoutes.get("/:year", async (req, res) => {
     daysInYear: totalDays,
     pctElapsed: Math.round(pctElapsed * 10000) / 10000,
     completedMonths,
+    monthlyTotals,
     settings: { jointSplitRatio: splitRatio },
     personal: {
       annualBudget: personalAnnualRaw,

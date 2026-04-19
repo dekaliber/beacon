@@ -253,13 +253,13 @@ export function CategoryOutliersChart({ data, compact = false }: CategoryOutlier
                 fill={colorCard} stroke={colorMuted} strokeWidth={1.5}
               />
             </svg>
-            <span className="text-[10px] text-muted-foreground">{previousMonthLabel}</span>
+            <span className="text-xs text-muted-foreground">{previousMonthLabel}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <svg width={11} height={11}>
               <circle cx={5.5} cy={5.5} r={DOT_R} fill={colorMuted} />
             </svg>
-            <span className="text-[10px] text-muted-foreground">{currentMonthLabel}</span>
+            <span className="text-xs text-muted-foreground">{currentMonthLabel}</span>
           </div>
         </div>
       </div>

@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect } from "react";
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -28,7 +30,7 @@ import { useApi } from "@/hooks/useApi";
 import { getBudgetOverview, getCategoryOutliersYtd, setAnnualBudget } from "@/api";
 import { CategoryOutliersChart } from "@/components/CategoryOutliersChart";
 import { formatCurrency } from "@/lib/utils";
-import type { BudgetPanel, CategoryOutliersData, ChartDay } from "@/types";
+import type { BudgetPanel, CategoryOutliersData, ChartDay, MonthlyTotal } from "@/types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -414,7 +416,7 @@ function ComparisonChart({
           )}
         </LineChart>
       </ResponsiveContainer>
-      <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
+      <div className="mt-2 flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <svg width="28" height="8">
             <line x1="0" y1="4" x2="14" y2="4" stroke={colorPrimary} strokeWidth="2" />
@@ -489,6 +491,8 @@ interface PanelProps {
   today: Date;
   todayDay?: number;
   outliers?: CategoryOutliersData;
+  monthlyTotals: MonthlyTotal[];
+  panelType: "total" | "personal" | "joint";
 }
 
 function BudgetPanelCard({
@@ -507,10 +511,24 @@ function BudgetPanelCard({
   today,
   todayDay,
   outliers,
+  monthlyTotals,
+  panelType,
 }: PanelProps) {
   const [showModal, setShowModal] = useState(false);
 
-  const isOverPace = panel.percentAboveBelow > 0;
+  const isCompletedYear = completedMonthCount === 12;
+
+  // For a completed year the actual full-year total = Jan–Nov completed + December MTD.
+  const fullYearTotal = panel.ytdCompletedMonths + panel.mtdTotal;
+
+  // For a completed year, use actual spend vs budget instead of the projection-based ratio.
+  const actualPctAboveBelow =
+    panel.effectiveAnnualBudget > 0
+      ? fullYearTotal / panel.effectiveAnnualBudget - 1
+      : 0;
+
+  const displayPctAboveBelow = isCompletedYear ? actualPctAboveBelow : panel.percentAboveBelow;
+  const isOverPace = displayPctAboveBelow > 0;
   const isNoBudget = panel.effectiveAnnualBudget === 0;
   const isCurrentYear = today.getFullYear() === parseInt(currentMonthName.split(" ")[1]);
   const mtdMonthLabel = currentMonthName.split(" ")[0];
@@ -519,8 +537,11 @@ function BudgetPanelCard({
     : 0;
 
   // ── Derived metrics ──────────────────────────────────────────────────────
+  // For a completed year, average over all 12 months (use fullYearTotal).
   const avgMonthly =
-    completedMonthCount > 0 ? panel.ytdCompletedMonths / completedMonthCount : null;
+    completedMonthCount > 0
+      ? (isCompletedYear ? fullYearTotal : panel.ytdCompletedMonths) / completedMonthCount
+      : null;
 
   const paceVariance =
     panel.effectiveAnnualBudget > 0 && avgMonthly != null
@@ -535,7 +556,7 @@ function BudgetPanelCard({
     completedMonthCount === 0
       ? "No completed months"
       : completedMonthCount === 12
-        ? "Full year avg"
+        ? "Jan–Dec"
         : completedMonthCount === 1
           ? "January"
           : `Jan–${SHORT_MONTHS[completedMonthCount - 1]}`;
@@ -544,12 +565,12 @@ function BudgetPanelCard({
 
   const pastBand = (
     <div className="space-y-2">
-      <BandLabel>Past</BandLabel>
+      <BandLabel>{isCompletedYear ? "Year Summary" : "Past"}</BandLabel>
       <div className="grid grid-cols-3 gap-3">
         <Metric
           label={completedLabel}
-          value={completedMonthCount > 0 ? fmt(panel.ytdCompletedMonths) : "—"}
-          sub="completed months total"
+          value={completedMonthCount > 0 ? fmt(isCompletedYear ? fullYearTotal : panel.ytdCompletedMonths) : "—"}
+          sub="completed months"
         />
         <Metric
           label="Avg monthly"
@@ -610,6 +631,68 @@ function BudgetPanelCard({
             monthlyBudget={panel.effectiveAnnualBudget > 0 ? panel.effectiveAnnualBudget / 12 : undefined}
           />
         </div>
+      </div>
+    </div>
+  );
+
+  // For a completed year: month-by-month stacked bar chart replacing "This Month"
+  const showPersonalBar = panelType === "total" || panelType === "personal";
+  const showJointBar    = panelType === "total" || panelType === "joint";
+  const monthlySpendBand = (
+    <div className="space-y-2">
+      <BandLabel>Monthly Spend</BandLabel>
+      <ResponsiveContainer width="100%" height={160}>
+        <BarChart data={monthlyTotals} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+          <XAxis dataKey="label" fontSize={12} axisLine={false} tickLine={false} />
+          <YAxis
+            fontSize={12}
+            tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip
+            formatter={(value: number, name: string) => [formatCurrency(value), name]}
+            cursor={{ fill: "var(--color-muted)" }}
+          />
+          {showPersonalBar && (
+            <Bar dataKey="personalSpent" name="Personal" stackId="a" fill="#9CA3AF" />
+          )}
+          {showJointBar && (
+            <Bar dataKey="jointSpent" name="Joint" stackId="a" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+          )}
+          {panel.effectiveAnnualBudget > 0 && (
+            <ReferenceLine
+              y={panel.effectiveAnnualBudget / 12}
+              stroke="#EF4444"
+              strokeWidth={1}
+              strokeDasharray="3 3"
+              strokeOpacity={0.5}
+            />
+          )}
+        </BarChart>
+      </ResponsiveContainer>
+      <div className="mt-1 flex items-center justify-center gap-5">
+        {showPersonalBar && (
+          <div className="flex items-center gap-1.5">
+            <svg width={12} height={12}><rect width={12} height={12} rx={2} fill="#9CA3AF" /></svg>
+            <span className="text-xs text-muted-foreground">Personal</span>
+          </div>
+        )}
+        {showJointBar && (
+          <div className="flex items-center gap-1.5">
+            <svg width={12} height={12}><rect width={12} height={12} rx={2} fill="#3B82F6" /></svg>
+            <span className="text-xs text-muted-foreground">Joint</span>
+          </div>
+        )}
+        {panel.effectiveAnnualBudget > 0 && (
+          <div className="flex items-center gap-1.5">
+            <svg width={20} height={8}>
+              <line x1="0" y1="4" x2="20" y2="4" stroke="#EF4444" strokeWidth="1" strokeDasharray="3 3" strokeOpacity="0.5" />
+            </svg>
+            <span className="text-xs text-muted-foreground">Avg monthly budget</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -727,10 +810,32 @@ function BudgetPanelCard({
               : "bg-success/10 text-success"
           }`}
         >
-          {pctLabel(panel.percentAboveBelow)} {isOverPace ? "over" : "under"} budget
+          {pctLabel(displayPctAboveBelow)} {isOverPace ? "over" : "under"} budget
         </div>
       )}
     </div>
+  );
+
+  const completedYearPaceBar = isCompletedYear && !isNoBudget && (
+    <PaceBar
+      normalizedYTD={fullYearTotal}
+      budget={panel.effectiveAnnualBudget}
+      pctElapsed={1}
+    />
+  );
+
+  const bands = isCompletedYear ? (
+    <>
+      {pastBand}
+      {completedYearPaceBar}
+      {monthlySpendBand}
+    </>
+  ) : (
+    <>
+      {pastBand}
+      {thisMonthBand}
+      {restOfYearBand}
+    </>
   );
 
   return (
@@ -742,9 +847,7 @@ function BudgetPanelCard({
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="flex flex-col gap-5">
               {header}
-              {pastBand}
-              {thisMonthBand}
-              {restOfYearBand}
+              {bands}
             </div>
             <div className="flex flex-col justify-center">
               <CategoryOutliersChart data={outliers} />
@@ -754,9 +857,7 @@ function BudgetPanelCard({
       ) : (
         <Card className="flex flex-col gap-5">
           {header}
-          {pastBand}
-          {thisMonthBand}
-          {restOfYearBand}
+          {bands}
         </Card>
       )}
     </>
@@ -899,6 +1000,8 @@ export function Budgets() {
             pctElapsed={data.pctElapsed}
             budgetLabel="Annual Budget (derived)"
             outliers={outliersData ?? undefined}
+            monthlyTotals={data.monthlyTotals}
+            panelType="total"
             {...sharedPanelProps}
           />
 
@@ -920,6 +1023,8 @@ export function Budgets() {
                 title="Personal"
                 panel={data.personal}
                 pctElapsed={data.pctElapsed}
+                monthlyTotals={data.monthlyTotals.map((m) => ({ ...m, jointSpent: 0 }))}
+                panelType="personal"
                 {...sharedPanelProps}
               />
               <BudgetPanelCard
@@ -927,6 +1032,8 @@ export function Budgets() {
                 subtitle={`your ${Math.round(data.settings.jointSplitRatio * 100)}% share`}
                 panel={data.joint}
                 pctElapsed={data.pctElapsed}
+                monthlyTotals={data.monthlyTotals.map((m) => ({ ...m, personalSpent: 0 }))}
+                panelType="joint"
                 {...sharedPanelProps}
               />
             </div>

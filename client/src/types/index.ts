@@ -275,6 +275,13 @@ export interface MonthlySpendingResponse {
   months: MonthlySpendingMonth[];
 }
 
+export interface MonthlyTotal {
+  month: number;
+  label: string;        // "Jan" … "Dec"
+  personalSpent: number;
+  jointSpent: number;   // already scaled by the user's joint split ratio
+}
+
 /** Full budget overview response for a given year. */
 export interface BudgetOverview {
   year: number;
@@ -282,6 +289,7 @@ export interface BudgetOverview {
   daysInYear: number;
   pctElapsed: number;
   completedMonths: number;           // calendar months fully elapsed within the year
+  monthlyTotals: MonthlyTotal[];
   settings: { jointSplitRatio: number };
   personal: BudgetPanel;
   joint: BudgetPanel;
