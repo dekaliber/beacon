@@ -536,9 +536,9 @@ function BudgetPanelSection({
   const pastBand = (
     <div className="space-y-2">
       <BandLabel>{isCompletedYear ? "Year Summary" : "Past"}</BandLabel>
-      <div className="-mx-4 overflow-x-auto px-4">
+      <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex gap-3">
-          <div className="min-w-[130px]">
+          <div className="min-w-[125px]">
             <Metric
               plain
               label={completedLabel}
@@ -546,7 +546,7 @@ function BudgetPanelSection({
               sub="completed months"
             />
           </div>
-          <div className="min-w-[130px]">
+          <div className="min-w-[125px]">
             <Metric
               plain
               label="Avg monthly"
@@ -558,7 +558,7 @@ function BudgetPanelSection({
               }
             />
           </div>
-          <div className="min-w-[130px]">
+          <div className="min-w-[125px]">
             <Metric
               plain
               label="vs budget pace"
@@ -704,9 +704,9 @@ function BudgetPanelSection({
       >
         Rest of year
       </BandLabel>
-      <div className="-mx-4 overflow-x-auto px-4">
+      <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex gap-3">
-          <div className="min-w-[130px]">
+          <div className="min-w-[125px]">
             <Metric
               plain
               label="Annual projection"
@@ -730,7 +730,7 @@ function BudgetPanelSection({
               }
             />
           </div>
-          <div className="min-w-[130px]">
+          <div className="min-w-[125px]">
             <Metric
               plain
               label={showDiscretionary ? "Discretionary left" : "Remaining budget"}
@@ -742,7 +742,7 @@ function BudgetPanelSection({
               sub={remainingValue < 0 ? "over budget" : "available to spend"}
             />
           </div>
-          <div className="min-w-[130px]">
+          <div className="min-w-[125px]">
             <Metric
               plain
               label={showDiscretionary ? "Discretionary / mo" : "Monthly target"}
@@ -919,30 +919,31 @@ export function MobileBudgets() {
     data && (data.personal.annualBudget != null || data.joint.annualBudget != null);
 
   return (
-    <div className="space-y-6">
+    <div>
       {/* Page header */}
-      <div className="flex flex-col gap-2">
+      <div className="mb-6 flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">Budget</h2>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="min-w-[4rem] text-center font-semibold">{year}</span>
-            <Button variant="ghost" size="sm" onClick={() => setYear((y) => y + 1)}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+          <button
+            onClick={() => setBudgetModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <Pencil className="h-4 w-4" />
+            Edit Budget
+          </button>
         </div>
-        <button
-          onClick={() => setBudgetModalOpen(true)}
-          className="flex items-center gap-1.5 self-start rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-        >
-          <Pencil className="h-4 w-4" />
-          Edit Budget
-        </button>
+        <div className="flex items-center gap-2 self-center">
+          <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="min-w-[4rem] text-center font-semibold">{year}</span>
+          <Button variant="ghost" size="sm" onClick={() => setYear((y) => y + 1)}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
+      <div className="space-y-9">
       {loading && (
         <div className="py-12 text-center text-muted-foreground">Loading…</div>
       )}
@@ -986,7 +987,7 @@ export function MobileBudgets() {
           </button>
 
           {showBreakdown && (
-            <div className="space-y-6">
+            <div className="space-y-9">
               <BudgetPanelSection
                 title="Personal"
                 panel={data.personal}
@@ -1018,6 +1019,7 @@ export function MobileBudgets() {
         jointSplitRatio={data?.settings.jointSplitRatio ?? 0.5}
         onSave={handleSaveBudgets}
       />
+      </div>
     </div>
   );
 }
