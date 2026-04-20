@@ -28,7 +28,7 @@ export function Modal({ open, onClose, title, children, className, contentClassN
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
       onClick={(e) => e.target === overlayRef.current && onClose()}
     >
       <div className={cn("flex w-full max-w-lg flex-col rounded-lg bg-background shadow-xl max-h-[90vh]", className)}>

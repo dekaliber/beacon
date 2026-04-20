@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { Plus, X, ChevronDown, ChevronRight, AlertCircle, Check, CornerDownRight, ArrowUp, Trash2, Calendar, Search, Filter } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
 import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, deleteExpense, getExpenseVendors, getTags, createTag, createRecurrenceRule } from "@/api";
-import { formatCurrency, formatDate, localToday } from "@/lib/utils";
+import { formatCurrency, formatDate, localToday, cn } from "@/lib/utils";
 import type { Account, Category, Expense, Tag } from "@/types";
 
 const EXPENSE_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH"];
@@ -1066,16 +1066,27 @@ function MobileFilterSheet({
         : [...s.tagIds, id],
     }));
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col justify-end">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+    <>
+      {/* Backdrop */}
+      <div
+        className={cn(
+          "fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200",
+          open ? "opacity-100" : "pointer-events-none opacity-0"
+        )}
+        onClick={onClose}
+      />
 
-      <div className="relative flex flex-col bg-background rounded-t-2xl max-h-[85vh] overflow-hidden">
+      {/* Sheet */}
+      <div
+        className={cn(
+          "fixed bottom-0 left-0 right-0 z-[60] flex flex-col bg-background rounded-t-2xl max-h-[85vh] overflow-hidden shadow-xl transition-transform duration-250 ease-out",
+          open ? "translate-y-0" : "translate-y-full"
+        )}
+      >
         {/* Drag handle */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">
-          <div className="h-1 w-10 rounded-full bg-muted-foreground/30" />
+          <div className="h-1 w-10 rounded-full bg-border" />
         </div>
 
         {/* Header */}
@@ -1347,7 +1358,7 @@ function MobileFilterSheet({
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

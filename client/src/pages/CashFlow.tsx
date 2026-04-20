@@ -700,7 +700,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
           <tr className="border-b border-border">
             <th className="py-2 pr-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide w-24">Date</th>
             <th className="py-2 pr-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Description</th>
-            <th className="py-2 pr-2 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide w-36">Amount</th>
+            <th className="py-2 pr-2 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide w-24">Amount</th>
             <th className="py-2 pr-4 w-14" />
             <th className="py-2 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide w-24">Balance</th>
           </tr>
