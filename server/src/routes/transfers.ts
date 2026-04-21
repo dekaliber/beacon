@@ -352,7 +352,7 @@ transferRoutes.delete("/:id", async (req, res) => {
 // Generate upcoming transfer instances from active rules
 // (mirrors the generateUpcomingExpenses pattern in the expenses route)
 export async function generateUpcomingTransfers(): Promise<void> {
-  const WINDOW_DAYS = 60;
+  const WINDOW_DAYS = 45;
   const windowEnd = new Date();
   windowEnd.setDate(windowEnd.getDate() + WINDOW_DAYS);
 

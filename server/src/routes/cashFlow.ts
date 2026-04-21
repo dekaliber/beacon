@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { getUserId } from "../middleware/auth.js";
+import { generateUpcomingTransfers } from "./transfers.js";
 
 export const cashFlowRoutes = Router();
 
@@ -290,12 +291,15 @@ async function buildProjection(
       startDate: { lte: windowEnd },
       OR: [{ endDate: null }, { endDate: { gte: settledThrough } }],
     },
-    select: { id: true, description: true, amount: true, frequency: true, interval: true, startDate: true, endDate: true, toAccountId: true },
+    select: { id: true, description: true, amount: true, frequency: true, interval: true, startDate: true, endDate: true, nextOccurrence: true, toAccountId: true },
   });
   for (const rule of activeTransferRulesFrom) {
     const seenDates = seenTransferRuleDatesFrom.get(rule.id) ?? new Set<string>();
+    // Start from nextOccurrence — the first date the rule hasn't generated yet.
+    // Using startDate would re-project already-generated occurrences whose dates
+    // were later edited (the edited date wouldn't be in seenDates, causing duplicates).
     const occurrences = generateRuleOccurrences(
-      rule.startDate,
+      rule.nextOccurrence,
       rule.endDate,
       rule.frequency as Frequency,
       rule.interval,
@@ -352,12 +356,15 @@ async function buildProjection(
       startDate: { lte: windowEnd },
       OR: [{ endDate: null }, { endDate: { gte: settledThrough } }],
     },
-    select: { id: true, description: true, amount: true, frequency: true, interval: true, startDate: true, endDate: true, fromAccountId: true },
+    select: { id: true, description: true, amount: true, frequency: true, interval: true, startDate: true, endDate: true, nextOccurrence: true, fromAccountId: true },
   });
   for (const rule of activeTransferRulesTo) {
     const seenDates = seenTransferRuleDatesTo.get(rule.id) ?? new Set<string>();
+    // Start from nextOccurrence — the first date the rule hasn't generated yet.
+    // Using startDate would re-project already-generated occurrences whose dates
+    // were later edited (the edited date wouldn't be in seenDates, causing duplicates).
     const occurrences = generateRuleOccurrences(
-      rule.startDate,
+      rule.nextOccurrence,
       rule.endDate,
       rule.frequency as Frequency,
       rule.interval,
@@ -745,6 +752,14 @@ cashFlowRoutes.delete("/adjustments/:id", async (req, res) => {
 
 cashFlowRoutes.get("/", async (req, res) => {
   const userId = getUserId(req);
+
+  // Auto-generate upcoming recurring transfer instances (best-effort, don't block projection)
+  try {
+    await generateUpcomingTransfers();
+  } catch (err) {
+    console.error("Failed to generate upcoming transfers:", err);
+  }
+
   try {
     const windowDays = Math.min(
       parseInt((req.query.windowDays as string) ?? "45", 10) || 45,
