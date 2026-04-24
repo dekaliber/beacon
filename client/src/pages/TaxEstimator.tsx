@@ -891,7 +891,9 @@ export function TaxEstimatorPage() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-border font-semibold">
-                    <td className="pt-2.5" colSpan={3}>Annual estimate</td>
+                    <td className="pt-2.5" colSpan={3}>
+                      Est. balance due{withheldNum > 0 && <span className="font-normal text-muted-foreground"> (after {formatCurrency(withheldNum)} in withholding)</span>}
+                    </td>
                     <td className="pt-2.5 text-right tabular-nums">{formatCurrency(netEstimated)}</td>
                     <td className="pt-2.5 text-right tabular-nums">{formatCurrency(totalQPaid)}</td>
                     <td className="pt-2.5 text-right tabular-nums">{formatCurrency(Math.max(0, netEstimated - totalQPaid))}</td>
@@ -1029,7 +1031,9 @@ export function TaxEstimatorPage() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-border font-semibold">
-                    <td className="pt-2.5" colSpan={3}>Annual estimate</td>
+                    <td className="pt-2.5" colSpan={3}>
+                      Est. balance due{caWithheldNum > 0 && <span className="font-normal text-muted-foreground"> (after {formatCurrency(caWithheldNum)} in withholding)</span>}
+                    </td>
                     <td className="pt-2.5 text-right tabular-nums">{formatCurrency(caNetEstimated)}</td>
                     <td className="pt-2.5 text-right tabular-nums">{formatCurrency(totalCAQPaid)}</td>
                     <td className="pt-2.5 text-right tabular-nums">{formatCurrency(Math.max(0, caNetEstimated - totalCAQPaid))}</td>
