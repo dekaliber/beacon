@@ -627,7 +627,19 @@ function BudgetPanelSection({
             tickLine={false}
           />
           <Tooltip
-            formatter={(value: number, name: string) => [formatCurrency(value), name]}
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null;
+              return (
+                <div className="rounded border border-border bg-background p-3 text-xs shadow-md">
+                  <p className="mb-2 font-medium">{label}</p>
+                  {payload.map((p) => (
+                    <p key={p.dataKey as string} className="mt-1.5" style={{ color: p.fill as string }}>
+                      {p.name} : {formatCurrency(p.value as number)}
+                    </p>
+                  ))}
+                </div>
+              );
+            }}
             cursor={{ fill: "var(--color-muted)" }}
           />
           {showPersonalBar && (

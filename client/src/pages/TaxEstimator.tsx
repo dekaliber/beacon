@@ -5,7 +5,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
-import { getIncome, getAllGainSnapshots } from "@/api";
+import { getIncome, getAllGainSnapshots, getTaxAssumptions, updateTaxAssumptions, updateTaxQuarterlyPayments } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Income, RealizedGainSnapshotWithAccount } from "@/types";
 
@@ -295,49 +295,50 @@ export function TaxEstimatorPage() {
   const navigate = useNavigate();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
-  const [filingStatus, setFilingStatus] = useState<FilingStatus>(() => {
-    return (localStorage.getItem("beacon-tax-filing-status") as FilingStatus | null) ?? "SINGLE";
-  });
-  const [otherOrdinary, setOtherOrdinary] = useState(
-    () => localStorage.getItem("beacon-tax-other-ordinary") ?? ""
-  );
-  const [otherLTCG, setOtherLTCG] = useState(
-    () => localStorage.getItem("beacon-tax-other-ltcg") ?? ""
-  );
-  const [withheld, setWithheld] = useState(
-    () => localStorage.getItem("beacon-tax-withheld") ?? ""
-  );
+  const [filingStatus, setFilingStatus] = useState<FilingStatus>("SINGLE");
+  const [otherOrdinary, setOtherOrdinary] = useState("");
+  const [otherLTCG, setOtherLTCG] = useState("");
+  const [withheld, setWithheld] = useState("");
   const [taxBreakdownTab, setTaxBreakdownTab] = useState<"federal" | "ca">("federal");
-  const [useTmt, setUseTmt] = useState(() => localStorage.getItem("beacon-tax-use-tmt") === "true");
-  const [useCaTmt, setUseCaTmt] = useState(() => localStorage.getItem("beacon-tax-use-ca-tmt") === "true");
+  const [useTmt, setUseTmt] = useState(false);
+  const [useCaTmt, setUseCaTmt] = useState(false);
   const [assumptionsOpen, setAssumptionsOpen] = useState(false);
   const [paymentScheduleOpen, setPaymentScheduleOpen] = useState(false);
   const [caPaymentScheduleOpen, setCaPaymentScheduleOpen] = useState(false);
   const [focusOnOpen, setFocusOnOpen] = useState<"ordinary" | "ltcg" | false>(false);
-  const [qPaid, setQPaid] = useState<[string, string, string, string]>(() => {
-    const y = new Date().getFullYear();
-    return [
-      localStorage.getItem(`beacon-tax-qpaid-${y}-q1`) ?? "",
-      localStorage.getItem(`beacon-tax-qpaid-${y}-q2`) ?? "",
-      localStorage.getItem(`beacon-tax-qpaid-${y}-q3`) ?? "",
-      localStorage.getItem(`beacon-tax-qpaid-${y}-q4`) ?? "",
-    ];
-  });
-  const [caWithheld, setCaWithheld] = useState(
-    () => localStorage.getItem("beacon-tax-ca-withheld") ?? ""
-  );
-  const [caQPaid, setCaQPaid] = useState<[string, string, string, string]>(() => {
-    const y = new Date().getFullYear();
-    return [
-      localStorage.getItem(`beacon-tax-ca-qpaid-${y}-q1`) ?? "",
-      localStorage.getItem(`beacon-tax-ca-qpaid-${y}-q2`) ?? "",
-      localStorage.getItem(`beacon-tax-ca-qpaid-${y}-q3`) ?? "",
-      localStorage.getItem(`beacon-tax-ca-qpaid-${y}-q4`) ?? "",
-    ];
-  });
+  const [qPaid, setQPaid] = useState<[string, string, string, string]>(["", "", "", ""]);
+  const [caWithheld, setCaWithheld] = useState("");
+  const [caQPaid, setCaQPaid] = useState<[string, string, string, string]>(["", "", "", ""]);
   const otherOrdinaryRef = useRef<HTMLInputElement>(null);
   const otherLTCGRef = useRef<HTMLInputElement>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+
+  // Load persisted assumptions from the server whenever year changes
+  const { data: taxData } = useApi(() => getTaxAssumptions(year), [year]);
+
+  useEffect(() => {
+    if (!taxData) return;
+    setFilingStatus(taxData.filingStatus as FilingStatus);
+    setOtherOrdinary(taxData.otherOrdinary   != null ? String(taxData.otherOrdinary)   : "");
+    setWithheld(     taxData.federalWithheld  != null ? String(taxData.federalWithheld) : "");
+    setOtherLTCG(    taxData.otherLtcg        != null ? String(taxData.otherLtcg)       : "");
+    setCaWithheld(   taxData.caWithheld       != null ? String(taxData.caWithheld)      : "");
+    setUseTmt(taxData.useTmt);
+    setUseCaTmt(taxData.useCaTmt);
+    const p = taxData.quarterlyPayments;
+    setQPaid([
+      p[0]?.federalAmount != null ? String(p[0].federalAmount) : "",
+      p[1]?.federalAmount != null ? String(p[1].federalAmount) : "",
+      p[2]?.federalAmount != null ? String(p[2].federalAmount) : "",
+      p[3]?.federalAmount != null ? String(p[3].federalAmount) : "",
+    ]);
+    setCaQPaid([
+      p[0]?.caAmount != null ? String(p[0].caAmount) : "",
+      p[1]?.caAmount != null ? String(p[1].caAmount) : "",
+      p[2]?.caAmount != null ? String(p[2].caAmount) : "",
+      p[3]?.caAmount != null ? String(p[3].caAmount) : "",
+    ]);
+  }, [taxData]);
 
   // Focus the correct field when the modal is opened via an edit link
   useEffect(() => {
@@ -348,59 +349,45 @@ export function TaxEstimatorPage() {
     }
   }, [assumptionsOpen, focusOnOpen]);
 
-  const updateFilingStatus = (s: FilingStatus) => {
-    setFilingStatus(s);
-    localStorage.setItem("beacon-tax-filing-status", s);
-  };
-  const updateOtherOrdinary = (v: string) => {
-    setOtherOrdinary(v);
-    localStorage.setItem("beacon-tax-other-ordinary", v);
-  };
-  const updateOtherLTCG = (v: string) => {
-    setOtherLTCG(v);
-    localStorage.setItem("beacon-tax-other-ltcg", v);
-  };
-  const updateWithheld = (v: string) => {
-    setWithheld(v);
-    localStorage.setItem("beacon-tax-withheld", v);
-  };
+  const updateFilingStatus = (s: FilingStatus) => setFilingStatus(s);
+  const updateOtherOrdinary = (v: string) => setOtherOrdinary(v);
+  const updateOtherLTCG = (v: string) => setOtherLTCG(v);
+  const updateWithheld = (v: string) => setWithheld(v);
   const updateQPaid = (idx: 0 | 1 | 2 | 3, v: string) => {
     setQPaid((prev) => {
       const next = [...prev] as [string, string, string, string];
       next[idx] = v;
       return next;
     });
-    localStorage.setItem(`beacon-tax-qpaid-${year}-q${idx + 1}`, v);
   };
-
-  const updateCaWithheld = (v: string) => {
-    setCaWithheld(v);
-    localStorage.setItem("beacon-tax-ca-withheld", v);
-  };
+  const updateCaWithheld = (v: string) => setCaWithheld(v);
   const updateCaQPaid = (idx: 0 | 1 | 2 | 3, v: string) => {
     setCaQPaid((prev) => {
       const next = [...prev] as [string, string, string, string];
       next[idx] = v;
       return next;
     });
-    localStorage.setItem(`beacon-tax-ca-qpaid-${year}-q${idx + 1}`, v);
   };
 
-  // Reload per-quarter paid values whenever the selected year changes
-  useEffect(() => {
-    setQPaid([
-      localStorage.getItem(`beacon-tax-qpaid-${year}-q1`) ?? "",
-      localStorage.getItem(`beacon-tax-qpaid-${year}-q2`) ?? "",
-      localStorage.getItem(`beacon-tax-qpaid-${year}-q3`) ?? "",
-      localStorage.getItem(`beacon-tax-qpaid-${year}-q4`) ?? "",
-    ]);
-    setCaQPaid([
-      localStorage.getItem(`beacon-tax-ca-qpaid-${year}-q1`) ?? "",
-      localStorage.getItem(`beacon-tax-ca-qpaid-${year}-q2`) ?? "",
-      localStorage.getItem(`beacon-tax-ca-qpaid-${year}-q3`) ?? "",
-      localStorage.getItem(`beacon-tax-ca-qpaid-${year}-q4`) ?? "",
-    ]);
-  }, [year]);
+  // Save helpers — fire-and-forget; local state is always the live source of truth
+  const saveAssumptions = () => {
+    updateTaxAssumptions(year, {
+      filingStatus,
+      otherOrdinary:   otherOrdinary.trim() ? parseFloat(otherOrdinary)   : null,
+      federalWithheld: withheld.trim()      ? parseFloat(withheld)        : null,
+      otherLtcg:       otherLTCG.trim()     ? parseFloat(otherLTCG)      : null,
+      caWithheld:      caWithheld.trim()    ? parseFloat(caWithheld)      : null,
+      useTmt,
+      useCaTmt,
+    });
+  };
+
+  const saveQuarterlyPayments = () => {
+    updateTaxQuarterlyPayments(year, {
+      federal: qPaid.map((v)    => v.trim()    ? parseFloat(v)    : null),
+      ca:      caQPaid.map((v)  => v.trim()    ? parseFloat(v)    : null),
+    });
+  };
 
   const toggleSection = (key: string) => {
     setExpandedSections((prev) => {
@@ -768,7 +755,7 @@ export function TaxEstimatorPage() {
       {/* Tax Assumptions Modal */}
       <Modal
         open={assumptionsOpen}
-        onClose={() => setAssumptionsOpen(false)}
+        onClose={() => { saveAssumptions(); setAssumptionsOpen(false); }}
         title="Tax Assumptions"
         className="max-w-lg"
       >
@@ -826,14 +813,14 @@ export function TaxEstimatorPage() {
           <br />California: 2025 brackets · Standard deduction ({formatCurrency(CA_STANDARD_DEDUCTION[filingStatus])}) applied · All capital gains taxed as ordinary income · State only, does not include SDI
         </p>
         <div className="mt-5 flex justify-end">
-          <Button onClick={() => setAssumptionsOpen(false)}>Done</Button>
+          <Button onClick={() => { saveAssumptions(); setAssumptionsOpen(false); }}>Done</Button>
         </div>
       </Modal>
 
       {/* Payment Schedule Modal */}
       <Modal
         open={paymentScheduleOpen}
-        onClose={() => setPaymentScheduleOpen(false)}
+        onClose={() => { saveQuarterlyPayments(); setPaymentScheduleOpen(false); }}
         title={`${useTmt ? "TMT " : ""}Payment Schedule · ${year}`}
         className="max-w-3xl"
       >
@@ -946,7 +933,7 @@ export function TaxEstimatorPage() {
               </p>
 
               <div className="flex justify-end">
-                <Button onClick={() => setPaymentScheduleOpen(false)}>Done</Button>
+                <Button onClick={() => { saveQuarterlyPayments(); setPaymentScheduleOpen(false); }}>Done</Button>
               </div>
             </div>
           );
@@ -956,7 +943,7 @@ export function TaxEstimatorPage() {
       {/* CA Payment Schedule Modal */}
       <Modal
         open={caPaymentScheduleOpen}
-        onClose={() => setCaPaymentScheduleOpen(false)}
+        onClose={() => { saveQuarterlyPayments(); setCaPaymentScheduleOpen(false); }}
         title={`${useCaTmt ? "CA TMT " : "CA "}Payment Schedule · ${year}`}
         className="max-w-3xl"
       >
@@ -1083,7 +1070,7 @@ export function TaxEstimatorPage() {
               </p>
 
               <div className="flex justify-end">
-                <Button onClick={() => setCaPaymentScheduleOpen(false)}>Done</Button>
+                <Button onClick={() => { saveQuarterlyPayments(); setCaPaymentScheduleOpen(false); }}>Done</Button>
               </div>
             </div>
           );
@@ -1377,7 +1364,7 @@ export function TaxEstimatorPage() {
             {taxBreakdownTab === "federal" && (
               <button
                 type="button"
-                onClick={() => setUseTmt((v) => { const next = !v; localStorage.setItem("beacon-tax-use-tmt", String(next)); return next; })}
+                onClick={() => setUseTmt((v) => { const next = !v; updateTaxAssumptions(year, { useTmt: next }); return next; })}
                 className={`ml-auto flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${useTmt ? "border-violet-300 bg-violet-50 text-violet-700" : "border-border text-muted-foreground hover:border-violet-300 hover:text-violet-700"}`}
               >
                 <span className={`inline-block h-3.5 w-6 rounded-full transition-colors ${useTmt ? "bg-violet-500" : "bg-muted-foreground/30"}`}>
@@ -1389,7 +1376,7 @@ export function TaxEstimatorPage() {
             {taxBreakdownTab === "ca" && (
               <button
                 type="button"
-                onClick={() => setUseCaTmt((v) => { const next = !v; localStorage.setItem("beacon-tax-use-ca-tmt", String(next)); return next; })}
+                onClick={() => setUseCaTmt((v) => { const next = !v; updateTaxAssumptions(year, { useCaTmt: next }); return next; })}
                 className={`ml-auto flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${useCaTmt ? "border-violet-300 bg-violet-50 text-violet-700" : "border-border text-muted-foreground hover:border-violet-300 hover:text-violet-700"}`}
               >
                 <span className={`inline-block h-3.5 w-6 rounded-full transition-colors ${useCaTmt ? "bg-violet-500" : "bg-muted-foreground/30"}`}>

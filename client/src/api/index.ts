@@ -35,6 +35,7 @@ import type {
   WithdrawalEvent,
   WithdrawalSummary,
   InvestmentSettings,
+  TaxAssumptions,
   MonthlySpendingResponse,
   QfxTransactionInput,
   QfxDividendInput,
@@ -582,3 +583,17 @@ export const getInvestmentSettings = () =>
 
 export const updateInvestmentSettings = (data: Partial<InvestmentSettings>) =>
   api.patch<InvestmentSettings>("/withdrawals/settings", data);
+
+// Tax Assumptions
+export const getTaxAssumptions = (year: number) =>
+  api.get<TaxAssumptions>(`/tax-assumptions/${year}`);
+
+export const updateTaxAssumptions = (
+  year: number,
+  data: Partial<Omit<TaxAssumptions, "quarterlyPayments">>,
+) => api.put<TaxAssumptions>(`/tax-assumptions/${year}`, data);
+
+export const updateTaxQuarterlyPayments = (
+  year: number,
+  data: { federal: (number | null)[]; ca: (number | null)[] },
+) => api.put<TaxAssumptions>(`/tax-assumptions/${year}/quarterly`, data);

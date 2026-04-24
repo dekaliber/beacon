@@ -279,7 +279,17 @@ async function computeMetrics(
     // Normalize within active period rather than the full calendar year.
     // This prevents a rule that ends mid-year from appearing "over budget"
     // for the remainder of the year after its final payment posts.
-    const daysElapsedInPeriod = Math.min(elapsed, activeDays);
+    //
+    // Use days elapsed since the rule's own effectiveStart (not since Jan 1) so
+    // that mid-year-starting rules aren't inflated. For rules that started
+    // before this year, effectiveStart is already clamped to Jan 1 so the
+    // result equals the overall `elapsed` value as expected.
+    const ruleElapsedMs = today.getTime() >= effectiveStart.getTime()
+      ? Math.min(today.getTime(), effectiveEnd.getTime()) - effectiveStart.getTime()
+      : -1;
+    const daysElapsedInPeriod = ruleElapsedMs < 0
+      ? 0
+      : Math.min(Math.floor(ruleElapsedMs / 86_400_000) + 1, activeDays);
     normalizedRecurringYTD += expectedAnnual * (daysElapsedInPeriod / activeDays);
   }
 

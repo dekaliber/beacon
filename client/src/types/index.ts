@@ -653,6 +653,21 @@ export interface InvestmentSettings {
   withdrawalRateTarget: number | null;
 }
 
+export interface TaxAssumptions {
+  filingStatus: "SINGLE" | "MFJ" | "HoH" | "MFS";
+  otherOrdinary:   number | null;
+  federalWithheld: number | null;
+  otherLtcg:       number | null;
+  caWithheld:      number | null;
+  useTmt:   boolean;
+  useCaTmt: boolean;
+  quarterlyPayments: {
+    quarter:       number;
+    federalAmount: number | null;
+    caAmount:      number | null;
+  }[];
+}
+
 // ── Cash flow projection types ────────────────────────────────────────────────
 
 export type CashFlowEventType =

@@ -371,6 +371,42 @@ model InvestmentSettings {
   @@map("investment_settings")
 }
 
+model TaxAssumptions {
+  id              String   @id @default(cuid())
+  userId          String
+  year            Int
+  filingStatus    String   @default("SINGLE")
+  otherOrdinary   Decimal? @db.Decimal(14, 2)
+  federalWithheld Decimal? @db.Decimal(14, 2)
+  otherLtcg       Decimal? @db.Decimal(14, 2)
+  caWithheld      Decimal? @db.Decimal(14, 2)
+  useTmt          Boolean  @default(false)
+  useCaTmt        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  quarterlyPayments TaxQuarterlyPayment[]
+
+  @@unique([userId, year])
+  @@index([userId])
+  @@map("tax_assumptions")
+}
+
+model TaxQuarterlyPayment {
+  id               String         @id @default(cuid())
+  taxAssumptionsId String
+  quarter          Int
+  federalAmount    Decimal?       @db.Decimal(14, 2)
+  caAmount         Decimal?       @db.Decimal(14, 2)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  taxAssumptions TaxAssumptions @relation(fields: [taxAssumptionsId], references: [id], onDelete: Cascade)
+
+  @@unique([taxAssumptionsId, quarter])
+  @@map("tax_quarterly_payments")
+}
+
 // ── Investment models ───────────────────────────────────────────────────────────
 
 model InvestmentHolding {
