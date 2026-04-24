@@ -24,7 +24,7 @@ import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
-import { getBudgetOverview, setAnnualBudget } from "@/api";
+import { getBudgetOverview, setAnnualBudget, getDataRange } from "@/api";
 import { formatCurrency } from "@/lib/utils";
 import type { BudgetPanel, ChartDay, MonthlyTotal } from "@/types";
 
@@ -877,6 +877,8 @@ export function MobileBudgets() {
     [year],
   );
 
+  const { data: dataRange } = useApi(() => getDataRange(), []);
+
   const handleSaveBudgets = async (personal: number | null, joint: number | null) => {
     const promises: Promise<unknown>[] = [];
     if (personal !== null) promises.push(setAnnualBudget(year, "personal", personal));
@@ -945,11 +947,11 @@ export function MobileBudgets() {
           </button>
         </div>
         <div className="flex items-center gap-2 self-center">
-          <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)}>
+          <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)} disabled={dataRange ? year <= dataRange.minYear : false}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="min-w-[4rem] text-center font-semibold">{year}</span>
-          <Button variant="ghost" size="sm" onClick={() => setYear((y) => y + 1)}>
+          <Button variant="ghost" size="sm" onClick={() => setYear((y) => y + 1)} disabled={dataRange ? year >= dataRange.maxYear : false}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
