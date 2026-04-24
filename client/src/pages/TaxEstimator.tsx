@@ -5,7 +5,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
-import { getIncome, getAllGainSnapshots, getTaxAssumptions, updateTaxAssumptions, updateTaxQuarterlyPayments } from "@/api";
+import { getIncome, getAllGainSnapshots, getTaxAssumptions, updateTaxAssumptions, updateTaxQuarterlyPayments, getDataRange } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Income, RealizedGainSnapshotWithAccount } from "@/types";
 
@@ -412,6 +412,8 @@ export function TaxEstimatorPage() {
   const { data: gainSnapshots } = useApi(() => getAllGainSnapshots(year), [year]);
   const snapshots: RealizedGainSnapshotWithAccount[] = useMemo(() => gainSnapshots ?? [], [gainSnapshots]);
 
+  const { data: dataRange } = useApi(() => getDataRange(), []);
+
   const otherOrdinaryNum = parseFloat(otherOrdinary) || 0;
   const otherLTCGNum = parseFloat(otherLTCG) || 0;
   const withheldNum = parseFloat(withheld) || 0;
@@ -741,11 +743,11 @@ export function TaxEstimatorPage() {
             Tax Assumptions
           </button>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)}>
+            <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)} disabled={dataRange ? year <= dataRange.minYear : false}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="min-w-[4rem] text-center font-semibold">{year}</span>
-            <Button variant="ghost" size="sm" onClick={() => setYear((y) => y + 1)}>
+            <Button variant="ghost" size="sm" onClick={() => setYear((y) => y + 1)} disabled={dataRange ? year >= dataRange.maxYear : false}>
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>

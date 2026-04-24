@@ -8,6 +8,7 @@ import {
   Trash2,
   ExternalLink,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Settings2,
 } from "lucide-react";
@@ -25,13 +26,13 @@ import {
   createTransfer,
   updateTransfer,
   deleteTransfer,
+  getDataRange,
 } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useDemo } from "@/context/DemoContext";
 import type { WithdrawalEvent, WithdrawalType, InvestmentSettings } from "@/types";
 
 const CURRENT_YEAR = new Date().getFullYear();
-const YEAR_OPTIONS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
 
 // ── Type label helpers ────────────────────────────────────────────────────────
 
@@ -682,6 +683,7 @@ export function WithdrawalsPage() {
 
   // Accounts for the transfer modal (non-joint investment + banking only)
   const { data: allAccountsData } = useApi(() => getAccounts(), []);
+  const { data: dataRange } = useApi(() => getDataRange(), []);
   const modalAccounts = useMemo<ModalAccount[]>(
     () =>
       (allAccountsData ?? [])
@@ -781,17 +783,14 @@ export function WithdrawalsPage() {
           <h2 className="text-2xl font-bold">Withdrawals</h2>
         </div>
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <select
-              value={year}
-              onChange={(e) => setYear(parseInt(e.target.value))}
-              className="appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
-            >
-              {YEAR_OPTIONS.map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)} disabled={dataRange ? year <= dataRange.minYear : false}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="min-w-[4rem] text-center font-semibold">{year}</span>
+            <Button variant="ghost" size="sm" onClick={() => setYear((y) => y + 1)} disabled={dataRange ? year >= dataRange.maxYear : false}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
           <Button onClick={() => { setEditingEvent(null); setTransferModalOpen(true); }}>
             <Plus className="h-4 w-4 mr-1.5" />

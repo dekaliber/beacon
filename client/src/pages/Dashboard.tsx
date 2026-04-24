@@ -11,7 +11,7 @@ import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
 import { CategoryOutliersChart } from "@/components/CategoryOutliersChart";
 import { useApi } from "@/hooks/useApi";
-import { getDashboard, getFlatCategories, getCategoryTrend, getCategoryOutliers } from "@/api";
+import { getDashboard, getFlatCategories, getCategoryTrend, getCategoryOutliers, getDataRange } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Category } from "@/types";
 
@@ -169,6 +169,7 @@ export function Dashboard() {
   const { data, loading } = useApi(() => getDashboard(year, month), [year, month]);
   const { data: allCategories } = useApi(() => getFlatCategories(), []);
   const { data: dashboardOutliers } = useApi(() => getCategoryOutliers(year, month), [year, month]);
+  const { data: dataRange } = useApi(() => getDataRange(), []);
 
   const prevMonth = () => {
     if (month === 1) { setMonth(12); setYear(year - 1); }
@@ -178,6 +179,9 @@ export function Dashboard() {
     if (month === 12) { setMonth(1); setYear(year + 1); }
     else setMonth(month + 1);
   };
+
+  const atMin = dataRange ? year * 12 + month <= dataRange.minYear * 12 + dataRange.minMonth : false;
+  const atMax = dataRange ? year * 12 + month >= dataRange.maxYear * 12 + dataRange.maxMonth : false;
 
   const monthLabel = new Date(year, month - 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
@@ -245,11 +249,11 @@ export function Dashboard() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Dashboard</h2>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={prevMonth}>
+          <Button variant="ghost" size="sm" onClick={prevMonth} disabled={atMin}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="min-w-[160px] text-center font-medium">{monthLabel}</span>
-          <Button variant="ghost" size="sm" onClick={nextMonth}>
+          <span className="min-w-[8rem] text-center font-semibold">{monthLabel}</span>
+          <Button variant="ghost" size="sm" onClick={nextMonth} disabled={atMax}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>

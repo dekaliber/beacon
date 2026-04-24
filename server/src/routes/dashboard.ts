@@ -4,6 +4,33 @@ import { getUserId } from "../middleware/auth.js";
 
 export const dashboardRoutes = Router();
 
+dashboardRoutes.get("/data-range", async (req, res) => {
+  const userId = getUserId(req);
+  const today = new Date();
+  const [expenseMin, expenseMax, incomeMin, incomeMax] = await Promise.all([
+    prisma.expense.findFirst({ where: { account: { userId }, parentExpenseId: null }, orderBy: { date: "asc" }, select: { date: true } }),
+    prisma.expense.findFirst({ where: { account: { userId }, parentExpenseId: null, date: { lte: today } }, orderBy: { date: "desc" }, select: { date: true } }),
+    prisma.income.findFirst({ where: { account: { userId } }, orderBy: { date: "asc" }, select: { date: true } }),
+    prisma.income.findFirst({ where: { account: { userId }, date: { lte: today } }, orderBy: { date: "desc" }, select: { date: true } }),
+  ]);
+
+  const minDates = [expenseMin?.date, incomeMin?.date].filter(Boolean) as Date[];
+  const maxDates = [expenseMax?.date, incomeMax?.date].filter(Boolean) as Date[];
+  if (minDates.length === 0) {
+    return res.json({ minYear: today.getUTCFullYear(), minMonth: today.getUTCMonth() + 1, maxYear: today.getUTCFullYear(), maxMonth: today.getUTCMonth() + 1 });
+  }
+
+  const min = new Date(Math.min(...minDates.map((d) => d.getTime())));
+  const max = new Date(Math.max(...maxDates.map((d) => d.getTime())));
+
+  res.json({
+    minYear: min.getUTCFullYear(),
+    minMonth: min.getUTCMonth() + 1,
+    maxYear: max.getUTCFullYear(),
+    maxMonth: max.getUTCMonth() + 1,
+  });
+});
+
 /** Return the effective monthly budget amount for a given month/year using the
  *  AnnualBudget + MonthlyBudget hierarchy. */
 async function getEffectiveMonthlyBudget(

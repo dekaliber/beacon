@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useApi } from "@/hooks/useApi";
-import { getMonthlySpending } from "@/api";
+import { getMonthlySpending, getDataRange } from "@/api";
 import { formatCurrency } from "@/lib/utils";
 import type { MonthlySpendingMonth, MonthlySpendingDay } from "@/types";
 
@@ -350,6 +350,8 @@ export function MonthlySpending() {
     [year],
   );
 
+  const { data: dataRange } = useApi(() => getDataRange(), []);
+
   // Compute a single symmetric anchor for both color scales. Using the larger
   // of |max| and |min| ensures positive and negative shades are directly
   // comparable in magnitude across the whole year.
@@ -383,11 +385,11 @@ export function MonthlySpending() {
           <h2 className="text-2xl font-bold">Monthly Spending</h2>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)}>
+          <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)} disabled={dataRange ? year <= dataRange.minYear : false}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="min-w-[4rem] text-center font-semibold">{year}</span>
-          <Button variant="ghost" size="sm" onClick={() => setYear((y) => y + 1)}>
+          <Button variant="ghost" size="sm" onClick={() => setYear((y) => y + 1)} disabled={dataRange ? year >= dataRange.maxYear : false}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>

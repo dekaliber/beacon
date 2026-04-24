@@ -182,6 +182,9 @@ export const updateBudgetSettings = (jointSplitRatio: number) =>
   api.put<{ jointSplitRatio: number }>("/budgets/settings", { jointSplitRatio });
 
 // Dashboard
+export const getDataRange = () =>
+  api.get<{ minYear: number; minMonth: number; maxYear: number; maxMonth: number }>("/dashboard/data-range");
+
 export const getDashboard = (year?: number, month?: number) => {
   const params = new URLSearchParams();
   if (year) params.set("year", year.toString());
