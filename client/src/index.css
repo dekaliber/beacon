@@ -25,3 +25,8 @@ body {
   margin: 0;
   font-family: "Inter", system-ui, -apple-system, sans-serif;
 }
+
+.recharts-wrapper:focus,
+.recharts-wrapper svg:focus {
+  outline: none;
+}
