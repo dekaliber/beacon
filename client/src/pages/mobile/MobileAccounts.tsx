@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
-import { Plus, X, ChevronDown, Landmark, CreditCard, TrendingUp, EyeOff, ArrowRight, Trash2, Check, Pencil } from "lucide-react";
+import { Plus, X, ChevronDown, Landmark, CreditCard, TrendingUp, EyeOff, Eye, ArrowRight, Trash2, Check, Pencil } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
 import { getAccounts, createAccount, updateAccount, deleteAccount, getInvestmentHoldings, getRecurrenceRules } from "@/api";
+import { cn } from "@/lib/utils";
+import { useDemo } from "@/context/DemoContext";
 import type { Account, TaxAdvantageType } from "@/types";
 
 const ACCOUNT_COLORS = [
@@ -99,6 +101,7 @@ export function MobileAccounts() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
   const { data: accounts, refetch } = useApi(() => getAccounts({ includeHidden: true }), []);
+  const { isDemoMode, toggleDemoMode } = useDemo();
 
   const handleSave = async (data: Partial<Account>) => {
     if (editing) {
@@ -176,14 +179,30 @@ export function MobileAccounts() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Accounts</h1>
-          <button
-            type="button"
-            onClick={openAdd}
-            className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
-          >
-            <Plus className="h-4 w-4" />
-            Add
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleDemoMode}
+              title={isDemoMode ? "Disable demo mode" : "Enable demo mode"}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                isDemoMode
+                  ? "bg-amber-100 text-amber-700"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              )}
+            >
+              {isDemoMode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              Demo
+            </button>
+            <button
+              type="button"
+              onClick={openAdd}
+              className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+            >
+              <Plus className="h-4 w-4" />
+              Add
+            </button>
+          </div>
         </div>
 
         {accounts.length === 0 ? (

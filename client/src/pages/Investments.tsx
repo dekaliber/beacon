@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { TrendingUp, TrendingDown, Landmark, LineChart, ChevronRight, Library, Target, ArrowUpRight, Sliders } from "lucide-react";
+import { TrendingUp, TrendingDown, LineChart, ChevronRight, Library, Target, ArrowUpRight, Sliders } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Modal } from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
@@ -1126,10 +1126,10 @@ export function Investments() {
     notifications?.pendingDividends.map((g) => g.accountId) ?? []
   );
   const { isDemoMode, demoFactor } = useDemo();
-  const displayAccounts = useMemo(
-    () => isDemoMode && accounts ? scaleInvestmentAccounts(accounts, demoFactor) : accounts,
-    [accounts, isDemoMode, demoFactor]
-  );
+  const displayAccounts = useMemo(() => {
+    const all = isDemoMode && accounts ? scaleInvestmentAccounts(accounts, demoFactor) : accounts;
+    return all?.filter((a) => a.type === "INVESTMENT") ?? null;
+  }, [accounts, isDemoMode, demoFactor]);
   const displayAllocation = useMemo(
     () => isDemoMode && allocation ? scaleAllocationSummary(allocation, demoFactor) : allocation,
     [allocation, isDemoMode, demoFactor]
@@ -1148,20 +1148,17 @@ export function Investments() {
 
 if (!displayAccounts) return null;
 
-  const investmentAccounts = displayAccounts.filter((a) => a.type === "INVESTMENT");
+  const investmentAccounts = displayAccounts;
 
   const totalPortfolioValue = displayAccounts.reduce((sum, a) => sum + a.totalMarketValue, 0);
   const totalDayGain = investmentAccounts.reduce((sum, a) => sum + (a.totalDayGain ?? 0), 0);
   const totalDayGainPct = totalPortfolioValue > 0 ? (totalDayGain / totalPortfolioValue) * 100 : null;
 
   // ── Asset Composition breakdown ──────────────────────────────────────────
-  // Settlement cash + banking balances + holdings classified as Cash via instrument weights
+  // Settlement cash + holdings classified as Cash via instrument weights
   const settlementCash = investmentAccounts.reduce((sum, a) => sum + (a.cashBalance ?? 0), 0);
-  const bankingBalance = displayAccounts
-    .filter((a) => a.type === "CHECKING" || a.type === "SAVINGS")
-    .reduce((sum, a) => sum + a.totalMarketValue, 0);
   const classifiedCashHoldings = investmentAccounts.reduce((sum, a) => sum + a.classifiedCashValue, 0);
-  const totalCashValue = settlementCash + bankingBalance + classifiedCashHoldings;
+  const totalCashValue = settlementCash + classifiedCashHoldings;
 
   // Untracked = holdings with no instrument weights assigned in the Securities page
   const untrackedValue = investmentAccounts.reduce((sum, a) => sum + a.untrackedValue, 0);
@@ -1193,64 +1190,52 @@ if (!displayAccounts) return null;
     .filter((a) => a.taxAdvantageType === "PLAN_529")
     .reduce((sum, a) => sum + nonCashValue(a), 0);
 
-  const renderAccountRow = (account: InvestmentAccountSummary) => {
-    const isBanking = account.type === "CHECKING" || account.type === "SAVINGS";
-    return (
-      <div
-        key={account.id}
-        role="button"
-        tabIndex={0}
-        onClick={() => navigate(`/investments/${account.id}`)}
-        onKeyDown={(e) => e.key === "Enter" && navigate(`/investments/${account.id}`)}
-        className="w-full text-left cursor-pointer"
-      >
-        <Card className="px-4 py-3 hover:shadow-md transition-shadow cursor-pointer">
-          <div className="flex items-center gap-3">
-            {/* Color dot */}
-            <div
-              className="h-8 w-8 flex-shrink-0 rounded-md flex items-center justify-center"
-              style={account.color ? { backgroundColor: account.color } : { backgroundColor: "#e2e2df" }}
-            >
-              {isBanking ? (
-                <Landmark className="h-4 w-4 text-gray-500" />
-              ) : (
-                <LineChart className="h-4 w-4 text-gray-500" />
-              )}
-            </div>
-
-            {/* Name + meta */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <p className="font-medium text-sm truncate">{account.name}</p>
-                {!isBanking && pendingDividendAccountIds.has(account.id) && (
-                  <span className="shrink-0 inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700 whitespace-nowrap">
-                    Pending dividends
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {isBanking
-                  ? account.type === "CHECKING" ? "Checking · Cash" : "Savings · Cash"
-                  : (() => { const n = account.holdings.length + (account.manualCount ?? 0); return `${n} holding${n !== 1 ? "s" : ""}`; })()}
-              </p>
-            </div>
-
-            {/* Value + gain */}
-            <div className="text-right flex-shrink-0 mr-2">
-              <p className="font-bold tabular-nums text-sm">
-                {formatCurrency(account.totalMarketValue)}
-              </p>
-              {!isBanking && account.totalDayGain != null && account.totalDayGain !== 0 && (
-                <GainBadge value={account.totalDayGain} pct={account.totalDayGainPct} label="1-day" />
-              )}
-            </div>
-
-            <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+  const renderAccountRow = (account: InvestmentAccountSummary) => (
+    <div
+      key={account.id}
+      role="button"
+      tabIndex={0}
+      onClick={() => navigate(`/investments/${account.id}`)}
+      onKeyDown={(e) => e.key === "Enter" && navigate(`/investments/${account.id}`)}
+      className="w-full text-left cursor-pointer"
+    >
+      <Card className="px-4 py-3 hover:shadow-md transition-shadow cursor-pointer">
+        <div className="flex items-center gap-3">
+          <div
+            className="h-8 w-8 flex-shrink-0 rounded-md flex items-center justify-center"
+            style={account.color ? { backgroundColor: account.color } : { backgroundColor: "#e2e2df" }}
+          >
+            <LineChart className="h-4 w-4 text-gray-500" />
           </div>
-        </Card>
-      </div>
-    );
-  };
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <p className="font-medium text-sm truncate">{account.name}</p>
+              {pendingDividendAccountIds.has(account.id) && (
+                <span className="shrink-0 inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700 whitespace-nowrap">
+                  Pending dividends
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {(() => { const n = account.holdings.length + (account.manualCount ?? 0); return `${n} holding${n !== 1 ? "s" : ""}`; })()}
+            </p>
+          </div>
+
+          <div className="text-right flex-shrink-0 mr-2">
+            <p className="font-bold tabular-nums text-sm">
+              {formatCurrency(account.totalMarketValue)}
+            </p>
+            {account.totalDayGain != null && account.totalDayGain !== 0 && (
+              <GainBadge value={account.totalDayGain} pct={account.totalDayGainPct} label="1-day" />
+            )}
+          </div>
+
+          <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+        </div>
+      </Card>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -1400,7 +1385,7 @@ if (!displayAccounts) return null;
       {displayAccounts.length === 0 && (
         <Card className="p-8 text-center">
           <LineChart className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-40" />
-          <p className="font-semibold text-lg mb-1">No investment or banking accounts</p>
+          <p className="font-semibold text-lg mb-1">No investment accounts</p>
           <p className="text-muted-foreground text-sm">
             Add accounts in{" "}
             <button
