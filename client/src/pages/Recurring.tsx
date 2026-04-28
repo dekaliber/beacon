@@ -549,12 +549,12 @@ function RuleTable({
       <colgroup>
         {/* Description takes all remaining space */}
         <col />
-        <col className="w-[72px]" /> {/* Next */}
-        <col className="w-[72px]" /> {/* Started */}
-        <col className="w-[72px]" /> {/* Ends */}
-        <col className="w-[140px]" /> {/* Account */}
-        <col className="w-[88px]" /> {/* Amount */}
-        <col className="w-[72px]" /> {/* Actions (always present for alignment) */}
+        {/* Next */}<col className="w-[72px]" />
+        {/* Started */}<col className="w-[72px]" />
+        {/* Ends */}<col className="w-[72px]" />
+        {/* Account */}<col className="w-[140px]" />
+        {/* Amount */}<col className="w-[88px]" />
+        {/* Actions (always present for alignment) */}<col className="w-[72px]" />
       </colgroup>
       <thead>
         <tr className="border-b border-border">
@@ -566,7 +566,7 @@ function RuleTable({
           <th className={colHdr}>{showNextColumn ? "Ends" : "Ended"}</th>
           <th className={colHdr}>Account</th>
           <th className={`${colHdr} pr-3 text-right`}>Amount</th>
-          <th className="pb-2" /> {/* Actions — always rendered for column alignment */}
+          {/* Actions — always rendered for column alignment */}<th className="pb-2" />
         </tr>
       </thead>
       <tbody className="divide-y divide-border">

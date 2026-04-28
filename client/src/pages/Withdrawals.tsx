@@ -626,7 +626,7 @@ function MonthSection({
           <colgroup>
             <col className="w-[90px]" />
             <col className="w-[130px]" />
-            <col /> {/* Description – flexible */}
+            {/* Description – flexible */}<col />
             <col className="w-[320px]" />
             <col className="w-[110px]" />
             <col className="w-[72px]" />

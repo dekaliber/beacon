@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useLayoutEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useRef, useLayoutEffect, useCallback } from "react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -707,19 +707,18 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
         </thead>
         <tbody>
           {events.map((event, idx) => (
-            <>
+            <React.Fragment key={event.id}>
               {idx === firstNegativeIdx && (
                 <NewAdjustmentRow
-                  key={`new-adj-${event.id}`}
                   defaultDate={event.date}
                   accountId={accountId}
                   onSaved={onRefetch}
                 />
               )}
               {event.type === "BALANCE_ADJUSTMENT" ? (
-                <AdjustmentEventRow key={event.id} event={event} onSaved={onRefetch} />
+                <AdjustmentEventRow event={event} onSaved={onRefetch} />
               ) : (
-                <tr key={event.id} className="group border-b border-border/50 hover:bg-muted/30 transition-colors">
+                <tr className="group border-b border-border/50 hover:bg-muted/30 transition-colors">
                   <td className="py-2 pr-4 text-muted-foreground whitespace-nowrap">{fmtDate(event.date)}</td>
                   <td className="py-2 pr-4">
                     <div className="flex items-center gap-2">
@@ -801,7 +800,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                   </td>
                 </tr>
               )}
-            </>
+            </React.Fragment>
           ))}
         </tbody>
       </table>
