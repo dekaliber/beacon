@@ -17,17 +17,17 @@ import {
   ChevronRight,
   ChevronDown,
   Pencil,
+  Settings2,
   X,
   Info,
   Calendar,
 } from "lucide-react";
 import { Button } from "@/components/Button";
-import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeadingMenu } from "@/components/PageHeadingMenu";
 import { useApi } from "@/hooks/useApi";
 import { getBudgetOverview, setAnnualBudget, getDataRange } from "@/api";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, cn } from "@/lib/utils";
 import type { BudgetPanel, ChartDay, MonthlyTotal } from "@/types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -59,9 +59,29 @@ function mergeChartData(
   }));
 }
 
-// ── Budget settings modal ─────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-interface BudgetSettingsModalProps {
+function useBodyScrollLock(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    const scrollY = window.scrollY;
+    document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      window.scrollTo(0, scrollY);
+    };
+  }, [active]);
+}
+
+// ── Budget settings sheet ─────────────────────────────────────────────────────
+
+interface BudgetSettingsSheetProps {
   open: boolean;
   onClose: () => void;
   personalBudget: number | null;
@@ -70,17 +90,19 @@ interface BudgetSettingsModalProps {
   onSave: (personal: number | null, joint: number | null) => Promise<void>;
 }
 
-function BudgetSettingsModal({
+function BudgetSettingsSheet({
   open,
   onClose,
   personalBudget,
   jointBudget,
   jointSplitRatio,
   onSave,
-}: BudgetSettingsModalProps) {
+}: BudgetSettingsSheetProps) {
   const [personal, setPersonal] = useState(personalBudget?.toString() ?? "");
   const [joint, setJoint]       = useState(jointBudget?.toString() ?? "");
   const [saving, setSaving]     = useState(false);
+
+  useBodyScrollLock(open);
 
   useEffect(() => {
     if (open) {
@@ -103,60 +125,71 @@ function BudgetSettingsModal({
   };
 
   const inputClass =
-    "w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+    "w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
   return (
-    <Modal open={open} onClose={onClose} title="Edit Budget">
-      <div className="space-y-5">
-        <div className="space-y-1.5">
-          <label className="mb-1 block text-sm font-medium">Personal Annual Budget</label>
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-            <input
-              type="number"
-              min="0"
-              step="100"
-              value={personal}
-              onChange={(e) => setPersonal(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-              placeholder="0"
-              className={inputClass}
-              autoFocus
-            />
-          </div>
-        </div>
+    <>
+      {open && (
+        <div className="fixed inset-0 z-[55] bg-black/40" onClick={onClose} />
+      )}
+      <div className={cn(
+        "fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl bg-background border-t border-border transition-transform duration-300",
+        open ? "translate-y-0" : "translate-y-full",
+      )}>
+        <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
+        <div className="px-4 pb-8 space-y-5">
+          <h2 className="text-base font-semibold">Budget Settings</h2>
 
-        <div className="space-y-1.5">
-          <label className="mb-1 block text-sm font-medium">Joint Annual Budget</label>
-          <p className="text-xs text-muted-foreground">
-            Enter your share of joint expenses. Actual joint spending is automatically
-            divided by your {Math.round(jointSplitRatio * 100)}% split ratio.
-          </p>
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-            <input
-              type="number"
-              min="0"
-              step="100"
-              value={joint}
-              onChange={(e) => setJoint(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-              placeholder="0"
-              className={inputClass}
-            />
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium">Personal Annual Budget</label>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+              <input
+                type="number"
+                min="0"
+                step="100"
+                value={personal}
+                onChange={(e) => setPersonal(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
+                placeholder="0"
+                className={inputClass}
+                autoFocus={open}
+              />
+            </div>
           </div>
-        </div>
 
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="secondary" onClick={onClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
-          </Button>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium">Joint Annual Budget</label>
+            <p className="text-xs text-muted-foreground">
+              Enter your share of joint expenses. Actual joint spending is automatically
+              divided by your {Math.round(jointSplitRatio * 100)}% split ratio.
+            </p>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+              <input
+                type="number"
+                min="0"
+                step="100"
+                value={joint}
+                onChange={(e) => setJoint(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
+                placeholder="0"
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button type="button" variant="secondary" className="flex-1" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="button" className="flex-1" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </div>
         </div>
       </div>
-    </Modal>
+    </>
   );
 }
 
@@ -937,30 +970,35 @@ export function MobileBudgets() {
   return (
     <div>
       {/* Page header */}
-      <div className="mb-6 flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <PageHeadingMenu
-            title="Budget"
-            items={[
-              { label: "Monthly Spending", icon: <Calendar className="h-4 w-4 text-muted-foreground" />, to: "/budgets/monthly-spending" },
-            ]}
-          />
+      <div className="mb-6 flex items-center gap-3">
+        <PageHeadingMenu
+          title="Budget"
+          items={[
+            { label: "Monthly Spending", icon: <Calendar className="h-4 w-4 text-muted-foreground" />, to: "/budgets/monthly-spending" },
+          ]}
+        />
+        <div className="flex flex-1 items-center justify-end gap-1">
+          <button
+            onClick={() => setYear((y) => y - 1)}
+            disabled={dataRange ? year <= dataRange.minYear : false}
+            className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <span className="min-w-[3rem] text-center text-sm font-semibold">{year}</span>
+          <button
+            onClick={() => setYear((y) => y + 1)}
+            disabled={dataRange ? year >= dataRange.maxYear : false}
+            className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
           <button
             onClick={() => setBudgetModalOpen(true)}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            className="ml-1 rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
           >
-            <Pencil className="h-4 w-4" />
-            Edit Budget
+            <Settings2 className="h-4.5 w-4.5" />
           </button>
-        </div>
-        <div className="flex items-center gap-2 self-center">
-          <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)} disabled={dataRange ? year <= dataRange.minYear : false}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="min-w-[4rem] text-center font-semibold">{year}</span>
-          <Button variant="ghost" size="sm" onClick={() => setYear((y) => y + 1)} disabled={dataRange ? year >= dataRange.maxYear : false}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
         </div>
       </div>
 
@@ -1034,7 +1072,7 @@ export function MobileBudgets() {
         </>
       )}
 
-      <BudgetSettingsModal
+      <BudgetSettingsSheet
         open={budgetModalOpen}
         onClose={() => setBudgetModalOpen(false)}
         personalBudget={data?.personal.annualBudget ?? null}
