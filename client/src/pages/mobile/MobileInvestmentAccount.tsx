@@ -125,6 +125,51 @@ function GainText({ value, pct, size = "sm" }: { value: number | null; pct?: num
   );
 }
 
+// ── Ghost chart (empty-state placeholder) ─────────────────────────────────────
+
+function GhostMobileGrowthChart() {
+  return (
+    <div className="select-none">
+      <div className="flex gap-1 mb-2">
+        {["WTD", "MTD", "YTD"].map((d) => (
+          <span key={d} className="px-2 py-0.5 rounded text-xs font-medium text-muted-foreground/30">{d}</span>
+        ))}
+      </div>
+      <div className="relative h-[120px] overflow-hidden">
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="absolute inset-0 w-full h-full opacity-[0.15]"
+          aria-hidden="true"
+        >
+          <defs>
+            <linearGradient id="ghost-grad-mobile" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.6} />
+              <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <path
+            d="M 0,75 C 8,70 12,60 20,55 C 28,50 32,65 42,52 C 52,39 56,48 68,32 C 78,18 88,22 100,12 L 100,100 L 0,100 Z"
+            fill="url(#ghost-grad-mobile)"
+          />
+          <path
+            d="M 0,75 C 8,70 12,60 20,55 C 28,50 32,65 42,52 C 52,39 56,48 68,32 C 78,18 88,22 100,12"
+            fill="none"
+            stroke="#6366f1"
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <p className="text-xs text-muted-foreground text-center px-6">
+            No data yet. Add dated lots to track growth over time.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Growth chart (simplified, market value only) ──────────────────────────────
 
 function MobileGrowthChart({ accountId }: { accountId: string }) {
@@ -151,6 +196,8 @@ function MobileGrowthChart({ accountId }: { accountId: string }) {
   const periodGainPct = periodGain != null && points[0]?.marketValue > 0
     ? (periodGain / points[0].marketValue) * 100
     : null;
+
+  if (!loading && allPoints.length === 0) return <GhostMobileGrowthChart />;
 
   return (
     <div>
@@ -1608,56 +1655,62 @@ export function MobileInvestmentAccount() {
           </div>
         </div>
 
-        {/* Market value + stats + chart */}
+        {/* Market value — only when there's something to total */}
         {hasHoldings && (
-          <>
-            <div>
-              <p className="text-2xl font-bold tabular-nums">{formatCurrency(totalMarketValue)}</p>
-            </div>
-
-            <MobileGrowthChart accountId={accountId!} />
-
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Total Gain</p>
-                <GainText value={totalGain} pct={totalGainPct} size="sm" />
-              </div>
-              <div className="grid grid-cols-2 gap-x-4">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Short-Term</p>
-                  <GainText value={shortTermGain} size="sm" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Long-Term</p>
-                  <GainText value={longTermGain} size="sm" />
-                </div>
-              </div>
-              {priceDate && (
-                <p className="text-[10px] text-muted-foreground leading-tight">
-                  Prices as of {formatDate(priceDate)} · 4:00 PM {easternTZAbbr(priceDate)}
-                </p>
-              )}
-            </div>
-
-            {/* Settlement cash */}
-            <button
-              type="button"
-              onClick={() => setCashSheetOpen(true)}
-              className="flex w-full items-center justify-between rounded-xl border border-border px-4 py-3 text-sm"
-            >
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Banknote className="h-4 w-4" />
-                <span>Settlement Cash</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="font-medium tabular-nums">
-                  {cashBalance != null ? formatCurrency(cashBalance) : "—"}
-                </span>
-                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-              </div>
-            </button>
-          </>
+          <div>
+            <p className="text-2xl font-bold tabular-nums">{formatCurrency(totalMarketValue)}</p>
+          </div>
         )}
+
+        {/* Chart — ghost when no holdings, real when data exists */}
+        {(displayHoldings.length > 0 || displayManuals.length > 0) ? (
+          <MobileGrowthChart accountId={accountId!} />
+        ) : (
+          <GhostMobileGrowthChart />
+        )}
+
+        {/* Stats — only when there's something to show */}
+        {hasHoldings && (
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Total Gain</p>
+              <GainText value={totalGain} pct={totalGainPct} size="sm" />
+            </div>
+            <div className="grid grid-cols-2 gap-x-4">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Short-Term</p>
+                <GainText value={shortTermGain} size="sm" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Long-Term</p>
+                <GainText value={longTermGain} size="sm" />
+              </div>
+            </div>
+            {priceDate && (
+              <p className="text-[10px] text-muted-foreground leading-tight">
+                Prices as of {formatDate(priceDate)} · 4:00 PM {easternTZAbbr(priceDate)}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Settlement cash — always visible so it's editable on empty accounts */}
+        <button
+          type="button"
+          onClick={() => setCashSheetOpen(true)}
+          className="flex w-full items-center justify-between rounded-xl border border-border px-4 py-3 text-sm"
+        >
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Banknote className="h-4 w-4" />
+            <span>Settlement Cash</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-medium tabular-nums">
+              {cashBalance != null ? formatCurrency(cashBalance) : "—"}
+            </span>
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+          </div>
+        </button>
 
         {/* Tab bar */}
         <div className="flex border-b border-border">

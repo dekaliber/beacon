@@ -4238,6 +4238,49 @@ function eventDotColor(events: GrowthEvent[]) {
   return "#22c55e";                        // green — buy
 }
 
+function GhostGrowthChart() {
+  return (
+    <div className="select-none">
+      <div className="flex gap-1 mb-3">
+        {["WTD", "MTD", "YTD"].map((d) => (
+          <span key={d} className="px-2 py-0.5 rounded text-xs font-medium text-muted-foreground/30">{d}</span>
+        ))}
+      </div>
+      <div className="relative h-[168px] overflow-hidden">
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="absolute inset-0 w-full h-full opacity-[0.15]"
+          aria-hidden="true"
+        >
+          <defs>
+            <linearGradient id="ghost-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.6} />
+              <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <path
+            d="M 0,75 C 8,70 12,60 20,55 C 28,50 32,65 42,52 C 52,39 56,48 68,32 C 78,18 88,22 100,12 L 100,100 L 0,100 Z"
+            fill="url(#ghost-grad)"
+          />
+          <path
+            d="M 0,75 C 8,70 12,60 20,55 C 28,50 32,65 42,52 C 52,39 56,48 68,32 C 78,18 88,22 100,12"
+            fill="none"
+            stroke="#4f46e5"
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <p className="text-sm text-muted-foreground text-center px-6">
+            No data yet. Add dated lots to track growth over time.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function GrowthChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload as GrowthPoint;
@@ -4382,22 +4425,32 @@ function GrowthChart({ accountId, isManaged, onImportClick, onDayGain }: { accou
     );
   }
 
-  if (error || allPoints.length === 0) {
+  if (error) {
     return (
       <>
         {header}
         <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground text-center px-4">
-          {error
-            ? "Failed to load growth data."
-            : isManaged
-              ? <span>{"No transaction history yet. "}{onImportClick
-                    ? <button onClick={onImportClick} className="text-primary underline underline-offset-2 hover:no-underline">Import a QFX file</button>
-                    : "Import a QFX file"
-                  }{" to enable the growth chart."}</span>
-              : "No data yet. Add dated lots to track growth over time."}
+          Failed to load growth data.
         </div>
       </>
     );
+  }
+
+  if (allPoints.length === 0) {
+    if (isManaged) {
+      return (
+        <>
+          {header}
+          <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground text-center px-4">
+            <span>{"No transaction history yet. "}{onImportClick
+                ? <button onClick={onImportClick} className="text-primary underline underline-offset-2 hover:no-underline">Import a QFX file</button>
+                : "Import a QFX file"
+              }{" to enable the growth chart."}</span>
+          </div>
+        </>
+      );
+    }
+    return <GhostGrowthChart />;
   }
 
   if (points.length === 0) {
@@ -4746,53 +4799,63 @@ export function InvestmentAccount() {
       </div>
 
       {/* Investment: prominent market value + chart + performance summary (shown above tab nav) */}
-      {isInvestment && (holdings.length > 0 || manuals.length > 0 || cashBalance != null) && (
+      {isInvestment && (
         <>
-          {/* Prominent market value — no label needed */}
-          <p className="text-3xl font-bold tabular-nums">{formatCurrency(totalMarketValue)}</p>
+          {/* Prominent market value — only when there's something to total */}
+          {(holdings.length > 0 || manuals.length > 0 || cashBalance != null) && (
+            <p className="text-3xl font-bold tabular-nums">{formatCurrency(totalMarketValue)}</p>
+          )}
 
           {/* Chart + summary row */}
           <div className="flex flex-col lg:flex-row items-start gap-6">
             {/* Growth chart — 2/3 width */}
             <div className="min-w-0 basis-2/3 py-2 flex flex-col w-full">
-              <GrowthChart key={chartKey} accountId={accountId!} isManaged={account.isManaged} onImportClick={account.isManaged ? () => document.getElementById("qfx-import")?.scrollIntoView({ behavior: "smooth" }) : undefined} onDayGain={handleDayGain} />
+              {(holdings.length > 0 || manuals.length > 0) ? (
+                <GrowthChart key={chartKey} accountId={accountId!} isManaged={account.isManaged} onImportClick={account.isManaged ? () => document.getElementById("qfx-import")?.scrollIntoView({ behavior: "smooth" }) : undefined} onDayGain={handleDayGain} />
+              ) : (
+                <GhostGrowthChart />
+              )}
             </div>
             {/* Performance summary — 1/3 width */}
             <Card className="min-w-0 basis-1/3 w-full p-4">
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-                    1 Day {dayGain == null ? "Gain/Loss" : dayGain >= 0 ? "Gain" : "Loss"}
-                  </p>
-                  <GainCell value={dayGain} size="base" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-                    Total {totalGain == null ? "Gain/Loss" : totalGain >= 0 ? "Gain" : "Loss"}
-                  </p>
-                  <GainCell value={totalGain} pct={totalGainPct} size="base" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-                    Short-Term {shortTermGain == null ? "Gain/Loss" : shortTermGain >= 0 ? "Gain" : "Loss"}
-                  </p>
-                  <GainCell value={shortTermGain} size="base" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-                    Long-Term {longTermGain == null ? "Gain/Loss" : longTermGain >= 0 ? "Gain" : "Loss"}
-                  </p>
-                  <GainCell value={longTermGain} size="base" />
-                </div>
-              </div>
-              {priceDate && (
-                <p className="text-[11px] text-muted-foreground pt-3 border-t border-border mt-3">
-                  Prices as of {formatDate(priceDate)} at 4:00 PM {easternTZAbbr(priceDate)}
-                </p>
+              {(holdings.length > 0 || manuals.length > 0 || cashBalance != null) && (
+                <>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                        1 Day {dayGain == null ? "Gain/Loss" : dayGain >= 0 ? "Gain" : "Loss"}
+                      </p>
+                      <GainCell value={dayGain} size="base" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                        Total {totalGain == null ? "Gain/Loss" : totalGain >= 0 ? "Gain" : "Loss"}
+                      </p>
+                      <GainCell value={totalGain} pct={totalGainPct} size="base" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                        Short-Term {shortTermGain == null ? "Gain/Loss" : shortTermGain >= 0 ? "Gain" : "Loss"}
+                      </p>
+                      <GainCell value={shortTermGain} size="base" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                        Long-Term {longTermGain == null ? "Gain/Loss" : longTermGain >= 0 ? "Gain" : "Loss"}
+                      </p>
+                      <GainCell value={longTermGain} size="base" />
+                    </div>
+                  </div>
+                  {priceDate && (
+                    <p className="text-[11px] text-muted-foreground pt-3 border-t border-border mt-3">
+                      Prices as of {formatDate(priceDate)} at 4:00 PM {easternTZAbbr(priceDate)}
+                    </p>
+                  )}
+                </>
               )}
 
-              {/* Settlement cash */}
-              <div className="pt-3 border-t border-border mt-3">
+              {/* Settlement cash — always visible so it's editable on empty accounts */}
+              <div className={(holdings.length > 0 || manuals.length > 0 || cashBalance != null) ? "pt-3 border-t border-border mt-3" : ""}>
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-1.5">
                     <Banknote className="h-3.5 w-3.5 text-muted-foreground" />
