@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   LineChart,
   Line,
@@ -864,6 +865,7 @@ function BudgetPanelSection({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function MobileBudgets() {
+  const navigate = useNavigate();
   const now   = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [showDiscretionary, setShowDiscretionary] = useState(false);
@@ -989,16 +991,25 @@ export function MobileBudgets() {
             {...sharedPanelProps}
           />
 
-          {/* Personal & Joint breakdown toggle */}
-          <button
-            onClick={toggleBreakdown}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          >
-            <span>{showBreakdown ? "Hide" : "Show"} Personal & Joint breakdown</span>
-            <ChevronDown
-              className={`h-4 w-4 transition-transform duration-200 ${showBreakdown ? "rotate-180" : ""}`}
-            />
-          </button>
+          {/* Secondary navigation */}
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={toggleBreakdown}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            >
+              <span>{showBreakdown ? "Hide" : "Show"} Personal & Joint breakdown</span>
+              <ChevronDown
+                className={`h-4 w-4 transition-transform duration-200 ${showBreakdown ? "rotate-180" : ""}`}
+              />
+            </button>
+            <button
+              onClick={() => navigate("/budgets/monthly-spending")}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            >
+              <span>View monthly spending calendar</span>
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
 
           {showBreakdown && (
             <div className="space-y-9">

@@ -38,6 +38,7 @@ import { MobileAssetClasses } from "@/pages/mobile/MobileAssetClasses";
 import { MobileRecurring } from "@/pages/mobile/MobileRecurring";
 import { MobileInvestmentAccount } from "@/pages/mobile/MobileInvestmentAccount";
 import { MobileWithdrawals } from "@/pages/mobile/MobileWithdrawals";
+import { MobileMonthlySpending } from "@/pages/mobile/MobileMonthlySpending";
 
 function AuthTokenBridge() {
   const { getToken } = useAuth();
@@ -88,7 +89,7 @@ function App() {
             <Route path="/income" element={<ResponsivePage desktop={<IncomePage />} mobile={<MobileIncome />} />} />
             <Route path="/income/tax-estimator" element={<ResponsivePage desktop={<TaxEstimatorPage />} />} />
             <Route path="/budgets" element={<ResponsivePage desktop={<Budgets />} mobile={<MobileBudgets />} />} />
-            <Route path="/budgets/monthly-spending" element={<ResponsivePage desktop={<MonthlySpending />} />} />
+            <Route path="/budgets/monthly-spending" element={<ResponsivePage desktop={<MonthlySpending />} mobile={<MobileMonthlySpending />} />} />
             <Route path="/accounts" element={<ResponsivePage desktop={<Accounts />} mobile={<MobileAccounts />} />} />
             <Route path="/categories" element={<ResponsivePage desktop={<Categories />} mobile={<MobileCategories />} />} />
             <Route path="/expenses/tags" element={<ResponsivePage desktop={<TagsPage />} />} />
