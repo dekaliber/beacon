@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Plus, X, ChevronDown, ChevronRight, AlertCircle, Check, CornerDownRight, ArrowUp, Trash2, Calendar, Search, Filter } from "lucide-react";
+import { Plus, X, ChevronDown, ChevronRight, AlertCircle, Check, CornerDownRight, ArrowUp, Trash2, Calendar, Search, Filter, Tag as TagIcon } from "lucide-react";
+import { PageHeadingMenu } from "@/components/PageHeadingMenu";
 import { useApi } from "@/hooks/useApi";
 import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, deleteExpense, getExpenseVendors, getTags, createTag, createRecurrenceRule } from "@/api";
 import { formatCurrency, formatDate, localToday, cn } from "@/lib/utils";
@@ -1591,7 +1592,13 @@ export function MobileExpenses() {
     <>
       <div className="space-y-6">
         <div className="flex items-center gap-2">
-          <h1 className="flex-1 text-2xl font-bold">Expenses</h1>
+          <PageHeadingMenu
+            title="Expenses"
+            items={[
+              { label: "Reimbursements", icon: <AlertCircle className="h-4 w-4 text-muted-foreground" />, to: "/expenses/reimbursements" },
+              { label: "Tags", icon: <TagIcon className="h-4 w-4 text-muted-foreground" />, to: "/expenses/tags" },
+            ]}
+          />
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input

@@ -4,6 +4,7 @@ import {
   TrendingUp, TrendingDown, LineChart, ChevronRight,
   Library, Target, ArrowUpRight, Sliders, X,
 } from "lucide-react";
+import { PageHeadingMenu } from "@/components/PageHeadingMenu";
 import { useApi } from "@/hooks/useApi";
 import {
   getInvestmentAccounts, getAllocationSummary, refreshPrices,
@@ -801,14 +802,13 @@ export function MobileInvestments() {
       <div className="space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Investments</h1>
-          <Link
-            to="/investments/securities"
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent"
-          >
-            <Library className="h-4 w-4" />
-            Securities
-          </Link>
+          <PageHeadingMenu
+            title="Investments"
+            items={[
+              { label: "Securities", icon: <Library className="h-4 w-4 text-muted-foreground" />, to: "/investments/securities" },
+              { label: "Withdrawal Rate", icon: <Target className="h-4 w-4 text-muted-foreground" />, to: "/investments/withdrawals" },
+            ]}
+          />
         </div>
 
         {/* Empty state */}

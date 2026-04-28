@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   LineChart,
   Line,
@@ -20,10 +19,12 @@ import {
   Pencil,
   X,
   Info,
+  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
+import { PageHeadingMenu } from "@/components/PageHeadingMenu";
 import { useApi } from "@/hooks/useApi";
 import { getBudgetOverview, setAnnualBudget, getDataRange } from "@/api";
 import { formatCurrency } from "@/lib/utils";
@@ -865,7 +866,6 @@ function BudgetPanelSection({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function MobileBudgets() {
-  const navigate = useNavigate();
   const now   = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [showDiscretionary, setShowDiscretionary] = useState(false);
@@ -939,7 +939,12 @@ export function MobileBudgets() {
       {/* Page header */}
       <div className="mb-6 flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold">Budget</h2>
+          <PageHeadingMenu
+            title="Budget"
+            items={[
+              { label: "Monthly Spending", icon: <Calendar className="h-4 w-4 text-muted-foreground" />, to: "/budgets/monthly-spending" },
+            ]}
+          />
           <button
             onClick={() => setBudgetModalOpen(true)}
             className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -1001,13 +1006,6 @@ export function MobileBudgets() {
               <ChevronDown
                 className={`h-4 w-4 transition-transform duration-200 ${showBreakdown ? "rotate-180" : ""}`}
               />
-            </button>
-            <button
-              onClick={() => navigate("/budgets/monthly-spending")}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            >
-              <span>View monthly spending calendar</span>
-              <ChevronRight className="h-4 w-4" />
             </button>
           </div>
 

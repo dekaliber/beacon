@@ -39,6 +39,8 @@ import { MobileRecurring } from "@/pages/mobile/MobileRecurring";
 import { MobileInvestmentAccount } from "@/pages/mobile/MobileInvestmentAccount";
 import { MobileWithdrawals } from "@/pages/mobile/MobileWithdrawals";
 import { MobileMonthlySpending } from "@/pages/mobile/MobileMonthlySpending";
+import { MobileTags } from "@/pages/mobile/MobileTags";
+import { MobileReimbursements } from "@/pages/mobile/MobileReimbursements";
 
 function AuthTokenBridge() {
   const { getToken } = useAuth();
@@ -92,10 +94,10 @@ function App() {
             <Route path="/budgets/monthly-spending" element={<ResponsivePage desktop={<MonthlySpending />} mobile={<MobileMonthlySpending />} />} />
             <Route path="/accounts" element={<ResponsivePage desktop={<Accounts />} mobile={<MobileAccounts />} />} />
             <Route path="/categories" element={<ResponsivePage desktop={<Categories />} mobile={<MobileCategories />} />} />
-            <Route path="/expenses/tags" element={<ResponsivePage desktop={<TagsPage />} />} />
+            <Route path="/expenses/tags" element={<ResponsivePage desktop={<TagsPage />} mobile={<MobileTags />} />} />
             <Route path="/recurring" element={<ResponsivePage desktop={<Recurring />} mobile={<MobileRecurring />} />} />
             <Route path="/cash-flow" element={<ResponsivePage desktop={<CashFlow />} mobile={<MobileCashFlow />} />} />
-            <Route path="/expenses/reimbursements" element={<ResponsivePage desktop={<ReimbursementsPage />} />} />
+            <Route path="/expenses/reimbursements" element={<ResponsivePage desktop={<ReimbursementsPage />} mobile={<MobileReimbursements />} />} />
             <Route path="/investments" element={<ResponsivePage desktop={<Investments />} mobile={<MobileInvestments />} />} />
             <Route path="/investments/securities" element={<ResponsivePage desktop={<SecuritiesPage />} />} />
             <Route path="/investments/withdrawals" element={<ResponsivePage desktop={<WithdrawalsPage />} mobile={<MobileWithdrawals />} />} />
