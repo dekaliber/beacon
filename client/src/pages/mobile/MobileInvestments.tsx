@@ -700,10 +700,10 @@ export function MobileInvestments() {
     notifications?.pendingDividends.map((g) => g.accountId) ?? [],
   );
   const { isDemoMode, demoFactor } = useDemo();
-  const displayAccounts = useMemo(
-    () => isDemoMode && accounts ? scaleInvestmentAccounts(accounts, demoFactor) : accounts,
-    [accounts, isDemoMode, demoFactor],
-  );
+  const displayAccounts = useMemo(() => {
+    const all = isDemoMode && accounts ? scaleInvestmentAccounts(accounts, demoFactor) : accounts;
+    return all?.filter((a) => a.type === "INVESTMENT") ?? null;
+  }, [accounts, isDemoMode, demoFactor]);
   const displayAllocation = useMemo(
     () => isDemoMode && allocation ? scaleAllocationSummary(allocation, demoFactor) : allocation,
     [allocation, isDemoMode, demoFactor],
@@ -722,7 +722,7 @@ export function MobileInvestments() {
 
   if (!displayAccounts) return null;
 
-  const investmentAccounts = displayAccounts.filter((a) => a.type === "INVESTMENT");
+  const investmentAccounts = displayAccounts;
 
   const totalPortfolioValue = displayAccounts.reduce((sum, a) => sum + a.totalMarketValue, 0);
   const totalDayGain = investmentAccounts.reduce((sum, a) => sum + (a.totalDayGain ?? 0), 0);
