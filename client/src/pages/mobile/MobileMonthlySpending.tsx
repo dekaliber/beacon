@@ -1,6 +1,5 @@
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
 import { getMonthlySpending, getDataRange } from "@/api";
 import { formatCurrency } from "@/lib/utils";
@@ -270,7 +269,7 @@ function MonthCard({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function MobileMonthlySpending() {
-  const navigate = useNavigate();
+
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [filter, setFilter] = useState<FilterMode>("total");
@@ -298,12 +297,6 @@ export function MobileMonthlySpending() {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button
-          onClick={() => navigate("/budgets")}
-          className="rounded-full p-1.5 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
         <h1 className="text-2xl font-bold flex-1">Monthly Spending</h1>
         <div className="flex items-center gap-1">
           <button

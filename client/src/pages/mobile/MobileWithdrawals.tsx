@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Plus,
@@ -672,7 +671,6 @@ function DeleteConfirmSheet({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function MobileWithdrawals() {
-  const navigate = useNavigate();
   const [year, setYear] = useState(CURRENT_YEAR);
 
   const { data: settings, refetch: refetchSettings } = useApi(() => getInvestmentSettings(), []);
@@ -762,14 +760,8 @@ export function MobileWithdrawals() {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button
-          onClick={() => navigate("/investments")}
-          className="rounded-full p-1.5 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <h1 className="text-2xl font-bold flex-1">Withdrawals</h1>
-        <div className="flex items-center gap-1">
+        <h1 className="text-2xl font-bold">Withdrawals</h1>
+        <div className="flex flex-1 items-center justify-end gap-1">
           <button
             onClick={() => setYear((y) => y - 1)}
             disabled={dataRange ? year <= dataRange.minYear : false}
@@ -785,13 +777,13 @@ export function MobileWithdrawals() {
           >
             <ChevronRight className="h-4 w-4" />
           </button>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="ml-1 rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            <Settings2 className="h-4.5 w-4.5" />
+          </button>
         </div>
-        <button
-          onClick={() => setSettingsOpen(true)}
-          className="rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-        >
-          <Settings2 className="h-4.5 w-4.5" />
-        </button>
       </div>
 
       {/* Summary card */}

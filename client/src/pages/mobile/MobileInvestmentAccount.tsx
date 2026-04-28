@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { AreaChart, Area, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import {
   ArrowLeft, LineChart, Plus, Trash2, Pencil, Check, X,
@@ -1494,7 +1494,6 @@ function AddManualFullscreen({
 
 export function MobileInvestmentAccount() {
   const { accountId } = useParams<{ accountId: string }>();
-  const navigate = useNavigate();
   const { notifications, refetch: refetchNotifications } = useNotifications();
   const hasActivityNotification = notifications?.pendingDividends.some((g) => g.accountId === accountId) ?? false;
 
@@ -1633,12 +1632,6 @@ export function MobileInvestmentAccount() {
       <div className="space-y-5">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate("/investments")}
-            className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
           <div
             className="h-8 w-8 shrink-0 rounded-md flex items-center justify-center"
             style={account.color ? { backgroundColor: account.color } : { backgroundColor: "#e2e2df" }}
