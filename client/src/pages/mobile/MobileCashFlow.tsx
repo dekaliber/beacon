@@ -168,7 +168,7 @@ function EditBalanceSheet({
       <div
         className={cn(
           "fixed bottom-0 left-0 right-0 z-[60] flex flex-col rounded-t-2xl bg-background shadow-xl transition-transform duration-250 ease-out",
-          account ? "translate-y-0" : "translate-y-[calc(100%+20px)]"
+          account ? "translate-y-0" : "translate-y-[110%]"
         )}
       >
         {/* Handle */}
