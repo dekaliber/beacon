@@ -133,7 +133,7 @@ function BudgetSettingsSheet({
         <div className="fixed inset-0 z-[55] bg-black/40" onClick={onClose} />
       )}
       <div className={cn(
-        "fixed inset-x-0 bottom-0 z-[60] flex flex-col rounded-t-2xl bg-background border-t border-border transition-transform duration-300",
+        "fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl bg-background border-t border-border transition-transform duration-300",
         open ? "translate-y-0" : "translate-y-full",
       )}>
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />

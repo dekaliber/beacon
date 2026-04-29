@@ -143,8 +143,8 @@ function SettingsSheet({
           onClick={onClose}
         />
       )}
-      <div id="sheet-settings" className={cn(
-        "fixed inset-x-0 bottom-0 z-[60] flex flex-col rounded-t-2xl bg-background border-t border-border transition-transform duration-300",
+      <div className={cn(
+        "fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl bg-background border-t border-border transition-transform duration-300",
         open ? "translate-y-0" : "translate-y-full",
       )}>
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
@@ -262,7 +262,7 @@ function MonthDetailSheet({
   return (
     <>
       {open && <div className="fixed inset-0 z-[55] bg-black/40" onClick={onClose} />}
-      <div id="sheet-month-detail" className={cn(
+      <div className={cn(
         "fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl bg-background border-t border-border transition-transform duration-300 max-h-[85vh] flex flex-col",
         open ? "translate-y-0" : "translate-y-full",
       )}>
@@ -479,7 +479,7 @@ function TransferFullscreen({
     "w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none bg-background";
 
   return (
-    <div id="sheet-transfer" className={cn(
+    <div className={cn(
       "fixed inset-0 z-[60] bg-background flex flex-col transition-transform duration-300",
       open ? "translate-y-0" : "translate-y-full",
     )}>
@@ -646,8 +646,8 @@ function DeleteConfirmSheet({
   return (
     <>
       {open && <div className="fixed inset-0 z-[55] bg-black/40" onClick={onClose} />}
-      <div id="sheet-delete-confirm" className={cn(
-        "fixed inset-x-0 bottom-0 z-[60] flex flex-col rounded-t-2xl bg-background border-t border-border transition-transform duration-300",
+      <div className={cn(
+        "fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl bg-background border-t border-border transition-transform duration-300",
         open ? "translate-y-0" : "translate-y-full",
       )}>
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
@@ -757,6 +757,7 @@ export function MobileWithdrawals() {
   const currentMonth = new Date().toLocaleDateString("en-CA").slice(0, 7);
 
   return (
+    <>
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
@@ -900,6 +901,8 @@ export function MobileWithdrawals() {
         </div>
       )}
 
+    </div>
+
       {/* Month detail sheet */}
       <MonthDetailSheet
         open={selectedMonth != null}
@@ -945,6 +948,6 @@ export function MobileWithdrawals() {
         onClose={() => setDeletingEvent(null)}
         onConfirm={confirmDelete}
       />
-    </div>
+    </>
   );
 }
