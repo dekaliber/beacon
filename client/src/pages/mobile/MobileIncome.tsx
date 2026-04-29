@@ -640,7 +640,7 @@ function MobileIncomeFilterSheet({
       <div
         className={cn(
           "fixed bottom-0 left-0 right-0 z-[60] flex flex-col bg-background rounded-t-2xl max-h-[85vh] overflow-hidden shadow-xl transition-transform duration-250 ease-out",
-          open ? "translate-y-0" : "translate-y-full"
+          open ? "translate-y-0" : "translate-y-[calc(100%+20px)]"
         )}
       >
         {/* Drag handle */}

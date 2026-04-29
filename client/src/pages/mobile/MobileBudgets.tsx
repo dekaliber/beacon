@@ -134,7 +134,7 @@ function BudgetSettingsSheet({
       )}
       <div className={cn(
         "fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl bg-background border-t border-border transition-transform duration-300",
-        open ? "translate-y-0" : "translate-y-full",
+        open ? "translate-y-0" : "translate-y-[calc(100%+20px)]",
       )}>
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="px-4 pb-8 space-y-5">
