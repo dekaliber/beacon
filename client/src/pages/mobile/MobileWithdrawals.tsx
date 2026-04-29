@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Plus,
   Settings2,
+  X,
   ChevronLeft,
   ChevronRight,
   Pencil,
@@ -266,16 +267,16 @@ function MonthDetailSheet({
         "fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl bg-background border-t border-border transition-transform duration-300 max-h-[85vh] flex flex-col",
         open ? "translate-y-0" : "translate-y-full",
       )}>
-        <div className="mx-auto mt-3 mb-1 h-1 w-10 rounded-full bg-muted-foreground/30 flex-shrink-0" />
+        <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
 
         {/* Sheet header */}
-        <div className="flex items-center justify-between px-4 py-3 flex-shrink-0 border-b border-border">
+        <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
           <div>
             <p className="font-semibold">{label}</p>
             <p className="text-xs text-muted-foreground tabular-nums">{formatCurrency(total)} total</p>
           </div>
-          <button onClick={onClose} className="text-sm text-muted-foreground hover:text-foreground px-2 py-1">
-            Done
+          <button onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
+            <X className="h-5 w-5" />
           </button>
         </div>
 

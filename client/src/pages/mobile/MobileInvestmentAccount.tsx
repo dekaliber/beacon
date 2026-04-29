@@ -328,9 +328,7 @@ function CashEditSheet({
           open ? "translate-y-0" : "translate-y-full",
         )}
       >
-        <div className="flex justify-center pt-3 pb-1 shrink-0">
-          <div className="h-1 w-10 rounded-full bg-border" />
-        </div>
+        <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
           <div>
             <h2 className="text-base font-semibold">Settlement Cash</h2>
@@ -640,9 +638,7 @@ function HoldingDetailSheet({
         )}
       >
         {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1 shrink-0">
-          <div className="h-1 w-10 rounded-full bg-border" />
-        </div>
+        <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
 
         {/* Header */}
         <div className="flex items-start justify-between px-4 pb-3 shrink-0 border-b border-border">
@@ -940,9 +936,7 @@ function ActivityDetailSheet({
           activity ? "translate-y-0" : "translate-y-full",
         )}
       >
-        <div className="flex justify-center pt-3 pb-1 shrink-0">
-          <div className="h-1 w-10 rounded-full bg-border" />
-        </div>
+        <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
           <div className="flex items-center gap-2">
             {a && <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${badgeClass}`}>{badgeLabel}</span>}

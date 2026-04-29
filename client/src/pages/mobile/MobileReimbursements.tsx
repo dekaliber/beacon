@@ -113,9 +113,7 @@ export function MobileReimbursements() {
           confirming ? "translate-y-0" : "translate-y-full"
         )}
       >
-        <div className="flex justify-center pt-3 pb-1 shrink-0">
-          <div className="h-1 w-10 rounded-full bg-border" />
-        </div>
+        <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
           <h2 className="text-base font-semibold">Mark as resolved?</h2>
           <button type="button" onClick={closeSheet} className="rounded-md p-2 text-muted-foreground hover:bg-accent">

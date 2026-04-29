@@ -408,9 +408,7 @@ function RuleDetailSheet({
         )}
       >
         {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1 shrink-0">
-          <div className="h-1 w-10 rounded-full bg-border" />
-        </div>
+        <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
 
         {rule && (
           <>
@@ -686,9 +684,7 @@ function ConfirmSheet({
     <>
       <div className={cn("fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200", open ? "opacity-100" : "pointer-events-none opacity-0")} onClick={onCancel} />
       <div className={cn("fixed bottom-0 left-0 right-0 z-[60] flex flex-col bg-background rounded-t-2xl shadow-xl transition-transform duration-250 ease-out", open ? "translate-y-0" : "translate-y-full")}>
-        <div className="flex justify-center pt-3 pb-1 shrink-0">
-          <div className="h-1 w-10 rounded-full bg-border" />
-        </div>
+        <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="px-4 pt-2 pb-4 space-y-3">
           <h2 className="text-base font-semibold">{title}</h2>
           <div className="text-sm text-muted-foreground">{description}</div>
@@ -745,9 +741,7 @@ function DeleteRuleSheet({
     <>
       <div className={cn("fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200", open ? "opacity-100" : "pointer-events-none opacity-0")} onClick={onCancel} />
       <div className={cn("fixed bottom-0 left-0 right-0 z-[60] flex flex-col bg-background rounded-t-2xl shadow-xl transition-transform duration-250 ease-out max-h-[85vh] overflow-hidden", open ? "translate-y-0" : "translate-y-full")}>
-        <div className="flex justify-center pt-3 pb-1 shrink-0">
-          <div className="h-1 w-10 rounded-full bg-border" />
-        </div>
+        <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
 
         <div className="flex-1 overflow-y-auto overscroll-contain px-4 pt-2 pb-4 space-y-3">
           <h2 className="text-base font-semibold">Delete recurring transaction?</h2>
@@ -1001,9 +995,7 @@ function TransferDetailSheet({
     <>
       <div className={cn("fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200", open ? "opacity-100" : "pointer-events-none opacity-0")} onClick={onClose} />
       <div className={cn("fixed bottom-0 left-0 right-0 z-[60] flex flex-col bg-background rounded-t-2xl shadow-xl transition-transform duration-250 ease-out", open ? "translate-y-0" : "translate-y-full")}>
-        <div className="flex justify-center pt-3 pb-1 shrink-0">
-          <div className="h-1 w-10 rounded-full bg-border" />
-        </div>
+        <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         {rule && (
           <>
             <div className="flex items-start justify-between px-4 pb-3 shrink-0">
