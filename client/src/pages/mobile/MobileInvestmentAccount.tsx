@@ -325,7 +325,7 @@ function CashEditSheet({
       <div
         className={cn(
           "fixed bottom-0 left-0 right-0 z-[60] flex flex-col rounded-t-2xl bg-background shadow-xl transition-transform duration-250 ease-out",
-          open ? "translate-y-0" : "translate-y-[110%]",
+          open ? "translate-y-0" : "translate-y-full",
         )}
       >
         <div className="flex justify-center pt-3 pb-1 shrink-0">
@@ -636,7 +636,7 @@ function HoldingDetailSheet({
       <div
         className={cn(
           "fixed bottom-0 left-0 right-0 z-[60] flex flex-col rounded-t-2xl bg-background shadow-xl transition-transform duration-250 ease-out max-h-[90vh]",
-          holding ? "translate-y-0" : "translate-y-[110%]",
+          holding ? "translate-y-0" : "translate-y-full",
         )}
       >
         {/* Drag handle */}
@@ -937,7 +937,7 @@ function ActivityDetailSheet({
       <div
         className={cn(
           "fixed bottom-0 left-0 right-0 z-[60] flex flex-col rounded-t-2xl bg-background shadow-xl transition-transform duration-250 ease-out max-h-[80vh]",
-          activity ? "translate-y-0" : "translate-y-[110%]",
+          activity ? "translate-y-0" : "translate-y-full",
         )}
       >
         <div className="flex justify-center pt-3 pb-1 shrink-0">

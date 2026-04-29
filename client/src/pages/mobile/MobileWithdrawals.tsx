@@ -144,8 +144,8 @@ function SettingsSheet({
         />
       )}
       <div className={cn(
-        "fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl bg-background border-t border-border transition-transform duration-300",
-        open ? "translate-y-0" : "translate-y-[110%]",
+        "fixed inset-x-0 bottom-0 z-[60] flex flex-col rounded-t-2xl bg-background border-t border-border transition-transform duration-300",
+        open ? "translate-y-0" : "translate-y-full",
       )}>
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="px-4 pb-8 space-y-5">
@@ -264,7 +264,7 @@ function MonthDetailSheet({
       {open && <div className="fixed inset-0 z-[55] bg-black/40" onClick={onClose} />}
       <div className={cn(
         "fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl bg-background border-t border-border transition-transform duration-300 max-h-[85vh] flex flex-col",
-        open ? "translate-y-0" : "translate-y-[110%]",
+        open ? "translate-y-0" : "translate-y-full",
       )}>
         <div className="mx-auto mt-3 mb-1 h-1 w-10 rounded-full bg-muted-foreground/30 flex-shrink-0" />
 
@@ -481,7 +481,7 @@ function TransferFullscreen({
   return (
     <div className={cn(
       "fixed inset-0 z-[60] bg-background flex flex-col transition-transform duration-300",
-      open ? "translate-y-0" : "translate-y-[110%]",
+      open ? "translate-y-0" : "translate-y-full",
     )}>
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-4 border-b border-border flex-shrink-0">
@@ -647,8 +647,8 @@ function DeleteConfirmSheet({
     <>
       {open && <div className="fixed inset-0 z-[55] bg-black/40" onClick={onClose} />}
       <div className={cn(
-        "fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl bg-background border-t border-border transition-transform duration-300",
-        open ? "translate-y-0" : "translate-y-[110%]",
+        "fixed inset-x-0 bottom-0 z-[60] flex flex-col rounded-t-2xl bg-background border-t border-border transition-transform duration-300",
+        open ? "translate-y-0" : "translate-y-full",
       )}>
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="px-4 pb-8 space-y-4">
