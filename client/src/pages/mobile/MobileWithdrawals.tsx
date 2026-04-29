@@ -143,7 +143,7 @@ function SettingsSheet({
           onClick={onClose}
         />
       )}
-      <div className={cn(
+      <div id="sheet-settings" className={cn(
         "fixed inset-x-0 bottom-0 z-[60] flex flex-col rounded-t-2xl bg-background border-t border-border transition-transform duration-300",
         open ? "translate-y-0" : "translate-y-full",
       )}>
@@ -262,7 +262,7 @@ function MonthDetailSheet({
   return (
     <>
       {open && <div className="fixed inset-0 z-[55] bg-black/40" onClick={onClose} />}
-      <div className={cn(
+      <div id="sheet-month-detail" className={cn(
         "fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl bg-background border-t border-border transition-transform duration-300 max-h-[85vh] flex flex-col",
         open ? "translate-y-0" : "translate-y-full",
       )}>
@@ -479,7 +479,7 @@ function TransferFullscreen({
     "w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none bg-background";
 
   return (
-    <div className={cn(
+    <div id="sheet-transfer" className={cn(
       "fixed inset-0 z-[60] bg-background flex flex-col transition-transform duration-300",
       open ? "translate-y-0" : "translate-y-full",
     )}>
@@ -646,7 +646,7 @@ function DeleteConfirmSheet({
   return (
     <>
       {open && <div className="fixed inset-0 z-[55] bg-black/40" onClick={onClose} />}
-      <div className={cn(
+      <div id="sheet-delete-confirm" className={cn(
         "fixed inset-x-0 bottom-0 z-[60] flex flex-col rounded-t-2xl bg-background border-t border-border transition-transform duration-300",
         open ? "translate-y-0" : "translate-y-full",
       )}>
