@@ -97,9 +97,10 @@ function DeviationBadge({ delta }: { delta: number }) {
   if (Math.abs(delta) < 0.05) {
     return <span className="text-xs text-muted-foreground tabular-nums">on target</span>;
   }
+  const isClose = Math.abs(delta) < 0.5;
   const over = delta > 0;
   return (
-    <span className={`text-xs font-medium tabular-nums ${over ? "text-amber-600" : "text-blue-600"}`}>
+    <span className={`text-xs font-medium tabular-nums ${isClose ? "text-green-600" : over ? "text-amber-600" : "text-blue-600"}`}>
       {over ? "+" : ""}{delta.toFixed(1)}%
     </span>
   );
@@ -489,32 +490,38 @@ function RebalanceModal({
                   const delta = item.targetPct != null ? newPct - item.targetPct : null;
                   const color = itemColor(item, idx);
                   return (
-                    <div key={item.id} className="py-3 space-y-2">
-                      <div className="flex items-center gap-2">
+                    <div key={item.id} className="py-3 grid grid-cols-[1fr_7rem] gap-x-2">
+                      {/* col 1, row 1 */}
+                      <div className="flex items-center gap-2 min-w-0">
                         <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: color }} />
-                        <span className="text-sm font-medium flex-1 truncate">{item.name}</span>
-                        <span className="text-xs text-muted-foreground tabular-nums">now {item.actualPct.toFixed(1)}%</span>
+                        <span className="text-sm font-medium truncate">{item.name}</span>
                       </div>
-                      <div className="flex items-center gap-2 pl-[18px]">
-                        <div className="relative flex-1">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none select-none">$</span>
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            value={manualAdj[item.id] ?? ""}
-                            onChange={(e) => setManualAdj((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                            placeholder="0"
-                            className={`w-full rounded-md border border-border bg-background pl-6 pr-3 py-2 text-sm text-right tabular-nums focus:outline-none focus:border-primary ${NO_SPINNER}`}
-                          />
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className={`text-sm tabular-nums font-medium ${
-                            delta == null ? "" : Math.abs(delta) < 0.5 ? "text-green-600" : delta > 0 ? "text-amber-600" : "text-blue-600"
+                      {/* col 2, rows 1–2 */}
+                      <div className="relative row-span-2 self-stretch col-start-2 row-start-1">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none select-none">$</span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={manualAdj[item.id] ?? ""}
+                          onChange={(e) => setManualAdj((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                          placeholder="0"
+                          className={`w-full h-full rounded-md border border-border bg-background pl-6 pr-3 py-2 text-sm text-right tabular-nums focus:outline-none focus:border-primary ${NO_SPINNER}`}
+                        />
+                      </div>
+                      {/* col 1, row 2 */}
+                      <div className="flex items-center gap-1.5 pl-[18px] mt-1 text-xs">
+                        <span className="tabular-nums text-muted-foreground">{item.actualPct.toFixed(1)}%</span>
+                        <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                        <span className={`tabular-nums font-medium ${
+                          delta == null ? "text-muted-foreground" : Math.abs(delta) < 0.5 ? "text-green-600" : delta > 0 ? "text-amber-600" : "text-blue-600"
+                        }`}>{newPct.toFixed(1)}%</span>
+                        {delta != null && (
+                          <span className={`tabular-nums ${
+                            Math.abs(delta) < 0.5 ? "text-green-600" : delta > 0 ? "text-amber-600" : "text-blue-600"
                           }`}>
-                            → {newPct.toFixed(1)}%
+                            ({delta >= 0 ? "+" : ""}{delta.toFixed(1)}%)
                           </span>
-                          {delta != null && <DeviationBadge delta={delta} />}
-                        </div>
+                        )}
                       </div>
                     </div>
                   );

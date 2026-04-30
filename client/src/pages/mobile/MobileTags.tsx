@@ -49,7 +49,7 @@ function ExpenseRow({ exp }: { exp: Expense }) {
 
 function OrphanedRow({ offset }: { offset: OrphanedOffset }) {
   return (
-    <div className="flex items-center gap-2 py-2 pl-11 pr-4 text-amber-600 dark:text-amber-400">
+    <div className="flex items-center gap-2 py-2 pl-11 pr-4 text-amber-600">
       <CornerDownRight className="h-3 w-3 shrink-0 opacity-60" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 truncate">

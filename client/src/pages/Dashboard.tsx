@@ -5,14 +5,14 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList,
   LineChart, Line,
 } from "recharts";
-import { ArrowRight, TrendingUp, Receipt, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { TrendingUp, Receipt, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
 import { CategoryOutliersChart } from "@/components/CategoryOutliersChart";
 import { useApi } from "@/hooks/useApi";
 import { getDashboard, getFlatCategories, getCategoryTrend, getCategoryOutliers, getDataRange } from "@/api";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import type { Category } from "@/types";
 
 const FullWidthCursor = (props: any) => (
@@ -538,61 +538,6 @@ export function Dashboard() {
       {/* Spending by Category over time — spaghetti chart */}
       <SpendingOverTimeChart year={year} month={month} />
 
-      {/* Recent expenses */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Recent Expenses</CardTitle>
-          <Button variant="ghost" size="sm" onClick={() => navigate("/expenses")}>
-            View all <ArrowRight className="h-4 w-4" />
-          </Button>
-        </CardHeader>
-        {data.recentTransactions.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="pb-3 pr-4 font-medium whitespace-nowrap">Date</th>
-                  <th className="pb-3 pr-4 font-medium">Description</th>
-                  <th className="pb-3 pr-4 font-medium">Vendor</th>
-                  <th className="pb-3 pr-4 font-medium">Category</th>
-                  <th className="pb-3 pr-4 font-medium">Account</th>
-                  <th className="pb-3 pr-4 font-medium"></th>
-                  <th className="pb-3 text-right font-medium whitespace-nowrap">Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {data.recentTransactions.map((tx) => {
-                  const amt = Number(tx.amount);
-                  const isCredit = amt < 0;
-                  return (
-                    <tr key={tx.id}>
-                      <td className="py-2.5 pr-4 text-muted-foreground whitespace-nowrap">{formatDate(tx.date)}</td>
-                      <td className="py-2.5 pr-4 font-medium">{tx.description}</td>
-                      <td className="py-2.5 pr-4 text-muted-foreground">{tx.vendor || "—"}</td>
-                      <td className="py-2.5 pr-4 text-muted-foreground">{tx.category?.name ?? "—"}</td>
-                      <td className="py-2.5 pr-4 text-muted-foreground">{tx.account.name}</td>
-                      <td className="py-2.5 pr-4">
-                        <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${tx.account.isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
-                          {tx.account.isJoint ? "J" : "P"}
-                        </span>
-                      </td>
-                      <td className={`py-2.5 text-right font-semibold ${isCredit ? "text-success" : ""}`}>
-                        {isCredit ? `+${formatCurrency(Math.abs(amt))}` : formatCurrency(amt)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <EmptyState
-            icon={Receipt}
-            title="No expenses yet"
-            description="Your recent expenses will show up here."
-          />
-        )}
-      </Card>
     </div>
   );
 }

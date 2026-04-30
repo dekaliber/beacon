@@ -258,7 +258,7 @@ export function TagsPage() {
                                               {formatDate(offset.date.slice(0, 10))}
                                             </td>
                                             <td className="py-1 pr-2">
-                                              <span className="flex items-center gap-1 truncate text-amber-600 dark:text-amber-400">
+                                              <span className="flex items-center gap-1 truncate text-amber-600">
                                                 <CornerDownRight className="h-3 w-3 flex-shrink-0 opacity-60" />
                                                 <span className="truncate">{offset.vendor || offset.description}</span>
                                                 <AlertTriangle
@@ -276,7 +276,7 @@ export function TagsPage() {
                                                 {offset.account.isJoint ? "J" : "P"}
                                               </span>
                                             </td>
-                                            <td className="py-1 text-right tabular-nums text-amber-600 dark:text-amber-400">
+                                            <td className="py-1 text-right tabular-nums text-amber-600">
                                               {formatCurrency(parseFloat(offset.amount))}
                                             </td>
                                           </tr>

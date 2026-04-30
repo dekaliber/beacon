@@ -44,12 +44,12 @@ export function MobileReimbursements() {
         </div>
 
         {expenses.length > 0 && (
-          <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/30">
-            <span className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-300">
+          <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <span className="flex items-center gap-2 text-sm font-medium text-amber-800">
               <AlertCircle className="h-4 w-4" />
               {expenses.length} pending
             </span>
-            <span className="text-sm font-semibold tabular-nums text-amber-800 dark:text-amber-300">
+            <span className="text-sm font-semibold tabular-nums text-amber-800">
               {formatCurrency(total)}
             </span>
           </div>
