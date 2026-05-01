@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { createPortal } from "react-dom";
 import {
@@ -2551,7 +2552,7 @@ function OffsetRow({
         />
       </td>
       <td className="w-[30px] py-2 text-center">
-        <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${offset.account.isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
+        <span className="inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: offset.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
           {offset.account.isJoint ? "J" : "P"}
         </span>
       </td>
@@ -2688,7 +2689,7 @@ function ExpenseRowWithOffsets({
           <EditableAccountCell value={expense.accountId} label={expense.account.name} color={expense.account.color} accounts={accounts} onSave={(v) => onInlineUpdate(expense.id, "accountId", v)} />
         </td>
         <td className="w-[30px] py-2 text-center">
-          <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${expense.account.isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: expense.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
             {expense.account.isJoint ? "J" : "P"}
           </span>
         </td>

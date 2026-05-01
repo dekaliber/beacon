@@ -28,6 +28,7 @@ import { PageHeadingMenu } from "@/components/PageHeadingMenu";
 import { useApi } from "@/hooks/useApi";
 import { getBudgetOverview, setAnnualBudget, getDataRange } from "@/api";
 import { formatCurrency, cn } from "@/lib/utils";
+import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import type { BudgetPanel, ChartDay, MonthlyTotal } from "@/types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -678,10 +679,10 @@ function BudgetPanelSection({
             cursor={{ fill: "var(--color-muted)" }}
           />
           {showPersonalBar && (
-            <Bar dataKey="personalSpent" name="Personal" stackId="a" fill="#9CA3AF" />
+            <Bar dataKey="personalSpent" name="Personal" stackId="a" fill={PERSONAL_COLOR} />
           )}
           {showJointBar && (
-            <Bar dataKey="jointSpent" name="Joint" stackId="a" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="jointSpent" name="Joint" stackId="a" fill={JOINT_COLOR} radius={[4, 4, 0, 0]} />
           )}
           {panel.effectiveAnnualBudget > 0 && (
             <ReferenceLine
@@ -697,13 +698,13 @@ function BudgetPanelSection({
       <div className="mt-1 flex items-center justify-center gap-5">
         {showPersonalBar && (
           <div className="flex items-center gap-1.5">
-            <svg width={12} height={12}><rect width={12} height={12} rx={2} fill="#9CA3AF" /></svg>
+            <svg width={12} height={12}><rect width={12} height={12} rx={2} fill={PERSONAL_COLOR} /></svg>
             <span className="text-xs text-muted-foreground">Personal</span>
           </div>
         )}
         {showJointBar && (
           <div className="flex items-center gap-1.5">
-            <svg width={12} height={12}><rect width={12} height={12} rx={2} fill="#3B82F6" /></svg>
+            <svg width={12} height={12}><rect width={12} height={12} rx={2} fill={JOINT_COLOR} /></svg>
             <span className="text-xs text-muted-foreground">Joint</span>
           </div>
         )}

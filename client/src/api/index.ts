@@ -167,13 +167,25 @@ function outliersRefDate(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
 }
 
-export const getCategoryOutliers = (year: number, month?: number) => {
+export const getCategoryOutliers = (year: number, month?: number, comparison: "mom" | "yoy" = "mom") => {
   const today = month !== undefined ? outliersRefDate(year, month) : localDateStr();
-  return api.get<CategoryOutliersData>(`/budgets/${year}/category-outliers?today=${today}`);
+  const compParam = comparison === "yoy" ? "&comparison=yoy" : "";
+  return api.get<CategoryOutliersData>(`/budgets/${year}/category-outliers?today=${today}${compParam}`);
 };
 
 export const getCategoryOutliersYtd = (year: number) =>
   api.get<CategoryOutliersData>(`/budgets/${year}/category-outliers-ytd?today=${localDateStr()}`);
+
+export const getCategoryAverages = (year: number, month: number) =>
+  api.get<import("../types").CategoryAveragesData>(`/dashboard/category-averages?year=${year}&month=${month}`);
+
+export const getSpendingVelocity = (year: number, month: number) => {
+  const today = outliersRefDate(year, month);
+  return api.get<import("../types").SpendingVelocityData>(`/dashboard/spending-velocity?year=${year}&month=${month}&today=${today}`);
+};
+
+export const getOutlierTransactions = (year: number, month: number) =>
+  api.get<import("../types").OutlierTransactionsData>(`/dashboard/outlier-transactions?year=${year}&month=${month}`);
 
 export const getBudgetSettings = () =>
   api.get<{ jointSplitRatio: number }>("/budgets/settings");
@@ -578,8 +590,12 @@ export const deleteBalanceAdjustment = (id: string) =>
 export const getWithdrawals = (year?: number) =>
   api.get<WithdrawalEvent[]>(`/withdrawals${year != null ? `?year=${year}` : ""}`);
 
-export const getWithdrawalSummary = (year?: number) =>
-  api.get<WithdrawalSummary>(`/withdrawals/summary${year != null ? `?year=${year}` : ""}`);
+export const getWithdrawalSummary = (year?: number) => {
+  const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
+  const params = new URLSearchParams({ today });
+  if (year != null) params.set("year", String(year));
+  return api.get<WithdrawalSummary>(`/withdrawals/summary?${params}`);
+};
 
 export const getInvestmentSettings = () =>
   api.get<InvestmentSettings>("/withdrawals/settings");

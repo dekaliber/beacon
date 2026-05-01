@@ -1,4 +1,5 @@
 import { useRef, useMemo, useState } from "react";
+import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import { Plus, Pencil, Trash2, Tag as TagIcon, ChevronDown, ChevronUp, CornerDownRight, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -142,13 +143,13 @@ export function TagsPage() {
                                 <>
                                   {tag.personalTotal > 0 && (
                                     <span className="flex items-center gap-1">
-                                      <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-gray-400 text-[9px] font-bold text-white">P</span>
+                                      <span className="inline-flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold text-white" style={{ backgroundColor: PERSONAL_COLOR }}>P</span>
                                       {formatCurrency(tag.personalTotal)}
                                     </span>
                                   )}
                                   {tag.jointTotal > 0 && (
                                     <span className="flex items-center gap-1">
-                                      <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-blue-500 text-[9px] font-bold text-white">J</span>
+                                      <span className="inline-flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold text-white" style={{ backgroundColor: JOINT_COLOR }}>J</span>
                                       {formatCurrency(tag.jointTotal)}
                                     </span>
                                   )}
@@ -214,9 +215,8 @@ export function TagsPage() {
                                               </td>
                                               <td className="py-1.5">
                                                 <span
-                                                  className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded text-[8px] font-bold text-white ${
-                                                    exp.account.isJoint ? "bg-blue-500" : "bg-gray-400"
-                                                  }`}
+                                                  className="inline-flex h-3.5 w-3.5 items-center justify-center rounded text-[8px] font-bold text-white"
+                                                  style={{ backgroundColor: exp.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}
                                                 >
                                                   {exp.account.isJoint ? "J" : "P"}
                                                 </span>
@@ -236,9 +236,8 @@ export function TagsPage() {
                                                 </td>
                                                 <td className="py-1">
                                                   <span
-                                                    className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded text-[8px] font-bold text-white ${
-                                                      offset.account.isJoint ? "bg-blue-500" : "bg-gray-400"
-                                                    }`}
+                                                    className="inline-flex h-3.5 w-3.5 items-center justify-center rounded text-[8px] font-bold text-white"
+                                                    style={{ backgroundColor: offset.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}
                                                   >
                                                     {offset.account.isJoint ? "J" : "P"}
                                                   </span>
@@ -269,9 +268,8 @@ export function TagsPage() {
                                             </td>
                                             <td className="py-1">
                                               <span
-                                                className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded text-[8px] font-bold text-white ${
-                                                  offset.account.isJoint ? "bg-blue-500" : "bg-gray-400"
-                                                }`}
+                                                className="inline-flex h-3.5 w-3.5 items-center justify-center rounded text-[8px] font-bold text-white"
+                                                style={{ backgroundColor: offset.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}
                                               >
                                                 {offset.account.isJoint ? "J" : "P"}
                                               </span>
