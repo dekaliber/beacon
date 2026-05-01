@@ -183,7 +183,9 @@ async function processPendingWithdrawalTransfers(userId: string): Promise<void> 
 
 withdrawalRoutes.get("/summary", async (req, res) => {
   const userId = getUserId(req);
-  const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
+  const todayParamEarly = typeof req.query.today === "string" ? req.query.today : null;
+  const todayForYear = todayParamEarly ? new Date(`${todayParamEarly}T12:00:00`) : new Date();
+  const year = req.query.year ? parseInt(req.query.year as string) : todayForYear.getFullYear();
 
   await processPendingWithdrawalTransfers(userId);
 
@@ -253,10 +255,11 @@ withdrawalRoutes.get("/summary", async (req, res) => {
     monthTotals[key] = (monthTotals[key] ?? 0) - parseFloat(row.amount.toString());
   }
 
-  // Build month summaries for the year
-  const today = new Date();
-  const currentYear = today.getFullYear();
-  const currentMonth = today.getMonth() + 1; // 1-indexed
+  // Build month summaries for the year — use client-supplied local date to avoid UTC drift
+  const todayParam = typeof req.query.today === "string" ? req.query.today : null;
+  const todayLocal = todayParam ? new Date(`${todayParam}T12:00:00`) : new Date();
+  const currentYear = todayLocal.getFullYear();
+  const currentMonth = todayLocal.getMonth() + 1; // 1-indexed
 
   const monthlySummaries = [];
   for (let m = 1; m <= 12; m++) {

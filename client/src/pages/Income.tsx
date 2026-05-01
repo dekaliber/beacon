@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
@@ -1383,7 +1384,7 @@ export function IncomePage() {
                       />
                     </td>
                     <td className="w-[30px] py-2 text-center">
-                      <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${income.account.isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
+                      <span className="inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: income.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
                         {income.account.isJoint ? "J" : "P"}
                       </span>
                     </td>
@@ -1500,7 +1501,7 @@ export function IncomePage() {
                         />
                       </td>
                       <td className="w-[30px] py-2 text-center">
-                        <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${income.account.isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
+                        <span className="inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: income.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
                           {income.account.isJoint ? "J" : "P"}
                         </span>
                       </td>

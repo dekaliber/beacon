@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import type { CategoryOutliersData } from "@/types";
 
 function fmtCompact(n: number): string {
@@ -11,9 +11,11 @@ interface CategoryOutliersChartProps {
   data: CategoryOutliersData;
   /** Reduces row height slightly for denser layouts (default: false). */
   compact?: boolean;
+  /** Override the default title + subtitle row with custom content. */
+  header?: ReactNode;
 }
 
-export function CategoryOutliersChart({ data, compact = false }: CategoryOutliersChartProps) {
+export function CategoryOutliersChart({ data, compact = false, header }: CategoryOutliersChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
@@ -72,10 +74,14 @@ export function CategoryOutliersChart({ data, compact = false }: CategoryOutlier
 
   return (
     <div className="w-full">
-      <p className="text-sm font-medium text-card-foreground">Largest Changes by Category</p>
-      <p className="mb-2 text-xs text-muted-foreground">
-        vs {previousMonthLabel} · {comparisonNote}
-      </p>
+      {header ?? (
+        <>
+          <p className="text-sm font-medium text-card-foreground">Largest Changes by Category</p>
+          <p className="mb-2 text-xs text-muted-foreground">
+            vs {previousMonthLabel} · {comparisonNote}
+          </p>
+        </>
+      )}
 
       <div className="rounded-md border border-border p-3">
         <div ref={containerRef} className="w-full">

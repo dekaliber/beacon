@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from "react";
+import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import { Plus, Pencil, Trash2, Tag as TagIcon, ChevronDown, ChevronUp, CornerDownRight, AlertTriangle, X } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
 import { getTags, createTag, updateTag, deleteTag, getExpenses, getTagOrphanedOffsets } from "@/api";
@@ -21,9 +22,8 @@ function ExpenseRow({ exp }: { exp: Expense }) {
           <p className="text-xs text-muted-foreground">{formatDate(exp.date.slice(0, 10))}</p>
         </div>
         <span
-          className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold text-white ${
-            exp.account.isJoint ? "bg-blue-500" : "bg-gray-400"
-          }`}
+          className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold text-white"
+          style={{ backgroundColor: exp.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}
         >
           {exp.account.isJoint ? "J" : "P"}
         </span>
@@ -34,9 +34,8 @@ function ExpenseRow({ exp }: { exp: Expense }) {
           <CornerDownRight className="h-3 w-3 shrink-0 opacity-50" />
           <p className="min-w-0 flex-1 truncate text-xs">{offset.vendor || offset.description}</p>
           <span
-            className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold text-white ${
-              offset.account.isJoint ? "bg-blue-500" : "bg-gray-400"
-            }`}
+            className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold text-white"
+            style={{ backgroundColor: offset.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}
           >
             {offset.account.isJoint ? "J" : "P"}
           </span>
@@ -59,9 +58,8 @@ function OrphanedRow({ offset }: { offset: OrphanedOffset }) {
         <p className="text-xs opacity-70">{formatDate(offset.date.slice(0, 10))}</p>
       </div>
       <span
-        className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold text-white ${
-          offset.account.isJoint ? "bg-blue-500" : "bg-gray-400"
-        }`}
+        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold text-white"
+        style={{ backgroundColor: offset.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}
       >
         {offset.account.isJoint ? "J" : "P"}
       </span>
@@ -132,13 +130,13 @@ function TagRow({
         <div className="flex shrink-0 items-center gap-2 text-xs tabular-nums text-muted-foreground">
           {tag.personalTotal > 0 && (
             <span className="flex items-center gap-1">
-              <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-gray-400 text-[9px] font-bold text-white">P</span>
+              <span className="inline-flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold text-white" style={{ backgroundColor: PERSONAL_COLOR }}>P</span>
               {formatCurrency(tag.personalTotal)}
             </span>
           )}
           {tag.jointTotal > 0 && (
             <span className="flex items-center gap-1">
-              <span className="inline-flex h-4 w-4 items-center justify-center rounded bg-blue-500 text-[9px] font-bold text-white">J</span>
+              <span className="inline-flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold text-white" style={{ backgroundColor: JOINT_COLOR }}>J</span>
               {formatCurrency(tag.jointTotal)}
             </span>
           )}

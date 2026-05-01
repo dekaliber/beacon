@@ -675,11 +675,19 @@ budgetRoutes.get("/:year/category-outliers", async (req, res) => {
   const curMonth = effectiveToday.getUTCMonth() + 1; // 1-indexed
   const curDay   = effectiveToday.getUTCDate();
 
-  const prevMonth     = curMonth === 1 ? 12 : curMonth - 1;
-  const prevMonthYear = curMonth === 1 ? curYear - 1 : curYear;
-  // Cap comparison day at the number of days in the previous month
-  const daysInPrevMonth = new Date(Date.UTC(prevMonthYear, prevMonth, 0)).getUTCDate();
-  const prevDay = Math.min(curDay, daysInPrevMonth);
+  const comparison = (req.query.comparison as string) ?? "mom";
+  let prevMonth: number, prevMonthYear: number, prevDay: number;
+  if (comparison === "yoy") {
+    prevMonth     = curMonth;
+    prevMonthYear = curYear - 1;
+    const daysInPrevMonth = new Date(Date.UTC(curYear - 1, curMonth, 0)).getUTCDate();
+    prevDay = Math.min(curDay, daysInPrevMonth);
+  } else {
+    prevMonth     = curMonth === 1 ? 12 : curMonth - 1;
+    prevMonthYear = curMonth === 1 ? curYear - 1 : curYear;
+    const daysInPrevMonth = new Date(Date.UTC(prevMonthYear, prevMonth, 0)).getUTCDate();
+    prevDay = Math.min(curDay, daysInPrevMonth);
+  }
 
   const curStart  = new Date(Date.UTC(curYear,       curMonth - 1, 1));
   const curEnd    = new Date(Date.UTC(curYear,       curMonth - 1, curDay, 23, 59, 59, 999));
@@ -823,7 +831,7 @@ budgetRoutes.get("/:year/category-outliers-ytd", async (req, res) => {
   const sel = {
     amount: true,
     categoryId: true,
-    category: { select: { name: true, color: true } },
+    category: { select: { name: true, color: true, parentId: true, parent: { select: { id: true, name: true, color: true } } } },
   } as const;
 
   const [curPersonal, curJoint, prevPersonal, prevJoint] = await Promise.all([
@@ -849,9 +857,14 @@ budgetRoutes.get("/:year/category-outliers-ytd", async (req, res) => {
 
   function accumulate(rows: Row[], scale: number, target: Map<string, number>) {
     for (const row of rows) {
-      const key = row.categoryId ?? "__uncategorized__";
+      // Roll up to parent category when one exists
+      const parent = row.category?.parent;
+      const key    = parent ? parent.id : (row.categoryId ?? "__uncategorized__");
       if (!categoryInfo.has(key)) {
-        categoryInfo.set(key, { name: row.category?.name ?? "Uncategorized", color: row.category?.color ?? null });
+        categoryInfo.set(key, {
+          name:  parent ? parent.name : (row.category?.name ?? "Uncategorized"),
+          color: parent ? parent.color : (row.category?.color ?? null),
+        });
       }
       target.set(key, (target.get(key) ?? 0) + Number(row.amount) * scale);
     }
@@ -880,9 +893,7 @@ budgetRoutes.get("/:year/category-outliers-ytd", async (req, res) => {
         delta:          Math.round(delta * 100) / 100,
       };
     })
-    .filter((o) => o.delta !== 0)
-    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-    .slice(0, 10);
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
 
   res.json({
     outliers,

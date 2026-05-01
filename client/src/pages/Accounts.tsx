@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import { Plus, Pencil, Trash2, Landmark, CreditCard, TrendingUp, EyeOff, ArrowRight, ChevronDown, Eye } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -174,7 +175,7 @@ export function Accounts() {
     return (
       <div key={ownership} className="space-y-4">
         <div className="flex items-center gap-2">
-          <span className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${isJoint ? "bg-blue-500" : "bg-gray-400"}`}>
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
             {isJoint ? "J" : "P"}
           </span>
           <span className="text-sm font-semibold uppercase tracking-wider">{ownership}</span>

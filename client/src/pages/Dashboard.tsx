@@ -3,172 +3,42 @@ import { useNavigate } from "react-router-dom";
 import {
   Cell, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList,
-  LineChart, Line,
+  PieChart, Pie,
 } from "recharts";
-import { TrendingUp, Receipt, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { Receipt, ChevronLeft, ChevronRight, Zap } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
 import { CategoryOutliersChart } from "@/components/CategoryOutliersChart";
+import { CategoryVsAverageChart } from "@/components/CategoryVsAverageChart";
+import { SpendingVelocitySparkline } from "@/components/SpendingVelocitySparkline";
+import { OutlierTransactionsList } from "@/components/OutlierTransactionsList";
 import { useApi } from "@/hooks/useApi";
-import { getDashboard, getFlatCategories, getCategoryTrend, getCategoryOutliers, getDataRange } from "@/api";
+import { getDashboard, getFlatCategories, getCategoryOutliers, getCategoryAverages, getSpendingVelocity, getOutlierTransactions, getDataRange } from "@/api";
 import { formatCurrency } from "@/lib/utils";
+import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import type { Category } from "@/types";
 
 const FullWidthCursor = (props: any) => (
   <rect x={0} y={props.y} width="100%" height={props.height} fill="#F8FAFC" style={{ pointerEvents: "none" }} />
 );
 
-function fmtCompact(v: number) {
-  if (v === 0) return "";
-  const sign = v < 0 ? "-" : "";
-  const abs = Math.abs(v);
-  if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(1)}k`;
-  return `${sign}$${Math.round(abs)}`;
-}
-
-// Perceptually distinct palette (Tableau10-derived) used for subcategory drill-down
-const DRILL_PALETTE = [
-  "#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F",
-  "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F", "#BAB0AC",
-];
-
-function SpendingOverTimeChart({ year, month }: { year: number; month: number }) {
-  const [drillCategory, setDrillCategory] = useState<{ id: string; name: string } | null>(null);
-  const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
-
-  const { data: categoryTrend } = useApi(
-    () => getCategoryTrend(year, month, drillCategory?.id),
-    [year, month, drillCategory?.id],
-  );
-
-  if (!categoryTrend || categoryTrend.series.length === 0) return null;
-
-  // In drill-down mode override colors with a distinct palette; top-level uses stored category colors
-  const series = drillCategory
-    ? categoryTrend.series.map((s, i) => ({ ...s, color: DRILL_PALETTE[i % DRILL_PALETTE.length] }))
-    : categoryTrend.series;
-
-  const chartData = categoryTrend.months.map((label, i) => {
-    const point: Record<string, unknown> = { label };
-    for (const s of series) {
-      point[s.name] = s.values[i];
-    }
-    return point;
-  });
-
-  const handleDrillIn = (s: { categoryId: string; name: string; hasChildren: boolean }) => {
-    if (!s.hasChildren) return;
-    setDrillCategory({ id: s.categoryId, name: s.name });
-    setHoveredCategory(null);
-  };
-
-  const handleDrillOut = () => {
-    setDrillCategory(null);
-    setHoveredCategory(null);
-  };
-
-  const yTickFormatter = (v: number) => {
-    const sign = v < 0 ? "-" : "";
-    const abs = Math.abs(v);
-    if (abs >= 1000) {
-      const k = abs / 1000;
-      return `${sign}$${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`;
-    }
-    return `${sign}$${Math.round(abs)}`;
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Spending by Category Over Time</CardTitle>
-        {drillCategory && (
-          <div className="flex items-center gap-1 text-sm mt-0.5">
-            <button onClick={handleDrillOut} className="text-primary hover:underline">
-              All categories
-            </button>
-            <ChevronRight className="h-3 w-3 text-muted-foreground" />
-            <span className="text-muted-foreground">{drillCategory.name}</span>
-          </div>
-        )}
-      </CardHeader>
-      <div className="w-full" onMouseLeave={() => setHoveredCategory(null)}>
-        <ResponsiveContainer width="100%" height={340}>
-          <LineChart data={chartData} margin={{ top: 32, right: 16, left: 0, bottom: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
-            <XAxis dataKey="label" fontSize={12} axisLine={false} tickLine={false} />
-            <YAxis fontSize={12} tickFormatter={yTickFormatter} axisLine={false} tickLine={false} width={48} />
-            <Tooltip content={() => null} cursor={{ stroke: "#E2E8F0", strokeWidth: 1 }} />
-            {series.map((s) => {
-              const isHovered = hoveredCategory === s.name;
-              const anyHovered = hoveredCategory !== null;
-              return (
-                <Line
-                  key={s.categoryId}
-                  type="monotone"
-                  dataKey={s.name}
-                  stroke={s.color}
-                  strokeWidth={isHovered ? 2.5 : 1.5}
-                  strokeOpacity={anyHovered ? (isHovered ? 1 : 0.15) : 0.35}
-                  isAnimationActive={false}
-                  style={{ cursor: s.hasChildren ? "pointer" : "default" }}
-                  onClick={() => handleDrillIn(s)}
-                  dot={
-                    isHovered
-                      ? (props: any) => {
-                          const { cx, cy, value, index } = props;
-                          if (!value) return <g key={`d-${index}`} />;
-                          return (
-                            <g key={`d-${index}`}>
-                              <circle cx={cx} cy={cy} r={3} fill={s.color} stroke="white" strokeWidth={1.5} />
-                              <text x={cx} y={cy - 10} textAnchor="middle" fontSize={10} fill={s.color} fontWeight="600">
-                                {fmtCompact(value)}
-                              </text>
-                            </g>
-                          );
-                        }
-                      : false
-                  }
-                  activeDot={isHovered ? { r: 4, fill: s.color, stroke: "white", strokeWidth: 1.5 } : false}
-                  onMouseEnter={() => setHoveredCategory(s.name)}
-                />
-              );
-            })}
-          </LineChart>
-        </ResponsiveContainer>
-        <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 px-4 pb-2">
-          {series.map((s) => (
-            <button
-              key={s.categoryId}
-              className="flex items-center gap-1.5 text-xs transition-opacity"
-              style={{
-                opacity: hoveredCategory === null || hoveredCategory === s.name ? 1 : 0.35,
-                cursor: s.hasChildren ? "pointer" : "default",
-              }}
-              onMouseEnter={() => setHoveredCategory(s.name)}
-              onMouseLeave={() => setHoveredCategory(null)}
-              onClick={() => handleDrillIn(s)}
-            >
-              <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
-              <span className={s.hasChildren ? "hover:underline" : ""}>{s.name}</span>
-              {s.hasChildren && <ChevronRight className="h-3 w-3 opacity-50" />}
-            </button>
-          ))}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 export function Dashboard() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
+  const [outlierComparison, setOutlierComparison] = useState<"mom" | "yoy">("mom");
   const navigate = useNavigate();
 
   const { data, loading } = useApi(() => getDashboard(year, month), [year, month]);
   const { data: allCategories } = useApi(() => getFlatCategories(), []);
-  const { data: dashboardOutliers } = useApi(() => getCategoryOutliers(year, month), [year, month]);
+  const { data: dashboardOutliers } = useApi(
+    () => getCategoryOutliers(year, month, outlierComparison),
+    [year, month, outlierComparison],
+  );
+  const { data: categoryAverages }   = useApi(() => getCategoryAverages(year, month),    [year, month]);
+  const { data: spendingVelocity }   = useApi(() => getSpendingVelocity(year, month),    [year, month]);
+  const { data: outlierTransactions } = useApi(() => getOutlierTransactions(year, month), [year, month]);
   const { data: dataRange } = useApi(() => getDataRange(), []);
 
   const prevMonth = () => {
@@ -191,18 +61,31 @@ export function Dashboard() {
 
   if (!data) return null;
 
-  const totalSpent = Number(data.totalSpent);
-  const budgetAmount = data.budget ? Number(data.budget) : null;
-  const budgetPct = budgetAmount ? Math.round((totalSpent / budgetAmount) * 100) : null;
-  const isOverBudget = budgetPct !== null && budgetPct > 100;
+  const totalSpent    = Number(data.totalSpent);
+  const personalSpent = Number(data.personalSpent ?? 0);
+  const jointSpent    = Number(data.jointSpent    ?? 0);
+  const budgetAmount  = data.budget         ? Number(data.budget)         : null;
+  const personalBudget = data.personalBudget ? Number(data.personalBudget) : null;
+  const jointBudget   = data.jointBudget    ? Number(data.jointBudget)    : null;
+  const budgetPct     = budgetAmount ? Math.round((totalSpent / budgetAmount) * 100) : null;
+  const isOverBudget  = budgetPct !== null && budgetPct > 100;
 
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
-  const isFutureMonth = year > now.getFullYear() || (year === now.getFullYear() && month > now.getMonth() + 1);
-  const daysRemaining = isCurrentMonth ? daysInMonth - now.getDate() : isFutureMonth ? daysInMonth : 0;
+  const daysInMonth     = new Date(year, month, 0).getDate();
+  const isCurrentMonth  = year === now.getFullYear() && month === now.getMonth() + 1;
+  const isFutureMonth   = year > now.getFullYear() || (year === now.getFullYear() && month > now.getMonth() + 1);
+  const daysElapsed     = isCurrentMonth ? now.getDate() : isFutureMonth ? 0 : daysInMonth;
 
-  const budgetRemaining = budgetAmount !== null ? budgetAmount - totalSpent : null;
-  const dailyRemaining = budgetRemaining !== null && daysRemaining > 0 ? budgetRemaining / daysRemaining : null;
+  const dailyRate       = daysElapsed > 0 ? totalSpent / daysElapsed : null;
+  const budgetDailyRate = budgetAmount ? budgetAmount / daysInMonth : null;
+  const paceRatio       = dailyRate !== null && budgetDailyRate ? dailyRate / budgetDailyRate : null;
+  const paceOffPct      = paceRatio !== null ? Math.round((paceRatio - 1) * 100) : null;
+
+  const budgetRemaining    = budgetAmount !== null ? budgetAmount - totalSpent : null;
+  const personalRemaining  = personalBudget !== null ? personalBudget - personalSpent : null;
+  const jointRemaining     = jointBudget    !== null ? jointBudget    - jointSpent    : null;
+  const prevMonthMtd       = data.prevMonthMtd ?? 0;
+  const momDelta           = prevMonthMtd > 0 ? totalSpent - prevMonthMtd : null;
+  const momDeltaPct        = momDelta !== null && prevMonthMtd > 0 ? Math.round((momDelta / prevMonthMtd) * 100) : null;
 
   const fmtWhole = (n: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
@@ -210,7 +93,6 @@ export function Dashboard() {
   const pad = (n: number) => String(n).padStart(2, "0");
   const goToExpenses = (opts: { categoryIds?: string[]; y: number; m: number }) => {
     const lastDay = new Date(opts.y, opts.m, 0).getDate();
-    // Expand any parent category IDs to also include their direct children
     const cats: Category[] = allCategories ?? [];
     const expandedIds = (opts.categoryIds ?? []).flatMap((id) => {
       const children = cats.filter((c) => c.parentId === id).map((c) => c.id);
@@ -230,18 +112,7 @@ export function Dashboard() {
     });
   };
 
-  const trendData = data.monthlyTrend.map((t) => ({
-    ...t,
-    personalSpent: Number(t.personalSpent),
-    jointSpent: Number(t.jointSpent),
-    budget: t.budget ? Number(t.budget) : undefined,
-  }));
-
-  const categoryData = data.spendingByCategory.map((c) => ({
-    ...c,
-    amount: Number(c.amount),
-  }));
-
+  const showPersonalJoint = personalSpent > 0 && jointSpent > 0;
 
   return (
     <div className="space-y-6">
@@ -259,41 +130,86 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Summary cards */}
+      {/* ── Summary cards ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {/* Card 1: MTD Spend + MTD Budget */}
+
+        {/* Card 1: MTD Spend with Personal/Joint pie and MoM comparison */}
         <Card>
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 rounded-lg bg-primary/10 p-2">
-              <Receipt className="h-5 w-5 text-primary" />
-            </div>
-            <div className="flex items-end gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">MTD Spend</p>
-                <p className="text-2xl font-bold">{fmtWhole(totalSpent)}</p>
+          <div className="flex gap-4">
+            {/* Left half */}
+            <div className="flex min-w-0 flex-1 flex-col">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 rounded-lg bg-primary/10 p-2 shrink-0">
+                  <Receipt className="h-5 w-5 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm text-muted-foreground">MTD Spend</p>
+                  <p className="text-2xl font-bold">{fmtWhole(totalSpent)}</p>
+                  {budgetAmount !== null ? (
+                    <p className="mt-0.5 text-xs text-muted-foreground">of {fmtWhole(budgetAmount)} budget</p>
+                  ) : (
+                    <button onClick={() => navigate("/budgets")} className="mt-0.5 text-xs text-primary hover:underline">
+                      Set a budget
+                    </button>
+                  )}
+                </div>
               </div>
-              <p className="mb-1 text-sm text-muted-foreground">of</p>
-              <div>
-                <p className="text-sm text-muted-foreground">MTD Budget</p>
-                {budgetAmount !== null ? (
-                  <p className="text-2xl font-bold">{fmtWhole(budgetAmount)}</p>
-                ) : (
-                  <button
-                    onClick={() => navigate("/budgets")}
-                    className="text-sm text-primary hover:underline"
+
+              {/* MoM comparison */}
+              {momDeltaPct !== null && (
+                <div className="mt-3 border-t border-border pt-3">
+                  <p className="text-xs text-muted-foreground">
+                    vs last month (day 1–{daysElapsed > 0 ? daysElapsed : daysInMonth})
+                  </p>
+                  <p className="mt-0.5 text-sm font-medium">
+                    {fmtWhole(prevMonthMtd)}{" "}
+                    <span className={momDelta! > 0 ? "text-destructive" : "text-success"}>
+                      {momDelta! > 0 ? "↑" : "↓"}{Math.abs(momDeltaPct)}%
+                    </span>
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Right half: pie + legend */}
+            {showPersonalJoint && totalSpent > 0 && (
+              <div className="flex w-1/2 shrink-0 flex-col items-center justify-center border-l border-border pl-4">
+                <PieChart width={96} height={96}>
+                  <Pie
+                    data={[
+                      { name: "Personal", value: personalSpent },
+                      { name: "Joint", value: jointSpent },
+                    ]}
+                    dataKey="value"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={46}
+                    startAngle={90}
+                    endAngle={450}
+                    strokeWidth={0}
                   >
-                    Set a budget
-                  </button>
-                )}
+                    <Cell fill={PERSONAL_COLOR} />
+                    <Cell fill={JOINT_COLOR} />
+                  </Pie>
+                </PieChart>
+                <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: PERSONAL_COLOR }} />
+                    <span>Personal <span className="font-medium text-foreground">{fmtWhole(personalSpent)}</span></span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: JOINT_COLOR }} />
+                    <span>Joint <span className="font-medium text-foreground">{fmtWhole(jointSpent)}</span></span>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </Card>
 
-        {/* Card 2: Budget Used + Budget Remaining (circular progress replaces icon) */}
+        {/* Card 2: Budget used % + remaining + Personal/Joint breakdown */}
         <Card>
           <div className="flex items-start gap-3">
-            {/* Circular progress in place of icon — uses currentColor via text-* for reliable SVG rendering */}
             <svg className={`mt-0.5 h-9 w-9 shrink-0 ${isOverBudget ? "text-destructive" : "text-success"}`} viewBox="0 0 36 36">
               <rect x="0" y="0" width="36" height="36" rx="8" fill="currentColor" fillOpacity="0.1" />
               <circle cx="18" cy="18" r="11" fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth="5"
@@ -304,239 +220,197 @@ export function Dashboard() {
                   strokeDasharray={`${(Math.min(budgetPct, 100) / 100) * 2 * Math.PI * 11} ${2 * Math.PI * 11}`} />
               )}
             </svg>
-            <div className="flex items-end gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Budget Used</p>
-                {budgetPct !== null ? (
-                  <p className={`text-2xl font-bold ${isOverBudget ? "text-destructive" : ""}`}>
-                    {budgetPct}%
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No budget set</p>
-                )}
-              </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-muted-foreground">Budget Used</p>
+              {budgetPct !== null ? (
+                <p className={`text-2xl font-bold ${isOverBudget ? "text-destructive" : ""}`}>{budgetPct}%</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">No budget set</p>
+              )}
               {budgetRemaining !== null && (
-                <>
-                  <p className="mb-1 text-sm text-muted-foreground">·</p>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Budget Remaining</p>
-                    <p className={`text-2xl font-bold ${budgetRemaining < 0 ? "text-destructive" : ""}`}>
-                      {fmtWhole(budgetRemaining)}
-                    </p>
-                  </div>
-                </>
+                <p className={`mt-0.5 text-xs ${budgetRemaining < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                  <span className={`font-medium ${budgetRemaining < 0 ? "text-destructive" : "text-foreground"}`}>
+                    {fmtWhole(Math.abs(budgetRemaining))}
+                  </span>
+                  {" "}{budgetRemaining < 0 ? "over budget" : "remaining"}
+                </p>
               )}
             </div>
           </div>
+
+          {/* Personal + Joint budget progress rows */}
+          {(personalBudget !== null || jointBudget !== null) && (
+            <div className="mt-3 space-y-2.5 border-t border-border pt-3">
+              {personalBudget !== null && (() => {
+                const pct = Math.min(Math.round((personalSpent / personalBudget) * 100), 100);
+                const over = personalSpent > personalBudget;
+                return (
+                  <div>
+                    <div className="mb-1 flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: PERSONAL_COLOR }} />
+                        Personal
+                      </span>
+                      <span className="text-muted-foreground">
+                        <span className={`font-medium ${over ? "text-destructive" : "text-foreground"}`}>{fmtWhole(personalSpent)}</span>
+                        {" / "}{fmtWhole(personalBudget)}
+                        {personalRemaining !== null && (
+                          <span className={over ? " text-destructive" : ""}>{" "}({over ? "+" : "−"}{fmtWhole(Math.abs(personalRemaining!))})</span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: over ? "var(--color-destructive)" : "var(--color-success)" }} />
+                    </div>
+                  </div>
+                );
+              })()}
+              {jointBudget !== null && (() => {
+                const pct = Math.min(Math.round((jointSpent / jointBudget) * 100), 100);
+                const over = jointSpent > jointBudget;
+                return (
+                  <div>
+                    <div className="mb-1 flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: JOINT_COLOR }} />
+                        Joint
+                      </span>
+                      <span className="text-muted-foreground">
+                        <span className={`font-medium ${over ? "text-destructive" : "text-foreground"}`}>{fmtWhole(jointSpent)}</span>
+                        {" / "}{fmtWhole(jointBudget)}
+                        {jointRemaining !== null && (
+                          <span className={over ? " text-destructive" : ""}>{" "}({over ? "+" : "−"}{fmtWhole(Math.abs(jointRemaining!))})</span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: over ? "var(--color-destructive)" : "var(--color-success)" }} />
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </Card>
 
-        {/* Card 3: Days Remaining + Daily Remaining */}
+        {/* Card 3: Pace — daily run rate vs budget-implied daily rate + velocity sparkline */}
         <Card>
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 rounded-lg bg-primary/10 p-2">
-              <Calendar className="h-5 w-5 text-primary" />
+            <div className="mt-0.5 rounded-lg bg-primary/10 p-2 shrink-0">
+              <Zap className="h-5 w-5 text-primary" />
             </div>
-            <div className="flex items-end gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Days Remaining</p>
-                <p className="text-2xl font-bold">{daysRemaining}</p>
-              </div>
-              {dailyRemaining !== null && (
-                <>
-                  <p className="mb-1 text-sm text-muted-foreground">·</p>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Daily Remaining</p>
-                    <p className={`text-2xl font-bold ${dailyRemaining < 0 ? "text-destructive" : ""}`}>
-                      {fmtWhole(dailyRemaining)}
-                    </p>
-                  </div>
-                </>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-muted-foreground">Daily Pace</p>
+              {dailyRate !== null ? (
+                <p className="text-2xl font-bold">{fmtWhole(dailyRate)}<span className="text-base font-normal text-muted-foreground">/day</span></p>
+              ) : (
+                <p className="text-2xl font-bold text-muted-foreground">—</p>
               )}
-              {dailyRemaining === null && daysRemaining > 0 && (
-                <>
-                  <p className="mb-1 text-sm text-muted-foreground">·</p>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Daily Remaining</p>
-                    <button
-                      onClick={() => navigate("/budgets")}
-                      className="text-sm text-primary hover:underline"
-                    >
-                      Set a budget
-                    </button>
-                  </div>
-                </>
+              {budgetDailyRate !== null && dailyRate !== null && paceOffPct !== null && (
+                <p className={`mt-1 text-xs ${Math.abs(paceOffPct) <= 10 ? "text-muted-foreground" : paceOffPct > 0 ? "text-destructive" : "text-success"}`}>
+                  {Math.abs(paceOffPct) <= 10
+                    ? <span>On pace · budget {fmtWhole(budgetDailyRate)}/day</span>
+                    : paceOffPct > 0
+                      ? <span><span className="font-medium">{paceOffPct}% over pace</span> · budget {fmtWhole(budgetDailyRate)}/day</span>
+                      : <span><span className="font-medium">{Math.abs(paceOffPct)}% under pace</span> · budget {fmtWhole(budgetDailyRate)}/day</span>
+                  }
+                </p>
+              )}
+              {budgetDailyRate === null && (
+                <button onClick={() => navigate("/budgets")} className="mt-1 text-xs text-primary hover:underline">
+                  Set a budget
+                </button>
+              )}
+              {dailyRate === null && daysElapsed === 0 && (
+                <p className="mt-1 text-xs text-muted-foreground">No data yet this month</p>
               )}
             </div>
           </div>
+          {/* Velocity sparkline — cumulative spend vs budget pace */}
+          {spendingVelocity && spendingVelocity.lastKnownDay > 0 && (
+            <div className="mt-3">
+              <SpendingVelocitySparkline data={spendingVelocity} height={68} />
+              <div className="mt-1 flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <svg width={16} height={8}>
+                    <line x1="0" y1="4" x2="16" y2="4" stroke={paceOffPct !== null && paceOffPct > 0 ? "var(--color-destructive)" : "var(--color-primary)"} strokeWidth="1.5" />
+                  </svg>
+                  <span className="text-xs text-muted-foreground">Actual</span>
+                </div>
+                {spendingVelocity.totalBudget !== null && (
+                  <div className="flex items-center gap-1.5">
+                    <svg width={16} height={8}>
+                      <line x1="0" y1="4" x2="16" y2="4" stroke="var(--color-muted-foreground)" strokeWidth="1" strokeDasharray="3 3" strokeOpacity="0.6" />
+                    </svg>
+                    <span className="text-xs text-muted-foreground">Budget pace</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </Card>
       </div>
 
-      {/* Charts row */}
+      {/* ── Analysis: Largest Changes + Category vs Average ───────────────── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Spending by category - horizontal ranked bar chart */}
+        {/* Largest Changes by Category — with MoM / YoY toggle */}
         <Card>
-          <CardHeader>
-            <CardTitle>Spending by Category</CardTitle>
-          </CardHeader>
-          {categoryData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={Math.max(200, categoryData.length * 28 + 16)}>
-              <BarChart
-                data={categoryData}
-                layout="vertical"
-                barSize={18}
-                barCategoryGap={10}
-                margin={{ top: 4, right: 76, left: 0, bottom: 4 }}
-              >
-                <XAxis type="number" hide axisLine={false} tickLine={false} />
-                <YAxis
-                  type="category"
-                  dataKey="shortName"
-                  width={112}
-                  fontSize={12}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v: string) => v.length > 14 ? v.slice(0, 13) + "…" : v}
-                />
-                <Tooltip cursor={<FullWidthCursor />} content={() => null} />
-                <Bar
-                  dataKey="amount"
-                  radius={[0, 4, 4, 0]}
-                  className="cursor-pointer"
-                  onClick={(data: any) => {
-                    if (data?.categoryId) goToExpenses({ categoryIds: [data.categoryId], y: year, m: month });
-                  }}
-                >
-                  {categoryData.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                  <LabelList
-                    dataKey="amount"
-                    position="right"
-                    formatter={(v: any) => formatCurrency(Number(v ?? 0))}
-                    style={{ fontSize: 12 }}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyState
-              icon={Receipt}
-              title="No expenses yet"
-              description="Add some expenses to see your spending breakdown."
-              action={
-                <Button size="sm" onClick={() => navigate("/expenses")}>
-                  Add Expense
-                </Button>
+          {dashboardOutliers && (
+            <CategoryOutliersChart
+              data={dashboardOutliers}
+              compact
+              header={
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium text-card-foreground">Largest Changes by Category</p>
+                    <p className="text-xs text-muted-foreground">
+                      vs {dashboardOutliers.previousMonthLabel} · {dashboardOutliers.comparisonNote}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5 text-xs font-medium">
+                    <button
+                      onClick={() => setOutlierComparison("mom")}
+                      className={`rounded-md px-2.5 py-1 transition-colors ${outlierComparison === "mom" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      MoM
+                    </button>
+                    <button
+                      onClick={() => setOutlierComparison("yoy")}
+                      className={`rounded-md px-2.5 py-1 transition-colors ${outlierComparison === "yoy" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                    >
+                      YoY
+                    </button>
+                  </div>
+                </div>
               }
             />
           )}
         </Card>
 
-        {/* Right column: largest changes + monthly trend stacked */}
+        {/* Right column: Category vs Average + Outlier Transactions */}
         <div className="flex flex-col gap-4">
-          {/* Largest Changes by Category — month-over-month */}
-          {dashboardOutliers && (
-            <Card>
-              <CategoryOutliersChart data={dashboardOutliers} compact />
-            </Card>
-          )}
-
-          {/* Monthly trend - stacked personal/joint bars with budget reference line */}
           <Card>
-            <CardHeader>
-              <CardTitle>Monthly Trend</CardTitle>
-            </CardHeader>
-            {trendData.some((t) => t.personalSpent > 0 || t.jointSpent > 0) ? (
-              <>
-              <div className="cursor-pointer">
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart
-                  data={trendData}
-                  margin={{ top: 4, right: 16, left: 0, bottom: 4 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
-                  <XAxis dataKey="label" fontSize={12} axisLine={false} tickLine={false} />
-                  <YAxis
-                    fontSize={12}
-                    tickFormatter={(v) => `$${Math.round(v / 1000)}k`}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    content={({ active, payload, label }) => {
-                      if (!active || !payload?.length) return null;
-                      return (
-                        <div className="rounded border border-border bg-background p-3 text-xs shadow-md">
-                          <p className="mb-2 font-medium">{label}</p>
-                          {payload.map((p) => (
-                            <p key={p.dataKey as string} className="mt-1.5" style={{ color: p.fill as string }}>
-                              {p.name} : {formatCurrency((p.value as number) ?? 0)}
-                            </p>
-                          ))}
-                        </div>
-                      );
-                    }}
-                    cursor={{ fill: "#F8FAFC" }}
-                  />
-                  <Bar
-                    dataKey="personalSpent"
-                    name="Personal"
-                    stackId="a"
-                    fill="#9CA3AF"
-                    onClick={(data: any) => { if (data?.year && data?.month) goToExpenses({ y: data.year, m: data.month }); }}
-                  />
-                  <Bar
-                    dataKey="jointSpent"
-                    name="Joint"
-                    stackId="a"
-                    fill="#3B82F6"
-                    radius={[4, 4, 0, 0]}
-                    onClick={(data: any) => { if (data?.year && data?.month) goToExpenses({ y: data.year, m: data.month }); }}
-                  />
-                  {budgetAmount !== null && (
-                    <ReferenceLine
-                      y={budgetAmount}
-                      stroke="#EF4444"
-                      strokeWidth={1}
-                      strokeDasharray="3 3"
-                      strokeOpacity={0.5}
-                    />
-                  )}
-                </BarChart>
-              </ResponsiveContainer>
+            {categoryAverages && (
+              <CategoryVsAverageChart categories={categoryAverages.categories} compact />
+            )}
+            {!categoryAverages && (
+              <div className="flex h-full min-h-[120px] items-center justify-center text-xs text-muted-foreground">
+                Loading…
               </div>
-              <div className="mt-3 flex items-center justify-center gap-5">
-                <div className="flex items-center gap-1.5">
-                  <svg width={12} height={12}><rect width={12} height={12} rx={2} fill="#9CA3AF" /></svg>
-                  <span className="text-xs text-muted-foreground">Personal</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <svg width={12} height={12}><rect width={12} height={12} rx={2} fill="#3B82F6" /></svg>
-                  <span className="text-xs text-muted-foreground">Joint</span>
-                </div>
-                {budgetAmount !== null && (
-                  <div className="flex items-center gap-1.5">
-                    <svg width={20} height={8}>
-                      <line x1="0" y1="4" x2="20" y2="4" stroke="#EF4444" strokeWidth="1" strokeDasharray="3 3" strokeOpacity="0.5" />
-                    </svg>
-                    <span className="text-xs text-muted-foreground">Budget</span>
-                  </div>
-                )}
+            )}
+          </Card>
+          <Card>
+            {outlierTransactions && (
+              <OutlierTransactionsList categories={outlierTransactions.categories} />
+            )}
+            {!outlierTransactions && (
+              <div className="flex min-h-[80px] items-center justify-center text-xs text-muted-foreground">
+                Loading…
               </div>
-              </>
-            ) : (
-              <EmptyState
-                icon={TrendingUp}
-                title="No trend data"
-                description="Spending trends will appear as you add expenses."
-              />
             )}
           </Card>
         </div>
       </div>
-
-      {/* Spending by Category over time — spaghetti chart */}
-      <SpendingOverTimeChart year={year} month={month} />
 
     </div>
   );

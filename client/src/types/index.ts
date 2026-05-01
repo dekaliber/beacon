@@ -779,12 +779,66 @@ export interface MonthlyTrend {
 export interface DashboardData {
   currentMonth: { month: number; year: number };
   totalSpent: string | number;
+  personalSpent: string | number;
+  jointSpent: string | number;
   transactionCount: number;
   budget: string | number | null;
+  personalBudget: string | number | null;
+  jointBudget: string | number | null;
+  prevMonthMtd: number;
   spendingByCategory: CategorySpending[];
   monthlyTrend: MonthlyTrend[];
   recentTransactions: Expense[];
   upcomingRecurring: RecurrenceRule[];
+}
+
+export interface CategoryAverage {
+  categoryId: string | null;
+  categoryName: string;
+  color: string;
+  currentAmount: number;
+  avgAmount: number;
+  delta: number;
+  deltaPercent: number | null;
+}
+
+export interface CategoryAveragesData {
+  categories: CategoryAverage[];
+}
+
+export interface SpendingVelocityDay {
+  day: number;
+  spend: number | null;
+  cumulative: number | null;
+}
+
+export interface SpendingVelocityData {
+  days: SpendingVelocityDay[];
+  totalBudget: number | null;
+  daysInMonth: number;
+  lastKnownDay: number;
+}
+
+export interface OutlierCategoryTransaction {
+  id: string;
+  description: string;
+  vendor: string;
+  date: string;
+  amount: number;
+}
+
+export interface OutlierCategoryGroup {
+  categoryId: string | null;
+  categoryName: string;
+  categoryColor: string;
+  currentMonthTotal: number;
+  historicalAvgMonthly: number;
+  excess: number;
+  transactions: OutlierCategoryTransaction[];
+}
+
+export interface OutlierTransactionsData {
+  categories: OutlierCategoryGroup[];
 }
 
 export interface CategoryTrendSeries {
