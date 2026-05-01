@@ -804,6 +804,7 @@ export interface CategoryAverage {
 
 export interface CategoryAveragesData {
   categories: CategoryAverage[];
+  earliestYear: number;
 }
 
 export interface SpendingVelocityDay {
@@ -852,6 +853,15 @@ export interface CategoryTrendSeries {
 export interface CategoryTrendData {
   months: string[];
   series: CategoryTrendSeries[];
+}
+
+export interface MtdChartData {
+  personal: BudgetChart;
+  joint: BudgetChart;
+  total: BudgetChart;
+  monthlyBudget: { personal: number; joint: number; total: number };
+  monthNames: { current: string; previous: string; priorYear: string };
+  todayDay: number | null;
 }
 
 export interface BudgetDetail {

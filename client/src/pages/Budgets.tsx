@@ -1,7 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
-  LineChart,
-  Line,
   BarChart,
   Bar,
   XAxis,
@@ -28,11 +26,10 @@ import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
 import { getBudgetOverview, getCategoryOutliersYtd, setAnnualBudget, getDataRange } from "@/api";
-import { CategoryOutliersChart } from "@/components/CategoryOutliersChart";
 import { SpendingOverTimeChart } from "@/components/SpendingOverTimeChart";
 import { formatCurrency } from "@/lib/utils";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
-import type { BudgetPanel, CategoryOutliersData, CategoryOutlier, ChartDay, MonthlyTotal } from "@/types";
+import type { BudgetPanel, CategoryOutliersData, CategoryOutlier, MonthlyTotal } from "@/types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -54,20 +51,6 @@ function fmtK(n: number): string {
   if (abs >= 10_000) return `$${Math.round(abs / 1000)}K`;
   if (abs >= 1_000)  return `$${(abs / 1000).toFixed(1)}K`;
   return `$${Math.round(abs)}`;
-}
-
-function mergeChartData(
-  current: ChartDay[],
-  previous: ChartDay[],
-  priorYear: ChartDay[],
-) {
-  const len = Math.max(current.length, previous.length, priorYear.length);
-  return Array.from({ length: len }, (_, i) => ({
-    day: i + 1,
-    current:   current[i]?.cumulative   ?? null,
-    previous:  previous[i]?.cumulative  ?? null,
-    priorYear: priorYear[i]?.cumulative ?? null,
-  }));
 }
 
 // ── Budget settings modal ─────────────────────────────────────────────────────
@@ -306,141 +289,62 @@ function ProjectionModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ── Monthly comparison chart ──────────────────────────────────────────────────
+// ── Forecast range explanation modal ─────────────────────────────────────────
 
-interface ComparisonChartProps {
-  chart: BudgetPanel["chart"];
-  currentMonthName: string;
-  prevMonthName: string;
-  priorYearMonthName: string;
-  todayDay?: number;
-  /** Monthly budget target — draws a horizontal reference line when set. */
-  monthlyBudget?: number;
-}
-
-function ComparisonChart({
-  chart,
-  currentMonthName,
-  prevMonthName,
-  priorYearMonthName,
-  todayDay,
-  monthlyBudget,
-}: ComparisonChartProps) {
-  const rawData = useMemo(
-    () => mergeChartData(chart.current, chart.previous, chart.priorYear),
-    [chart],
-  );
-
-  const data = useMemo(() => {
-    if (!todayDay) {
-      return rawData.map((d) => ({ ...d, currentSolid: d.current, currentFuture: null }));
-    }
-    return rawData.map((d) => ({
-      ...d,
-      currentSolid:  d.day <= todayDay ? d.current : null,
-      currentFuture: d.day >= todayDay ? d.current : null,
-    }));
-  }, [rawData, todayDay]);
-
-  const hasData = rawData.some((d) => d.current || d.previous || d.priorYear);
-  if (!hasData) return null;
-
-  // Compute a clean Y-axis domain and tick count so gridlines always land on
-  // whole $1k/$2k/etc. boundaries. The key is to drive both the axis labels and
-  // CartesianGrid from the same recharts-generated tick set (via tickCount +
-  // domain) rather than passing explicit ticks — recharts uses explicit ticks
-  // only for labels but generates gridlines from its own internal set, so the
-  // two can diverge and produce missing or misaligned guidelines.
-  const rawDataMax = Math.max(
-    0,
-    ...rawData.flatMap((d) => [d.current ?? 0, d.previous ?? 0, d.priorYear ?? 0]),
-  );
-  const yMax = Math.ceil((rawDataMax + 500) / 1000) * 1000;
-  // Smallest increment where yMax / increment ≤ 5 (at most 5 intervals / 6 ticks).
-  const yIncrement = [1000, 2000, 5000, 10000, 20000, 50000].find((i) => yMax / i <= 5) ?? 50000;
-  // tickCount drives recharts' internal D3 tick generator, which also feeds
-  // CartesianGrid. With a clean domain (yMax = N × yIncrement) D3 reliably
-  // produces exactly these N+1 evenly-spaced values.
-  const yTickCount = Math.round(yMax / yIncrement) + 1;
-
-  const colorPrimary = "var(--color-primary)";
-  const colorMuted   = "var(--color-muted-foreground)";
-
+function ForecastRangeModal({ onClose }: { onClose: () => void }) {
   return (
-    <div>
-      <ResponsiveContainer width="100%" height={160}>
-        <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-          <XAxis
-            dataKey="day"
-            tick={{ fontSize: 11, fill: colorMuted }}
-            tickLine={false}
-            interval={4}
-          />
-          <YAxis
-            tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-            tick={{ fontSize: 11, fill: colorMuted }}
-            tickLine={false}
-            axisLine={false}
-            width={40}
-            domain={[0, yMax]}
-            tickCount={yTickCount}
-            interval={0}
-          />
-          <Tooltip
-            content={({ active, payload, label }) => {
-              if (!active || !payload?.length) return null;
-              const labels: Record<string, string> = {
-                currentSolid:  currentMonthName,
-                currentFuture: currentMonthName,
-                previous:      prevMonthName,
-                priorYear:     priorYearMonthName,
-              };
-              const items = payload.filter((p) => p.dataKey !== "currentFuture");
-              return (
-                <div className="rounded border border-border bg-background p-3 text-xs shadow-md">
-                  <p className="mb-2 font-medium">Day {label}</p>
-                  {items.map((p) => (
-                    <p key={p.dataKey as string} className="mt-1.5" style={{ color: p.stroke as string }}>
-                      {labels[p.dataKey as string] ?? p.dataKey} : {formatCurrency(p.value as number)}
-                    </p>
-                  ))}
-                </div>
-              );
-            }}
-          />
-          <Line type="monotone" dataKey="currentSolid"  stroke={colorPrimary} strokeWidth={2}   dot={false} connectNulls name="currentSolid" />
-          <Line type="monotone" dataKey="currentFuture" stroke={colorPrimary} strokeWidth={2}   dot={false} connectNulls strokeDasharray="6 3" name="currentFuture" />
-          <Line type="monotone" dataKey="previous"      stroke={colorMuted}   strokeWidth={1.5} dot={false} connectNulls strokeOpacity={0.6} name="previous" />
-          <Line type="monotone" dataKey="priorYear"     stroke={colorPrimary} strokeWidth={1.5} dot={false} connectNulls strokeOpacity={0.3} name="priorYear" />
-          <ReferenceLine y={0} stroke="var(--color-border)" />
-          {monthlyBudget != null && monthlyBudget > 0 && (
-            <ReferenceLine
-              y={monthlyBudget}
-              stroke="var(--color-destructive)"
-              strokeWidth={1}
-              strokeDasharray="3 3"
-              strokeOpacity={0.5}
-            />
-          )}
-        </LineChart>
-      </ResponsiveContainer>
-      <div className="mt-2 flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <svg width="28" height="8">
-            <line x1="0" y1="4" x2="14" y2="4" stroke={colorPrimary} strokeWidth="2" />
-            <line x1="14" y1="4" x2="28" y2="4" stroke={colorPrimary} strokeWidth="2" strokeDasharray="4 3" />
-          </svg>
-          {currentMonthName}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke={colorMuted} strokeWidth="1.5" strokeOpacity="0.6" /></svg>
-          {prevMonthName}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke={colorPrimary} strokeWidth="1.5" strokeOpacity="0.3" /></svg>
-          {priorYearMonthName}
-        </span>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-sm p-1 text-muted-foreground opacity-70 hover:opacity-100 hover:bg-accent"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        <h3 className="mb-1 text-base font-semibold">How the forecast range works</h3>
+        <p className="mb-5 text-xs text-muted-foreground">
+          The shaded band shows a statistical confidence range for your annual spend, based on how variable your monthly spending has been so far this year.
+        </p>
+
+        <div className="space-y-5 text-sm">
+          <section>
+            <h4 className="mb-1.5 font-semibold text-foreground">The core idea</h4>
+            <p className="text-muted-foreground leading-relaxed">
+              Your past monthly spend has a center (the average) and a spread (how much it varies month to month). The range projects that variability forward: the more erratic your spending has been, the wider the band.
+            </p>
+          </section>
+
+          <section>
+            <h4 className="mb-1.5 font-semibold text-foreground">How it's calculated</h4>
+            <p className="text-muted-foreground leading-relaxed">
+              The spread is the standard deviation of your completed monthly totals, scaled by the square root of the number of months remaining. This follows the standard rule for summing independent random variables: if each month has uncertainty σ, then N remaining months contribute σ√N of combined uncertainty.
+            </p>
+            <p className="mt-2 text-muted-foreground leading-relaxed">
+              The final range is the annual projection ± that spread — the same projection shown to the left.
+            </p>
+          </section>
+
+          <section>
+            <h4 className="mb-1.5 font-semibold text-foreground">What it assumes</h4>
+            <p className="text-muted-foreground leading-relaxed">
+              The range assumes future months will vary similarly to how past months have varied. It doesn't predict what causes the variation, only how much. Consistent monthly spending produces a tight band; lumpy or irregular months produce a wide one.
+            </p>
+          </section>
+
+          <section>
+            <h4 className="mb-1.5 font-semibold text-foreground">When it appears</h4>
+            <p className="text-muted-foreground leading-relaxed">
+              The forecast range is shown once you have at least two completed months of data and a budget is set.
+            </p>
+          </section>
+        </div>
       </div>
     </div>
   );
@@ -499,7 +403,6 @@ interface PanelProps {
   priorYearMonthName: string;
   today: Date;
   todayDay?: number;
-  outliers?: CategoryOutliersData;
   monthlyTotals: MonthlyTotal[];
 }
 
@@ -518,10 +421,10 @@ function BudgetPanelCard({
   priorYearMonthName,
   today,
   todayDay,
-  outliers,
   monthlyTotals,
 }: PanelProps) {
   const [showModal, setShowModal] = useState(false);
+  const [showForecastModal, setShowForecastModal] = useState(false);
 
   const isCompletedYear = completedMonthCount === 12;
 
@@ -628,35 +531,44 @@ function BudgetPanelCard({
     </div>
   );
 
+  const thisMonthBudget = panel.effectiveAnnualBudget > 0
+    ? (panel.monthlyBudgets
+        ? panel.monthlyBudgets[today.getMonth()].amount
+        : panel.effectiveAnnualBudget / 12)
+    : null;
+  const remainingMonthly = thisMonthBudget !== null ? thisMonthBudget - panel.mtdTotal : null;
+  const remainingDaily   = remainingMonthly !== null && daysLeft > 0 ? remainingMonthly / daysLeft : null;
+
   const thisMonthBand = (
     <div className="space-y-2">
       <BandLabel>This month</BandLabel>
-      <div className="flex gap-4 items-start">
-        <div className="w-40 shrink-0">
-          <Metric
-            label={`${mtdMonthLabel} so far`}
-            value={completedMonthCount > 0 || isCurrentYear ? fmt(panel.mtdTotal) : "—"}
-            valueClass={
-              panel.effectiveAnnualBudget > 0 && (completedMonthCount > 0 || isCurrentYear)
-                ? panel.mtdTotal > panel.effectiveAnnualBudget / 12
-                  ? "text-destructive"
-                  : "text-success"
-                : undefined
-            }
-            sub={isCurrentYear && daysLeft > 0 ? `${daysLeft} days remaining` : "month complete"}
-          />
-        </div>
-        <div className="flex-1 min-w-0">
-          <ComparisonChart
-            chart={panel.chart}
-            currentMonthName={currentMonthName}
-            prevMonthName={prevMonthName}
-            priorYearMonthName={priorYearMonthName}
-            todayDay={todayDay}
-            monthlyBudget={panel.effectiveAnnualBudget > 0 ? panel.effectiveAnnualBudget / 12 : undefined}
-          />
-        </div>
+      <div className="grid grid-cols-3 gap-3">
+        <Metric
+          label={`${mtdMonthLabel} so far`}
+          value={completedMonthCount > 0 || isCurrentYear ? fmt(panel.mtdTotal) : "—"}
+          valueClass={
+            panel.effectiveAnnualBudget > 0 && (completedMonthCount > 0 || isCurrentYear)
+              ? panel.mtdTotal > panel.effectiveAnnualBudget / 12
+                ? "text-destructive"
+                : "text-success"
+              : undefined
+          }
+          sub={isCurrentYear && daysLeft > 0 ? `${daysLeft} days remaining` : "month complete"}
+        />
+        <Metric
+          label="Remaining spend target"
+          value={remainingDaily !== null ? fmt(remainingDaily) : "—"}
+          valueClass={remainingDaily !== null && remainingDaily < 0 ? "text-destructive" : undefined}
+          sub={daysLeft > 0 ? "per day" : isCurrentYear ? "month complete" : undefined}
+        />
       </div>
+      {!isNoBudget && (
+        <PaceBar
+          normalizedYTD={panel.normalizedYTD}
+          budget={panel.effectiveAnnualBudget}
+          pctElapsed={pctElapsed}
+        />
+      )}
     </div>
   );
 
@@ -692,28 +604,96 @@ function BudgetPanelCard({
       >
         Rest of year
       </BandLabel>
+
+      {/* Row 1: Annual projection + forecast range */}
+      <div className="rounded-lg bg-muted/40 px-3 py-2.5">
+        <div className="flex gap-4 items-start">
+          {/* Left 1/3: projection metric */}
+          <div className="w-1/3 shrink-0">
+            <p className="text-xs text-muted-foreground">Annual projection</p>
+            <p className={`mt-0.5 text-lg font-bold leading-tight ${
+              panel.effectiveAnnualBudget > 0 && panel.projectedAnnual > panel.effectiveAnnualBudget
+                ? "text-destructive"
+                : ""
+            }`}>
+              {fmt(panel.projectedAnnual)}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                adjusted rate
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="inline-flex items-center text-muted-foreground hover:text-foreground"
+                  title="How is this calculated?"
+                >
+                  <Info className="h-3 w-3" />
+                </button>
+              </span>
+            </p>
+          </div>
+
+          {/* Right 2/3: forecast range */}
+          {projectionLow !== null && projectionHigh !== null && (() => {
+            const scaleMax  = Math.max(projectionHigh, panel.effectiveAnnualBudget) * 1.15;
+            const lowPct    = Math.min((projectionLow  / scaleMax) * 100, 100);
+            const centerPct = Math.min((panel.projectedAnnual / scaleMax) * 100, 100);
+            const highPct   = Math.min((projectionHigh / scaleMax) * 100, 100);
+            const budgetPct = Math.min((panel.effectiveAnnualBudget / scaleMax) * 100, 100);
+            return (
+              <div className="flex-1 min-w-0">
+                <div className="mb-1 flex items-center gap-1">
+                  <p className="text-xs text-muted-foreground">Annual forecast range</p>
+                  <button
+                    onClick={() => setShowForecastModal(true)}
+                    className="inline-flex items-center text-muted-foreground hover:text-foreground"
+                    title="How is this calculated?"
+                  >
+                    <Info className="h-3 w-3" />
+                  </button>
+                </div>
+                {/* Forecast range label above bar, centered on projection mark */}
+                <div className="relative h-4">
+                  <span
+                    className="absolute -translate-x-1/2 whitespace-nowrap text-[10px] text-muted-foreground"
+                    style={{ left: `${centerPct}%` }}
+                  >
+                    <span className="font-medium text-foreground">{fmtK(projectionLow)}</span>
+                    {" – "}
+                    <span className="font-medium text-foreground">{fmtK(projectionHigh)}</span>
+                  </span>
+                </div>
+                {/* Bar */}
+                <div className="relative h-2 rounded-full bg-secondary">
+                  <div
+                    className="absolute top-0 h-full rounded-full bg-primary/20"
+                    style={{ left: `${lowPct}%`, width: `${highPct - lowPct}%` }}
+                  />
+                  <div
+                    className="absolute top-0 h-full w-0.5 rounded-full bg-primary"
+                    style={{ left: `${centerPct}%` }}
+                  />
+                  <div
+                    className="absolute top-0 h-full w-0.5 rounded-full bg-destructive/60"
+                    style={{ left: `${budgetPct}%` }}
+                  />
+                </div>
+                {/* Budget label below bar, centered on budget mark */}
+                <div className="relative mt-1 h-4">
+                  <span
+                    className="absolute -translate-x-1/2 whitespace-nowrap text-[10px] text-muted-foreground"
+                    style={{ left: `${budgetPct}%` }}
+                  >
+                    Budget {fmtK(panel.effectiveAnnualBudget)}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+
+      {/* Row 2: Remaining budget + monthly target */}
       <div className="grid grid-cols-3 gap-3">
-        <Metric
-          label="Annual projection"
-          value={fmt(panel.projectedAnnual)}
-          valueClass={
-            panel.effectiveAnnualBudget > 0 && panel.projectedAnnual > panel.effectiveAnnualBudget
-              ? "text-destructive"
-              : undefined
-          }
-          sub={
-            <span className="flex items-center gap-1">
-              adjusted rate
-              <button
-                onClick={() => setShowModal(true)}
-                className="inline-flex items-center text-muted-foreground hover:text-foreground"
-                title="How is this calculated?"
-              >
-                <Info className="h-3 w-3" />
-              </button>
-            </span>
-          }
-        />
         <Metric
           label={showDiscretionary ? "Discretionary left" : "Remaining budget"}
           value={
@@ -737,51 +717,6 @@ function BudgetPanelCard({
           }
         />
       </div>
-      {!isNoBudget && (
-        <PaceBar
-          normalizedYTD={panel.normalizedYTD}
-          budget={panel.effectiveAnnualBudget}
-          pctElapsed={pctElapsed}
-        />
-      )}
-      {projectionLow !== null && projectionHigh !== null && (() => {
-        const scaleMax  = Math.max(projectionHigh, panel.effectiveAnnualBudget) * 1.15;
-        const lowPct    = Math.min((projectionLow / scaleMax) * 100, 100);
-        const centerPct = Math.min((panel.projectedAnnual / scaleMax) * 100, 100);
-        const highPct   = Math.min((projectionHigh / scaleMax) * 100, 100);
-        const budgetPct = Math.min((panel.effectiveAnnualBudget / scaleMax) * 100, 100);
-        return (
-          <div className="rounded-lg bg-muted/40 px-3 py-2.5">
-            <p className="mb-2 text-xs text-muted-foreground">Annual forecast range</p>
-            <div className="relative h-2 rounded-full bg-secondary">
-              <div
-                className="absolute top-0 h-full rounded-full bg-primary/20"
-                style={{ left: `${lowPct}%`, width: `${highPct - lowPct}%` }}
-              />
-              <div
-                className="absolute top-0 h-full w-0.5 rounded-full bg-primary"
-                style={{ left: `${centerPct}%` }}
-              />
-              <div
-                className="absolute top-0 h-full w-0.5 rounded-full bg-destructive/60"
-                style={{ left: `${budgetPct}%` }}
-              />
-            </div>
-            <div className="mt-1.5 flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">
-                On pace for{" "}
-                <span className="font-medium text-foreground">{fmtK(projectionLow)}</span>
-                {" – "}
-                <span className="font-medium text-foreground">{fmtK(projectionHigh)}</span>
-              </span>
-              <span className="flex items-center gap-1 text-muted-foreground">
-                <span className="inline-block h-3 w-0.5 rounded-full bg-destructive/60" />
-                Budget {fmtK(panel.effectiveAnnualBudget)}
-              </span>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 
@@ -841,25 +776,12 @@ function BudgetPanelCard({
   return (
     <>
       {showModal && <ProjectionModal onClose={() => setShowModal(false)} />}
+      {showForecastModal && <ForecastRangeModal onClose={() => setShowForecastModal(false)} />}
 
-      {outliers ? (
-        <Card className="flex flex-col gap-5">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="flex flex-col gap-5">
-              {header}
-              {bands}
-            </div>
-            <div className="flex flex-col justify-center">
-              <CategoryOutliersChart data={outliers} />
-            </div>
-          </div>
-        </Card>
-      ) : (
-        <Card className="flex flex-col gap-5">
-          {header}
-          {bands}
-        </Card>
-      )}
+      <Card className="flex flex-col gap-5">
+        {header}
+        {bands}
+      </Card>
     </>
   );
 }
@@ -998,15 +920,16 @@ function MonthlyTrendCard({ monthlyTotals, monthlyBudget }: MonthlyTrendCardProp
       <CardHeader>
         <CardTitle>Monthly Trend</CardTitle>
       </CardHeader>
-      <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={monthlyTotals} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+      <ResponsiveContainer width="100%" height={140}>
+        <BarChart data={monthlyTotals} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-          <XAxis dataKey="label" fontSize={12} axisLine={false} tickLine={false} />
+          <XAxis dataKey="label" fontSize={10} axisLine={false} tickLine={false} />
           <YAxis
-            fontSize={12}
+            fontSize={10}
             tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`}
             axisLine={false}
             tickLine={false}
+            width={32}
           />
           <Tooltip
             content={({ active, payload, label }) => {
@@ -1025,7 +948,7 @@ function MonthlyTrendCard({ monthlyTotals, monthlyBudget }: MonthlyTrendCardProp
             cursor={{ fill: "var(--color-muted)" }}
           />
           <Bar dataKey="personalSpent" name="Personal" stackId="a" fill={PERSONAL_COLOR} />
-          <Bar dataKey="jointSpent" name="Joint" stackId="a" fill={JOINT_COLOR} radius={[4, 4, 0, 0]} />
+          <Bar dataKey="jointSpent" name="Joint" stackId="a" fill={JOINT_COLOR} radius={[3, 3, 0, 0]} />
           {monthlyBudget != null && monthlyBudget > 0 && (
             <ReferenceLine
               y={monthlyBudget}
@@ -1037,23 +960,127 @@ function MonthlyTrendCard({ monthlyTotals, monthlyBudget }: MonthlyTrendCardProp
           )}
         </BarChart>
       </ResponsiveContainer>
-      <div className="mt-3 flex items-center justify-center gap-5">
+      <div className="mt-2 flex items-center justify-center gap-4">
         <div className="flex items-center gap-1.5">
-          <svg width={12} height={12}><rect width={12} height={12} rx={2} fill={PERSONAL_COLOR} /></svg>
+          <svg width={10} height={10}><rect width={10} height={10} rx={2} fill={PERSONAL_COLOR} /></svg>
           <span className="text-xs text-muted-foreground">Personal</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <svg width={12} height={12}><rect width={12} height={12} rx={2} fill={JOINT_COLOR} /></svg>
+          <svg width={10} height={10}><rect width={10} height={10} rx={2} fill={JOINT_COLOR} /></svg>
           <span className="text-xs text-muted-foreground">Joint</span>
         </div>
         {monthlyBudget != null && monthlyBudget > 0 && (
           <div className="flex items-center gap-1.5">
-            <svg width={20} height={8}>
-              <line x1="0" y1="4" x2="20" y2="4" stroke="var(--color-destructive)" strokeWidth="1" strokeDasharray="3 3" strokeOpacity="0.5" />
+            <svg width={16} height={8}>
+              <line x1="0" y1="4" x2="16" y2="4" stroke="var(--color-destructive)" strokeWidth="1" strokeDasharray="3 3" strokeOpacity="0.5" />
             </svg>
             <span className="text-xs text-muted-foreground">Monthly budget</span>
           </div>
         )}
+      </div>
+    </Card>
+  );
+}
+
+// ── Personal / Joint split card ───────────────────────────────────────────────
+
+interface SplitCardProps {
+  personal: BudgetPanel;
+  joint: BudgetPanel;
+}
+
+function SplitCard({ personal, joint }: SplitCardProps) {
+  const personalYTD   = personal.ytdCompletedMonths + personal.mtdTotal;
+  const jointYTD      = joint.ytdCompletedMonths    + joint.mtdTotal;
+  const grandTotal    = personalYTD + jointYTD;
+
+  if (grandTotal === 0) return null;
+
+  const actualPersonalPct = personalYTD / grandTotal;
+  const actualJointPct    = 1 - actualPersonalPct;
+
+  const totalBudget       = personal.effectiveAnnualBudget + joint.effectiveAnnualBudget;
+  const hasBudgets        = totalBudget > 0;
+  const targetPersonalPct = hasBudgets ? personal.effectiveAnnualBudget / totalBudget : null;
+  const targetJointPct    = targetPersonalPct != null ? 1 - targetPersonalPct : null;
+
+  function StreamCol({ label, color, ytd, actualPct, targetPct }: {
+    label: string; color: string; ytd: number;
+    actualPct: number; targetPct: number | null;
+  }) {
+    const overTarget = targetPct != null && actualPct > targetPct;
+    const underTarget = targetPct != null && actualPct < targetPct;
+    return (
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+        </div>
+        <p className="text-xl font-bold leading-tight">{fmt(ytd)}</p>
+        <div className="space-y-0.5 text-xs">
+          <p className={overTarget ? "text-destructive font-medium" : underTarget ? "text-success font-medium" : "text-muted-foreground"}>
+            {Math.round(actualPct * 100)}% of actual spend
+          </p>
+          {targetPct != null && (
+            <p className="text-muted-foreground">{Math.round(targetPct * 100)}% budget share</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Personal vs. Joint</CardTitle>
+        <p className="mt-0.5 text-xs text-muted-foreground">YTD spend composition</p>
+      </CardHeader>
+
+      {/* Stacked composition bar — marker shows where the split should be per budget */}
+      <div className="mb-4 space-y-1">
+        <div className="relative h-5 overflow-hidden rounded-sm">
+          <div className="absolute inset-0 flex">
+            <div
+              className="h-full shrink-0"
+              style={{ width: `${actualPersonalPct * 100}%`, backgroundColor: PERSONAL_COLOR }}
+            />
+            <div className="h-full flex-1" style={{ backgroundColor: JOINT_COLOR }} />
+          </div>
+          {targetPersonalPct != null && (
+            <div
+              className="absolute top-0 h-full w-px bg-foreground/60"
+              style={{ left: `${targetPersonalPct * 100}%` }}
+            />
+          )}
+        </div>
+        {targetPersonalPct != null && (
+          <div className="relative h-4">
+            <span
+              className="absolute -translate-x-1/2 whitespace-nowrap text-xs text-muted-foreground"
+              style={{ left: `${targetPersonalPct * 100}%` }}
+            >
+              target {Math.round(targetPersonalPct * 100)}% / {Math.round(targetJointPct! * 100)}%
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="flex gap-6">
+        <StreamCol
+          label="Personal"
+          color={PERSONAL_COLOR}
+          ytd={personalYTD}
+          actualPct={actualPersonalPct}
+          targetPct={targetPersonalPct}
+        />
+        <div className="w-px shrink-0 bg-border" />
+        <StreamCol
+          label="Joint"
+          color={JOINT_COLOR}
+          ytd={jointYTD}
+          actualPct={actualJointPct}
+          targetPct={targetJointPct}
+        />
       </div>
     </Card>
   );
@@ -1192,17 +1219,29 @@ export function Budgets() {
 
       {!loading && data && (
         <>
-          {/* Total — full width, most prominent */}
-          <BudgetPanelCard
-            title="Total"
-            subtitle={`Personal + ${Math.round(data.settings.jointSplitRatio * 100)}% of Joint`}
-            panel={data.total}
-            pctElapsed={data.pctElapsed}
-            budgetLabel="Annual Budget (derived)"
-            outliers={outliersData ?? undefined}
-            monthlyTotals={data.monthlyTotals}
-            {...sharedPanelProps}
-          />
+          {/* Total + split/trend right column */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <BudgetPanelCard
+              title="Total"
+              subtitle={`Personal + ${Math.round(data.settings.jointSplitRatio * 100)}% of Joint`}
+              panel={data.total}
+              pctElapsed={data.pctElapsed}
+              budgetLabel="Annual Budget (derived)"
+              monthlyTotals={data.monthlyTotals}
+              {...sharedPanelProps}
+            />
+            <div className="flex flex-col gap-4">
+              <SplitCard personal={data.personal} joint={data.joint} />
+              <MonthlyTrendCard
+                monthlyTotals={data.monthlyTotals.map((m) =>
+                  year < curYear || m.month <= curMonthIdx + 1
+                    ? m
+                    : { ...m, personalSpent: 0, jointSpent: 0 }
+                )}
+                monthlyBudget={data.total.effectiveAnnualBudget > 0 ? data.total.effectiveAnnualBudget / 12 : null}
+              />
+            </div>
+          </div>
 
           {/* Personal & Joint breakdown toggle */}
           <button
@@ -1240,12 +1279,6 @@ export function Budgets() {
           {outliersData && outliersData.outliers.length > 0 && (
             <CategoryPacingCard outliers={outliersData} year={year} />
           )}
-
-          {/* Monthly Trend — full width */}
-          <MonthlyTrendCard
-            monthlyTotals={data.monthlyTotals}
-            monthlyBudget={data.total.effectiveAnnualBudget > 0 ? data.total.effectiveAnnualBudget / 12 : null}
-          />
 
           {/* Spending by Category Over Time — full width */}
           <SpendingOverTimeChart year={year} month={trendMonth} />

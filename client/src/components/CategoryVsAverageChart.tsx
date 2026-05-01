@@ -9,11 +9,12 @@ function fmtCompact(n: number): string {
 
 interface CategoryVsAverageChartProps {
   categories: CategoryAverage[];
+  yearLabel: string;
   /** Reduces row height slightly for denser layouts (default: false). */
   compact?: boolean;
 }
 
-export function CategoryVsAverageChart({ categories, compact = false }: CategoryVsAverageChartProps) {
+export function CategoryVsAverageChart({ categories, yearLabel, compact = false }: CategoryVsAverageChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
@@ -61,12 +62,12 @@ export function CategoryVsAverageChart({ categories, compact = false }: Category
 
   return (
     <div className="w-full">
-      <p className="text-sm font-medium text-card-foreground">vs. 12-Month Average</p>
+      <p className="text-sm font-medium text-card-foreground">Spending vs. Category Averages</p>
       <p className="mb-2 text-xs text-muted-foreground">
-        Current month spend compared to monthly average
+        Current month spend compared to {yearLabel} averages
       </p>
 
-      <div className="rounded-md border border-border p-3">
+      <div className="rounded-md p-3">
         <div ref={containerRef} className="w-full">
           {width > 0 && (
             <svg width={width} height={svgH} style={{ overflow: "visible" }}>
@@ -148,24 +149,39 @@ export function CategoryVsAverageChart({ categories, compact = false }: Category
                       {deltaStr}
                     </text>
 
-                    {/* Hover tooltip */}
-                    {isHovered && (
-                      <>
-                        <text
-                          x={xAvg} y={barY - 5}
-                          textAnchor="middle" fontSize={10} fill={colorMuted}
-                        >
-                          avg {fmtAmt(c.avgAmount)}
-                        </text>
-                        <text
-                          x={xCur > xBase + 4 ? xCur : xBase + 4} y={barY - 5}
-                          textAnchor={xCur > xAvg ? "end" : "start"}
-                          fontSize={10} fontWeight={600} fill={barColor}
-                        >
-                          {fmtAmt(c.currentAmount)}{pctStr}
-                        </text>
-                      </>
-                    )}
+                    {/* Hover tooltip — collision-aware label placement */}
+                    {isHovered && (() => {
+                      const xCurClamped = Math.max(xCur, xBase + 4);
+                      const separation  = Math.abs(xCurClamped - xAvg);
+                      const MIN_GAP     = 58;
+
+                      let avgX: number, avgAnchor: "middle" | "end" | "start";
+                      let curX: number, curAnchor: "middle" | "end" | "start";
+
+                      if (separation >= MIN_GAP) {
+                        avgX = xAvg;       avgAnchor = "middle";
+                        curX = xCurClamped; curAnchor = xCur > xAvg ? "end" : "start";
+                      } else {
+                        const leftX     = Math.min(xCurClamped, xAvg);
+                        const rightX    = Math.max(xCurClamped, xAvg);
+                        const curIsLeft = xCurClamped <= xAvg;
+                        curX = curIsLeft ? leftX  - 3 : rightX + 3;
+                        curAnchor = curIsLeft ? "end" : "start";
+                        avgX = curIsLeft ? rightX + 3 : leftX  - 3;
+                        avgAnchor = curIsLeft ? "start" : "end";
+                      }
+
+                      return (
+                        <>
+                          <text x={avgX} y={barY - 5} textAnchor={avgAnchor} fontSize={10} fill={colorMuted}>
+                            avg {fmtAmt(c.avgAmount)}
+                          </text>
+                          <text x={curX} y={barY - 5} textAnchor={curAnchor} fontSize={10} fontWeight={600} fill={barColor}>
+                            {fmtAmt(c.currentAmount)}{pctStr}
+                          </text>
+                        </>
+                      );
+                    })()}
 
                     {/* Transparent hover target */}
                     <rect

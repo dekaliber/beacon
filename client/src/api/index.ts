@@ -187,6 +187,13 @@ export const getSpendingVelocity = (year: number, month: number) => {
 export const getOutlierTransactions = (year: number, month: number) =>
   api.get<import("../types").OutlierTransactionsData>(`/dashboard/outlier-transactions?year=${year}&month=${month}`);
 
+export const getMtdChart = (year: number, month: number) => {
+  const today = outliersRefDate(year, month);
+  return api.get<import("../types").MtdChartData>(
+    `/budgets/${year}/monthly-chart?month=${month}&today=${today}`,
+  );
+};
+
 export const getBudgetSettings = () =>
   api.get<{ jointSplitRatio: number }>("/budgets/settings");
 

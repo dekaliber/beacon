@@ -27,7 +27,7 @@ export function OutlierTransactionsList({ categories }: OutlierTransactionsListP
     <div className="w-full">
       <p className="text-sm font-medium text-card-foreground">Spending Outliers</p>
       <p className="mb-3 text-xs text-muted-foreground">
-        Categories exceeding their historical monthly average
+        Largest transactions driving above average category spend
       </p>
       <div className="space-y-4">
         {categories.map((cat) => {

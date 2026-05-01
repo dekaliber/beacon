@@ -209,7 +209,7 @@ async function buildProjection(
       description: exp.description || exp.vendor || "Expense",
       amount: -parseFloat(exp.amount.toString()),
       type: "EXPENSE",
-      confidence: exp.recurrenceRuleId ? "PROJECTED" : "KNOWN",
+      confidence: (exp.recurrenceRuleId && toDateStr(exp.date) > toDateStr(windowStart)) ? "PROJECTED" : "KNOWN",
     });
     if (exp.recurrenceRuleId) {
       if (!seenRecurrenceRuleDates.has(exp.recurrenceRuleId)) {

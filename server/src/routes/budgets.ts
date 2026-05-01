@@ -659,7 +659,7 @@ budgetRoutes.get("/:year/category-outliers", async (req, res) => {
   const jointIds          = accounts.filter((a) =>  a.isJoint).map((a) => a.id);
   const ignoredCategoryIds = ignoredCategories.map((c) => c.id);
 
-  // Compute scale cap = 20% of effective monthly total budget
+  // Compute scale cap = 30% of effective monthly total budget
   const pBudget = annualBudgets.find((b) => b.type === "PERSONAL") ?? null;
   const jBudget = annualBudgets.find((b) => b.type === "JOINT")    ?? null;
   const toOverrides = (b: typeof pBudget) =>
@@ -669,7 +669,7 @@ budgetRoutes.get("/:year/category-outliers", async (req, res) => {
   ) + effectiveAnnual(
     jBudget ? Number(jBudget.annualAmount) : null, toOverrides(jBudget),
   );
-  const scaleCap: number | null = effTotal > 0 ? Math.round(effTotal / 12 * 0.20) : null;
+  const scaleCap: number | null = effTotal > 0 ? Math.round(effTotal / 12 * 0.30) : null;
 
   const curYear  = effectiveToday.getUTCFullYear();
   const curMonth = effectiveToday.getUTCMonth() + 1; // 1-indexed
@@ -1131,6 +1131,105 @@ budgetRoutes.get("/:year/monthly-spending", async (req, res) => {
     console.error("monthly-spending error", err);
     res.status(500).json({ error: "Internal server error" });
   }
+});
+
+// GET /api/budgets/:year/monthly-chart?month=N&today=YYYY-MM-DD
+// Returns daily cumulative spend for the specified month across personal, joint, total views.
+budgetRoutes.get("/:year/monthly-chart", async (req, res) => {
+  const userId = getUserId(req);
+  const year  = parseInt(req.params.year);
+  const month = parseInt(req.query.month as string);
+  if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "Invalid year or month" });
+  }
+
+  const todayParam = req.query.today as string | undefined;
+  const today = todayParam ? new Date(`${todayParam}T00:00:00Z`) : new Date();
+
+  const [accounts, ignoredCategories, settings, annualBudgets] = await Promise.all([
+    prisma.account.findMany({ where: { userId, isActive: true }, select: { id: true, isJoint: true } }),
+    prisma.category.findMany({ where: { userId, ignoreInBudget: true }, select: { id: true } }),
+    getOrCreateSettings(userId),
+    prisma.annualBudget.findMany({ where: { userId, year }, include: { monthlyOverrides: true } }),
+  ]);
+
+  const splitRatio         = Number(settings.jointSplitRatio);
+  const personalIds        = accounts.filter((a) => !a.isJoint).map((a) => a.id);
+  const jointIds           = accounts.filter((a) =>  a.isJoint).map((a) => a.id);
+  const ignoredCategoryIds = ignoredCategories.map((c) => c.id);
+
+  const prevMonth     = month === 1 ? 12 : month - 1;
+  const prevMonthYear = month === 1 ? year - 1 : year;
+
+  async function buildChartForIds(ids: string[], ratio = 1) {
+    const [current, previous, priorYear] = await Promise.all([
+      buildMonthlyComparison(year,           month,     ids, ignoredCategoryIds),
+      buildMonthlyComparison(prevMonthYear,  prevMonth, ids, ignoredCategoryIds),
+      buildMonthlyComparison(year - 1,       month,     ids, ignoredCategoryIds),
+    ]);
+    if (ratio === 1) return { current, previous, priorYear };
+    const scale = (arr: { day: number; cumulative: number }[]) =>
+      arr.map((d) => ({ ...d, cumulative: Math.round(d.cumulative * ratio * 100) / 100 }));
+    return { current: scale(current), previous: scale(previous), priorYear: scale(priorYear) };
+  }
+
+  function mergeSeries(
+    a: { day: number; cumulative: number }[],
+    b: { day: number; cumulative: number }[],
+  ) {
+    const len = Math.max(a.length, b.length);
+    return Array.from({ length: len }, (_, i) => ({
+      day: i + 1,
+      cumulative: Math.round(((a[i]?.cumulative ?? 0) + (b[i]?.cumulative ?? 0)) * 100) / 100,
+    }));
+  }
+
+  const [personalChart, jointChart] = await Promise.all([
+    buildChartForIds(personalIds, 1),
+    buildChartForIds(jointIds, splitRatio),
+  ]);
+
+  const totalChart = {
+    current:   mergeSeries(personalChart.current,   jointChart.current),
+    previous:  mergeSeries(personalChart.previous,  jointChart.previous),
+    priorYear: mergeSeries(personalChart.priorYear, jointChart.priorYear),
+  };
+
+  const personalBudget = annualBudgets.find((b) => b.type === "PERSONAL") ?? null;
+  const jointBudget    = annualBudgets.find((b) => b.type === "JOINT")    ?? null;
+  const toOverrides = (b: typeof personalBudget) =>
+    (b?.monthlyOverrides ?? []).map((o) => ({ month: o.month, amount: Number(o.amount) }));
+  const personalMonthly = resolveMonthlyAmounts(
+    personalBudget?.annualAmount != null ? Number(personalBudget.annualAmount) : null,
+    toOverrides(personalBudget),
+  );
+  const jointMonthly = resolveMonthlyAmounts(
+    jointBudget?.annualAmount != null ? Number(jointBudget.annualAmount) : null,
+    toOverrides(jointBudget),
+  );
+  const personalMonthlyBudget = personalMonthly[month - 1].amount;
+  const jointMonthlyBudget    = jointMonthly[month - 1].amount;
+
+  const SRV_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const isCurrentMonth =
+    today.getUTCFullYear() === year && today.getUTCMonth() + 1 === month;
+
+  res.json({
+    personal: personalChart,
+    joint:    jointChart,
+    total:    totalChart,
+    monthlyBudget: {
+      personal: personalMonthlyBudget,
+      joint:    jointMonthlyBudget,
+      total:    personalMonthlyBudget + jointMonthlyBudget,
+    },
+    monthNames: {
+      current:   `${SRV_MONTHS[month - 1]} ${year}`,
+      previous:  `${SRV_MONTHS[prevMonth - 1]} ${prevMonthYear}`,
+      priorYear: `${SRV_MONTHS[month - 1]} ${year - 1}`,
+    },
+    todayDay: isCurrentMonth ? today.getUTCDate() : null,
+  });
 });
 
 // ── Legacy stubs ───────────────────────────────────────────────────────────────

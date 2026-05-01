@@ -75,9 +75,21 @@ dashboardRoutes.get("/category-averages", async (req, res) => {
   const year  = parseInt(req.query.year  as string) || now.getUTCFullYear();
   const month = parseInt(req.query.month as string) || now.getUTCMonth() + 1;
 
-  // Historical window: the 12 complete months ending before the current month
-  const histStart = new Date(Date.UTC(year, month - 13, 1));
-  const histEnd   = new Date(Date.UTC(year, month - 1, 0, 23, 59, 59, 999));
+  // Historical baseline: all complete years before the current year, same as outlier-transactions.
+  // This keeps the average stable across all months of a given year.
+  const earliest = await prisma.expense.findFirst({
+    where: { account: { userId }, date: { lt: new Date(Date.UTC(year, 0, 1)) } },
+    orderBy: { date: "asc" },
+    select: { date: true },
+  });
+  if (!earliest) return res.json({ categories: [] });
+
+  const earliestYear = earliest.date.getUTCFullYear();
+  const histMonths   = (year - earliestYear) * 12;
+  if (histMonths <= 0) return res.json({ categories: [] });
+
+  const histStart = new Date(Date.UTC(earliestYear, 0, 1));
+  const histEnd   = new Date(Date.UTC(year, 0, 0, 23, 59, 59, 999)); // Dec 31 of year-1
 
   // Current month window
   const curStart = new Date(Date.UTC(year, month - 1, 1));
@@ -142,7 +154,6 @@ dashboardRoutes.get("/category-averages", async (req, res) => {
   rollUp(curP,  1,          curAgg);
   rollUp(curJ,  splitRatio, curAgg);
 
-  const HIST_MONTHS = 12;
   const allKeys = new Set([...histAgg.keys(), ...curAgg.keys()]);
 
   const categories = Array.from(allKeys)
@@ -150,7 +161,7 @@ dashboardRoutes.get("/category-averages", async (req, res) => {
       const info        = categoryInfo.get(key)!;
       const histTotal   = histAgg.get(key) ?? 0;
       const curAmount   = curAgg.get(key)  ?? 0;
-      const avgAmount   = histTotal / HIST_MONTHS;
+      const avgAmount   = histTotal / histMonths;
       const delta       = curAmount - avgAmount;
       const deltaPercent = avgAmount > 1 ? Math.round((delta / avgAmount) * 100) : null;
       return {
@@ -164,10 +175,10 @@ dashboardRoutes.get("/category-averages", async (req, res) => {
       };
     })
     .filter((o) => o.avgAmount > 0 || o.currentAmount > 0)
-    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .sort((a, b) => b.avgAmount - a.avgAmount)
     .slice(0, 12);
 
-  res.json({ categories });
+  res.json({ categories, earliestYear });
 });
 
 // Day-by-day cumulative spend for the viewed month (spending velocity)

@@ -1,23 +1,24 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Cell, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList,
-  PieChart, Pie,
+  PieChart, Pie, LineChart, Line,
 } from "recharts";
-import { Receipt, ChevronLeft, ChevronRight, Zap } from "lucide-react";
+import { Receipt, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
 import { CategoryOutliersChart } from "@/components/CategoryOutliersChart";
 import { CategoryVsAverageChart } from "@/components/CategoryVsAverageChart";
-import { SpendingVelocitySparkline } from "@/components/SpendingVelocitySparkline";
 import { OutlierTransactionsList } from "@/components/OutlierTransactionsList";
 import { useApi } from "@/hooks/useApi";
-import { getDashboard, getFlatCategories, getCategoryOutliers, getCategoryAverages, getSpendingVelocity, getOutlierTransactions, getDataRange } from "@/api";
+import { getDashboard, getFlatCategories, getCategoryOutliers, getCategoryAverages, getMtdChart, getOutlierTransactions, getDataRange } from "@/api";
 import { formatCurrency } from "@/lib/utils";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import type { Category } from "@/types";
+
+type ChartView = "total" | "personal" | "joint";
 
 const FullWidthCursor = (props: any) => (
   <rect x={0} y={props.y} width="100%" height={props.height} fill="#F8FAFC" style={{ pointerEvents: "none" }} />
@@ -28,6 +29,7 @@ export function Dashboard() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [outlierComparison, setOutlierComparison] = useState<"mom" | "yoy">("mom");
+  const [chartView, setChartView] = useState<ChartView>("total");
   const navigate = useNavigate();
 
   const { data, loading } = useApi(() => getDashboard(year, month), [year, month]);
@@ -37,9 +39,28 @@ export function Dashboard() {
     [year, month, outlierComparison],
   );
   const { data: categoryAverages }   = useApi(() => getCategoryAverages(year, month),    [year, month]);
-  const { data: spendingVelocity }   = useApi(() => getSpendingVelocity(year, month),    [year, month]);
+  const { data: mtdChart }           = useApi(() => getMtdChart(year, month),            [year, month]);
   const { data: outlierTransactions } = useApi(() => getOutlierTransactions(year, month), [year, month]);
   const { data: dataRange } = useApi(() => getDataRange(), []);
+
+  const chartMergedData = useMemo(() => {
+    if (!mtdChart) return [];
+    const series = mtdChart[chartView];
+    const todayDay = mtdChart.todayDay;
+    const len = Math.max(series.current.length, series.previous.length, series.priorYear.length);
+    return Array.from({ length: len }, (_, i) => {
+      const day = i + 1;
+      const current = series.current[i]?.cumulative ?? null;
+      return {
+        day,
+        current,
+        previous:      series.previous[i]?.cumulative  ?? null,
+        priorYear:     series.priorYear[i]?.cumulative ?? null,
+        currentSolid:  todayDay == null || day <= todayDay ? current : null,
+        currentFuture: todayDay != null  && day >= todayDay ? current : null,
+      };
+    });
+  }, [mtdChart, chartView]);
 
   const prevMonth = () => {
     if (month === 1) { setMonth(12); setYear(year - 1); }
@@ -75,17 +96,24 @@ export function Dashboard() {
   const isFutureMonth   = year > now.getFullYear() || (year === now.getFullYear() && month > now.getMonth() + 1);
   const daysElapsed     = isCurrentMonth ? now.getDate() : isFutureMonth ? 0 : daysInMonth;
 
-  const dailyRate       = daysElapsed > 0 ? totalSpent / daysElapsed : null;
-  const budgetDailyRate = budgetAmount ? budgetAmount / daysInMonth : null;
-  const paceRatio       = dailyRate !== null && budgetDailyRate ? dailyRate / budgetDailyRate : null;
-  const paceOffPct      = paceRatio !== null ? Math.round((paceRatio - 1) * 100) : null;
-
   const budgetRemaining    = budgetAmount !== null ? budgetAmount - totalSpent : null;
   const personalRemaining  = personalBudget !== null ? personalBudget - personalSpent : null;
   const jointRemaining     = jointBudget    !== null ? jointBudget    - jointSpent    : null;
   const prevMonthMtd       = data.prevMonthMtd ?? 0;
   const momDelta           = prevMonthMtd > 0 ? totalSpent - prevMonthMtd : null;
   const momDeltaPct        = momDelta !== null && prevMonthMtd > 0 ? Math.round((momDelta / prevMonthMtd) * 100) : null;
+  const yearLabel = categoryAverages
+    ? categoryAverages.earliestYear === year - 1
+      ? `${year - 1}`
+      : `${categoryAverages.earliestYear}–${year - 1}`
+    : "";
+
+  const chartRawMax = chartMergedData.length
+    ? Math.max(0, ...chartMergedData.flatMap((d) => [d.current ?? 0, d.previous ?? 0, d.priorYear ?? 0]))
+    : 0;
+  const chartYMax       = Math.ceil((chartRawMax + 500) / 1000) * 1000 || 1000;
+  const chartYIncrement = [500, 1000, 2000, 5000, 10000, 20000, 50000].find((i) => chartYMax / i <= 4) ?? 50000;
+  const chartYTickCount = Math.round(chartYMax / chartYIncrement) + 1;
 
   const fmtWhole = (n: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
@@ -293,113 +321,161 @@ export function Dashboard() {
           )}
         </Card>
 
-        {/* Card 3: Pace — daily run rate vs budget-implied daily rate + velocity sparkline */}
+        {/* Card 3: MTD spending chart with Total/Personal/Joint toggle */}
         <Card>
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 rounded-lg bg-primary/10 p-2 shrink-0">
-              <Zap className="h-5 w-5 text-primary" />
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <div>
+              <p className="text-sm text-muted-foreground">Monthly Pace</p>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm text-muted-foreground">Daily Pace</p>
-              {dailyRate !== null ? (
-                <p className="text-2xl font-bold">{fmtWhole(dailyRate)}<span className="text-base font-normal text-muted-foreground">/day</span></p>
-              ) : (
-                <p className="text-2xl font-bold text-muted-foreground">—</p>
-              )}
-              {budgetDailyRate !== null && dailyRate !== null && paceOffPct !== null && (
-                <p className={`mt-1 text-xs ${Math.abs(paceOffPct) <= 10 ? "text-muted-foreground" : paceOffPct > 0 ? "text-destructive" : "text-success"}`}>
-                  {Math.abs(paceOffPct) <= 10
-                    ? <span>On pace · budget {fmtWhole(budgetDailyRate)}/day</span>
-                    : paceOffPct > 0
-                      ? <span><span className="font-medium">{paceOffPct}% over pace</span> · budget {fmtWhole(budgetDailyRate)}/day</span>
-                      : <span><span className="font-medium">{Math.abs(paceOffPct)}% under pace</span> · budget {fmtWhole(budgetDailyRate)}/day</span>
-                  }
-                </p>
-              )}
-              {budgetDailyRate === null && (
-                <button onClick={() => navigate("/budgets")} className="mt-1 text-xs text-primary hover:underline">
-                  Set a budget
+            <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-muted p-0.5 text-xs font-medium">
+              {(["total", "personal", "joint"] as const).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setChartView(v)}
+                  className={`rounded-md px-2 py-1 capitalize transition-colors ${
+                    chartView === v
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {v.charAt(0).toUpperCase() + v.slice(1)}
                 </button>
-              )}
-              {dailyRate === null && daysElapsed === 0 && (
-                <p className="mt-1 text-xs text-muted-foreground">No data yet this month</p>
-              )}
+              ))}
             </div>
           </div>
-          {/* Velocity sparkline — cumulative spend vs budget pace */}
-          {spendingVelocity && spendingVelocity.lastKnownDay > 0 && (
-            <div className="mt-3">
-              <SpendingVelocitySparkline data={spendingVelocity} height={68} />
-              <div className="mt-1 flex items-center gap-4">
-                <div className="flex items-center gap-1.5">
-                  <svg width={16} height={8}>
-                    <line x1="0" y1="4" x2="16" y2="4" stroke={paceOffPct !== null && paceOffPct > 0 ? "var(--color-destructive)" : "var(--color-primary)"} strokeWidth="1.5" />
+          {mtdChart ? (
+            <>
+              <ResponsiveContainer width="100%" height={112}>
+                <LineChart data={chartMergedData} margin={{ top: 2, right: 4, bottom: 0, left: 2 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                  <XAxis
+                    dataKey="day"
+                    tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
+                    tickLine={false}
+                    interval={4}
+                  />
+                  <YAxis
+                    tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                    tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
+                    tickLine={false}
+                    axisLine={false}
+                    width={34}
+                    domain={[0, chartYMax]}
+                    tickCount={chartYTickCount}
+                    interval={0}
+                  />
+                  <Tooltip
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      const labels: Record<string, string> = {
+                        currentSolid:  mtdChart.monthNames.current,
+                        currentFuture: mtdChart.monthNames.current,
+                        previous:      mtdChart.monthNames.previous,
+                        priorYear:     mtdChart.monthNames.priorYear,
+                      };
+                      const items = payload.filter((p) => p.dataKey !== "currentFuture");
+                      return (
+                        <div className="rounded border border-border bg-background p-2 text-xs shadow-md">
+                          <p className="mb-1.5 font-medium">Day {label}</p>
+                          {items.map((p) => (
+                            <p key={p.dataKey as string} className="mt-1" style={{ color: p.stroke as string }}>
+                              {labels[p.dataKey as string] ?? p.dataKey}: {formatCurrency(p.value as number)}
+                            </p>
+                          ))}
+                        </div>
+                      );
+                    }}
+                  />
+                  <Line type="monotone" dataKey="currentSolid"  stroke="var(--color-primary)" strokeWidth={2}   dot={false} connectNulls />
+                  <Line type="monotone" dataKey="currentFuture" stroke="var(--color-primary)" strokeWidth={2}   dot={false} connectNulls strokeDasharray="6 3" />
+                  <Line type="monotone" dataKey="previous"      stroke="var(--color-muted-foreground)" strokeWidth={1.5} dot={false} connectNulls strokeOpacity={0.6} />
+                  <Line type="monotone" dataKey="priorYear"     stroke="var(--color-primary)" strokeWidth={1.5} dot={false} connectNulls strokeOpacity={0.3} />
+                  <ReferenceLine y={0} stroke="var(--color-border)" />
+                  {mtdChart.monthlyBudget[chartView] > 0 && (
+                    <ReferenceLine
+                      y={mtdChart.monthlyBudget[chartView]}
+                      stroke="var(--color-destructive)"
+                      strokeWidth={1}
+                      strokeDasharray="3 3"
+                      strokeOpacity={0.5}
+                    />
+                  )}
+                </LineChart>
+              </ResponsiveContainer>
+              <div className="mt-1.5 flex flex-wrap justify-center gap-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <svg width="20" height="8">
+                    <line x1="0" y1="4" x2="10" y2="4" stroke="var(--color-primary)" strokeWidth="2" />
+                    <line x1="10" y1="4" x2="20" y2="4" stroke="var(--color-primary)" strokeWidth="2" strokeDasharray="3 2" />
                   </svg>
-                  <span className="text-xs text-muted-foreground">Actual</span>
-                </div>
-                {spendingVelocity.totalBudget !== null && (
-                  <div className="flex items-center gap-1.5">
-                    <svg width={16} height={8}>
-                      <line x1="0" y1="4" x2="16" y2="4" stroke="var(--color-muted-foreground)" strokeWidth="1" strokeDasharray="3 3" strokeOpacity="0.6" />
-                    </svg>
-                    <span className="text-xs text-muted-foreground">Budget pace</span>
-                  </div>
-                )}
+                  {mtdChart.monthNames.current}
+                </span>
+                <span className="flex items-center gap-1">
+                  <svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--color-muted-foreground)" strokeWidth="1.5" strokeOpacity="0.6" /></svg>
+                  {mtdChart.monthNames.previous}
+                </span>
+                <span className="flex items-center gap-1">
+                  <svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--color-primary)" strokeWidth="1.5" strokeOpacity="0.3" /></svg>
+                  {mtdChart.monthNames.priorYear}
+                </span>
               </div>
+            </>
+          ) : (
+            <div className="flex h-[148px] items-center justify-center text-xs text-muted-foreground">
+              Loading…
             </div>
           )}
         </Card>
       </div>
 
-      {/* ── Analysis: Largest Changes + Category vs Average ───────────────── */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Largest Changes by Category — with MoM / YoY toggle */}
-        <Card>
-          {dashboardOutliers && (
-            <CategoryOutliersChart
-              data={dashboardOutliers}
-              compact
-              header={
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-medium text-card-foreground">Largest Changes by Category</p>
-                    <p className="text-xs text-muted-foreground">
-                      vs {dashboardOutliers.previousMonthLabel} · {dashboardOutliers.comparisonNote}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5 text-xs font-medium">
-                    <button
-                      onClick={() => setOutlierComparison("mom")}
-                      className={`rounded-md px-2.5 py-1 transition-colors ${outlierComparison === "mom" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                    >
-                      MoM
-                    </button>
-                    <button
-                      onClick={() => setOutlierComparison("yoy")}
-                      className={`rounded-md px-2.5 py-1 transition-colors ${outlierComparison === "yoy" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                    >
-                      YoY
-                    </button>
-                  </div>
+      {/* ── Largest Changes by Category — full width ───────────────────────── */}
+      <Card>
+        {dashboardOutliers && (
+          <CategoryOutliersChart
+            data={dashboardOutliers}
+            compact
+            header={
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium text-card-foreground">Largest Changes by Category</p>
+                  <p className="text-xs text-muted-foreground">
+                    Top 10 subcategory changes vs {dashboardOutliers.previousMonthLabel} · {dashboardOutliers.comparisonNote}
+                  </p>
                 </div>
-              }
-            />
-          )}
-        </Card>
+                <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5 text-xs font-medium">
+                  <button
+                    onClick={() => setOutlierComparison("mom")}
+                    className={`rounded-md px-2.5 py-1 transition-colors ${outlierComparison === "mom" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    MoM
+                  </button>
+                  <button
+                    onClick={() => setOutlierComparison("yoy")}
+                    className={`rounded-md px-2.5 py-1 transition-colors ${outlierComparison === "yoy" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    YoY
+                  </button>
+                </div>
+              </div>
+            }
+          />
+        )}
+      </Card>
 
-        {/* Right column: Category vs Average + Outlier Transactions */}
-        <div className="flex flex-col gap-4">
-          <Card>
+      {/* ── Spending vs. Category Averages + Spending Outliers — combined ──── */}
+      <Card>
+        <div className="grid grid-cols-1 divide-y divide-border lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+          <div className="lg:pr-6">
             {categoryAverages && (
-              <CategoryVsAverageChart categories={categoryAverages.categories} compact />
+              <CategoryVsAverageChart categories={categoryAverages.categories} yearLabel={yearLabel} compact />
             )}
             {!categoryAverages && (
               <div className="flex h-full min-h-[120px] items-center justify-center text-xs text-muted-foreground">
                 Loading…
               </div>
             )}
-          </Card>
-          <Card>
+          </div>
+          <div className="pt-6 lg:pl-6 lg:pt-0">
             {outlierTransactions && (
               <OutlierTransactionsList categories={outlierTransactions.categories} />
             )}
@@ -408,9 +484,9 @@ export function Dashboard() {
                 Loading…
               </div>
             )}
-          </Card>
+          </div>
         </div>
-      </div>
+      </Card>
 
     </div>
   );
