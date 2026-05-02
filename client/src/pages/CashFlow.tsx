@@ -213,16 +213,16 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
     return (
       <>
         {/* Amount cell */}
-        <td className={cn("py-2 pr-2 text-right tabular-nums font-medium", amountClassName)}>
+        <td className={cn("py-1.5 pr-2 text-right tabular-nums font-medium", amountClassName)}>
           {event.amount > 0 ? "+" : event.amount === 0 ? "-" : ""}
           {formatCurrency(event.amount)}
         </td>
         {/* Edit cell */}
-        <td className="py-2 pr-4 w-14">
+        <td className="py-1.5 pr-4 w-14">
           <div className="flex items-center gap-1">
             <button
               onClick={() => { setValue(Math.abs(event.amount).toFixed(2)); setOpen(true); }}
-              className="rounded p-1 hover:bg-accent text-muted-foreground"
+              className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
               title="Override statement amount"
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -234,8 +234,8 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
                   onDetailClick(rect.top + rect.height / 2);
                 }}
                 className={cn(
-                  "rounded p-1 hover:bg-accent",
-                  isDetailOpen ? "text-primary" : "text-muted-foreground",
+                  "rounded p-1.5 hover:bg-accent transition-colors",
+                  isDetailOpen ? "text-primary" : "text-muted-foreground/40 hover:text-muted-foreground",
                 )}
                 title="View statement transactions"
               >
@@ -251,7 +251,7 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
   return (
     <>
       {/* Amount cell — becomes inline input when editing */}
-      <td className="py-2 pr-2 text-right">
+      <td className="py-1.5 pr-2 text-right">
         <span className="inline-flex items-center justify-end gap-1">
           <span className="text-xs text-muted-foreground">$</span>
           <input
@@ -267,7 +267,7 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
         </span>
       </td>
       {/* Edit cell — confirm / clear-override / cancel */}
-      <td className="py-2 pr-4 w-14">
+      <td className="py-1.5 pr-4 w-14">
         <div className="flex items-center gap-1">
           <button
             onClick={handleSave}
@@ -339,7 +339,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved }: NewAdjustmentRowP
 
   return (
     <tr className="border-b border-dashed border-red-300 bg-red-50/50">
-      <td className="py-2 pr-4">
+      <td className="py-1.5 pr-4">
         <input
           type="date"
           value={date}
@@ -348,7 +348,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved }: NewAdjustmentRowP
           className="rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary w-[80px]"
         />
       </td>
-      <td className="py-2 pr-4">
+      <td className="py-1.5 pr-4">
         <input
           type="text"
           value={description}
@@ -357,7 +357,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved }: NewAdjustmentRowP
           className="w-full rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </td>
-      <td className="py-2 pr-2 text-right">
+      <td className="py-1.5 pr-2 text-right">
         <input
           type="number"
           step="100"
@@ -373,7 +373,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved }: NewAdjustmentRowP
           }}
         />
       </td>
-      <td className="py-2 pr-4 w-14" colSpan={2}>
+      <td className="py-1.5 pr-4 w-14" colSpan={2}>
         <div className="flex items-center gap-1">
           <button
             onClick={handleSave}
@@ -440,21 +440,21 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
   if (!editing) {
     return (
       <tr className="group border-b border-border/50 bg-amber-50/50 hover:bg-amber-50 transition-colors">
-        <td className="py-2 pr-4 text-muted-foreground whitespace-nowrap">{fmtDate(event.date)}</td>
-        <td className="py-2 pr-4">
+        <td className="py-1.5 pr-4 text-muted-foreground whitespace-nowrap">{fmtDate(event.date)}</td>
+        <td className="py-1.5 pr-4">
           <div className="flex items-center gap-2">
             <span className="text-green-600 shrink-0">{eventIcon(event.type)}</span>
             <span className="font-medium">{event.description}</span>
           </div>
         </td>
-        <td className="py-2 pr-2 text-right tabular-nums font-medium text-green-600">
+        <td className="py-1.5 pr-2 text-right tabular-nums font-medium text-green-600">
           +{formatCurrency(event.amount)}
         </td>
-        <td className="py-2 pr-4">
+        <td className="py-1.5 pr-4">
           <div className="flex items-center gap-0.5">
             <button
               onClick={() => setEditing(true)}
-              className="rounded p-1 hover:bg-accent text-muted-foreground"
+              className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
               title="Edit"
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -462,7 +462,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
             <button
               onClick={handleDelete}
               disabled={saving}
-              className="rounded p-1 hover:bg-accent text-muted-foreground disabled:opacity-40"
+              className="rounded p-1.5 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
               title="Delete"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -470,7 +470,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
           </div>
         </td>
         <td className={cn(
-          "py-2 text-right tabular-nums font-semibold",
+          "py-1.5 text-right tabular-nums font-semibold",
           event.runningBalance < 0 ? "text-red-600" : "text-foreground",
         )}>
           {formatCurrency(event.runningBalance)}
@@ -481,7 +481,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
 
   return (
     <tr className="border-b border-border/50 bg-amber-50">
-      <td className="py-2 pr-4">
+      <td className="py-1.5 pr-4">
         <input
           type="date"
           value={date}
@@ -490,7 +490,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
           className="rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary w-[80px]"
         />
       </td>
-      <td className="py-2 pr-4">
+      <td className="py-1.5 pr-4">
         <input
           type="text"
           value={description}
@@ -500,7 +500,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
           onKeyDown={(e) => { if (e.key === "Escape") setEditing(false); }}
         />
       </td>
-      <td className="py-2 pr-2 text-right">
+      <td className="py-1.5 pr-2 text-right">
         <span className="inline-flex items-center justify-end gap-1">
           <span className="text-xs text-muted-foreground">$</span>
           <input
@@ -514,7 +514,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
           />
         </span>
       </td>
-      <td className="py-2 pr-4 w-14">
+      <td className="py-1.5 pr-4 w-14">
         <div className="flex items-center gap-1">
           <button
             onClick={handleSave}
@@ -533,7 +533,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
         </div>
       </td>
       <td className={cn(
-        "py-2 text-right tabular-nums font-semibold",
+        "py-1.5 text-right tabular-nums font-semibold",
         event.runningBalance < 0 ? "text-red-600" : "text-foreground",
       )}>
         {formatCurrency(event.runningBalance)}
@@ -719,8 +719,8 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                 <AdjustmentEventRow event={event} onSaved={onRefetch} />
               ) : (
                 <tr className="group border-b border-border/50 hover:bg-muted/30 transition-colors">
-                  <td className="py-2 pr-4 text-muted-foreground whitespace-nowrap">{fmtDate(event.date)}</td>
-                  <td className="py-2 pr-4">
+                  <td className="py-1.5 pr-4 text-muted-foreground whitespace-nowrap">{fmtDate(event.date)}</td>
+                  <td className="py-1.5 pr-4">
                     <div className="flex items-center gap-2">
                       <span className={cn("shrink-0", event.amount > 0 ? "text-green-600" : "text-red-500")}>
                         {eventIcon(event.type)}
@@ -761,39 +761,41 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                   ) : (
                     <>
                       <td className={cn(
-                        "py-2 pr-2 text-right tabular-nums font-medium",
+                        "py-1.5 pr-2 text-right tabular-nums font-medium",
                         event.amount > 0 ? "text-green-600" : "text-red-500",
                       )}>
                         {event.amount > 0 ? "+" : event.amount === 0 ? "-" : ""}
                         {formatCurrency(event.amount)}
                       </td>
-                      <td className="py-2 pr-4 w-14">
-                        {(event.type === "TRANSFER_IN" || event.type === "TRANSFER_OUT") &&
-                          event.transferId && (
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => onEditTransfer?.(event)}
-                              className="rounded p-1 hover:bg-accent text-muted-foreground hover:text-foreground"
-                              title="Edit transfer"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                            {event.confidence === "PROJECTED" && (
+                      <td className="py-1.5 pr-4 w-14">
+                        <div className="flex items-center gap-1 h-[26px]">
+                          {(event.type === "TRANSFER_IN" || event.type === "TRANSFER_OUT") &&
+                            event.transferId && (
+                            <>
                               <button
-                                onClick={async () => { await confirmTransfer(event.transferId!); onRefetch(); }}
-                                className="rounded p-1 hover:bg-accent text-muted-foreground hover:text-green-600"
-                                title="Confirm transfer"
+                                onClick={() => onEditTransfer?.(event)}
+                                className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+                                title="Edit transfer"
                               >
-                                <SquareCheckBig className="h-3.5 w-3.5" />
+                                <Pencil className="h-3.5 w-3.5" />
                               </button>
-                            )}
-                          </div>
-                        )}
+                              {event.confidence === "PROJECTED" && (
+                                <button
+                                  onClick={async () => { await confirmTransfer(event.transferId!); onRefetch(); }}
+                                  className="rounded p-1.5 text-muted-foreground/40 hover:text-green-600 hover:bg-accent transition-colors"
+                                  title="Confirm transfer"
+                                >
+                                  <SquareCheckBig className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </td>
                     </>
                   )}
                   <td className={cn(
-                    "py-2 text-right tabular-nums font-semibold",
+                    "py-1.5 text-right tabular-nums font-semibold",
                     event.runningBalance < 0 ? "text-red-600" : "text-foreground",
                   )}>
                     {formatCurrency(event.runningBalance)}
@@ -1136,9 +1138,9 @@ export function CashFlow() {
           </div>
           <button
             onClick={() => setEditingBalance(account)}
-            className="rounded p-1 hover:bg-accent flex-shrink-0"
+            className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors flex-shrink-0"
           >
-            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+            <Pencil className="h-3.5 w-3.5" />
           </button>
         </div>
       </Card>

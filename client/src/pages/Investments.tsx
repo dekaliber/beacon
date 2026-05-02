@@ -733,7 +733,7 @@ function AllocationCard({
     .map((i, idx) => ({ ...toSegment(i, idx), pct: i.actualPct }));
 
   return (
-    <Card className="p-0 py-2 space-y-4 border-0 shadow-none">
+    <Card className="p-0 py-2 space-y-4 border-0 shadow-none bg-transparent">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">

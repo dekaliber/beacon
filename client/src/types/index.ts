@@ -856,6 +856,16 @@ export interface CategoryTrendData {
   series: CategoryTrendSeries[];
 }
 
+export interface CategoryYearTrendsData {
+  years: number[];
+  series: {
+    categoryId: string;
+    name: string;
+    color: string;
+    avgByYear: number[];
+  }[];
+}
+
 export interface MtdChartData {
   personal: BudgetChart;
   joint: BudgetChart;

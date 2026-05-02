@@ -165,43 +165,47 @@ export function Dashboard() {
       {/* ── Net Worth ──────────────────────────────────────────────────────── */}
       {netWorth && (
         <Card>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-8">
-            {/* Headline */}
-            <div className="shrink-0">
-              <p className="text-sm text-muted-foreground">Net Worth</p>
-              <p className="text-3xl font-bold">{fmtWhole(netWorth.total)}</p>
+          <div className="grid grid-cols-6 gap-x-6 gap-y-3 items-center">
+            {/* Headline — spans 2 cols */}
+            <div className="col-span-6 sm:col-span-2 sm:border-r sm:border-border sm:pr-6">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Net Worth</p>
+              <p className="text-3xl font-bold tabular-nums">{formatCurrency(netWorth.total)}</p>
             </div>
 
-            {/* Breakdown */}
-            <div className="grid grid-cols-2 gap-x-8 gap-y-2 sm:grid-cols-4 flex-1">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Investments</p>
-                  <p className="text-sm font-semibold">{fmtWhole(netWorth.investments)}</p>
-                </div>
+            {/* Investments */}
+            <div className="col-span-3 sm:col-span-1">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Investments</p>
               </div>
-              <div className="flex items-center gap-2">
-                <Wallet className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Investment Cash</p>
-                  <p className="text-sm font-semibold">{fmtWhole(netWorth.investmentCash)}</p>
-                </div>
+              <p className="text-base font-semibold tabular-nums">{formatCurrency(netWorth.investments)}</p>
+            </div>
+
+            {/* Investment Cash */}
+            <div className="col-span-3 sm:col-span-1">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Inv. Cash</p>
               </div>
-              <div className="flex items-center gap-2">
-                <Landmark className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Banking Cash</p>
-                  <p className="text-sm font-semibold">{fmtWhole(netWorth.bankingCash)}</p>
-                </div>
+              <p className="text-base font-semibold tabular-nums">{formatCurrency(netWorth.investmentCash)}</p>
+            </div>
+
+            {/* Banking Cash */}
+            <div className="col-span-3 sm:col-span-1">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <Landmark className="h-3.5 w-3.5 text-muted-foreground" />
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Banking Cash</p>
               </div>
-              <div className="flex items-center gap-2">
-                <CreditCard className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Credit Cards</p>
-                  <p className="text-sm font-semibold text-destructive">−{fmtWhole(netWorth.creditCardDebt)}</p>
-                </div>
+              <p className="text-base font-semibold tabular-nums">{formatCurrency(netWorth.bankingCash)}</p>
+            </div>
+
+            {/* Credit Cards */}
+            <div className="col-span-3 sm:col-span-1">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Credit Cards</p>
               </div>
+              <p className="text-base font-semibold tabular-nums text-destructive">−{formatCurrency(netWorth.creditCardDebt)}</p>
             </div>
           </div>
         </Card>

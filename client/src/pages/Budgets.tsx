@@ -19,13 +19,15 @@ import {
   X,
   Info,
   CalendarDays,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
-import { getBudgetOverview, getCategoryOutliersYtd, setAnnualBudget, getDataRange, getCategoryTrend } from "@/api";
+import { getBudgetOverview, getCategoryOutliersYtd, setAnnualBudget, getDataRange, getCategoryTrend, getCategoryYearTrends } from "@/api";
 import { SpendingOverTimeChart } from "@/components/SpendingOverTimeChart";
 import { formatCurrency } from "@/lib/utils";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
@@ -1092,15 +1094,45 @@ function SplitCard({ personal, joint }: SplitCardProps) {
 
 // ── Category avg monthly grid (completed years only) ─────────────────────────
 
+function YoYBadge({ avgByYear, years, year }: { avgByYear: number[]; years: number[]; year: number }) {
+  const curIdx  = years.indexOf(year);
+  const prevIdx = years.indexOf(year - 1);
+  if (curIdx === -1 || prevIdx === -1) return null;
+  const cur  = avgByYear[curIdx];
+  const prev = avgByYear[prevIdx];
+  if (!prev) return null;
+
+  const pct  = (cur - prev) / Math.abs(prev);
+  const up   = pct > 0;
+  const Icon = up ? TrendingUp : TrendingDown;
+  const abs  = Math.abs(Math.round(pct * 100));
+
+  return (
+    <div className={`w-20 flex flex-col items-center rounded-md p-2 ${
+      up ? "bg-destructive/10 text-destructive" : "bg-success/10 text-success"
+    }`}>
+      <div className="flex items-center gap-1">
+        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <span className="text-base font-semibold leading-none">{abs}%</span>
+      </div>
+      <p className="mt-1 text-xs opacity-75">vs {year - 1}</p>
+    </div>
+  );
+}
+
 function CategoryAvgMonthlyGrid({ year, completedMonths }: { year: number; completedMonths: number }) {
-  const { data } = useApi(() => getCategoryTrend(year, completedMonths), [year, completedMonths]);
+  const { data }       = useApi(() => getCategoryTrend(year, completedMonths), [year, completedMonths]);
+  const { data: trends } = useApi(() => getCategoryYearTrends(), []);
   if (!data || data.series.length === 0) return null;
+
+  const trendsMap = new Map(trends?.series.map((s) => [s.categoryId, s]) ?? []);
 
   const items = data.series.map((s) => ({
     categoryId: s.categoryId,
-    name: s.name,
-    color: s.color,
+    name:       s.name,
+    color:      s.color,
     avgMonthly: s.values.reduce((sum, v) => sum + v, 0) / completedMonths,
+    trend:      trendsMap.get(s.categoryId),
   }));
 
   const monthLabel = completedMonths === 12 ? "all 12 months" : `first ${completedMonths} months`;
@@ -1111,9 +1143,9 @@ function CategoryAvgMonthlyGrid({ year, completedMonths }: { year: number; compl
         <CardTitle>Monthly Average by Category</CardTitle>
         <p className="mt-0.5 text-xs text-muted-foreground">Average monthly spend across {monthLabel}</p>
       </CardHeader>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
         {items.map((item) => (
-          <div key={item.categoryId} className="rounded-lg bg-muted/40 px-3 py-2.5">
+          <div key={item.categoryId} className="bg-muted/40 px-3 py-2.5 border-t border-border">
             <div className="flex items-center gap-1.5 mb-1">
               <span
                 className="inline-block h-2 w-2 shrink-0 rounded-full"
@@ -1121,8 +1153,17 @@ function CategoryAvgMonthlyGrid({ year, completedMonths }: { year: number; compl
               />
               <p className="truncate text-xs text-muted-foreground">{item.name}</p>
             </div>
-            <p className="text-base font-bold leading-tight">{formatCurrency(item.avgMonthly)}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">per month</p>
+            <div className="flex items-center mt-0.5">
+              <div className="w-1/2">
+                <p className="text-base font-bold leading-tight">{formatCurrency(item.avgMonthly)}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">avg / month</p>
+              </div>
+              <div className="w-1/2 flex justify-center">
+                {item.trend && trends && (
+                  <YoYBadge avgByYear={item.trend.avgByYear} years={trends.years} year={year} />
+                )}
+              </div>
+            </div>
           </div>
         ))}
       </div>

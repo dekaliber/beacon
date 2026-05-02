@@ -217,6 +217,11 @@ export const getNetWorth = () => {
   return api.get<import("../types").NetWorthData>(`/dashboard/net-worth?today=${today}`);
 };
 
+export const getCategoryYearTrends = () => {
+  const today = new Date().toLocaleDateString("en-CA");
+  return api.get<import("../types").CategoryYearTrendsData>(`/dashboard/category-year-trends?today=${today}`);
+};
+
 export const getCategoryTrend = (year?: number, month?: number, parentCategoryId?: string) => {
   const params = new URLSearchParams();
   if (year) params.set("year", year.toString());

@@ -1249,11 +1249,11 @@ export function IncomePage() {
               className="h-9 w-44 rounded-md border border-border bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
-          <Button variant={filterOpen ? "primary" : "secondary"} onClick={() => setFilterOpen(!filterOpen)}>
+          <Button variant={filterOpen ? "primary" : "secondary"} className={filterOpen ? "" : "border border-border"} onClick={() => setFilterOpen(!filterOpen)}>
             <Filter className="h-4 w-4" />
             {hasActiveFilters && <span className="ml-1 rounded-full bg-primary-foreground/20 px-1.5 text-xs">!</span>}
           </Button>
-          <Button variant="secondary" onClick={() => setImportModalOpen(true)}>
+          <Button variant="secondary" className="border border-border" onClick={() => setImportModalOpen(true)}>
             <Upload className="h-4 w-4" /> Import
           </Button>
           <Button onClick={() => { setEditing(null); setModalOpen(true); }}>
@@ -1396,7 +1396,7 @@ export function IncomePage() {
                       />
                     </td>
                     <td className="w-[40px] py-2 text-right">
-                      <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent">
+                      <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors">
                         <Pencil className="h-4 w-4" />
                       </button>
                     </td>
@@ -1415,7 +1415,7 @@ export function IncomePage() {
                 </div>
                 <div className="ml-4 flex items-center gap-2">
                   <span className="font-semibold text-green-600">+{formatCurrency(income.amount)}</span>
-                  <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1 hover:bg-accent"><Pencil className="h-4 w-4 text-muted-foreground" /></button>
+                  <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"><Pencil className="h-4 w-4" /></button>
                 </div>
               </div>
             ))}
@@ -1513,7 +1513,7 @@ export function IncomePage() {
                         />
                       </td>
                       <td className="w-[40px] py-2 text-right">
-                        <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent">
+                        <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors">
                           <Pencil className="h-4 w-4" />
                         </button>
                       </td>
@@ -1543,7 +1543,7 @@ export function IncomePage() {
                   </div>
                   <div className="ml-2 flex items-center gap-2">
                     <span className={`font-semibold ${!income.isCashReceived ? "text-muted-foreground" : "text-green-600"}`}>+{formatCurrency(income.amount)}</span>
-                    <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1 hover:bg-accent"><Pencil className="h-4 w-4 text-muted-foreground" /></button>
+                    <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"><Pencil className="h-4 w-4" /></button>
                   </div>
                 </div>
               ))}

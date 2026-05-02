@@ -830,10 +830,10 @@ function LotRow({
         </td>
         <td className="py-2 pr-3">
           <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => setEditing(true)} className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+            <button onClick={() => setEditing(true)} className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors">
               <Pencil className="h-3.5 w-3.5" />
             </button>
-            <button onClick={handleDeleteRequest} className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+            <button onClick={handleDeleteRequest} className="p-1.5 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors">
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -1899,14 +1899,14 @@ function ManualHoldingRow({
           <div className="flex items-center justify-end gap-1">
             <button
               onClick={onEdit}
-              className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
               title="Edit"
             >
               <Pencil className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={() => setShowDeleteModal(true)}
-              className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              className="p-1.5 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
               title="Delete manual investment"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -4901,7 +4901,7 @@ export function InvestmentAccount() {
                     <button
                       type="submit"
                       disabled={savingCash}
-                      className="rounded p-1 hover:bg-accent transition-colors"
+                      className="rounded p-1.5 hover:bg-accent transition-colors"
                       aria-label="Save"
                     >
                       <Check className="h-3.5 w-3.5 text-green-600" />
@@ -4909,10 +4909,10 @@ export function InvestmentAccount() {
                     <button
                       type="button"
                       onClick={() => setEditingCash(false)}
-                      className="rounded p-1 hover:bg-accent transition-colors"
+                      className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
                       aria-label="Cancel"
                     >
-                      <X className="h-3.5 w-3.5 text-muted-foreground" />
+                      <X className="h-3.5 w-3.5" />
                     </button>
                   </form>
                 ) : cashBalance != null ? (

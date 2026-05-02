@@ -613,28 +613,28 @@ function RuleTable({
                   {onEdit && (
                     <button
                       onClick={() => onEdit(rule)}
-                      className="rounded p-1 hover:bg-accent"
+                      className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
                       title="Edit recurring transaction"
                     >
-                      <Pencil className="h-4 w-4 text-muted-foreground" />
+                      <Pencil className="h-4 w-4" />
                     </button>
                   )}
                   {onArchive && (
                     <button
                       onClick={() => onArchive(rule)}
-                      className="rounded p-1 hover:bg-accent"
+                      className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
                       title="Archive recurring transaction"
                     >
-                      <Archive className="h-4 w-4 text-muted-foreground" />
+                      <Archive className="h-4 w-4" />
                     </button>
                   )}
                   {onDelete && (
                     <button
                       onClick={() => onDelete(rule)}
-                      className="rounded p-1 hover:bg-accent"
+                      className="rounded p-1.5 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
                       title="Permanently delete recurring transaction"
                     >
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   )}
                 </div>
@@ -1255,17 +1255,17 @@ export function Recurring() {
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => { setEditingTransferRule(rule); setTransferModalOpen(true); }}
-                            className="rounded p-1 hover:bg-accent"
+                            className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
                             title="Edit"
                           >
-                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                            <Pencil className="h-3.5 w-3.5" />
                           </button>
                           <button
                             onClick={() => setArchiveTransferTarget(rule)}
-                            className="rounded p-1 hover:bg-accent"
+                            className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
                             title="Archive"
                           >
-                            <Archive className="h-3.5 w-3.5 text-muted-foreground" />
+                            <Archive className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       </td>

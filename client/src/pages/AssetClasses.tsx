@@ -314,14 +314,14 @@ function AssetClassRow({
         {!isChild && (
           <button
             onClick={onAddChild}
-            className="rounded p-1 hover:bg-accent"
+            className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
             title="Add sub-class"
           >
-            <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+            <Plus className="h-3.5 w-3.5" />
           </button>
         )}
-        <button onClick={onEdit} className="rounded p-1 hover:bg-accent" title="Edit">
-          <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+        <button onClick={onEdit} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors" title="Edit">
+          <Pencil className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>

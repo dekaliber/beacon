@@ -156,8 +156,8 @@ export function Accounts() {
                     <EyeOff className="h-3.5 w-3.5 text-gray-300" />
                   </span>
                 )}
-                <button onClick={() => openEdit(account)} className="rounded p-1 hover:bg-accent">
-                  <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                <button onClick={() => openEdit(account)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors">
+                  <Pencil className="h-3.5 w-3.5" />
                 </button>
               </div>
             </Card>

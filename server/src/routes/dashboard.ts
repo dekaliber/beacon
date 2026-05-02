@@ -545,6 +545,114 @@ dashboardRoutes.get("/category-trend", async (req, res) => {
   res.json({ months: monthLabels, series });
 });
 
+// ── GET /dashboard/category-year-trends ────────────────────────────────────
+// Returns avg monthly spend per top-level category per calendar year,
+// covering all years from the earliest expense to today.
+dashboardRoutes.get("/category-year-trends", async (req, res) => {
+  const userId = getUserId(req);
+  const todayStr = (req.query.today as string | undefined) ?? new Date().toLocaleDateString("en-CA");
+  const [todayYear, todayMonth] = todayStr.split("-").map(Number);
+
+  const [accounts, ignoredCategories, settings, allCats, expenseMin] = await Promise.all([
+    prisma.account.findMany({ where: { userId, isActive: true }, select: { id: true, isJoint: true } }),
+    prisma.category.findMany({ where: { userId, ignoreInBudget: true }, select: { id: true } }),
+    prisma.budgetSettings.findFirst({ where: { userId } }),
+    prisma.category.findMany({ where: { userId }, select: { id: true, parentId: true } }),
+    prisma.expense.findFirst({ where: { account: { userId }, parentExpenseId: null }, orderBy: { date: "asc" }, select: { date: true } }),
+  ]);
+
+  if (!expenseMin) return res.json({ years: [], series: [] });
+
+  const personalAccountIds = accounts.filter((a) => !a.isJoint).map((a) => a.id);
+  const jointAccountIds    = accounts.filter((a) =>  a.isJoint).map((a) => a.id);
+  const ignoredCategoryIds = ignoredCategories.map((c) => c.id);
+  const splitRatio         = settings ? Number(settings.jointSplitRatio) : 0.5;
+
+  const minYear = expenseMin.date.getUTCFullYear();
+  const completedMonthsThisYear = todayMonth - 1;
+  // Only include years that have at least one completed month of data
+  const maxYear = completedMonthsThisYear > 0 ? todayYear : todayYear - 1;
+  if (maxYear < minYear) return res.json({ years: [], series: [] });
+
+  const years = Array.from({ length: maxYear - minYear + 1 }, (_, i) => minYear + i);
+
+  // Window: from start of minYear through end of last completed month
+  const windowStart = new Date(Date.UTC(minYear, 0, 1));
+  const windowEnd   = maxYear < todayYear
+    ? new Date(Date.UTC(maxYear, 11, 31, 23, 59, 59, 999))
+    : new Date(Date.UTC(todayYear, todayMonth - 1, 0, 23, 59, 59, 999)); // last day of prev month
+
+  const expenseFilter = {
+    date: { gte: windowStart, lte: windowEnd },
+    ...budgetExpenseFilter(ignoredCategoryIds),
+  };
+
+  const [personalExpenses, jointExpenses] = await Promise.all([
+    prisma.expense.findMany({
+      where: { accountId: { in: personalAccountIds }, ...expenseFilter },
+      select: { amount: true, date: true, categoryId: true },
+    }),
+    prisma.expense.findMany({
+      where: { accountId: { in: jointAccountIds }, ...expenseFilter },
+      select: { amount: true, date: true, categoryId: true },
+    }),
+  ]);
+
+  const rawCategoryIds = [...new Set([
+    ...personalExpenses.map((e) => e.categoryId),
+    ...jointExpenses.map((e) => e.categoryId),
+  ])].filter((id): id is string => id !== null);
+
+  const categories = await prisma.category.findMany({
+    where: { id: { in: rawCategoryIds } },
+    include: { parent: true },
+  });
+  const categoryMap = new Map(categories.map((c) => [c.id, c]));
+
+  const agg      = new Map<string, number>(); // "groupId::year" → total spend
+  const groupInfo = new Map<string, { name: string; color: string }>();
+
+  function accumulateExpense(
+    expense: { amount: unknown; date: Date; categoryId: string | null },
+    scale: number,
+  ) {
+    const cat      = expense.categoryId ? categoryMap.get(expense.categoryId) : undefined;
+    const groupId    = cat?.parent?.id    ?? cat?.id    ?? "__unknown__";
+    const groupName  = cat?.parent?.name  ?? cat?.name  ?? "Unknown";
+    const groupColor = cat?.parent?.color ?? cat?.color ?? "#6B7280";
+    if (!groupInfo.has(groupId)) groupInfo.set(groupId, { name: groupName, color: groupColor });
+    const yr  = expense.date.getUTCFullYear();
+    const key = `${groupId}::${yr}`;
+    agg.set(key, (agg.get(key) ?? 0) + Number(expense.amount) * scale);
+  }
+
+  for (const e of personalExpenses) accumulateExpense(e, 1);
+  for (const e of jointExpenses)    accumulateExpense(e, splitRatio);
+
+  function completedMonthsForYear(y: number): number {
+    if (y < todayYear) return 12;
+    return completedMonthsThisYear; // maxYear === todayYear case
+  }
+
+  const series = [...groupInfo.entries()]
+    .map(([categoryId, info]) => ({
+      categoryId,
+      name:  info.name,
+      color: info.color,
+      avgByYear: years.map((y) => {
+        const months = completedMonthsForYear(y);
+        return months > 0 ? (agg.get(`${categoryId}::${y}`) ?? 0) / months : 0;
+      }),
+    }))
+    .sort((a, b) => {
+      const aTotal = a.avgByYear.reduce((s, v) => s + v, 0);
+      const bTotal = b.avgByYear.reduce((s, v) => s + v, 0);
+      return bTotal - aTotal;
+    });
+
+  res.json({ years, series });
+});
+
 // ── GET /dashboard/net-worth ────────────────────────────────────────────────
 // Returns current net worth broken down into investments, investment cash,
 // banking cash, and outstanding credit card debt.

@@ -285,7 +285,7 @@ export function UserMenu() {
 export function Layout() {
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-screen bg-muted">
       {/* Top nav bar */}
       <header className="sticky top-0 z-50 border-b border-border bg-background">
         <div className="mx-auto flex h-14 max-w-7xl items-center px-4">

@@ -7,7 +7,7 @@ interface CardProps {
 
 export function Card({ className, children }: CardProps) {
   return (
-    <div className={cn("rounded-lg border border-border bg-card p-6 shadow-sm", className)}>
+    <div className={cn("rounded-lg border border-border bg-card p-6", className)}>
       {children}
     </div>
   );

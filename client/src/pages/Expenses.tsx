@@ -2066,12 +2066,13 @@ export function Expenses() {
           </div>
           <Button
             variant={filterOpen ? "primary" : "secondary"}
+            className={filterOpen ? "" : "border border-border"}
             onClick={() => setFilterOpen(!filterOpen)}
           >
             <Filter className="h-4 w-4" />
             {hasActiveFilters && <span className="ml-1 rounded-full bg-primary-foreground/20 px-1.5 text-xs">!</span>}
           </Button>
-          <Button variant="secondary" onClick={() => setImportModalOpen(true)}>
+          <Button variant="secondary" className="border border-border" onClick={() => setImportModalOpen(true)}>
             <Upload className="h-4 w-4" /> Import
           </Button>
           <Button onClick={() => { setEditing(null); setOffsetParent(null); setModalOpen(true); }}>
@@ -2231,7 +2232,7 @@ export function Expenses() {
                           </div>
                           <div className="ml-4 flex items-center gap-2">
                             <span className={`font-semibold ${parseFloat(expense.amount) < 0 ? "text-green-600" : ""}`}>{formatCurrency(expense.amount)}</span>
-                            <button onClick={() => openEdit(expense)} className="rounded p-1 hover:bg-accent"><Pencil className="h-4 w-4 text-muted-foreground" /></button>
+                            <button onClick={() => openEdit(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"><Pencil className="h-4 w-4" /></button>
                           </div>
                         </div>
                       ))}
@@ -2339,7 +2340,7 @@ export function Expenses() {
                         ? `+${formatCurrency(Math.abs(parseFloat(expense.amount)))}`
                         : formatCurrency(parseFloat(expense.amount))}
                     </span>
-                    <button onClick={() => openEdit(expense)} className="rounded p-1 hover:bg-accent"><Pencil className="h-4 w-4 text-muted-foreground" /></button>
+                    <button onClick={() => openEdit(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"><Pencil className="h-4 w-4" /></button>
                   </div>
                 </div>
               ))}
@@ -2560,7 +2561,7 @@ function OffsetRow({
         <EditableAmountCell value={offset.amount} onSave={(v) => onInlineUpdate(offset.id, "amount", v)} isOffset />
       </td>
       <td className="w-[60px] py-2 text-right">
-        <button onClick={() => onEdit(offset)} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent">
+        <button onClick={() => onEdit(offset)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors">
           <Pencil className="h-3.5 w-3.5" />
         </button>
       </td>
@@ -2699,11 +2700,11 @@ function ExpenseRowWithOffsets({
         <td className="w-[60px] py-2 text-right">
           <div className="flex items-center justify-end gap-0.5">
             {parseFloat(expense.amount) >= 0 && (
-              <button onClick={() => onCreateOffset(expense)} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent" title="Add offset / reimbursement">
+              <button onClick={() => onCreateOffset(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors" title="Add offset / reimbursement">
                 <Undo2 className="h-3.5 w-3.5" />
               </button>
             )}
-            <button onClick={() => onEdit(expense)} className="rounded p-1 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent">
+            <button onClick={() => onEdit(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors">
               <Pencil className="h-4 w-4" />
             </button>
           </div>
