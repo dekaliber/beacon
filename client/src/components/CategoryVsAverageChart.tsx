@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type MouseEvent } from "react";
 import type { CategoryAverage } from "@/types";
 
 function fmtCompact(n: number): string {
@@ -18,6 +18,7 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -39,8 +40,13 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
   const ROW_H     = compact ? 28 : 32;
   const BAR_H     = compact ? 10 : 12;
   const AVG_TICK_H = ROW_H * 0.65; // height of the average tick mark
-  const LABEL_W   = 118;
   const DELTA_W   = 60;
+
+  const maxLabelChars = Math.max(
+    ...categories.map((c) => Math.min(c.categoryName.length, 15)),
+    1,
+  );
+  const LABEL_W = Math.ceil(maxLabelChars * 6.5) + 12;
   const CHART_PAD_L = 10;
   const CHART_PAD_R = 6;
 
@@ -67,7 +73,7 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
         Current month spend compared to {yearLabel} averages
       </p>
 
-      <div className="rounded-md p-3">
+      <div className="relative rounded-md py-3">
         <div ref={containerRef} className="w-full">
           {width > 0 && (
             <svg width={width} height={svgH} style={{ overflow: "visible" }}>
@@ -149,55 +155,18 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
                       {deltaStr}
                     </text>
 
-                    {/* Hover tooltip — collision-aware label placement */}
-                    {isHovered && (() => {
-                      const xCurClamped  = Math.max(xCur, xBase + 4);
-                      const separation   = Math.abs(xCurClamped - xAvg);
-                      const curLabelText = fmtAmt(c.currentAmount) + pctStr;
-                      const avgLabelText = "avg " + fmtAmt(c.avgAmount);
-                      const CHAR_W       = 5.5;
-                      // Estimate space needed: full width of cur label + half width of avg label
-                      const minGap = Math.max(
-                        58,
-                        curLabelText.length * CHAR_W + (avgLabelText.length * CHAR_W) / 2 + 6,
-                      );
-
-                      const curAnchor: "start" | "end" = xCur > xAvg ? "end" : "start";
-
-                      if (separation >= minGap) {
-                        // Labels are far enough apart — place horizontally side by side
-                        return (
-                          <>
-                            <text x={xAvg} y={barY - 5} textAnchor="middle" fontSize={10} fill={colorMuted}>
-                              {avgLabelText}
-                            </text>
-                            <text x={xCurClamped} y={barY - 5} textAnchor={curAnchor} fontSize={10} fontWeight={600} fill={barColor}>
-                              {curLabelText}
-                            </text>
-                          </>
-                        );
-                      } else {
-                        // Too close — stagger vertically to avoid overlap and stay within chart bounds
-                        return (
-                          <>
-                            <text x={xAvg} y={barY - 15} textAnchor="middle" fontSize={10} fill={colorMuted}>
-                              {avgLabelText}
-                            </text>
-                            <text x={xCurClamped} y={barY - 4} textAnchor={curAnchor} fontSize={10} fontWeight={600} fill={barColor}>
-                              {curLabelText}
-                            </text>
-                          </>
-                        );
-                      }
-                    })()}
-
                     {/* Transparent hover target */}
                     <rect
                       x={0} y={y} width={width} height={ROW_H}
                       fill="transparent"
                       style={{ cursor: "default" }}
                       onMouseEnter={() => setHoveredIdx(i)}
-                      onMouseLeave={() => setHoveredIdx(null)}
+                      onMouseLeave={() => { setHoveredIdx(null); setMousePos(null); }}
+                      onMouseMove={(e: MouseEvent<SVGRectElement>) => {
+                        const rect = (e.currentTarget as SVGRectElement).closest("svg")!.getBoundingClientRect();
+                        const parentRect = containerRef.current!.getBoundingClientRect();
+                        setMousePos({ x: e.clientX - parentRect.left, y: e.clientY - parentRect.top });
+                      }}
                     />
                   </g>
                 );
@@ -205,6 +174,34 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
             </svg>
           )}
         </div>
+
+        {/* Floating tooltip */}
+        {hoveredIdx !== null && mousePos !== null && (() => {
+          const c = categories[hoveredIdx];
+          const isOver   = c.delta > 0;
+          const barColor = isOver ? colorUp : colorDown;
+          const pctStr   = c.deltaPercent !== null
+            ? ` (${isOver ? "+" : ""}${c.deltaPercent}%)`
+            : "";
+          const TOOLTIP_W = 200;
+          const left = mousePos.x + 12 + TOOLTIP_W > width ? mousePos.x - TOOLTIP_W - 8 : mousePos.x + 12;
+          return (
+            <div
+              className="pointer-events-none absolute z-10 rounded-md border border-border bg-card px-3 py-2 shadow-md"
+              style={{ left, top: mousePos.y - 10, width: TOOLTIP_W }}
+            >
+              <p className="mb-1.5 text-xs font-semibold text-card-foreground">{c.categoryName}</p>
+              <div className="grid gap-x-3 gap-y-1 text-xs" style={{ gridTemplateColumns: "max-content 1fr" }}>
+                <span className="text-muted-foreground">Category Avg</span>
+                <span className="whitespace-nowrap font-medium text-foreground">{fmtAmt(c.avgAmount)}</span>
+                <span className="text-muted-foreground">Current Month</span>
+                <span className="whitespace-nowrap font-semibold" style={{ color: barColor }}>
+                  {fmtAmt(c.currentAmount)}{pctStr}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Legend */}
         <div className="mt-3 flex items-center justify-center gap-5">

@@ -43,15 +43,26 @@ const transferSchema = z.object({
 // List all active transfer rules
 transferRoutes.get("/rules", async (req, res) => {
   const userId = getUserId(req);
+  const now = new Date();
   const rules = await prisma.transferRule.findMany({
     where: { userId, isActive: true },
     include: {
       fromAccount: { select: { id: true, name: true, color: true, type: true } },
       toAccount: { select: { id: true, name: true, color: true, type: true } },
+      transfers: {
+        where: { isConfirmed: false, date: { gte: now } },
+        orderBy: { date: "asc" },
+        take: 1,
+        select: { date: true },
+      },
     },
     orderBy: { createdAt: "asc" },
   });
-  res.json(rules);
+  const result = rules.map(({ transfers, ...rule }) => ({
+    ...rule,
+    nextTransferDate: transfers[0]?.date?.toISOString() ?? null,
+  }));
+  res.json(result);
 });
 
 // Update a transfer rule

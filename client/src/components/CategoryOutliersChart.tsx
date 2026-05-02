@@ -46,12 +46,14 @@ export function CategoryOutliersChart({ data, compact = false, header }: Categor
   const HEADER_H    = 18;
   const DOT_R       = 4.5;
   const GHOST_R     = 3.5;
-  const LABEL_W     = 128;
   const CUR_W       = 80;
   const PREV_W      = 80;
   const DELTA_W     = 88;
   const CHART_PAD_L = 10;
   const CHART_PAD_R = 8;
+
+  const maxLabelChars  = Math.max(...outliers.map((o) => Math.min(o.categoryName.length, 17)), 1);
+  const LABEL_W        = Math.ceil(maxLabelChars * 6.5) + 12;
 
   const colsW          = CUR_W + PREV_W + DELTA_W;
   const chartAreaRight = Math.max(width - colsW, LABEL_W + CHART_PAD_L + CHART_PAD_R + 1);
@@ -89,7 +91,7 @@ export function CategoryOutliersChart({ data, compact = false, header }: Categor
         </>
       )}
 
-      <div className="rounded-md p-3">
+      <div className="rounded-md py-3">
         <div ref={containerRef} className="w-full">
           {width > 0 && (
             <svg width={width} height={svgH} style={{ overflow: "visible" }}>

@@ -569,6 +569,8 @@ export interface TransferRule {
   startDate: string;
   endDate: string | null;
   nextOccurrence: string;
+  /** Earliest pending unconfirmed transfer date ≥ today. Prefer over nextOccurrence for display. */
+  nextTransferDate: string | null;
   fromAccountId: string;
   toAccountId: string;
   fromAccount: TransferAccountRef;

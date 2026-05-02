@@ -1227,31 +1227,50 @@ export function Recurring() {
           <Card>
             {transferRules && transferRules.length > 0 ? (
               <table className="w-full table-fixed text-sm">
+                <colgroup>
+                  <col />{/* Description */}
+                  <col className="w-[110px]" />{/* Frequency */}
+                  <col className="w-[80px]" />{/* Next */}
+                  <col className="w-[80px]" />{/* Started */}
+                  <col className="w-[28%]" />{/* From → To */}
+                  <col className="w-[88px]" />{/* Amount */}
+                  <col className="w-[72px]" />{/* Actions */}
+                </colgroup>
                 <thead>
                   <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
-                    <th className="py-2 px-4 text-left font-medium w-[30%]">Description</th>
-                    <th className="py-2 px-4 text-left font-medium w-[15%]">Amount</th>
-                    <th className="py-2 px-4 text-left font-medium w-[28%]">From → To</th>
-                    <th className="py-2 px-4 text-left font-medium w-[17%]">Frequency</th>
-                    <th className="py-2 px-4 text-right font-medium w-[10%]">Actions</th>
+                    <th className="py-2 text-left font-medium">Description</th>
+                    <th className="py-2 text-left font-medium">Frequency</th>
+                    <th className="py-2 text-left font-medium">Next</th>
+                    <th className="py-2 text-left font-medium">Started</th>
+                    <th className="py-2 text-left font-medium">From → To</th>
+                    <th className="py-2 pr-3 text-right font-medium">Amount</th>
+                    <th className="py-2" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {transferRules.map((rule) => (
                     <tr key={rule.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="py-3 px-4 font-medium truncate">{rule.description}</td>
-                      <td className="py-3 px-4 tabular-nums">{formatCurrency(parseFloat(rule.amount))}</td>
-                      <td className="py-3 px-4">
-                        <span className="flex items-center gap-1.5 text-xs">
+                      <td className="py-3 pr-4 font-medium truncate">{rule.description}</td>
+                      <td className="py-3 pr-4 whitespace-nowrap text-muted-foreground">
+                        {formatFrequency(rule.frequency, rule.interval)}
+                      </td>
+                      <td className="py-3 pr-4 whitespace-nowrap text-muted-foreground">
+                        {formatDate(rule.nextTransferDate ?? rule.nextOccurrence)}
+                      </td>
+                      <td className="py-3 pr-4 whitespace-nowrap text-muted-foreground">
+                        {formatDate(rule.startDate)}
+                      </td>
+                      <td className="py-3 pr-4">
+                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <span className="truncate">{rule.fromAccount.name}</span>
-                          <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          <ArrowRight className="h-3 w-3 shrink-0" />
                           <span className="truncate">{rule.toAccount.name}</span>
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-muted-foreground capitalize">
-                        {formatFrequency(rule.frequency, rule.interval)}
+                      <td className="py-3 pr-3 text-right tabular-nums font-medium">
+                        {formatCurrency(parseFloat(rule.amount))}
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3">
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => { setEditingTransferRule(rule); setTransferModalOpen(true); }}
