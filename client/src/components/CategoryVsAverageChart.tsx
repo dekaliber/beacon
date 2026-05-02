@@ -151,36 +151,44 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
 
                     {/* Hover tooltip — collision-aware label placement */}
                     {isHovered && (() => {
-                      const xCurClamped = Math.max(xCur, xBase + 4);
-                      const separation  = Math.abs(xCurClamped - xAvg);
-                      const MIN_GAP     = 58;
-
-                      let avgX: number, avgAnchor: "middle" | "end" | "start";
-                      let curX: number, curAnchor: "middle" | "end" | "start";
-
-                      if (separation >= MIN_GAP) {
-                        avgX = xAvg;       avgAnchor = "middle";
-                        curX = xCurClamped; curAnchor = xCur > xAvg ? "end" : "start";
-                      } else {
-                        const leftX     = Math.min(xCurClamped, xAvg);
-                        const rightX    = Math.max(xCurClamped, xAvg);
-                        const curIsLeft = xCurClamped <= xAvg;
-                        curX = curIsLeft ? leftX  - 3 : rightX + 3;
-                        curAnchor = curIsLeft ? "end" : "start";
-                        avgX = curIsLeft ? rightX + 3 : leftX  - 3;
-                        avgAnchor = curIsLeft ? "start" : "end";
-                      }
-
-                      return (
-                        <>
-                          <text x={avgX} y={barY - 5} textAnchor={avgAnchor} fontSize={10} fill={colorMuted}>
-                            avg {fmtAmt(c.avgAmount)}
-                          </text>
-                          <text x={curX} y={barY - 5} textAnchor={curAnchor} fontSize={10} fontWeight={600} fill={barColor}>
-                            {fmtAmt(c.currentAmount)}{pctStr}
-                          </text>
-                        </>
+                      const xCurClamped  = Math.max(xCur, xBase + 4);
+                      const separation   = Math.abs(xCurClamped - xAvg);
+                      const curLabelText = fmtAmt(c.currentAmount) + pctStr;
+                      const avgLabelText = "avg " + fmtAmt(c.avgAmount);
+                      const CHAR_W       = 5.5;
+                      // Estimate space needed: full width of cur label + half width of avg label
+                      const minGap = Math.max(
+                        58,
+                        curLabelText.length * CHAR_W + (avgLabelText.length * CHAR_W) / 2 + 6,
                       );
+
+                      const curAnchor: "start" | "end" = xCur > xAvg ? "end" : "start";
+
+                      if (separation >= minGap) {
+                        // Labels are far enough apart — place horizontally side by side
+                        return (
+                          <>
+                            <text x={xAvg} y={barY - 5} textAnchor="middle" fontSize={10} fill={colorMuted}>
+                              {avgLabelText}
+                            </text>
+                            <text x={xCurClamped} y={barY - 5} textAnchor={curAnchor} fontSize={10} fontWeight={600} fill={barColor}>
+                              {curLabelText}
+                            </text>
+                          </>
+                        );
+                      } else {
+                        // Too close — stagger vertically to avoid overlap and stay within chart bounds
+                        return (
+                          <>
+                            <text x={xAvg} y={barY - 15} textAnchor="middle" fontSize={10} fill={colorMuted}>
+                              {avgLabelText}
+                            </text>
+                            <text x={xCurClamped} y={barY - 4} textAnchor={curAnchor} fontSize={10} fontWeight={600} fill={barColor}>
+                              {curLabelText}
+                            </text>
+                          </>
+                        );
+                      }
                     })()}
 
                     {/* Transparent hover target */}

@@ -64,6 +64,7 @@ import {
   getInvestmentGrowth,
   importQfx,
   importQfxDividends,
+  getQfxLastDate,
   updateSaleActivity,
   refreshPrices,
   getPendingDividends,
@@ -4004,6 +4005,7 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
   const [result, setResult] = useState<{ imported: number; total: number; dividendsImported: number; dividendsSkipped: number } | null>(null);
   const [importDividends, setImportDividends] = useState(true);
   const [dividendStartDate, setDividendStartDate] = useState(`${new Date().getFullYear()}-01-01`);
+  const { data: lastDateData, refetch: refetchLastDate } = useApi(() => getQfxLastDate(accountId), [accountId]);
   const filteredDividends = parsed && importDividends
     ? parsed.dividends.filter((d) => d.date >= dividendStartDate)
     : [];
@@ -4040,6 +4042,7 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
       ]);
       setResult({ ...txnRes, dividendsImported: divRes.imported, dividendsSkipped: divRes.skipped });
       setParsed(null);
+      refetchLastDate();
       onImported();
       const parts = [];
       if (txnRes.imported > 0) parts.push(`${txnRes.imported} transaction${txnRes.imported !== 1 ? "s" : ""}`);
@@ -4072,9 +4075,14 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
             <Upload className="h-3.5 w-3.5" />
             Select QFX file
           </Button>
-          <p className="text-xs text-muted-foreground">
-            Export from Wealthfront → Documents → Export to Quicken
-          </p>
+          <div className="text-xs text-muted-foreground">
+            <span>Export from Wealthfront → Documents → Export to Quicken</span>
+            {lastDateData?.lastDate && (
+              <span className="ml-3 text-foreground/60">
+                · Last transaction: <span className="font-medium">{formatDate(lastDateData.lastDate)}</span>
+              </span>
+            )}
+          </div>
         </div>
       )}
 
@@ -5181,7 +5189,7 @@ export function InvestmentAccount() {
                 </div>
                 <p className="text-xs text-muted-foreground">Import QFX to enable the growth chart</p>
               </div>
-              <QfxImportPanel accountId={accountId!} onImported={refreshChart} />
+              <QfxImportPanel accountId={accountId!} onImported={() => { refetch(); refreshChart(); }} />
             </Card>
             </div>
           )}

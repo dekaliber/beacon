@@ -1736,6 +1736,48 @@ investmentRoutes.post("/qfx-import/:accountId", async (req, res) => {
       });
     }
 
+    // Sync managed lots from the full QFX transaction history so the holdings
+    // table always reflects the current cumulative position. We read all records
+    // (not just the new ones) so that re-importing a duplicate file still repairs
+    // any stale lots.
+    const allQfxTxns = await prisma.qfxTransaction.findMany({ where: { accountId } });
+    const netSharesMap = new Map<string, number>();
+    for (const t of allQfxTxns) {
+      const prev = netSharesMap.get(t.ticker) ?? 0;
+      const delta = parseFloat(t.shares.toString()) * (t.type === "SELL" ? -1 : 1);
+      netSharesMap.set(t.ticker, prev + delta);
+    }
+
+    for (const [ticker, netShares] of netSharesMap) {
+      if (netShares < 0.000001) continue;
+
+      const existing = await prisma.investmentHolding.findFirst({
+        where: { accountId, ticker },
+        include: { lots: { where: { acquiredDate: null }, take: 1 } },
+      });
+
+      let holdingId: string;
+      let costPerShare = 0;
+
+      if (existing) {
+        holdingId = existing.id;
+        if (existing.lots[0]) {
+          costPerShare = parseFloat(existing.lots[0].costPerShare.toString());
+        }
+      } else {
+        const instrumentId = await resolveInstrumentId(ticker, ticker);
+        const created = await prisma.investmentHolding.create({
+          data: { accountId, ticker, name: ticker, instrumentId },
+        });
+        holdingId = created.id;
+      }
+
+      await prisma.$transaction([
+        prisma.investmentLot.deleteMany({ where: { holdingId, acquiredDate: null } }),
+        prisma.investmentLot.create({ data: { holdingId, quantity: netShares, costPerShare, acquiredDate: null } }),
+      ]);
+    }
+
     res.json({ imported: result.count, total: transactions.length });
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -1743,6 +1785,32 @@ investmentRoutes.post("/qfx-import/:accountId", async (req, res) => {
     }
     console.error(err);
     res.status(500).json({ error: { message: "Failed to import QFX transactions" } });
+  }
+});
+
+// ── GET /api/investments/qfx-last-date/:accountId ────────────────────────
+// Returns the date of the most recent QFX transaction for the account so the
+// UI can tell the user what date range to export from Wealthfront next time.
+
+investmentRoutes.get("/qfx-last-date/:accountId", async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const { accountId } = req.params;
+    const account = await prisma.account.findFirst({
+      where: { id: accountId, isActive: true, type: "INVESTMENT", isManaged: true, userId },
+    });
+    if (!account) return res.status(404).json({ error: { message: "Account not found" } });
+
+    const latest = await prisma.qfxTransaction.findFirst({
+      where: { accountId },
+      orderBy: { date: "desc" },
+      select: { date: true },
+    });
+
+    res.json({ lastDate: latest ? latest.date.toISOString() : null });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: { message: "Failed to fetch last QFX date" } });
   }
 });
 

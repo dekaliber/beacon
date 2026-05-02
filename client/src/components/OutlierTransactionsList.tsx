@@ -1,4 +1,5 @@
 import type { OutlierCategoryGroup } from "@/types";
+import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 
 function fmtAmount(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
@@ -57,6 +58,12 @@ export function OutlierTransactionsList({ categories }: OutlierTransactionsListP
                     key={t.id}
                     className="flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-muted/40"
                   >
+                    <span
+                      className="shrink-0 inline-flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold leading-none text-white"
+                      style={{ backgroundColor: t.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}
+                    >
+                      {t.isJoint ? "J" : "P"}
+                    </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-medium text-foreground">
                         {t.description}

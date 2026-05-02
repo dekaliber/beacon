@@ -826,6 +826,7 @@ export interface OutlierCategoryTransaction {
   vendor: string;
   date: string;
   amount: number;
+  isJoint: boolean;
 }
 
 export interface OutlierCategoryGroup {
@@ -875,4 +876,12 @@ export interface BudgetDetail {
     total: string;
     count: number;
   }[];
+}
+
+export interface NetWorthData {
+  total: number;
+  investments: number;
+  investmentCash: number;
+  bankingCash: number;
+  creditCardDebt: number;
 }

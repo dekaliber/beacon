@@ -483,11 +483,19 @@ function YoYPanel({ history }: { history: RecurringHistoryMonth[] }) {
             tickFormatter={(v: number) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`}
           />
           <Tooltip
-            formatter={(v: number | undefined, key: string | undefined) => [
-              formatCurrency(v ?? 0),
-              (key ?? "") === "thisYear" ? String(currYear) : String(prevYear),
-            ]}
-            contentStyle={{ fontSize: 12 }}
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null;
+              return (
+                <div className="rounded border border-border bg-background p-2 text-xs shadow-md">
+                  <p className="mb-1.5 font-medium">{label}</p>
+                  {payload.map((p) => (
+                    <p key={p.dataKey as string} className="mt-1 text-foreground">
+                      {(p.dataKey as string) === "thisYear" ? currYear : prevYear}: {formatCurrency(p.value as number)}
+                    </p>
+                  ))}
+                </div>
+              );
+            }}
             cursor={{ fill: CHART_HOVER_FILL }}
           />
           {hasLastYear && (

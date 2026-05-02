@@ -1,11 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Cell, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList,
   PieChart, Pie, LineChart, Line,
 } from "recharts";
-import { Receipt, ChevronLeft, ChevronRight } from "lucide-react";
+import { Receipt, ChevronLeft, ChevronRight, TrendingUp, Landmark, CreditCard, Wallet } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
@@ -13,7 +13,7 @@ import { CategoryOutliersChart } from "@/components/CategoryOutliersChart";
 import { CategoryVsAverageChart } from "@/components/CategoryVsAverageChart";
 import { OutlierTransactionsList } from "@/components/OutlierTransactionsList";
 import { useApi } from "@/hooks/useApi";
-import { getDashboard, getFlatCategories, getCategoryOutliers, getCategoryAverages, getMtdChart, getOutlierTransactions, getDataRange } from "@/api";
+import { getDashboard, getFlatCategories, getCategoryOutliers, getCategoryAverages, getMtdChart, getOutlierTransactions, getDataRange, getNetWorth } from "@/api";
 import { formatCurrency } from "@/lib/utils";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import type { Category } from "@/types";
@@ -42,6 +42,7 @@ export function Dashboard() {
   const { data: mtdChart }           = useApi(() => getMtdChart(year, month),            [year, month]);
   const { data: outlierTransactions } = useApi(() => getOutlierTransactions(year, month), [year, month]);
   const { data: dataRange } = useApi(() => getDataRange(), []);
+  const { data: netWorth } = useApi(() => getNetWorth(), []);
 
   const chartMergedData = useMemo(() => {
     if (!mtdChart) return [];
@@ -73,6 +74,22 @@ export function Dashboard() {
 
   const atMin = dataRange ? year * 12 + month <= dataRange.minYear * 12 + dataRange.minMonth : false;
   const atMax = dataRange ? year * 12 + month >= dataRange.maxYear * 12 + dataRange.maxMonth : false;
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const inputType = (target as HTMLInputElement).type;
+      const isTextInput = (target.tagName === "INPUT" && inputType !== "checkbox" && inputType !== "radio")
+        || target.tagName === "TEXTAREA"
+        || target.tagName === "SELECT"
+        || target.isContentEditable;
+      if (isTextInput) return;
+      if (e.key === "ArrowLeft")  { if (!atMin) prevMonth(); }
+      else if (e.key === "ArrowRight") { if (!atMax) nextMonth(); }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [atMin, atMax, month, year]);
 
   const monthLabel = new Date(year, month - 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
@@ -144,6 +161,52 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
+
+      {/* ── Net Worth ──────────────────────────────────────────────────────── */}
+      {netWorth && (
+        <Card>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-8">
+            {/* Headline */}
+            <div className="shrink-0">
+              <p className="text-sm text-muted-foreground">Net Worth</p>
+              <p className="text-3xl font-bold">{fmtWhole(netWorth.total)}</p>
+            </div>
+
+            {/* Breakdown */}
+            <div className="grid grid-cols-2 gap-x-8 gap-y-2 sm:grid-cols-4 flex-1">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Investments</p>
+                  <p className="text-sm font-semibold">{fmtWhole(netWorth.investments)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Wallet className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Investment Cash</p>
+                  <p className="text-sm font-semibold">{fmtWhole(netWorth.investmentCash)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Landmark className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Banking Cash</p>
+                  <p className="text-sm font-semibold">{fmtWhole(netWorth.bankingCash)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Credit Cards</p>
+                  <p className="text-sm font-semibold text-destructive">−{fmtWhole(netWorth.creditCardDebt)}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Month selector */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Dashboard</h2>
@@ -346,7 +409,7 @@ export function Dashboard() {
           {mtdChart ? (
             <>
               <ResponsiveContainer width="100%" height={112}>
-                <LineChart data={chartMergedData} margin={{ top: 2, right: 4, bottom: 0, left: 2 }}>
+                <LineChart data={chartMergedData} margin={{ top: 5, right: 4, bottom: 0, left: 2 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                   <XAxis
                     dataKey="day"

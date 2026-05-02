@@ -28,6 +28,10 @@ interface ShortcutEntry {
 }
 
 const PAGE_SHORTCUTS: Record<string, ShortcutEntry[]> = {
+  "/": [
+    { key: "←", description: "Previous month" },
+    { key: "→", description: "Next month" },
+  ],
   "/expenses": [
     { key: "A", description: "Add expense" },
     { key: "G", description: "Group selected transactions", conditional: "2+ selected" },

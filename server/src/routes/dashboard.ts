@@ -302,7 +302,8 @@ dashboardRoutes.get("/outlier-transactions", async (req, res) => {
     },
   } as const;
   const histSel  = { amount: true, category: catSel } as const;
-  const curSel   = { id: true, amount: true, date: true, description: true, vendor: true, category: catSel } as const;
+  const curSel   = { id: true, amount: true, date: true, description: true, vendor: true, category: catSel, offsets: { select: { amount: true } } } as const;
+  const curFilter = { parentExpenseId: null as null, ...expFilter };
 
   const [histP, histJ, curP, curJ] = await Promise.all([
     personalIds.length > 0
@@ -312,10 +313,10 @@ dashboardRoutes.get("/outlier-transactions", async (req, res) => {
       ? prisma.expense.findMany({ where: { accountId: { in: jointIds },    date: { gte: histStart, lte: histEnd }, ...expFilter }, select: histSel })
       : Promise.resolve([]),
     personalIds.length > 0
-      ? prisma.expense.findMany({ where: { accountId: { in: personalIds }, date: { gte: curStart, lte: curEnd }, ...expFilter }, select: curSel })
+      ? prisma.expense.findMany({ where: { accountId: { in: personalIds }, date: { gte: curStart, lte: curEnd }, ...curFilter }, select: curSel })
       : Promise.resolve([]),
     jointIds.length > 0
-      ? prisma.expense.findMany({ where: { accountId: { in: jointIds },    date: { gte: curStart, lte: curEnd }, ...expFilter }, select: curSel })
+      ? prisma.expense.findMany({ where: { accountId: { in: jointIds },    date: { gte: curStart, lte: curEnd }, ...curFilter }, select: curSel })
       : Promise.resolve([]),
   ]);
 
@@ -346,14 +347,17 @@ dashboardRoutes.get("/outlier-transactions", async (req, res) => {
 
   // Accumulate current-month totals and collect transactions by top-level category
   const curTotals = new Map<string, number>();
-  type TxnEntry = { id: string; description: string; vendor: string; date: string; effectiveAmount: number };
+  type TxnEntry = { id: string; description: string; vendor: string; date: string; effectiveAmount: number; isJoint: boolean };
   const curTxns = new Map<string, TxnEntry[]>();
 
-  function accumulateCurrent(e: typeof curP[number], scale: number) {
+  function accumulateCurrent(e: typeof curP[number], scale: number, isJoint: boolean) {
     const { topId, topName, topColor } = topLevel(e.category);
     if (!catInfo.has(topId)) catInfo.set(topId, { name: topName, color: topColor });
-    const effective = Number(e.amount) * scale;
+    const offsetSum = e.offsets.reduce((s, o) => s + Number(o.amount), 0);
+    const net = Number(e.amount) + offsetSum;
+    const effective = net * scale;
     curTotals.set(topId, (curTotals.get(topId) ?? 0) + effective);
+    if (net <= 0) return;
     if (!curTxns.has(topId)) curTxns.set(topId, []);
     curTxns.get(topId)!.push({
       id:              e.id,
@@ -361,11 +365,12 @@ dashboardRoutes.get("/outlier-transactions", async (req, res) => {
       vendor:          e.vendor,
       date:            e.date.toISOString().slice(0, 10),
       effectiveAmount: effective,
+      isJoint,
     });
   }
 
-  for (const e of curP) accumulateCurrent(e, 1);
-  for (const e of curJ) accumulateCurrent(e, splitRatio);
+  for (const e of curP) accumulateCurrent(e, 1, false);
+  for (const e of curJ) accumulateCurrent(e, splitRatio, true);
 
   // Build outlier list: categories where current month > historical monthly avg
   const outliers: {
@@ -375,7 +380,7 @@ dashboardRoutes.get("/outlier-transactions", async (req, res) => {
     currentMonthTotal: number;
     historicalAvgMonthly: number;
     excess: number;
-    transactions: { id: string; description: string; vendor: string; date: string; amount: number }[];
+    transactions: { id: string; description: string; vendor: string; date: string; amount: number; isJoint: boolean }[];
   }[] = [];
 
   for (const [topId, histTotal] of histTotals) {
@@ -407,6 +412,7 @@ dashboardRoutes.get("/outlier-transactions", async (req, res) => {
         vendor:      t.vendor,
         date:        t.date,
         amount:      Math.round(t.effectiveAmount * 100) / 100,
+        isJoint:     t.isJoint,
       })),
     });
   }
@@ -537,6 +543,106 @@ dashboardRoutes.get("/category-trend", async (req, res) => {
     .sort((a, b) => b.values.reduce((s, v) => s + v, 0) - a.values.reduce((s, v) => s + v, 0));
 
   res.json({ months: monthLabels, series });
+});
+
+// ── GET /dashboard/net-worth ────────────────────────────────────────────────
+// Returns current net worth broken down into investments, investment cash,
+// banking cash, and outstanding credit card debt.
+dashboardRoutes.get("/net-worth", async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const todayStr = (req.query.today as string | undefined) ?? new Date().toLocaleDateString("en-CA");
+    const [todayYear, todayMonth, todayDay] = todayStr.split("-").map(Number);
+    // Use local-date noon to avoid any UTC-boundary issues in Date math
+    const today = new Date(todayYear, todayMonth - 1, todayDay, 12, 0, 0);
+
+    // ── 1. Banking cash: balance on CHECKING / SAVINGS ─────────────────────
+    const bankingAccounts = await prisma.account.findMany({
+      where: { userId, isActive: true, isHidden: false, type: { in: ["CHECKING", "SAVINGS"] } },
+      select: { balance: true },
+    });
+    const bankingCash = bankingAccounts.reduce((sum, a) => sum + parseFloat(a.balance.toString()), 0);
+
+    // ── 2. Investment holdings + cash ───────────────────────────────────────
+    const investmentAccounts = await prisma.account.findMany({
+      where: { userId, isActive: true, isHidden: false, type: "INVESTMENT" },
+      select: {
+        cashBalance: true,
+        holdings: { select: { ticker: true, lots: { select: { quantity: true } } } },
+        manualInvestments: { select: { marketValue: true } },
+      },
+    });
+
+    const allTickers = [...new Set(
+      investmentAccounts.flatMap((a) => a.holdings.map((h) => h.ticker))
+    )];
+    const prices = await prisma.tickerPrice.findMany({
+      where: { ticker: { in: allTickers } },
+      select: { ticker: true, price: true },
+    });
+    const priceMap = new Map(prices.map((p) => [p.ticker, parseFloat(p.price.toString())]));
+
+    let investments = 0;
+    let investmentCash = 0;
+    for (const acct of investmentAccounts) {
+      for (const holding of acct.holdings) {
+        const price = priceMap.get(holding.ticker);
+        if (price == null) continue;
+        const qty = holding.lots.reduce((s, l) => s + parseFloat(l.quantity.toString()), 0);
+        investments += qty * price;
+      }
+      for (const m of acct.manualInvestments) {
+        investments += parseFloat(m.marketValue.toString());
+      }
+      if (acct.cashBalance != null) {
+        investmentCash += parseFloat(acct.cashBalance.toString());
+      }
+    }
+
+    // ── 3. Credit card outstanding balances ─────────────────────────────────
+    // Assumes cards are paid in full on the due date each month.
+    // Cutoff = the last closing date that has been paid off, determined by
+    // whether today is before or after the due date.
+    const ccAccounts = await prisma.account.findMany({
+      where: { userId, isActive: true, isHidden: false, type: "CREDIT_CARD", closingDay: { not: null }, dueDay: { not: null } },
+      select: { id: true, closingDay: true, dueDay: true },
+    });
+
+    function ccCutoff(closingDay: number, dueDay: number): Date {
+      const sameMonth = dueDay > closingDay;
+      const paymentMade = todayDay >= dueDay;
+      // months back from current month to the last-paid closing date:
+      // same-month card + paid → 0, same-month + unpaid → 1
+      // next-month card + paid → 1, next-month + unpaid → 2
+      const monthsBack = sameMonth ? (paymentMade ? 0 : 1) : (paymentMade ? 1 : 2);
+      return new Date(todayYear, todayMonth - 1 - monthsBack, closingDay, 12, 0, 0);
+    }
+
+    let creditCardDebt = 0;
+    if (ccAccounts.length > 0) {
+      const ccDebts = await Promise.all(
+        ccAccounts.map(async (cc) => {
+          const cutoff = ccCutoff(cc.closingDay!, cc.dueDay!);
+          const result = await prisma.expense.aggregate({
+            where: {
+              accountId: cc.id,
+              date: { gte: cutoff, lte: today },
+              parentExpenseId: null,
+            },
+            _sum: { amount: true },
+          });
+          return parseFloat((result._sum.amount ?? 0).toString());
+        })
+      );
+      creditCardDebt = ccDebts.reduce((s, v) => s + v, 0);
+    }
+
+    const total = investments + investmentCash + bankingCash - creditCardDebt;
+    res.json({ total, investments, investmentCash, bankingCash, creditCardDebt });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: { message: "Failed to compute net worth" } });
+  }
 });
 
 // Main dashboard data

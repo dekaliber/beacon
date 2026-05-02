@@ -212,6 +212,11 @@ export const getDashboard = (year?: number, month?: number) => {
   return api.get<DashboardData>(`/dashboard${query}`);
 };
 
+export const getNetWorth = () => {
+  const today = new Date().toLocaleDateString("en-CA");
+  return api.get<import("../types").NetWorthData>(`/dashboard/net-worth?today=${today}`);
+};
+
 export const getCategoryTrend = (year?: number, month?: number, parentCategoryId?: string) => {
   const params = new URLSearchParams();
   if (year) params.set("year", year.toString());
@@ -379,6 +384,9 @@ export const importQfxDividends = (
   `/investments/qfx-dividends/${accountId}`,
   { dividends },
 );
+
+export const getQfxLastDate = (accountId: string) =>
+  api.get<{ lastDate: string | null }>(`/investments/qfx-last-date/${accountId}`);
 
 // ── Realized Gain Snapshots ───────────────────────────────────────────────
 export const getAllGainSnapshots = (year: number) =>

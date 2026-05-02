@@ -25,7 +25,7 @@ import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
-import { getBudgetOverview, getCategoryOutliersYtd, setAnnualBudget, getDataRange } from "@/api";
+import { getBudgetOverview, getCategoryOutliersYtd, setAnnualBudget, getDataRange, getCategoryTrend } from "@/api";
 import { SpendingOverTimeChart } from "@/components/SpendingOverTimeChart";
 import { formatCurrency } from "@/lib/utils";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
@@ -934,14 +934,18 @@ function MonthlyTrendCard({ monthlyTotals, monthlyBudget }: MonthlyTrendCardProp
           <Tooltip
             content={({ active, payload, label }) => {
               if (!active || !payload?.length) return null;
+              const total = payload.reduce((s, p) => s + (p.value as number), 0);
               return (
-                <div className="rounded border border-border bg-background p-3 text-xs shadow-md">
-                  <p className="mb-2 font-medium">{label}</p>
+                <div className="rounded border border-border bg-background p-2 text-xs shadow-md">
+                  <p className="mb-1.5 font-medium">{label}</p>
                   {payload.map((p) => (
-                    <p key={p.dataKey as string} className="mt-1.5" style={{ color: p.fill as string }}>
-                      {p.name} : {formatCurrency(p.value as number)}
+                    <p key={p.dataKey as string} className="mt-1" style={{ color: p.fill as string }}>
+                      {p.name}: {formatCurrency(p.value as number)}
                     </p>
                   ))}
+                  <p className="mt-1.5 border-t border-border pt-1 font-medium text-foreground">
+                    Total: {formatCurrency(total)}
+                  </p>
                 </div>
               );
             }}
@@ -1081,6 +1085,46 @@ function SplitCard({ personal, joint }: SplitCardProps) {
           actualPct={actualJointPct}
           targetPct={targetJointPct}
         />
+      </div>
+    </Card>
+  );
+}
+
+// ── Category avg monthly grid (completed years only) ─────────────────────────
+
+function CategoryAvgMonthlyGrid({ year, completedMonths }: { year: number; completedMonths: number }) {
+  const { data } = useApi(() => getCategoryTrend(year, completedMonths), [year, completedMonths]);
+  if (!data || data.series.length === 0) return null;
+
+  const items = data.series.map((s) => ({
+    categoryId: s.categoryId,
+    name: s.name,
+    color: s.color,
+    avgMonthly: s.values.reduce((sum, v) => sum + v, 0) / completedMonths,
+  }));
+
+  const monthLabel = completedMonths === 12 ? "all 12 months" : `first ${completedMonths} months`;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Monthly Average by Category</CardTitle>
+        <p className="mt-0.5 text-xs text-muted-foreground">Average monthly spend across {monthLabel}</p>
+      </CardHeader>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {items.map((item) => (
+          <div key={item.categoryId} className="rounded-lg bg-muted/40 px-3 py-2.5">
+            <div className="flex items-center gap-1.5 mb-1">
+              <span
+                className="inline-block h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: item.color }}
+              />
+              <p className="truncate text-xs text-muted-foreground">{item.name}</p>
+            </div>
+            <p className="text-base font-bold leading-tight">{formatCurrency(item.avgMonthly)}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">per month</p>
+          </div>
+        ))}
       </div>
     </Card>
   );
@@ -1282,6 +1326,9 @@ export function Budgets() {
 
           {/* Spending by Category Over Time — full width */}
           <SpendingOverTimeChart year={year} month={trendMonth} />
+
+          {/* Monthly avg by category — completed months only */}
+          {completedMonthCount > 0 && <CategoryAvgMonthlyGrid year={year} completedMonths={completedMonthCount} />}
         </>
       )}
 
