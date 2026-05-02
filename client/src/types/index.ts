@@ -115,7 +115,7 @@ export interface Expense {
 export type IncomeSubtype = "REGULAR" | "DIVIDEND" | "CAPITAL_GAIN" | "RETURN_OF_CAPITAL";
 export type TaxClassification = "QUALIFIED" | "ORDINARY" | "TAX_EXEMPT" | "RETURN_OF_CAPITAL" | "CAPITAL_GAIN";
 export type PendingDividendStatus = "PENDING" | "CONFIRMED" | "DISMISSED";
-export type InvestmentActivityType = "DIVIDEND" | "SALE" | "PURCHASE";
+export type InvestmentActivityType = "DIVIDEND" | "SALE" | "PURCHASE" | "TRANSFER";
 
 export interface InvestmentActivity {
   id: string;
@@ -132,6 +132,7 @@ export interface InvestmentActivity {
   costBasis: number | null;
   shortTermGain: number | null;
   longTermGain: number | null;
+  transferAccountId: string | null;
   notes: string | null;
   isCollectible?: boolean; // resolved at query time from the linked Instrument
   createdAt: string;

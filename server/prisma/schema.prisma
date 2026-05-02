@@ -63,6 +63,7 @@ enum InvestmentActivityType {
   DIVIDEND
   SALE
   PURCHASE
+  TRANSFER
 }
 
 enum QfxTransactionType {
@@ -526,11 +527,13 @@ model InvestmentActivity {
   amount        Decimal                @db.Decimal(12, 2)
   fees          Decimal?               @db.Decimal(12, 2)
   costBasis     Decimal?               @db.Decimal(12, 2)
-  shortTermGain Decimal?               @db.Decimal(12, 2)
-  longTermGain  Decimal?               @db.Decimal(12, 2)
-  notes         String?
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
+  shortTermGain     Decimal?               @db.Decimal(12, 2)
+  longTermGain      Decimal?               @db.Decimal(12, 2)
+  // For TRANSFER activities: the other account in the transfer (source or destination)
+  transferAccountId String?
+  notes             String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
   account          Account            @relation(fields: [accountId], references: [id])
   holding          InvestmentHolding? @relation(fields: [holdingId], references: [id], onDelete: SetNull)

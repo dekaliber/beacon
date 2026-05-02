@@ -370,6 +370,26 @@ export const previewSell = (data: SellPreviewRequest) =>
 export const executeSell = (data: SellRequest) =>
   api.post<SellResponse>("/investments/sell", data);
 
+export interface TransferRequest {
+  holdingId: string;
+  destinationAccountId: string;
+  sharesToTransfer?: number;
+  costBasisMethod?: "FIFO" | "LIFO" | "MIN_TAX" | "MAX_GAIN";
+  lotAllocations?: LotAllocationInput[];
+  transferDate: string;
+  notes?: string;
+}
+
+export interface TransferResponse {
+  sourceActivity: InvestmentActivity;
+  destActivity: InvestmentActivity;
+  sourceHolding: InvestmentHolding | null;
+  destHolding: InvestmentHolding;
+}
+
+export const executeTransfer = (data: TransferRequest) =>
+  api.post<TransferResponse>("/investments/transfer", data);
+
 export const getInvestmentGrowth = (accountId: string) =>
   api.get<{ points: GrowthPoint[] }>(`/investments/growth/${accountId}`);
 

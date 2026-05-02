@@ -58,6 +58,7 @@ import {
   deleteManualInvestment,
   previewSell,
   executeSell,
+  executeTransfer,
   getGainSnapshot,
   upsertGainSnapshot,
   deleteGainSnapshot,
@@ -1158,7 +1159,7 @@ function HoldingRow({
         <td className="py-3 pr-3" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-1 justify-end">
             {holding.totalQuantity > 0 && (
-              <Tooltip content="Record a sale">
+              <Tooltip content="Record a sale or transfer">
                 <button
                   onClick={(e) => { e.stopPropagation(); onSell(); }}
                   className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
@@ -2085,19 +2086,22 @@ function SellModal({
   accounts,
   onClose,
   onSold,
+  onTransferred,
 }: {
   holding: InvestmentHolding;
   accounts: Account[];
   onClose: () => void;
   onSold: () => void;
+  onTransferred: () => void;
 }) {
+  const [mode, setMode] = useState<"sell" | "transfer">("sell");
   const [step, setStep] = useState<"input" | "preview">("input");
   const [selectionMode, setSelectionMode] = useState<"method" | "lots">("method");
   const [shares, setShares] = useState("");
   const [price, setPrice] = useState(
     holding.currentPrice != null ? holding.currentPrice.toFixed(4) : ""
   );
-  const [saleDate, setSaleDate] = useState(localToday());
+  const [actionDate, setActionDate] = useState(localToday());
   const [fees, setFees] = useState("");
   const [method, setMethod] = useState<"FIFO" | "LIFO" | "MIN_TAX" | "MAX_GAIN">("MIN_TAX");
   const [lotInputs, setLotInputs] = useState<Record<string, string>>({});
@@ -2107,29 +2111,87 @@ function SellModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const eligibleAccounts = accounts.filter((a) => a.type !== "CREDIT_CARD");
+  const sellEligibleAccounts = accounts.filter((a) => a.type !== "CREDIT_CARD");
+  const transferEligibleAccounts = accounts.filter(
+    (a) => a.type === "INVESTMENT" && a.id !== holding.accountId
+  );
+  const eligibleAccounts = mode === "sell" ? sellEligibleAccounts : transferEligibleAccounts;
   const maxShares = holding.totalQuantity;
   const methodInfo = COST_BASIS_METHODS.find((m) => m.value === method)!;
 
-  // Sorted lots for the lot-level UI
   const sortedLots = [...holding.lots].sort((a, b) => {
     if (!a.acquiredDate) return 1;
     if (!b.acquiredDate) return -1;
     return a.acquiredDate < b.acquiredDate ? -1 : 1;
   });
 
-  // Compute lot allocations from lotInputs
   const lotAllocations = sortedLots
     .map((lot) => ({ lotId: lot.id, shares: parseFloat(lotInputs[lot.id] || "0") || 0 }))
     .filter((a) => a.shares > 0);
   const lotTotalShares = lotAllocations.reduce((s, a) => s + a.shares, 0);
 
-  const handlePreview = async () => {
+  // For the transfer confirm step: compute which lots are affected client-side
+  const transferLotBreakdown = useMemo(() => {
+    if (mode !== "transfer") return [];
+    if (selectionMode === "lots") {
+      return lotAllocations.map((a) => {
+        const lot = sortedLots.find((l) => l.id === a.lotId)!;
+        return { lotId: lot.id, acquiredDate: lot.acquiredDate, shares: a.shares, costPerShare: parseFloat(lot.costPerShare) };
+      });
+    }
+    const sharesToMove = parseFloat(shares) || 0;
+    const sorted = [...holding.lots].sort((a, b) => {
+      const aCps = parseFloat(a.costPerShare);
+      const bCps = parseFloat(b.costPerShare);
+      switch (method) {
+        case "FIFO":    return (a.acquiredDate ? new Date(a.acquiredDate).getTime() : Infinity) - (b.acquiredDate ? new Date(b.acquiredDate).getTime() : Infinity);
+        case "LIFO":    return (b.acquiredDate ? new Date(b.acquiredDate).getTime() : -Infinity) - (a.acquiredDate ? new Date(a.acquiredDate).getTime() : -Infinity);
+        case "MIN_TAX": return bCps - aCps;
+        case "MAX_GAIN": return aCps - bCps;
+        default:        return 0;
+      }
+    });
+    const result: { lotId: string; acquiredDate: string | null; shares: number; costPerShare: number }[] = [];
+    let remaining = sharesToMove;
+    for (const lot of sorted) {
+      if (remaining <= 0.000001) break;
+      const available = parseFloat(lot.quantity);
+      const take = Math.min(available, remaining);
+      result.push({ lotId: lot.id, acquiredDate: lot.acquiredDate, shares: take, costPerShare: parseFloat(lot.costPerShare) });
+      remaining -= take;
+    }
+    return result;
+  }, [mode, selectionMode, lotAllocations, shares, method, sortedLots, holding.lots]);
+
+  const transferTotalCostBasis = transferLotBreakdown.reduce((s, l) => s + l.shares * l.costPerShare, 0);
+
+  const handleNext = async () => {
     setError(null);
+
+    if (mode === "transfer") {
+      if (!destAccountId) return setError("Select a destination account.");
+      if (selectionMode === "method") {
+        const sharesToMove = parseFloat(shares);
+        if (isNaN(sharesToMove) || sharesToMove <= 0) return setError("Enter a valid number of shares.");
+        if (sharesToMove > maxShares + 0.000001) return setError(`Cannot transfer more than ${maxShares.toLocaleString(undefined, { maximumFractionDigits: 6 })} shares.`);
+      } else {
+        if (lotAllocations.length === 0) return setError("Enter shares to transfer for at least one lot.");
+        for (const lot of sortedLots) {
+          const requested = parseFloat(lotInputs[lot.id] || "0") || 0;
+          const available = parseFloat(lot.quantity);
+          if (requested > available + 0.000001) {
+            return setError(`Lot ${lot.acquiredDate ? formatDate(lot.acquiredDate) : "unknown"}: cannot transfer ${requested} shares, only ${available} available.`);
+          }
+        }
+      }
+      setStep("preview");
+      return;
+    }
+
+    // Sell mode — compute preview via API
     const pricePerShare = parseFloat(price);
     if (isNaN(pricePerShare) || pricePerShare <= 0) return setError("Enter a valid sale price.");
     if (!destAccountId) return setError("Select a destination account.");
-
     if (selectionMode === "method") {
       const sharesToSell = parseFloat(shares);
       if (isNaN(sharesToSell) || sharesToSell <= 0) return setError("Enter a valid number of shares.");
@@ -2137,7 +2199,6 @@ function SellModal({
     } else {
       if (lotAllocations.length === 0) return setError("Enter shares to sell for at least one lot.");
       if (lotTotalShares > maxShares + 0.000001) return setError(`Total shares (${lotTotalShares.toLocaleString(undefined, { maximumFractionDigits: 6 })}) exceeds available ${maxShares.toLocaleString(undefined, { maximumFractionDigits: 6 })}.`);
-      // Validate each lot doesn't exceed its available quantity
       for (const lot of sortedLots) {
         const requested = parseFloat(lotInputs[lot.id] || "0") || 0;
         const available = parseFloat(lot.quantity);
@@ -2153,7 +2214,7 @@ function SellModal({
         holdingId: holding.id,
         sharesToSell: selectionMode === "method" ? parseFloat(shares) : lotTotalShares,
         pricePerShare,
-        saleDate,
+        saleDate: actionDate,
         fees: parseFloat(fees) || 0,
       };
       const result = await previewSell(
@@ -2171,27 +2232,42 @@ function SellModal({
   };
 
   const handleConfirm = async () => {
-    if (!preview) return;
     setSubmitting(true);
     setError(null);
     try {
-      const baseRequest = {
-        holdingId: holding.id,
-        sharesToSell: selectionMode === "method" ? parseFloat(shares) : lotTotalShares,
-        pricePerShare: parseFloat(price),
-        saleDate,
-        fees: parseFloat(fees) || 0,
-        destinationAccountId: destAccountId,
-      };
-      await executeSell(
-        selectionMode === "method"
-          ? { ...baseRequest, costBasisMethod: method }
-          : { ...baseRequest, lotAllocations }
-      );
-      onSold();
-      onClose();
+      if (mode === "transfer") {
+        const baseRequest = {
+          holdingId: holding.id,
+          destinationAccountId: destAccountId,
+          transferDate: actionDate,
+        };
+        await executeTransfer(
+          selectionMode === "method"
+            ? { ...baseRequest, sharesToTransfer: parseFloat(shares), costBasisMethod: method }
+            : { ...baseRequest, lotAllocations }
+        );
+        onTransferred();
+        onClose();
+      } else {
+        if (!preview) return;
+        const baseRequest = {
+          holdingId: holding.id,
+          sharesToSell: selectionMode === "method" ? parseFloat(shares) : lotTotalShares,
+          pricePerShare: parseFloat(price),
+          saleDate: actionDate,
+          fees: parseFloat(fees) || 0,
+          destinationAccountId: destAccountId,
+        };
+        await executeSell(
+          selectionMode === "method"
+            ? { ...baseRequest, costBasisMethod: method }
+            : { ...baseRequest, lotAllocations }
+        );
+        onSold();
+        onClose();
+      }
     } catch (e: any) {
-      setError(e?.message ?? "Failed to record sale.");
+      setError(e?.message ?? mode === "transfer" ? "Failed to transfer holding." : "Failed to record sale.");
       setStep("input");
     } finally {
       setSubmitting(false);
@@ -2201,20 +2277,40 @@ function SellModal({
   const gainColor = (v: number) =>
     v >= 0 ? "text-green-600" : "text-red-500";
 
+  const destAccount = eligibleAccounts.find((a) => a.id === destAccountId);
+
   return (
     <Modal
       open
       onClose={onClose}
-      title={`Sell ${holding.ticker}`}
-      className={step === "preview" ? "max-w-3xl" : "max-w-lg"}
+      title={`Sell or Transfer ${holding.ticker}`}
+      className={step === "preview" && mode === "sell" ? "max-w-3xl" : "max-w-lg"}
     >
       {step === "input" ? (
         <div className="space-y-4">
+          {/* Sell / Transfer mode toggle */}
+          <div className="flex rounded border border-border overflow-hidden text-xs font-medium">
+            <button
+              type="button"
+              onClick={() => { setMode("sell"); setDestAccountId(""); setError(null); }}
+              className={`flex-1 py-2 transition-colors ${mode === "sell" ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-muted/60"}`}
+            >
+              Sell
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode("transfer"); setDestAccountId(""); setError(null); }}
+              className={`flex-1 py-2 transition-colors border-l border-border ${mode === "transfer" ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-muted/60"}`}
+            >
+              Transfer to another account
+            </button>
+          </div>
+
           <p className="text-sm text-muted-foreground">
             Available: <span className="font-medium text-foreground">{maxShares.toLocaleString(undefined, { maximumFractionDigits: 6 })} shares</span>
           </p>
 
-          {/* Selection mode toggle */}
+          {/* Lot selection mode toggle */}
           <div className="flex rounded border border-border overflow-hidden text-xs font-medium">
             <button
               type="button"
@@ -2234,9 +2330,9 @@ function SellModal({
 
           {selectionMode === "method" ? (
             <>
-              <div className="grid grid-cols-2 gap-3">
+              <div className={`grid gap-3 ${mode === "sell" ? "grid-cols-2" : "grid-cols-1"}`}>
                 <div>
-                  <label className="block text-xs font-medium mb-1">Shares to Sell</label>
+                  <label className="block text-xs font-medium mb-1">{mode === "sell" ? "Shares to Sell" : "Shares to Transfer"}</label>
                   <input
                     type="number"
                     value={shares}
@@ -2248,21 +2344,23 @@ function SellModal({
                     className="w-full rounded border border-border px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1">Sale Price / Share</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
-                    <input
-                      type="number"
-                      value={price}
-                      step="0.000001"
-                      min="0"
-                      placeholder="0.00"
-                      onChange={(e) => setPrice(e.target.value)}
-                      className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
+                {mode === "sell" && (
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Sale Price / Share</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
+                      <input
+                        type="number"
+                        value={price}
+                        step="0.000001"
+                        min="0"
+                        placeholder="0.00"
+                        onChange={(e) => setPrice(e.target.value)}
+                        className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1">Cost Basis Method</label>
@@ -2286,7 +2384,7 @@ function SellModal({
               {/* Lot selection table */}
               <div>
                 <div className="mb-1">
-                  <label className="text-xs font-medium">Lots — enter shares to sell from each</label>
+                  <label className="text-xs font-medium">Lots — enter shares to {mode === "sell" ? "sell" : "transfer"} from each</label>
                 </div>
                 <div className="max-h-52 overflow-y-auto rounded border border-border">
                   <table className="w-full text-xs">
@@ -2341,8 +2439,8 @@ function SellModal({
                 </div>
               </div>
 
-              {/* Price row for lot mode */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Total shares row for lot mode (sell also shows price) */}
+              <div className={`grid gap-3 ${mode === "sell" ? "grid-cols-2" : "grid-cols-1"}`}>
                 <div>
                   <label className="block text-xs font-medium mb-1">Total Shares</label>
                   <input
@@ -2353,54 +2451,58 @@ function SellModal({
                     className="w-full rounded border border-border px-3 py-2 text-sm tabular-nums bg-muted text-muted-foreground cursor-default"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1">Sale Price / Share</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
-                    <input
-                      type="number"
-                      value={price}
-                      step="0.000001"
-                      min="0"
-                      placeholder="0.00"
-                      onChange={(e) => setPrice(e.target.value)}
-                      className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
+                {mode === "sell" && (
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Sale Price / Share</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
+                      <input
+                        type="number"
+                        value={price}
+                        step="0.000001"
+                        min="0"
+                        placeholder="0.00"
+                        onChange={(e) => setPrice(e.target.value)}
+                        className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`grid gap-3 ${mode === "sell" ? "grid-cols-2" : "grid-cols-1"}`}>
             <div>
-              <label className="block text-xs font-medium mb-1">Sale Date</label>
+              <label className="block text-xs font-medium mb-1">{mode === "sell" ? "Sale Date" : "Transfer Date"}</label>
               <SmartDateInput
-                value={saleDate}
+                value={actionDate}
                 max={localToday()}
-                onChange={setSaleDate}
+                onChange={setActionDate}
                 className="w-full rounded border border-border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Fees (optional)</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
-                <input
-                  type="number"
-                  value={fees}
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                  onChange={(e) => setFees(e.target.value)}
-                  className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
-                />
+            {mode === "sell" && (
+              <div>
+                <label className="block text-xs font-medium mb-1">Fees (optional)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
+                  <input
+                    type="number"
+                    value={fees}
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    onChange={(e) => setFees(e.target.value)}
+                    className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div>
-            <label className="block text-xs font-medium mb-1">Proceeds Go To</label>
+            <label className="block text-xs font-medium mb-1">{mode === "sell" ? "Proceeds Go To" : "Transfer To"}</label>
             <div className="relative">
               <select
                 value={destAccountId}
@@ -2414,20 +2516,23 @@ function SellModal({
               </select>
               <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
             </div>
+            {mode === "transfer" && transferEligibleAccounts.length === 0 && (
+              <p className="mt-1 text-xs text-muted-foreground">No other investment accounts found.</p>
+            )}
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <div className="flex gap-2 pt-1">
             <Button variant="secondary" onClick={onClose} className="flex-1">Cancel</Button>
-            <Button onClick={handlePreview} disabled={loading} className="flex-1">
-              {loading ? "Calculating…" : "Preview Sale →"}
+            <Button onClick={handleNext} disabled={loading || (mode === "transfer" && transferEligibleAccounts.length === 0)} className="flex-1">
+              {loading ? "Calculating…" : mode === "sell" ? "Preview Sale →" : "Review Transfer →"}
             </Button>
           </div>
         </div>
-      ) : (
+      ) : mode === "sell" ? (
         <div className="space-y-4">
-          {/* Lot breakdown table */}
+          {/* Sell — lot breakdown table */}
           <div className="overflow-x-auto rounded border border-border">
             <table className="w-full text-xs">
               <thead>
@@ -2469,7 +2574,7 @@ function SellModal({
             </table>
           </div>
 
-          {/* Summary */}
+          {/* Sell — summary */}
           <div className="rounded border border-border bg-muted/20 p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Gross Proceeds</span>
@@ -2515,6 +2620,76 @@ function SellModal({
             </Button>
             <Button onClick={handleConfirm} disabled={submitting} className="flex-1">
               {submitting ? "Recording…" : "Confirm Sale"}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        /* Transfer — confirm summary (no server round-trip needed, no taxable gain) */
+        <div className="space-y-4">
+          <div className="rounded border border-border bg-muted/20 p-3 text-sm space-y-1">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">From</span>
+              <span className="font-medium">This account</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">To</span>
+              <span className="font-medium">{destAccount?.name ?? "—"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Ticker</span>
+              <span className="font-medium tabular-nums">{holding.ticker}</span>
+            </div>
+            <div className="flex justify-between border-t border-border pt-2 mt-1">
+              <span className="text-muted-foreground">Total Shares</span>
+              <span className="font-medium tabular-nums">
+                {(selectionMode === "method" ? parseFloat(shares) : lotTotalShares).toLocaleString(undefined, { maximumFractionDigits: 6 })}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total Cost Basis</span>
+              <span className="font-medium tabular-nums">{formatCurrency(transferTotalCostBasis)}</span>
+            </div>
+          </div>
+
+          {transferLotBreakdown.length > 0 && (
+            <div className="overflow-x-auto rounded border border-border">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-muted/40 text-muted-foreground uppercase tracking-wide">
+                    <th className="py-2 px-3 text-left font-medium">Lot Date</th>
+                    <th className="py-2 px-3 text-right font-medium">Shares</th>
+                    <th className="py-2 px-3 text-right font-medium">Cost/Share</th>
+                    <th className="py-2 px-3 text-right font-medium">Cost Basis</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transferLotBreakdown.map((lot, i) => (
+                    <tr key={i} className="border-t border-border">
+                      <td className="py-2 px-3 tabular-nums">{lot.acquiredDate ? formatDate(lot.acquiredDate) : "—"}</td>
+                      <td className="py-2 px-3 text-right tabular-nums">
+                        {lot.shares.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                      </td>
+                      <td className="py-2 px-3 text-right tabular-nums">{formatCurrency(lot.costPerShare)}</td>
+                      <td className="py-2 px-3 text-right tabular-nums">{formatCurrency(lot.shares * lot.costPerShare)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            Cost basis and acquisition dates are preserved in the destination account. No taxable event is recorded.
+          </p>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+
+          <div className="flex gap-2 pt-1">
+            <Button variant="secondary" onClick={() => { setStep("input"); setError(null); }} className="flex-1">
+              ← Back
+            </Button>
+            <Button onClick={handleConfirm} disabled={submitting} className="flex-1">
+              {submitting ? "Transferring…" : "Confirm Transfer"}
             </Button>
           </div>
         </div>
@@ -3413,14 +3588,16 @@ function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHo
               {/* Type filter */}
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide shrink-0 pr-1">Type</span>
-                {(["PURCHASE", "SALE", "DIVIDEND"] as const).filter(t => presentTypes.has(t)).map((type) => {
+                {(["PURCHASE", "SALE", "DIVIDEND", "TRANSFER"] as const).filter(t => presentTypes.has(t)).map((type) => {
                   const active = selectedTypes.has(type);
                   const colorClass = type === "PURCHASE"
                     ? active ? "bg-green-100 text-green-700 border-green-300" : "border-border text-muted-foreground hover:border-green-300 hover:text-green-700"
                     : type === "SALE"
                     ? active ? "bg-blue-100 text-blue-700 border-blue-300" : "border-border text-muted-foreground hover:border-blue-300 hover:text-blue-700"
+                    : type === "TRANSFER"
+                    ? active ? "bg-amber-100 text-amber-700 border-amber-300" : "border-border text-muted-foreground hover:border-amber-300 hover:text-amber-700"
                     : active ? "bg-violet-100 text-violet-700 border-violet-300" : "border-border text-muted-foreground hover:border-violet-300 hover:text-violet-700";
-                  const label = type === "PURCHASE" ? "Purchase" : type === "SALE" ? "Sale" : "Dividend";
+                  const label = type === "PURCHASE" ? "Purchase" : type === "SALE" ? "Sale" : type === "TRANSFER" ? "Transfer" : "Dividend";
                   return (
                     <button
                       key={type}
@@ -3466,13 +3643,16 @@ function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHo
                   const isGainPositive = gain >= 0;
                   const isPurchase = a.type === "PURCHASE";
                   const isSale = a.type === "SALE";
+                  const isTransfer = a.type === "TRANSFER";
 
                   const badgeClass = isSale
                     ? "bg-blue-100 text-blue-700"
                     : isPurchase
                     ? "bg-green-100 text-green-700"
+                    : isTransfer
+                    ? "bg-amber-100 text-amber-700"
                     : "bg-violet-100 text-violet-700";
-                  const badgeLabel = isSale ? "Sale" : isPurchase ? "Purchase" : "Dividend";
+                  const badgeLabel = isSale ? "Sale" : isPurchase ? "Purchase" : isTransfer ? "Transfer" : "Dividend";
 
                   return (
                     <tr key={a.id} className="border-b border-border hover:bg-muted/20 group">
@@ -4991,6 +5171,12 @@ export function InvestmentAccount() {
           accounts={accounts}
           onClose={() => setSellModalHolding(null)}
           onSold={() => {
+            refetch();
+            refreshChart();
+            setActiveTab("activity");
+            setSellModalHolding(null);
+          }}
+          onTransferred={() => {
             refetch();
             refreshChart();
             setActiveTab("activity");

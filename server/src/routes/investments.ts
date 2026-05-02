@@ -3053,6 +3053,253 @@ investmentRoutes.post("/sell", async (req, res) => {
   }
 });
 
+// ── POST /api/investments/transfer ───────────────────────────────────────────
+// Moves investment lots from one account to another, preserving cost basis and
+// acquisition dates. No taxable event — no gain/loss is recorded.
+//
+// If the destination account already holds the same ticker, the transferred lots
+// are added to the existing holding. If the source holding becomes empty after
+// the transfer, it is deleted (sale history on InvestmentActivity is preserved
+// since those records carry their own accountId).
+//
+// Both accounts receive a TRANSFER InvestmentActivity record with transferAccountId
+// pointing to the other side for display purposes.
+
+const transferSchema = z.object({
+  holdingId: z.string(),
+  destinationAccountId: z.string(),
+  // Either sharesToTransfer + costBasisMethod OR lotAllocations (validated below)
+  sharesToTransfer: z.number().positive().optional(),
+  costBasisMethod: z.enum(["FIFO", "LIFO", "MIN_TAX", "MAX_GAIN"]).optional(),
+  lotAllocations: z
+    .array(z.object({ lotId: z.string(), shares: z.number().positive() }))
+    .optional(),
+  transferDate: z.string().transform((s) => new Date(s)),
+  notes: z.string().optional(),
+});
+
+investmentRoutes.post("/transfer", async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const body = transferSchema.parse(req.body);
+
+    const hasMethod = !!body.costBasisMethod;
+    const hasAllocations = !!body.lotAllocations?.length;
+    if (!hasMethod && !hasAllocations) {
+      return res.status(400).json({
+        error: { message: "Either costBasisMethod or lotAllocations must be provided" },
+      });
+    }
+    if (hasMethod && !body.sharesToTransfer) {
+      return res.status(400).json({
+        error: { message: "sharesToTransfer is required when using costBasisMethod" },
+      });
+    }
+
+    const holding = await prisma.investmentHolding.findFirst({
+      where: { id: body.holdingId, account: { userId } },
+      include: { lots: true, account: { select: { isTaxAdvantaged: true } } },
+    });
+    if (!holding) return res.status(404).json({ error: { message: "Holding not found" } });
+
+    const destAccount = await prisma.account.findFirst({
+      where: { id: body.destinationAccountId, userId },
+    });
+    if (!destAccount)
+      return res.status(404).json({ error: { message: "Destination account not found" } });
+    if (destAccount.type !== "INVESTMENT")
+      return res.status(400).json({ error: { message: "Destination account must be an investment account" } });
+    if (destAccount.id === holding.accountId)
+      return res.status(400).json({ error: { message: "Source and destination accounts must be different" } });
+
+    // Determine which lots to transfer and how many shares from each
+    type LotShare = { lotId: string; shares: number; costPerShare: number; acquiredDate: Date | null };
+    let lotAllocations: LotShare[];
+
+    if (body.lotAllocations) {
+      const lotMap = new Map(holding.lots.map((l) => [l.id, l]));
+      const invalid = body.lotAllocations.find((a) => !lotMap.has(a.lotId));
+      if (invalid)
+        return res.status(400).json({ error: { message: "One or more lot IDs do not belong to this holding" } });
+      lotAllocations = body.lotAllocations.map((a) => {
+        const lot = lotMap.get(a.lotId)!;
+        const available = parseFloat(lot.quantity.toString());
+        if (a.shares > available + 0.000001)
+          throw Object.assign(new Error(`Lot ${a.lotId}: cannot transfer ${a.shares} shares, only ${available} available`), { status: 400 });
+        return { lotId: lot.id, shares: a.shares, costPerShare: parseFloat(lot.costPerShare.toString()), acquiredDate: lot.acquiredDate };
+      });
+    } else {
+      const sharesToTransfer = body.sharesToTransfer!;
+      const totalQty = holding.lots.reduce((s, l) => s + parseFloat(l.quantity.toString()), 0);
+      if (sharesToTransfer > totalQty + 0.000001)
+        return res.status(400).json({ error: { message: `Cannot transfer ${sharesToTransfer} shares; only ${totalQty} available` } });
+
+      const sorted = [...holding.lots].sort((a, b) => {
+        const aCps = parseFloat(a.costPerShare.toString());
+        const bCps = parseFloat(b.costPerShare.toString());
+        switch (body.costBasisMethod) {
+          case "FIFO":    return (a.acquiredDate?.getTime() ?? Infinity) - (b.acquiredDate?.getTime() ?? Infinity);
+          case "LIFO":    return (b.acquiredDate?.getTime() ?? -Infinity) - (a.acquiredDate?.getTime() ?? -Infinity);
+          case "MIN_TAX": return bCps - aCps;
+          case "MAX_GAIN": return aCps - bCps;
+          default:        return 0;
+        }
+      });
+
+      lotAllocations = [];
+      let remaining = sharesToTransfer;
+      for (const lot of sorted) {
+        if (remaining <= 0.000001) break;
+        const shares = Math.min(parseFloat(lot.quantity.toString()), remaining);
+        lotAllocations.push({ lotId: lot.id, shares, costPerShare: parseFloat(lot.costPerShare.toString()), acquiredDate: lot.acquiredDate });
+        remaining -= shares;
+      }
+    }
+
+    const totalTransferredShares = lotAllocations.reduce((s, a) => s + a.shares, 0);
+    const totalTransferredCostBasis = Math.round(
+      lotAllocations.reduce((s, a) => s + a.shares * a.costPerShare, 0) * 100
+    ) / 100;
+
+    // Resolve instrument before opening the transaction — this may hit the network
+    // (Yahoo Finance lookup) and would time out the 5 s interactive transaction.
+    const instrumentId = await resolveInstrumentId(holding.ticker, holding.name);
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Reduce or delete source lots
+      for (const alloc of lotAllocations) {
+        const lot = holding.lots.find((l) => l.id === alloc.lotId)!;
+        const remaining = parseFloat(lot.quantity.toString()) - alloc.shares;
+        if (remaining < 0.000001) {
+          await tx.investmentLot.delete({ where: { id: alloc.lotId } });
+        } else {
+          await tx.investmentLot.update({ where: { id: alloc.lotId }, data: { quantity: remaining } });
+        }
+      }
+
+      // 2. Delete source holding if now empty
+      const remainingLots = await tx.investmentLot.count({ where: { holdingId: holding.id } });
+      const sourceHoldingDeleted = remainingLots === 0;
+      if (sourceHoldingDeleted) {
+        await tx.investmentHolding.delete({ where: { id: holding.id } });
+        await deactivateIfOrphaned(tx, holding.instrumentId);
+      }
+
+      // 3. Upsert destination holding (create if ticker not yet held there)
+      let destHolding = await tx.investmentHolding.findUnique({
+        where: { accountId_ticker: { accountId: body.destinationAccountId, ticker: holding.ticker } },
+      });
+      if (!destHolding) {
+        destHolding = await tx.investmentHolding.create({
+          data: {
+            accountId: body.destinationAccountId,
+            ticker: holding.ticker,
+            name: holding.name,
+            type: holding.type,
+            assetClass: holding.assetClass,
+            instrumentId,
+          },
+        });
+      }
+
+      // 4. Create destination lots with original cost basis and acquisition dates
+      for (const alloc of lotAllocations) {
+        await tx.investmentLot.create({
+          data: {
+            holdingId: destHolding.id,
+            quantity: alloc.shares,
+            costPerShare: alloc.costPerShare,
+            acquiredDate: alloc.acquiredDate,
+          },
+        });
+      }
+
+      // 5. Record TRANSFER activity on source account
+      const sourceActivity = await tx.investmentActivity.create({
+        data: {
+          accountId: holding.accountId,
+          holdingId: sourceHoldingDeleted ? null : holding.id,
+          ticker: holding.ticker,
+          type: "TRANSFER",
+          date: body.transferDate,
+          shares: totalTransferredShares,
+          amount: totalTransferredCostBasis,
+          costBasis: totalTransferredCostBasis,
+          transferAccountId: body.destinationAccountId,
+          notes: body.notes ?? null,
+          updatedAt: new Date(),
+        },
+      });
+
+      // 6. Record TRANSFER activity on destination account
+      const destActivity = await tx.investmentActivity.create({
+        data: {
+          accountId: body.destinationAccountId,
+          holdingId: destHolding.id,
+          ticker: holding.ticker,
+          type: "TRANSFER",
+          date: body.transferDate,
+          shares: totalTransferredShares,
+          amount: totalTransferredCostBasis,
+          costBasis: totalTransferredCostBasis,
+          transferAccountId: holding.accountId,
+          notes: body.notes ?? null,
+          updatedAt: new Date(),
+        },
+      });
+
+      return { sourceActivity, destActivity, sourceHoldingDeleted, destHoldingId: destHolding.id };
+    });
+
+    // Fetch updated holdings for the response
+    const [updatedSource, updatedDest] = await Promise.all([
+      result.sourceHoldingDeleted
+        ? Promise.resolve(null)
+        : prisma.investmentHolding.findUnique({ where: { id: holding.id }, include: { lots: true } }),
+      prisma.investmentHolding.findUnique({ where: { id: result.destHoldingId }, include: { lots: true } }),
+    ]);
+
+    function serializeHoldingWithPrice(h: any, price: number | null, priceDate: any, priceUpdatedAt: any) {
+      if (!h) return null;
+      return {
+        id: h.id,
+        accountId: h.accountId,
+        ticker: h.ticker,
+        name: h.name,
+        type: h.type,
+        currentPrice: price,
+        priceDate: priceDate ?? null,
+        priceUpdatedAt: priceUpdatedAt ?? null,
+        lots: h.lots.map((l: any) => ({
+          id: l.id,
+          holdingId: l.holdingId,
+          quantity: l.quantity.toString(),
+          costPerShare: l.costPerShare.toString(),
+          acquiredDate: l.acquiredDate ? l.acquiredDate.toISOString() : null,
+        })),
+        ...computeHoldingFields(h.lots, price),
+      };
+    }
+
+    const tp = await prisma.tickerPrice.findUnique({ where: { ticker: holding.ticker } });
+    const price = tp ? parseFloat(tp.price.toString()) : null;
+
+    res.json({
+      sourceActivity: serializeActivity(result.sourceActivity),
+      destActivity: serializeActivity(result.destActivity),
+      sourceHolding: serializeHoldingWithPrice(updatedSource, price, tp?.priceDate, tp?.updatedAt),
+      destHolding: serializeHoldingWithPrice(updatedDest, price, tp?.priceDate, tp?.updatedAt),
+    });
+  } catch (err: any) {
+    if (err instanceof z.ZodError)
+      return res.status(400).json({ error: { message: err.errors[0]?.message } });
+    if (err.status === 400)
+      return res.status(400).json({ error: { message: err.message } });
+    console.error(err);
+    res.status(500).json({ error: { message: "Failed to transfer holding" } });
+  }
+});
+
 // ── Realized Gain Snapshots ────────────────────────────────────────────────
 // Stores YTD realized gain/loss totals pasted in from a robo-advisor dashboard.
 // One row per account per year; GET returns the snapshot for the requested year
