@@ -2183,14 +2183,14 @@ export function Expenses() {
                               className="h-4 w-4 rounded accent-primary"
                             />
                           </th>
-                          <th className="w-[70px] pb-3 pr-3 font-medium">Date</th>
-                          <th className="pb-3 pr-3 font-medium">Description</th>
+                          <th className="w-[70px] pb-3 pr-3 text-xs font-medium uppercase tracking-wide">Date</th>
+                          <th className="pb-3 pr-3 text-xs font-medium uppercase tracking-wide">Description</th>
                           <th className="w-[60px] pb-3"></th>
-                          <th className="w-[170px] pb-3 pr-3 font-medium">Vendor</th>
-                          <th className="w-[190px] pb-3 pr-3 font-medium">Category</th>
-                          <th className="w-[155px] pb-3 pr-3 font-medium">Account</th>
+                          <th className="w-[170px] pb-3 pr-3 text-xs font-medium uppercase tracking-wide">Vendor</th>
+                          <th className="w-[190px] pb-3 pr-3 text-xs font-medium uppercase tracking-wide">Category</th>
+                          <th className="w-[155px] pb-3 pr-3 text-xs font-medium uppercase tracking-wide">Account</th>
                           <th className="w-[30px] pb-3"></th>
-                          <th className="w-[90px] pb-3 text-right font-medium">Amount</th>
+                          <th className="w-[90px] pb-3 text-right text-xs font-medium uppercase tracking-wide">Amount</th>
                           <th className="w-[60px] pb-3"></th>
                         </tr>
                       </thead>
@@ -2282,14 +2282,14 @@ export function Expenses() {
                         className="h-4 w-4 rounded accent-primary"
                       />
                     </th>
-                    <th className="w-[70px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
-                    <th className="cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("description")}>Description <SortIcon field="description" /></th>
+                    <th className="w-[70px] cursor-pointer select-none pb-3 pr-3 text-xs font-medium uppercase tracking-wide" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
+                    <th className="cursor-pointer select-none pb-3 pr-3 text-xs font-medium uppercase tracking-wide" onClick={() => toggleSort("description")}>Description <SortIcon field="description" /></th>
                     <th className="w-[60px] pb-3"></th>
-                    <th className="w-[170px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("vendor")}>Vendor <SortIcon field="vendor" /></th>
-                    <th className="w-[190px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("category")}>Category <SortIcon field="category" /></th>
-                    <th className="w-[155px] cursor-pointer select-none pb-3 pr-3 font-medium" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
+                    <th className="w-[170px] cursor-pointer select-none pb-3 pr-3 text-xs font-medium uppercase tracking-wide" onClick={() => toggleSort("vendor")}>Vendor <SortIcon field="vendor" /></th>
+                    <th className="w-[190px] cursor-pointer select-none pb-3 pr-3 text-xs font-medium uppercase tracking-wide" onClick={() => toggleSort("category")}>Category <SortIcon field="category" /></th>
+                    <th className="w-[155px] cursor-pointer select-none pb-3 pr-3 text-xs font-medium uppercase tracking-wide" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
                     <th className="w-[30px] pb-3"></th>
-                    <th className="w-[90px] cursor-pointer select-none pb-3 text-right font-medium" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
+                    <th className="w-[90px] cursor-pointer select-none pb-3 text-right text-xs font-medium uppercase tracking-wide" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
                     <th className="w-[60px] pb-3"></th>
                   </tr>
                 </thead>
@@ -3002,14 +3002,14 @@ function ImportModal({
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-background">
                 <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="px-2 py-1.5 font-medium">#</th>
-                  <th className="px-2 py-1.5 font-medium">Date</th>
-                  <th className="px-2 py-1.5 font-medium">Description</th>
-                  <th className="px-2 py-1.5 font-medium">Vendor</th>
-                  <th className="px-2 py-1.5 font-medium">Category</th>
-                  <th className="px-2 py-1.5 font-medium">Account</th>
-                  <th className="px-2 py-1.5 font-medium text-right">Amount</th>
-                  <th className="px-2 py-1.5 font-medium">Status</th>
+                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">#</th>
+                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Date</th>
+                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Description</th>
+                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Vendor</th>
+                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Category</th>
+                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Account</th>
+                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide text-right">Amount</th>
+                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Status</th>
                 </tr>
               </thead>
               <tbody>
