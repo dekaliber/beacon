@@ -34,6 +34,10 @@ export function PageHeadingMenu({
     };
   }, [open]);
 
+  if (items.length === 0) {
+    return <h1 className="text-2xl font-bold">{title}</h1>;
+  }
+
   return (
     <div className="relative" ref={ref}>
       <button

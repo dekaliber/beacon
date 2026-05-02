@@ -9,10 +9,10 @@ import {
   Tooltip as RechartsTooltip,
   ReferenceLine,
 } from "recharts";
-import { AlertTriangle, TrendingDown, Landmark, Pencil, Info, X, TrendingUp, CreditCard, ArrowDownLeft, ArrowUpRight, Sparkles, Wallet } from "lucide-react";
+import { AlertTriangle, TrendingDown, Landmark, Pencil, Info, X, TrendingUp, CreditCard, ArrowDownLeft, ArrowUpRight, Sparkles, Wallet, PlusCircle } from "lucide-react";
 import { Card } from "@/components/Card";
 import { useApi } from "@/hooks/useApi";
-import { getCashFlow, getInvestmentAccounts, updateAccount } from "@/api";
+import { getCashFlow, getInvestmentAccounts, updateAccount, createBalanceAdjustment } from "@/api";
 import { formatCurrency, cn } from "@/lib/utils";
 import type { CashFlowProjection, CashFlowEvent, DailyBalance, InvestmentAccountSummary } from "@/types";
 
@@ -248,6 +248,134 @@ function EditBalanceSheet({
   );
 }
 
+// ── Add cash injection bottom sheet ──────────────────────────────────────────
+
+interface AddCashInjectionSheetProps {
+  open: boolean;
+  accountId: string | null;
+  defaultDate: string;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved }: AddCashInjectionSheetProps) {
+  const today = useMemo(() => new Date().toLocaleDateString("en-CA"), []);
+  const [date, setDate] = useState(defaultDate);
+  const [description, setDescription] = useState("Cash injection");
+  const [amount, setAmount] = useState("");
+  const [saving, setSaving] = useState(false);
+  const amountRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      setDate(defaultDate);
+      setDescription("Cash injection");
+      setAmount("");
+      setTimeout(() => amountRef.current?.focus(), 80);
+    }
+  }, [open, defaultDate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0 || !accountId) return;
+    setSaving(true);
+    try {
+      await createBalanceAdjustment({ accountId, date, amount: amt, description: description.trim() || "Cash injection" });
+      onSaved();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div
+        className={cn(
+          "fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200",
+          open ? "opacity-100" : "pointer-events-none opacity-0"
+        )}
+        onClick={onClose}
+      />
+      <div
+        className={cn(
+          "fixed bottom-0 left-0 right-0 z-[60] flex flex-col rounded-t-2xl bg-background shadow-xl transition-transform duration-250 ease-out",
+          open ? "translate-y-0" : "translate-y-full"
+        )}
+      >
+        <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
+
+        <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
+          <h2 className="text-base font-semibold">Add Cash Injection</h2>
+          <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form id="cash-injection-form" onSubmit={handleSubmit} className="px-4 pt-4 pb-2 space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium">Date</label>
+            <input
+              type="date"
+              value={date}
+              min={today}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Description</label>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Cash injection"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Amount</label>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+              <input
+                ref={amountRef}
+                type="text"
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+                className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+          </div>
+        </form>
+
+        <div className="shrink-0 border-t border-border p-4">
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="cash-injection-form"
+              disabled={saving || !amount || parseFloat(amount) <= 0}
+              className="flex-1 rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Banking tile ──────────────────────────────────────────────────────────────
 
 function BankingTile({
@@ -386,15 +514,17 @@ function ProjectionSection({
   windowEnd,
   bankingAccount,
   onEditBalance,
+  onAddInjection,
 }: {
   projection: CashFlowProjection;
   windowEnd: string;
   bankingAccount: InvestmentAccountSummary | null;
   onEditBalance: () => void;
+  onAddInjection: (defaultDate: string) => void;
 }) {
   const firstNegativeEntry = projection.dailyBalances.find((d) => d.balance < 0);
   const firstNegativeDate = firstNegativeEntry?.date;
-  const shortfall = firstNegativeEntry ? Math.abs(firstNegativeEntry.balance) : 0;
+  const shortfall = firstNegativeEntry ? firstNegativeEntry.balance : 0;
 
   return (
     <div className="space-y-4">
@@ -416,18 +546,34 @@ function ProjectionSection({
             </p>
           </div>
         </div>
-        {firstNegativeDate && (
-          <div className="flex items-center gap-1.5 text-sm text-red-600">
-            <TrendingDown className="h-4 w-4 shrink-0" />
-            <span>
-              Projected shortfall of {formatCurrency(shortfall)} starting {fmtDate(firstNegativeDate)}
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Chart */}
       <BalanceChart data={projection.dailyBalances} />
+
+      {/* Shortfall card */}
+      {firstNegativeDate && (
+        <Card className="px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 flex-shrink-0 rounded-md bg-red-100 flex items-center justify-center">
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm text-red-600">Projected shortfall</p>
+              <p className="text-xs text-muted-foreground">
+                {formatCurrency(shortfall)} starting {fmtDate(firstNegativeDate)}
+              </p>
+            </div>
+            <button
+              onClick={() => onAddInjection(firstNegativeDate)}
+              className="flex shrink-0 items-center gap-1 rounded-md bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+            >
+              <PlusCircle className="h-3.5 w-3.5" />
+              Add injection
+            </button>
+          </div>
+        </Card>
+      )}
 
       {/* Banking tile */}
       {bankingAccount && (
@@ -476,6 +622,8 @@ export function MobileCashFlow() {
   const { data: accounts, refetch: refetchAccounts } = useApi(getInvestmentAccounts);
   const [activeTab, setActiveTab]                   = useState<string | null>(null);
   const [editingAccount, setEditingAccount]         = useState<InvestmentAccountSummary | null>(null);
+  const [injectionOpen, setInjectionOpen]           = useState(false);
+  const [injectionDefaultDate, setInjectionDefaultDate] = useState("");
 
   const projections = data?.projections ?? [];
   const personal = projections.filter((p) => !p.isJoint).sort((a, b) => b.startBalance - a.startBalance);
@@ -534,6 +682,7 @@ export function MobileCashFlow() {
           windowEnd={data.windowEnd}
           bankingAccount={selectedBankingAccount}
           onEditBalance={() => setEditingAccount(selectedBankingAccount)}
+          onAddInjection={(defaultDate) => { setInjectionDefaultDate(defaultDate); setInjectionOpen(true); }}
         />
       )}
 
@@ -542,6 +691,15 @@ export function MobileCashFlow() {
         account={editingAccount}
         onClose={() => setEditingAccount(null)}
         onSave={handleSaveBalance}
+      />
+
+      {/* Add cash injection sheet */}
+      <AddCashInjectionSheet
+        open={injectionOpen}
+        accountId={selectedId}
+        defaultDate={injectionDefaultDate}
+        onClose={() => setInjectionOpen(false)}
+        onSaved={() => { refetch(); refetchAccounts(); }}
       />
     </div>
   );

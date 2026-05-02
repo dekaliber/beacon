@@ -1305,20 +1305,22 @@ export function MobileRecurring() {
                   <div
                     key={rule.id}
                     onClick={() => setTransferDetailRule(rule)}
-                    className="flex cursor-pointer items-center gap-3 px-4 py-3 active:bg-accent transition-colors"
+                    className="flex cursor-pointer items-start gap-3 px-4 py-3 active:bg-accent transition-colors"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium text-sm">{rule.description}</p>
-                      <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                        <span className="truncate max-w-[90px]">{rule.fromAccount.name}</span>
-                        <ArrowRight className="h-3 w-3 shrink-0" />
-                        <span className="truncate max-w-[90px]">{rule.toAccount.name}</span>
-                        <span>· {formatFrequency(rule.frequency, rule.interval)}</span>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {formatFrequency(rule.frequency, rule.interval)} · {formatDate(rule.nextTransferDate ?? rule.nextOccurrence)}
                       </p>
                     </div>
-                    <span className="shrink-0 font-semibold text-sm">
-                      {formatCurrency(parseFloat(rule.amount))}
-                    </span>
+                    <div className="shrink-0 text-right">
+                      <p className="font-semibold text-sm">{formatCurrency(parseFloat(rule.amount))}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{rule.fromAccount.name}</p>
+                      <p className="flex items-center justify-end gap-0.5 text-xs text-muted-foreground">
+                        <ArrowRight className="h-3 w-3 shrink-0" />
+                        {rule.toAccount.name}
+                      </p>
+                    </div>
                   </div>
                 ))}
               </div>
