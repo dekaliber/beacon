@@ -568,7 +568,11 @@ export function MobileDashboard() {
 
         {/* ── Spending vs. Category Averages ────────────────────────────────── */}
         <Card>
-          {categoryAverages ? (
+          {categoryAverages && categoryAverages.categories.length === 0 ? (
+            <div className="flex min-h-[120px] items-center justify-center text-xs text-muted-foreground">
+              Not enough history to compute averages
+            </div>
+          ) : categoryAverages ? (
             <CategoryVsAverageChart
               categories={categoryAverages.categories}
               yearLabel={yearLabel}
@@ -582,15 +586,17 @@ export function MobileDashboard() {
         </Card>
 
         {/* ── Spending Outliers ─────────────────────────────────────────────── */}
-        <Card>
-          {outlierTransactions ? (
-            <OutlierTransactionsList categories={outlierTransactions.categories} />
-          ) : (
-            <div className="flex min-h-[80px] items-center justify-center text-xs text-muted-foreground">
-              Loading…
-            </div>
-          )}
-        </Card>
+        {(!categoryAverages || categoryAverages.categories.length > 0) && (
+          <Card>
+            {outlierTransactions ? (
+              <OutlierTransactionsList categories={outlierTransactions.categories} />
+            ) : (
+              <div className="flex min-h-[80px] items-center justify-center text-xs text-muted-foreground">
+                Loading…
+              </div>
+            )}
+          </Card>
+        )}
 
       </div>
     </div>

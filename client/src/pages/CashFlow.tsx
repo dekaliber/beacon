@@ -451,7 +451,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
           +{formatCurrency(event.amount)}
         </td>
         <td className="py-1.5 pr-4">
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-1 h-[26px]">
             <button
               onClick={() => setEditing(true)}
               className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"

@@ -175,8 +175,7 @@ dashboardRoutes.get("/category-averages", async (req, res) => {
       };
     })
     .filter((o) => o.avgAmount > 0 || o.currentAmount > 0)
-    .sort((a, b) => b.avgAmount - a.avgAmount)
-    .slice(0, 12);
+    .sort((a, b) => b.avgAmount - a.avgAmount);
 
   res.json({ categories, earliestYear });
 });
@@ -301,9 +300,8 @@ dashboardRoutes.get("/outlier-transactions", async (req, res) => {
       parent: { select: { id: true, name: true, color: true } },
     },
   } as const;
-  const histSel  = { amount: true, category: catSel } as const;
-  const curSel   = { id: true, amount: true, date: true, description: true, vendor: true, category: catSel, offsets: { select: { amount: true } } } as const;
-  const curFilter = { parentExpenseId: null as null, ...expFilter };
+  const histSel = { amount: true, category: catSel } as const;
+  const curSel  = { id: true, amount: true, date: true, description: true, vendor: true, category: catSel } as const;
 
   const [histP, histJ, curP, curJ] = await Promise.all([
     personalIds.length > 0
@@ -313,10 +311,10 @@ dashboardRoutes.get("/outlier-transactions", async (req, res) => {
       ? prisma.expense.findMany({ where: { accountId: { in: jointIds },    date: { gte: histStart, lte: histEnd }, ...expFilter }, select: histSel })
       : Promise.resolve([]),
     personalIds.length > 0
-      ? prisma.expense.findMany({ where: { accountId: { in: personalIds }, date: { gte: curStart, lte: curEnd }, ...curFilter }, select: curSel })
+      ? prisma.expense.findMany({ where: { accountId: { in: personalIds }, date: { gte: curStart, lte: curEnd }, ...expFilter }, select: curSel })
       : Promise.resolve([]),
     jointIds.length > 0
-      ? prisma.expense.findMany({ where: { accountId: { in: jointIds },    date: { gte: curStart, lte: curEnd }, ...curFilter }, select: curSel })
+      ? prisma.expense.findMany({ where: { accountId: { in: jointIds },    date: { gte: curStart, lte: curEnd }, ...expFilter }, select: curSel })
       : Promise.resolve([]),
   ]);
 
@@ -353,11 +351,9 @@ dashboardRoutes.get("/outlier-transactions", async (req, res) => {
   function accumulateCurrent(e: typeof curP[number], scale: number, isJoint: boolean) {
     const { topId, topName, topColor } = topLevel(e.category);
     if (!catInfo.has(topId)) catInfo.set(topId, { name: topName, color: topColor });
-    const offsetSum = e.offsets.reduce((s, o) => s + Number(o.amount), 0);
-    const net = Number(e.amount) + offsetSum;
-    const effective = net * scale;
+    const effective = Number(e.amount) * scale;
     curTotals.set(topId, (curTotals.get(topId) ?? 0) + effective);
-    if (net <= 0) return;
+    if (Number(e.amount) <= 0) return;
     if (!curTxns.has(topId)) curTxns.set(topId, []);
     curTxns.get(topId)!.push({
       id:              e.id,

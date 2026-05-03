@@ -1110,7 +1110,7 @@ function MobileFilterSheet({
               className="flex cursor-pointer items-center px-4 py-3"
               onClick={() => setAccountOpen((v) => !v)}
             >
-              <span className="flex-1 text-sm font-medium">Account</span>
+              <span className="flex-1 text-sm font-medium">Account{staged.accountIds.length > 0 && <span className="ml-1.5 font-normal text-muted-foreground">({staged.accountIds.length} selected)</span>}</span>
               {accountOpen && (
                 <div className="mr-3 flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                   <button type="button" onClick={() => setStaged((s) => ({ ...s, accountIds: accounts.map((a) => a.id) }))} className="text-xs text-primary">All</button>
@@ -1180,12 +1180,12 @@ function MobileFilterSheet({
               className="flex cursor-pointer items-center px-4 py-3"
               onClick={() => setCategoryOpen((v) => !v)}
             >
-              <span className="flex-1 text-sm font-medium">Categories</span>
+              <span className="flex-1 text-sm font-medium">Categories{staged.categoryIds.length > 0 && <span className="ml-1.5 font-normal text-muted-foreground">({staged.categoryIds.length} selected)</span>}</span>
               {categoryOpen && (
                 <div className="mr-3 flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                  <button type="button" onClick={() => setStaged((s) => ({ ...s, categoryIds: flatCatOptions.map((o) => o.id) }))} className="text-xs text-primary">All</button>
+                  <button type="button" onClick={() => setStaged((s) => ({ ...s, categoryIds: [...new Set([...s.categoryIds, ...filteredCats.map((o) => o.id)])] }))} className="text-xs text-primary">All</button>
                   <span className="text-xs text-muted-foreground/40">·</span>
-                  <button type="button" onClick={() => setStaged((s) => ({ ...s, categoryIds: [] }))} className="text-xs text-muted-foreground">None</button>
+                  <button type="button" onClick={() => { const ids = new Set(filteredCats.map((o) => o.id)); setStaged((s) => ({ ...s, categoryIds: s.categoryIds.filter((id) => !ids.has(id)) })); }} className="text-xs text-muted-foreground">None</button>
                 </div>
               )}
               <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-150 ${categoryOpen ? "rotate-180" : ""}`} />
@@ -1236,7 +1236,7 @@ function MobileFilterSheet({
               className="flex cursor-pointer items-center px-4 py-3"
               onClick={() => setTagOpen((v) => !v)}
             >
-              <span className="flex-1 text-sm font-medium">Tag</span>
+              <span className="flex-1 text-sm font-medium">Tag{staged.tagIds.length > 0 && <span className="ml-1.5 font-normal text-muted-foreground">({staged.tagIds.length} selected)</span>}</span>
               {tagOpen && (
                 <div className="mr-3 flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                   <button type="button" onClick={() => setStaged((s) => ({ ...s, tagIds: tags.map((t) => t.id) }))} className="text-xs text-primary">All</button>

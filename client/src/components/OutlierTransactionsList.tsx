@@ -16,13 +16,7 @@ interface OutlierTransactionsListProps {
 }
 
 export function OutlierTransactionsList({ categories }: OutlierTransactionsListProps) {
-  if (categories.length === 0) {
-    return (
-      <div className="flex min-h-[80px] items-center justify-center text-xs text-muted-foreground">
-        No categories above their monthly average
-      </div>
-    );
-  }
+  if (categories.length === 0) return null;
 
   return (
     <div className="w-full">

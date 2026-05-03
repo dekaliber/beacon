@@ -516,9 +516,12 @@ async function buildProjection(
     }
   }
 
-  // Sort by date, then debits before credits (conservative ordering)
+  // Sort by date, then cash injections first, then debits before credits (conservative ordering)
   rawEvents.sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    const aIsAdj = a.type === "BALANCE_ADJUSTMENT" ? 0 : 1;
+    const bIsAdj = b.type === "BALANCE_ADJUSTMENT" ? 0 : 1;
+    if (aIsAdj !== bIsAdj) return aIsAdj - bIsAdj;
     return a.amount - b.amount; // debits (negative) first
   });
 

@@ -1282,6 +1282,7 @@ export function IncomePage() {
                 selected={staged.categoryIds}
                 onChange={(ids) => setStaged((s) => ({ ...s, categoryIds: ids }))}
                 placeholder="Categories"
+                searchable
               />
             </div>
             <div>
@@ -1611,6 +1612,9 @@ export function IncomePage() {
           deleteDisabled={allIncomes.some((i) => selectedIds.has(i.id) && i.activityId != null)}
           showTaxStatus
           deleteDisabledTitle="Deselect investment-linked transactions (Div / Sale) to enable delete"
+          selectedTransactions={allIncomes
+            .filter((i) => selectedIds.has(i.id))
+            .map((i) => ({ amount: i.amount, isJoint: i.account.isJoint }))}
         />
         </div>
       )}

@@ -2101,6 +2101,7 @@ export function Expenses() {
                 selected={staged.categoryIds}
                 onChange={(ids) => setStaged((s) => ({ ...s, categoryIds: ids }))}
                 placeholder="All Categories"
+                searchable
               />
             </div>
             <div>
@@ -2412,6 +2413,13 @@ export function Expenses() {
           onGroupAction={handleGroupAction}
           onSetAsPrimary={handleSetAsPrimary}
           onCreateTag={async (name) => { const t = await createTag({ name }); refetchTags(); return t; }}
+          selectedTransactions={expenses
+            .filter((e) => selectedIds.has(e.id))
+            .map((e) => {
+              const rawOffsetSum = (e.offsets ?? []).reduce((s, o) => s + parseFloat(o.amount), 0);
+              const net = parseFloat(e.amount) + rawOffsetSum;
+              return { amount: String(net), isJoint: e.account.isJoint };
+            })}
         />
       )}
 

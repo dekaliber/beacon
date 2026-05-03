@@ -183,12 +183,12 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
           const pctStr   = c.deltaPercent !== null
             ? ` (${isOver ? "+" : ""}${c.deltaPercent}%)`
             : "";
-          const TOOLTIP_W = 200;
-          const left = mousePos.x + 12 + TOOLTIP_W > width ? mousePos.x - TOOLTIP_W - 8 : mousePos.x + 12;
+          const TOOLTIP_MIN_W = 200;
+          const left = Math.max(0, Math.min(mousePos.x - TOOLTIP_MIN_W / 2, width - TOOLTIP_MIN_W));
           return (
             <div
               className="pointer-events-none absolute z-10 rounded-md border border-border bg-card px-3 py-2 shadow-md"
-              style={{ left, top: mousePos.y - 10, width: TOOLTIP_W }}
+              style={{ left, top: mousePos.y - 8, minWidth: TOOLTIP_MIN_W, transform: "translateY(-100%)" }}
             >
               <p className="mb-1.5 text-xs font-semibold text-card-foreground">{c.categoryName}</p>
               <div className="grid gap-x-3 gap-y-1 text-xs" style={{ gridTemplateColumns: "max-content 1fr" }}>

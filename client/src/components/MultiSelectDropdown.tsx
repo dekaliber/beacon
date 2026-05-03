@@ -18,6 +18,7 @@ interface MultiSelectDropdownProps {
   onChange: (selected: string[]) => void;
   placeholder: string;
   groups?: MultiSelectGroup[];
+  searchable?: boolean;
 }
 
 export function MultiSelectDropdown({
@@ -26,14 +27,19 @@ export function MultiSelectDropdown({
   onChange,
   placeholder,
   groups,
+  searchable,
 }: MultiSelectDropdownProps) {
   const [open, setOpen] = useState(false);
   const [flipUp, setFlipUp] = useState(false);
+  const [search, setSearch] = useState("");
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearch("");
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -43,8 +49,18 @@ export function MultiSelectDropdown({
     onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
   };
 
-  const selectAll = () => onChange(options.map((o) => o.id));
-  const deselectAll = () => onChange([]);
+  const visibleOptions = searchable && search.trim()
+    ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
+    : options;
+
+  const selectAll = () => {
+    const visibleIds = visibleOptions.map((o) => o.id);
+    onChange([...new Set([...selected, ...visibleIds])]);
+  };
+  const deselectAll = () => {
+    const visibleIds = new Set(visibleOptions.map((o) => o.id));
+    onChange(selected.filter((id) => !visibleIds.has(id)));
+  };
 
   const buttonLabel =
     selected.length === 0
@@ -112,10 +128,22 @@ export function MultiSelectDropdown({
               Deselect all
             </button>
           </div>
+          {searchable && (
+            <div className="border-b border-border p-2">
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search…"
+                className="w-full rounded border border-border px-2 py-1 text-sm focus:outline-none"
+                autoFocus
+              />
+            </div>
+          )}
           <div className="max-h-52 overflow-auto">
             {groups ? (
               groups.map((group) => {
-                const groupOptions = options.filter((o) => o.groupKey === group.key);
+                const groupOptions = visibleOptions.filter((o) => o.groupKey === group.key);
                 if (groupOptions.length === 0) return null;
                 return (
                   <div key={group.key}>
@@ -126,8 +154,10 @@ export function MultiSelectDropdown({
                   </div>
                 );
               })
+            ) : visibleOptions.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-muted-foreground">No categories found</p>
             ) : (
-              options.map(renderOption)
+              visibleOptions.map(renderOption)
             )}
           </div>
         </div>

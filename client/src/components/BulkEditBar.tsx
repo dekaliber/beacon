@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { X, Link2, Unlink, Star, Check, Trash2 } from "lucide-react";
 import { bulkUpdateExpenses, bulkDeleteExpenses } from "@/api";
 import type { Category, Tag } from "@/types";
+import { formatCurrency } from "@/lib/utils";
 
 // The action to show depends on which groups the selected expenses belong to:
 //   "group"   → create a new group OR add ungrouped expenses to an existing group
@@ -34,6 +35,8 @@ interface BulkEditBarProps {
   deleteDisabled?: boolean;
   /** Tooltip shown on the disabled Delete button */
   deleteDisabledTitle?: string;
+  /** Selected transactions for computing personal/joint totals */
+  selectedTransactions?: { amount: string; isJoint: boolean }[];
 }
 
 type ActivePopover = "description" | "category" | "taxStatus" | "tags" | null;
@@ -66,6 +69,7 @@ export function BulkEditBar({
   showTaxStatus = false,
   deleteDisabled = false,
   deleteDisabledTitle,
+  selectedTransactions,
 }: BulkEditBarProps) {
   const [active, setActive] = useState<ActivePopover>(null);
   const [groupLoading, setGroupLoading] = useState(false);
@@ -206,6 +210,20 @@ export function BulkEditBar({
 
   const showTagCreate = !!tagSearch.trim() && filteredTags.length === 0 && !!onCreateTag;
 
+  const selectionTotals = useMemo(() => {
+    if (!selectedTransactions?.length) return null;
+    let personal = 0;
+    let joint = 0;
+    for (const t of selectedTransactions) {
+      const amt = parseFloat(t.amount);
+      if (t.isJoint) joint += amt;
+      else personal += amt;
+    }
+    const hasPersonal = selectedTransactions.some((t) => !t.isJoint);
+    const hasJoint = selectedTransactions.some((t) => t.isJoint);
+    return { personal, joint, hasPersonal, hasJoint };
+  }, [selectedTransactions]);
+
   const handleCreateTag = async () => {
     const name = tagSearch.trim();
     if (!name || tagCreating || !onCreateTag) return;
@@ -262,6 +280,21 @@ export function BulkEditBar({
       <span className="flex items-center px-4 py-2.5 whitespace-nowrap">
         {ids.length} selected
       </span>
+
+      {selectionTotals && (
+        <>
+          <span className={sepCls} />
+          <span className="flex items-center px-4 py-2.5 whitespace-nowrap text-primary-foreground/90 text-sm">
+            {selectionTotals.hasPersonal && selectionTotals.hasJoint ? (
+              <>Personal: {formatCurrency(selectionTotals.personal)} <span className="mx-1.5 opacity-50">•</span> Joint: {formatCurrency(selectionTotals.joint)}</>
+            ) : selectionTotals.hasJoint ? (
+              <>Joint: {formatCurrency(selectionTotals.joint)}</>
+            ) : (
+              <>Personal: {formatCurrency(selectionTotals.personal)}</>
+            )}
+          </span>
+        </>
+      )}
 
       <span className={sepCls} />
 
@@ -506,7 +539,7 @@ export function BulkEditBar({
             title={groupAction === "group" ? "Group selected transactions" : "Remove from group"}
           >
             {groupAction === "group" ? (
-              <><Link2 className="h-3.5 w-3.5" />{groupLoading ? "Grouping…" : "Group Transactions"}</>
+              <><Link2 className="h-3.5 w-3.5" />{groupLoading ? "Grouping…" : "Group"}</>
             ) : (
               <><Unlink className="h-3.5 w-3.5" />{groupLoading ? "Ungrouping…" : "Remove from Group"}</>
             )}
