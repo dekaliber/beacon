@@ -495,6 +495,36 @@ export function Dashboard() {
         </Card>
       </div>
 
+      {/* ── Spending vs. Category Averages + Spending Outliers — combined ──── */}
+      <Card>
+        {categoryAverages && categoryAverages.categories.length === 0 ? (
+          <div className="flex min-h-[120px] items-center justify-center text-xs text-muted-foreground">
+            Not enough history to compute averages
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 divide-y divide-border lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+            <div className="lg:pr-6">
+              {categoryAverages ? (
+                <CategoryVsAverageChart categories={categoryAverages.categories} yearLabel={yearLabel} compact />
+              ) : (
+                <div className="flex h-full min-h-[120px] items-center justify-center text-xs text-muted-foreground">
+                  Loading…
+                </div>
+              )}
+            </div>
+            <div className="pt-6 lg:pl-6 lg:pt-0">
+              {outlierTransactions ? (
+                <OutlierTransactionsList categories={outlierTransactions.categories} />
+              ) : (
+                <div className="flex min-h-[80px] items-center justify-center text-xs text-muted-foreground">
+                  Loading…
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Card>
+
       {/* ── Largest Changes by Category — full width ───────────────────────── */}
       <Card>
         {dashboardOutliers && (
@@ -526,36 +556,6 @@ export function Dashboard() {
               </div>
             }
           />
-        )}
-      </Card>
-
-      {/* ── Spending vs. Category Averages + Spending Outliers — combined ──── */}
-      <Card>
-        {categoryAverages && categoryAverages.categories.length === 0 ? (
-          <div className="flex min-h-[120px] items-center justify-center text-xs text-muted-foreground">
-            Not enough history to compute averages
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 divide-y divide-border lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-            <div className="lg:pr-6">
-              {categoryAverages ? (
-                <CategoryVsAverageChart categories={categoryAverages.categories} yearLabel={yearLabel} compact />
-              ) : (
-                <div className="flex h-full min-h-[120px] items-center justify-center text-xs text-muted-foreground">
-                  Loading…
-                </div>
-              )}
-            </div>
-            <div className="pt-6 lg:pl-6 lg:pt-0">
-              {outlierTransactions ? (
-                <OutlierTransactionsList categories={outlierTransactions.categories} />
-              ) : (
-                <div className="flex min-h-[80px] items-center justify-center text-xs text-muted-foreground">
-                  Loading…
-                </div>
-              )}
-            </div>
-          </div>
         )}
       </Card>
 
