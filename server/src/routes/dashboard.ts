@@ -382,6 +382,7 @@ dashboardRoutes.get("/outlier-transactions", async (req, res) => {
   for (const [topId, histTotal] of histTotals) {
     const avgMonthly = histTotal / histMonths;
     const curTotal   = curTotals.get(topId) ?? 0;
+    if (avgMonthly <= 0 && curTotal <= 0) continue;
     const excess     = curTotal - avgMonthly;
     if (excess <= 0) continue;
 

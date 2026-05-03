@@ -497,6 +497,38 @@ export function MobileDashboard() {
           )}
         </Card>
 
+        {/* ── Spending vs. Category Averages ────────────────────────────────── */}
+        <Card>
+          {categoryAverages && categoryAverages.categories.length === 0 ? (
+            <div className="flex min-h-[120px] items-center justify-center text-xs text-muted-foreground">
+              Not enough history to compute averages
+            </div>
+          ) : categoryAverages ? (
+            <CategoryVsAverageChart
+              categories={categoryAverages.categories}
+              yearLabel={yearLabel}
+              compact
+            />
+          ) : (
+            <div className="flex min-h-[120px] items-center justify-center text-xs text-muted-foreground">
+              Loading…
+            </div>
+          )}
+        </Card>
+
+        {/* ── Spending Outliers ─────────────────────────────────────────────── */}
+        {(!categoryAverages || categoryAverages.categories.length > 0) && (
+          <Card>
+            {outlierTransactions ? (
+              <OutlierTransactionsList categories={outlierTransactions.categories} />
+            ) : (
+              <div className="flex min-h-[80px] items-center justify-center text-xs text-muted-foreground">
+                Loading…
+              </div>
+            )}
+          </Card>
+        )}
+
         {/* ── Largest Changes by Category ───────────────────────────────────── */}
         {dashboardOutliers && dashboardOutliers.outliers.length > 0 && (
           <Card>
@@ -563,38 +595,6 @@ export function MobileDashboard() {
                 })}
               </tbody>
             </table>
-          </Card>
-        )}
-
-        {/* ── Spending vs. Category Averages ────────────────────────────────── */}
-        <Card>
-          {categoryAverages && categoryAverages.categories.length === 0 ? (
-            <div className="flex min-h-[120px] items-center justify-center text-xs text-muted-foreground">
-              Not enough history to compute averages
-            </div>
-          ) : categoryAverages ? (
-            <CategoryVsAverageChart
-              categories={categoryAverages.categories}
-              yearLabel={yearLabel}
-              compact
-            />
-          ) : (
-            <div className="flex min-h-[120px] items-center justify-center text-xs text-muted-foreground">
-              Loading…
-            </div>
-          )}
-        </Card>
-
-        {/* ── Spending Outliers ─────────────────────────────────────────────── */}
-        {(!categoryAverages || categoryAverages.categories.length > 0) && (
-          <Card>
-            {outlierTransactions ? (
-              <OutlierTransactionsList categories={outlierTransactions.categories} />
-            ) : (
-              <div className="flex min-h-[80px] items-center justify-center text-xs text-muted-foreground">
-                Loading…
-              </div>
-            )}
           </Card>
         )}
 
