@@ -77,6 +77,11 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
         <div ref={containerRef} className="w-full">
           {width > 0 && (
             <svg width={width} height={svgH} style={{ overflow: "visible" }}>
+              <defs>
+                <pattern id="pending-stripe" x="0" y="0" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                  <rect width="2" height="4" fill="white" fillOpacity={0.55} />
+                </pattern>
+              </defs>
               {/* Vertical gridlines */}
               {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
                 const x = LABEL_W + CHART_PAD_L + frac * innerW;
@@ -109,6 +114,10 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
                   ? c.categoryName.slice(0, 14) + "…"
                   : c.categoryName;
 
+                const pendingAmt  = c.pendingAmount ?? 0;
+                const recordedAmt = Math.max(0, c.currentAmount - pendingAmt);
+                const xRecorded   = xOf(recordedAmt);
+
                 return (
                   <g key={c.categoryId ?? `__cat${i}__`}>
                     {/* Row background */}
@@ -132,11 +141,25 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
                       rx={2} fill="var(--color-muted-foreground)" fillOpacity={0.2}
                     />
 
-                    {/* Current amount bar */}
+                    {/* Recorded (non-pending) portion of current bar */}
                     <rect
-                      x={xBase} y={barY} width={Math.max(0, xCur - xBase)} height={BAR_H}
+                      x={xBase} y={barY} width={Math.max(0, xRecorded - xBase)} height={BAR_H}
                       rx={2} fill={barColor} fillOpacity={0.75}
                     />
+
+                    {/* Pending portion: faded base + diagonal stripe overlay */}
+                    {pendingAmt > 0 && xCur > xRecorded && (
+                      <>
+                        <rect
+                          x={xRecorded} y={barY} width={Math.max(0, xCur - xRecorded)} height={BAR_H}
+                          rx={2} fill={barColor} fillOpacity={0.35}
+                        />
+                        <rect
+                          x={xRecorded} y={barY} width={Math.max(0, xCur - xRecorded)} height={BAR_H}
+                          rx={2} fill="url(#pending-stripe)"
+                        />
+                      </>
+                    )}
 
                     {/* Average tick mark */}
                     {xAvg > xBase && (
@@ -183,6 +206,7 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
           const pctStr   = c.deltaPercent !== null
             ? ` (${isOver ? "+" : ""}${c.deltaPercent}%)`
             : "";
+          const pendingAmtTip = c.pendingAmount ?? 0;
           const TOOLTIP_MIN_W = 200;
           const left = Math.max(0, Math.min(mousePos.x - TOOLTIP_MIN_W / 2, width - TOOLTIP_MIN_W));
           return (
@@ -195,8 +219,11 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
                 <span className="text-muted-foreground">Category Avg</span>
                 <span className="whitespace-nowrap font-medium text-foreground">{fmtAmt(c.avgAmount)}</span>
                 <span className="text-muted-foreground">Current Month</span>
-                <span className="whitespace-nowrap font-semibold" style={{ color: barColor }}>
-                  {fmtAmt(c.currentAmount)}{pctStr}
+                <span className="font-semibold" style={{ color: barColor }}>
+                  <span className="whitespace-nowrap">{fmtAmt(c.currentAmount)}{pctStr}</span>
+                  {pendingAmtTip > 0 && (
+                    <span className="block font-normal italic text-muted-foreground">({fmtAmt(pendingAmtTip)} pending)</span>
+                  )}
                 </span>
               </div>
             </div>
@@ -210,6 +237,18 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
               <rect x={0} y={2} width={20} height={8} rx={2} fill="var(--color-muted-foreground)" fillOpacity={0.75} />
             </svg>
             <span className="text-xs text-muted-foreground">This month</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <svg width={20} height={12}>
+              <defs>
+                <pattern id="legend-stripe" x="0" y="0" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                  <rect width="2" height="4" fill="white" fillOpacity={0.55} />
+                </pattern>
+              </defs>
+              <rect x={0} y={2} width={20} height={8} rx={2} fill="var(--color-muted-foreground)" fillOpacity={0.35} />
+              <rect x={0} y={2} width={20} height={8} rx={2} fill="url(#legend-stripe)" />
+            </svg>
+            <span className="text-xs text-muted-foreground">Pending</span>
           </div>
           <div className="flex items-center gap-1.5">
             <svg width={12} height={12}>

@@ -803,6 +803,7 @@ export interface CategoryAverage {
   avgAmount: number;
   delta: number;
   deltaPercent: number | null;
+  pendingAmount?: number;
 }
 
 export interface CategoryAveragesData {
@@ -830,6 +831,7 @@ export interface OutlierCategoryTransaction {
   date: string;
   amount: number;
   isJoint: boolean;
+  isPending?: boolean;
 }
 
 export interface OutlierCategoryGroup {

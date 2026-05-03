@@ -75,6 +75,10 @@ dashboardRoutes.get("/category-averages", async (req, res) => {
   const year  = parseInt(req.query.year  as string) || now.getUTCFullYear();
   const month = parseInt(req.query.month as string) || now.getUTCMonth() + 1;
 
+  const todayParam2 = req.query.today as string | undefined;
+  const refDate2 = todayParam2 ? new Date(`${todayParam2}T00:00:00Z`) : now;
+  const todayEndOfDay2 = new Date(Date.UTC(refDate2.getUTCFullYear(), refDate2.getUTCMonth(), refDate2.getUTCDate(), 23, 59, 59, 999));
+
   // Historical baseline: all complete years before the current year, same as outlier-transactions.
   // This keeps the average stable across all months of a given year.
   const earliest = await prisma.expense.findFirst({
@@ -109,6 +113,7 @@ dashboardRoutes.get("/category-averages", async (req, res) => {
   const expFilter = budgetExpenseFilter(ignoredCategoryIds);
   const sel = {
     amount:     true,
+    date:       true,
     categoryId: true,
     category: {
       select: {
@@ -154,6 +159,19 @@ dashboardRoutes.get("/category-averages", async (req, res) => {
   rollUp(curP,  1,          curAgg);
   rollUp(curJ,  splitRatio, curAgg);
 
+  // Accumulate pending amounts (current-month expenses dated after today)
+  const pendingAgg = new Map<string, number>();
+  function accumulatePending(rows: typeof curP, scale: number) {
+    for (const e of rows) {
+      if (e.date <= todayEndOfDay2) continue;
+      const cat   = e.category;
+      const topId = cat?.parent?.id ?? cat?.id ?? "__unknown__";
+      pendingAgg.set(topId, (pendingAgg.get(topId) ?? 0) + Number(e.amount) * scale);
+    }
+  }
+  accumulatePending(curP, 1);
+  accumulatePending(curJ, splitRatio);
+
   const allKeys = new Set([...histAgg.keys(), ...curAgg.keys()]);
 
   const categories = Array.from(allKeys)
@@ -172,6 +190,7 @@ dashboardRoutes.get("/category-averages", async (req, res) => {
         avgAmount:     Math.round(avgAmount * 100) / 100,
         delta:         Math.round(delta     * 100) / 100,
         deltaPercent,
+        pendingAmount: Math.round((pendingAgg.get(key) ?? 0) * 100) / 100,
       };
     })
     .filter((o) => o.avgAmount > 0 || o.currentAmount > 0)
@@ -264,6 +283,10 @@ dashboardRoutes.get("/outlier-transactions", async (req, res) => {
   const year   = parseInt(req.query.year  as string) || now.getUTCFullYear();
   const month  = parseInt(req.query.month as string) || now.getUTCMonth() + 1;
 
+  const todayParam3 = req.query.today as string | undefined;
+  const refDate3 = todayParam3 ? new Date(`${todayParam3}T00:00:00Z`) : now;
+  const todayEndOfDay3 = new Date(Date.UTC(refDate3.getUTCFullYear(), refDate3.getUTCMonth(), refDate3.getUTCDate(), 23, 59, 59, 999));
+
   const [accounts, ignoredCategories, settings] = await Promise.all([
     prisma.account.findMany({ where: { userId, isActive: true }, select: { id: true, isJoint: true } }),
     prisma.category.findMany({ where: { userId, ignoreInBudget: true }, select: { id: true } }),
@@ -345,7 +368,7 @@ dashboardRoutes.get("/outlier-transactions", async (req, res) => {
 
   // Accumulate current-month totals and collect transactions by top-level category
   const curTotals = new Map<string, number>();
-  type TxnEntry = { id: string; description: string; vendor: string; date: string; effectiveAmount: number; isJoint: boolean };
+  type TxnEntry = { id: string; description: string; vendor: string; date: string; effectiveAmount: number; isJoint: boolean; isPending: boolean };
   const curTxns = new Map<string, TxnEntry[]>();
 
   function accumulateCurrent(e: typeof curP[number], scale: number, isJoint: boolean) {
@@ -362,6 +385,7 @@ dashboardRoutes.get("/outlier-transactions", async (req, res) => {
       date:            e.date.toISOString().slice(0, 10),
       effectiveAmount: effective,
       isJoint,
+      isPending:       e.date > todayEndOfDay3,
     });
   }
 
@@ -410,6 +434,7 @@ dashboardRoutes.get("/outlier-transactions", async (req, res) => {
         date:        t.date,
         amount:      Math.round(t.effectiveAmount * 100) / 100,
         isJoint:     t.isJoint,
+        isPending:   t.isPending,
       })),
     });
   }
@@ -760,6 +785,12 @@ dashboardRoutes.get("/", async (req, res) => {
   const startOfMonth = new Date(Date.UTC(year, month - 1, 1));
   const endOfMonth = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
 
+  // Use the client's local date to cap MTD spend at "today" (excludes future-dated expenses).
+  const todayParam = req.query.today as string | undefined;
+  const refDate = todayParam ? new Date(`${todayParam}T00:00:00Z`) : now;
+  const refEndOfDay = new Date(Date.UTC(refDate.getUTCFullYear(), refDate.getUTCMonth(), refDate.getUTCDate(), 23, 59, 59, 999));
+  const effectiveMtdEnd = refEndOfDay < endOfMonth ? refEndOfDay : endOfMonth;
+
   // ── Shared setup: accounts, ignored categories, split ratio ──────────────
   const [accounts, ignoredCategories, settings] = await Promise.all([
     prisma.account.findMany({ where: { userId, isActive: true }, select: { id: true, isJoint: true } }),
@@ -773,14 +804,12 @@ dashboardRoutes.get("/", async (req, res) => {
   const splitRatio          = settings ? Number(settings.jointSplitRatio) : 0.5;
 
   // ── MTD spend: personal (full) + joint (× splitRatio), budget-eligible only ──
-  // Mirrors the Budgets page's totalMetrics.mtdTotal calculation.
-  // Note: joint budget is entered as the user's intended share, so splitRatio
-  // is applied to joint *spending* but NOT to the budget amount (see below).
+  // Capped at effectiveMtdEnd so future-dated expenses are excluded from the headline figure.
   const [personalMonthSpend, jointMonthSpend] = await Promise.all([
     prisma.expense.aggregate({
       where: {
         accountId: { in: personalAccountIds },
-        date: { gte: startOfMonth, lte: endOfMonth },
+        date: { gte: startOfMonth, lte: effectiveMtdEnd },
         ...budgetExpenseFilter(ignoredCategoryIds),
       },
       _sum: { amount: true },
@@ -788,7 +817,7 @@ dashboardRoutes.get("/", async (req, res) => {
     prisma.expense.aggregate({
       where: {
         accountId: { in: jointAccountIds },
-        date: { gte: startOfMonth, lte: endOfMonth },
+        date: { gte: startOfMonth, lte: effectiveMtdEnd },
         ...budgetExpenseFilter(ignoredCategoryIds),
       },
       _sum: { amount: true },
@@ -926,13 +955,14 @@ dashboardRoutes.get("/", async (req, res) => {
   }
 
   // ── Previous-month same-date MTD (for MoM comparison in summary card) ──────
-  const isCurrentMonthReq = year === now.getUTCFullYear() && month === now.getUTCMonth() + 1;
+  const isCurrentMonthReq = year === refDate.getUTCFullYear() && month === refDate.getUTCMonth() + 1;
   const daysInCurMonth    = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const compareDay        = isCurrentMonthReq ? now.getUTCDate() : daysInCurMonth;
+  const compareDay        = isCurrentMonthReq ? refDate.getUTCDate() : daysInCurMonth;
   const prevMonthYear2    = month === 1 ? year - 1 : year;
   const prevMonthNum2     = month === 1 ? 12 : month - 1;
   const daysInPrevMonth2  = new Date(prevMonthYear2, prevMonthNum2, 0).getDate();
-  const prevCompareDay    = Math.min(compareDay, daysInPrevMonth2);
+  // Past months: compare against the full prior month, not just the same day count.
+  const prevCompareDay    = isCurrentMonthReq ? Math.min(compareDay, daysInPrevMonth2) : daysInPrevMonth2;
 
   const prevMtdStart = new Date(Date.UTC(prevMonthYear2, prevMonthNum2 - 1, 1));
   const prevMtdEnd   = new Date(Date.UTC(prevMonthYear2, prevMonthNum2 - 1, prevCompareDay, 23, 59, 59, 999));

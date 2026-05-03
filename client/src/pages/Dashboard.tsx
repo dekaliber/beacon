@@ -254,7 +254,9 @@ export function Dashboard() {
               {momDeltaPct !== null && (
                 <div className="mt-3 border-t border-border pt-3">
                   <p className="text-xs text-muted-foreground">
-                    vs last month (day 1–{daysElapsed > 0 ? daysElapsed : daysInMonth})
+                    {isCurrentMonth
+                      ? `vs last month (day 1–${daysElapsed})`
+                      : "vs last month"}
                   </p>
                   <p className="mt-0.5 text-sm font-medium">
                     {fmtWhole(prevMonthMtd)}{" "}

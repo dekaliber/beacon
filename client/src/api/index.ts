@@ -176,16 +176,20 @@ export const getCategoryOutliers = (year: number, month?: number, comparison: "m
 export const getCategoryOutliersYtd = (year: number) =>
   api.get<CategoryOutliersData>(`/budgets/${year}/category-outliers-ytd?today=${localDateStr()}`);
 
-export const getCategoryAverages = (year: number, month: number) =>
-  api.get<import("../types").CategoryAveragesData>(`/dashboard/category-averages?year=${year}&month=${month}`);
+export const getCategoryAverages = (year: number, month: number) => {
+  const today = outliersRefDate(year, month);
+  return api.get<import("../types").CategoryAveragesData>(`/dashboard/category-averages?year=${year}&month=${month}&today=${today}`);
+};
 
 export const getSpendingVelocity = (year: number, month: number) => {
   const today = outliersRefDate(year, month);
   return api.get<import("../types").SpendingVelocityData>(`/dashboard/spending-velocity?year=${year}&month=${month}&today=${today}`);
 };
 
-export const getOutlierTransactions = (year: number, month: number) =>
-  api.get<import("../types").OutlierTransactionsData>(`/dashboard/outlier-transactions?year=${year}&month=${month}`);
+export const getOutlierTransactions = (year: number, month: number) => {
+  const today = outliersRefDate(year, month);
+  return api.get<import("../types").OutlierTransactionsData>(`/dashboard/outlier-transactions?year=${year}&month=${month}&today=${today}`);
+};
 
 export const getMtdChart = (year: number, month: number) => {
   const today = outliersRefDate(year, month);
@@ -208,8 +212,9 @@ export const getDashboard = (year?: number, month?: number) => {
   const params = new URLSearchParams();
   if (year) params.set("year", year.toString());
   if (month) params.set("month", month.toString());
-  const query = params.toString() ? `?${params}` : "";
-  return api.get<DashboardData>(`/dashboard${query}`);
+  const today = (year !== undefined && month !== undefined) ? outliersRefDate(year, month) : localDateStr();
+  params.set("today", today);
+  return api.get<DashboardData>(`/dashboard?${params}`);
 };
 
 export const getNetWorth = () => {

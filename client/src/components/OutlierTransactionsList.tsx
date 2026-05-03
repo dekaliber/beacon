@@ -50,7 +50,7 @@ export function OutlierTransactionsList({ categories }: OutlierTransactionsListP
                 {cat.transactions.map((t) => (
                   <div
                     key={t.id}
-                    className="flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-muted/40"
+                    className={`flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-muted/40 ${t.isPending ? "opacity-60" : ""}`}
                   >
                     <span
                       className="shrink-0 inline-flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold leading-none text-white"
@@ -66,6 +66,9 @@ export function OutlierTransactionsList({ categories }: OutlierTransactionsListP
                         )}
                       </p>
                     </div>
+                    {t.isPending && (
+                      <span className="shrink-0 text-[10px] italic text-muted-foreground">pending</span>
+                    )}
                     <span className="shrink-0 text-xs text-muted-foreground">{fmtDate(t.date)}</span>
                     <span className="shrink-0 text-xs font-semibold">{fmtAmount(t.amount)}</span>
                   </div>
