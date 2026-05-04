@@ -84,6 +84,16 @@ function eventIcon(type: CashFlowEvent["type"]) {
 
 // ── Balance chart ─────────────────────────────────────────────────────────────
 
+function BalanceTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border border-border bg-background shadow-md px-3 py-2 text-xs space-y-0.5">
+      <p className="font-semibold text-foreground">{fmtDate(label as string)}</p>
+      <p className="text-muted-foreground">Balance: <span className="text-foreground font-medium tabular-nums">{formatCurrency(payload[0].value ?? 0)}</span></p>
+    </div>
+  );
+}
+
 interface BalanceChartProps {
   data: DailyBalance[];
 }
@@ -146,16 +156,7 @@ function BalanceChart({ data }: BalanceChartProps) {
           tickCount={5}
           width={52}
         />
-        <RechartsTooltip
-          contentStyle={{
-            fontSize: 12,
-            background: "hsl(var(--background))",
-            border: "1px solid hsl(var(--border))",
-            borderRadius: 6,
-          }}
-          formatter={(v: number | undefined) => [formatCurrency(v ?? 0), "Balance" as const]}
-          labelFormatter={(label) => fmtDate(label as string)}
-        />
+        <RechartsTooltip content={<BalanceTooltip />} />
         {hasNegative && (
           <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="4 2" strokeWidth={1.5} />
         )}

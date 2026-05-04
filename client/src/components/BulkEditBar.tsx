@@ -35,6 +35,10 @@ interface BulkEditBarProps {
   deleteDisabled?: boolean;
   /** Tooltip shown on the disabled Delete button */
   deleteDisabledTitle?: string;
+  /** When true, the Group button is shown but disabled */
+  groupActionDisabled?: boolean;
+  /** Tooltip shown on the disabled Group button */
+  groupActionDisabledTitle?: string;
   /** Selected transactions for computing personal/joint totals */
   selectedTransactions?: { amount: string; isJoint: boolean }[];
 }
@@ -69,6 +73,8 @@ export function BulkEditBar({
   showTaxStatus = false,
   deleteDisabled = false,
   deleteDisabledTitle,
+  groupActionDisabled = false,
+  groupActionDisabledTitle,
   selectedTransactions,
 }: BulkEditBarProps) {
   const [active, setActive] = useState<ActivePopover>(null);
@@ -533,10 +539,10 @@ export function BulkEditBar({
           {/* Group / Ungroup */}
           <button
             type="button"
-            onClick={handleGroupAction}
-            disabled={groupLoading}
-            className="flex items-center gap-1.5 px-4 py-2.5 transition-colors whitespace-nowrap hover:bg-white/10 disabled:opacity-50"
-            title={groupAction === "group" ? "Group selected transactions" : "Remove from group"}
+            onClick={() => { if (!groupActionDisabled) handleGroupAction(); }}
+            disabled={groupLoading || (groupAction === "group" && groupActionDisabled)}
+            className={`flex items-center gap-1.5 px-4 py-2.5 transition-colors whitespace-nowrap ${groupAction === "group" && groupActionDisabled ? "opacity-40 cursor-not-allowed" : "hover:bg-white/10 disabled:opacity-50"}`}
+            title={groupAction === "group" && groupActionDisabled ? groupActionDisabledTitle : groupAction === "group" ? "Group selected transactions" : "Remove from group"}
           >
             {groupAction === "group" ? (
               <><Link2 className="h-3.5 w-3.5" />{groupLoading ? "Grouping…" : "Group"}</>

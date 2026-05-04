@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { Plus, X, ChevronDown, ChevronRight, AlertCircle, Check, CornerDownRight, ArrowUp, Trash2, Calendar, Search, Filter, Tag as TagIcon } from "lucide-react";
 import { PageHeadingMenu } from "@/components/PageHeadingMenu";
 import { useApi } from "@/hooks/useApi";
-import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, deleteExpense, getExpenseVendors, getTags, createTag, createRecurrenceRule } from "@/api";
+import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, deleteExpense, getExpenseVendors, getTags, createTag, createRecurrenceRule, getVendorCategory } from "@/api";
 import { formatCurrency, formatDate, localToday, cn } from "@/lib/utils";
 import type { Account, Category, Expense, Tag } from "@/types";
 
@@ -17,7 +17,7 @@ const FREQUENCY_OPTIONS = [
 
 // ── Vendor input with suggestions ─────────────────────────────────────────────
 
-function VendorInput({ vendors, initialValue = "" }: { vendors: string[]; initialValue?: string }) {
+function VendorInput({ vendors, initialValue = "", onSelect }: { vendors: string[]; initialValue?: string; onSelect?: (vendor: string) => void }) {
   const [value, setValue] = useState(initialValue);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -59,7 +59,7 @@ function VendorInput({ vendors, initialValue = "" }: { vendors: string[]; initia
               type="button"
               className="flex w-full items-center px-3 py-2.5 text-left text-sm hover:bg-accent"
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { setValue(vendor); setOpen(false); }}
+              onClick={() => { setValue(vendor); setOpen(false); onSelect?.(vendor); }}
             >
               {vendor}
             </button>
@@ -72,8 +72,12 @@ function VendorInput({ vendors, initialValue = "" }: { vendors: string[]; initia
 
 // ── Category picker with search ───────────────────────────────────────────────
 
-function CategoryPicker({ categories, initialId = "" }: { categories: Category[]; initialId?: string }) {
+function CategoryPicker({ categories, initialId = "", externalId }: { categories: Category[]; initialId?: string; externalId?: string }) {
   const [selectedId, setSelectedId] = useState(initialId);
+
+  useEffect(() => {
+    if (externalId) setSelectedId(externalId);
+  }, [externalId]);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -363,6 +367,7 @@ function MobileExpenseModal({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [autofillCategoryId, setAutofillCategoryId] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(() => expense?.tags.map((t) => t.tagId) ?? []);
   const [isReimbursementExpected, setIsReimbursementExpected] = useState(expense?.isReimbursementExpected ?? false);
@@ -376,6 +381,10 @@ function MobileExpenseModal({
   );
   const today = localToday();
   const isEditing = expense != null;
+
+  useEffect(() => {
+    if (open) setAutofillCategoryId(undefined);
+  }, [open]);
 
   // Lock body scroll while open — prevents iOS Safari from scrolling the page
   // underneath when the address bar retracts.
@@ -396,6 +405,15 @@ function MobileExpenseModal({
   }, [open]);
 
   if (!open) return null;
+
+  const handleVendorSelect = async (vendor: string) => {
+    if (!isEditing && vendor) {
+      try {
+        const result = await getVendorCategory(vendor);
+        if (result.categoryId) setAutofillCategoryId(result.categoryId);
+      } catch { /* ignore */ }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -439,6 +457,7 @@ function MobileExpenseModal({
       } else {
         await createExpense(data);
       }
+      setSaving(false);
       onSaved();
       onClose();
     } catch (err) {
@@ -519,7 +538,7 @@ function MobileExpenseModal({
 
           <div>
             <label className="mb-1.5 block text-sm font-medium">Vendor</label>
-            <VendorInput vendors={vendors} initialValue={expense?.vendor ?? ""} />
+            <VendorInput vendors={vendors} initialValue={expense?.vendor ?? ""} onSelect={handleVendorSelect} />
           </div>
 
           <div>
@@ -542,7 +561,7 @@ function MobileExpenseModal({
 
           <div>
             <label className="mb-1.5 block text-sm font-medium">Category</label>
-            <CategoryPicker categories={categories} initialId={expense?.categoryId ?? ""} />
+            <CategoryPicker categories={categories} initialId={expense?.categoryId ?? ""} externalId={autofillCategoryId} />
           </div>
 
           <div>

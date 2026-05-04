@@ -1800,6 +1800,17 @@ export function Expenses() {
     return { groupAction: "ungroup", targetGroupId: null };
   }, [selectedIds, expenses]);
 
+  const upcomingExpenseIdSet = useMemo(
+    () => new Set(upcomingExpenses.map((e) => e.id)),
+    [upcomingExpenses],
+  );
+  const groupActionDisabled = useMemo(() => {
+    if (selectedIds.size === 0) return false;
+    const hasUpcoming = [...selectedIds].some((id) => upcomingExpenseIdSet.has(id));
+    const hasRegular = [...selectedIds].some((id) => !upcomingExpenseIdSet.has(id));
+    return hasUpcoming && hasRegular;
+  }, [selectedIds, upcomingExpenseIdSet]);
+
   const handleGroupAction = useCallback(async () => {
     const selectedArr = [...selectedIds];
     if (groupAction === "group") {
@@ -1961,6 +1972,33 @@ export function Expenses() {
     }
     anchorIdxRef.current = idx;
   }, [groupedRows, toggleSelect, selectedIds]);
+
+  const UPCOMING_PAGE_SIZE = 5;
+  const visibleUpcoming = useMemo(
+    () => upcomingExpanded ? upcomingExpenses : upcomingExpenses.slice(0, UPCOMING_PAGE_SIZE),
+    [upcomingExpanded, upcomingExpenses],
+  );
+
+  const anchorUpcomingIdxRef = useRef<number | null>(null);
+  const handleUpcomingCheckboxChange = useCallback((id: string, idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.nativeEvent instanceof MouseEvent && e.nativeEvent.shiftKey && anchorUpcomingIdxRef.current !== null) {
+      const anchor = anchorUpcomingIdxRef.current;
+      const newState = !selectedIds.has(id);
+      const start = Math.min(anchor, idx);
+      const end = Math.max(anchor, idx);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        visibleUpcoming.slice(start, end + 1).forEach((exp) => {
+          if (newState) next.add(exp.id);
+          else next.delete(exp.id);
+        });
+        return next;
+      });
+    } else {
+      toggleSelect(id);
+    }
+    anchorUpcomingIdxRef.current = idx;
+  }, [visibleUpcoming, toggleSelect, selectedIds]);
 
   const parentCategories = (categories ?? []).filter((c) => !c.parentId);
   const childCategories = (categories ?? []).filter((c) => c.parentId);
@@ -2159,9 +2197,7 @@ export function Expenses() {
         <Card>
           <h3 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">Upcoming</h3>
           {(() => {
-            const UPCOMING_PAGE_SIZE = 5;
             const hasMore = upcomingExpenses.length > UPCOMING_PAGE_SIZE;
-            const visibleUpcoming = upcomingExpanded ? upcomingExpenses : upcomingExpenses.slice(0, UPCOMING_PAGE_SIZE);
             return (
               <>
                 <div className="hidden md:block">
@@ -2196,7 +2232,7 @@ export function Expenses() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {visibleUpcoming.map((expense) => (
+                        {visibleUpcoming.map((expense, idx) => (
                           <ExpenseRowWithOffsets
                             key={expense.id}
                             expense={expense}
@@ -2208,7 +2244,7 @@ export function Expenses() {
                             categories={categories ?? []}
                             isUpcoming
                             isSelected={selectedIds.has(expense.id)}
-                            onToggleSelect={toggleSelect}
+                            onToggleSelect={(id, e) => handleUpcomingCheckboxChange(id, idx, e)}
                           />
                         ))}
                       </tbody>
@@ -2413,7 +2449,9 @@ export function Expenses() {
           onGroupAction={handleGroupAction}
           onSetAsPrimary={handleSetAsPrimary}
           onCreateTag={async (name) => { const t = await createTag({ name }); refetchTags(); return t; }}
-          selectedTransactions={expenses
+          groupActionDisabled={groupActionDisabled}
+          groupActionDisabledTitle="Cannot group upcoming and posted transactions together"
+          selectedTransactions={[...expenses, ...upcomingExpenses]
             .filter((e) => selectedIds.has(e.id))
             .map((e) => {
               const rawOffsetSum = (e.offsets ?? []).reduce((s, o) => s + parseFloat(o.amount), 0);
