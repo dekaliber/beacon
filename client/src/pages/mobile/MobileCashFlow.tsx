@@ -12,7 +12,7 @@ import {
 import { AlertTriangle, TrendingDown, Landmark, Pencil, Info, X, TrendingUp, CreditCard, ArrowDownLeft, ArrowUpRight, Sparkles, Wallet, PlusCircle } from "lucide-react";
 import { Card } from "@/components/Card";
 import { useApi } from "@/hooks/useApi";
-import { getCashFlow, getInvestmentAccounts, updateAccount, createBalanceAdjustment, upsertStatementOverride, getExpenses } from "@/api";
+import { getCashFlow, getInvestmentAccounts, updateAccount, createBalanceAdjustment, updateBalanceAdjustment, upsertStatementOverride, getExpenses } from "@/api";
 import { formatCurrency, cn } from "@/lib/utils";
 import type { CashFlowProjection, CashFlowEvent, DailyBalance, InvestmentAccountSummary, Expense } from "@/types";
 
@@ -256,10 +256,13 @@ interface AddCashInjectionSheetProps {
   defaultDate: string;
   onClose: () => void;
   onSaved: () => void;
+  editingEvent?: CashFlowEvent | null;
 }
 
-function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved }: AddCashInjectionSheetProps) {
+function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved, editingEvent }: AddCashInjectionSheetProps) {
   const today = useMemo(() => new Date().toLocaleDateString("en-CA"), []);
+  const isEditing = !!editingEvent;
+  const isOpen = open || isEditing;
   const [date, setDate] = useState(defaultDate);
   const [description, setDescription] = useState("Cash injection");
   const [amount, setAmount] = useState("");
@@ -267,21 +270,35 @@ function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved 
   const amountRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (open) {
+    if (editingEvent) {
+      setDate(editingEvent.date);
+      setDescription(editingEvent.description);
+      setAmount(Math.abs(editingEvent.amount).toFixed(2));
+      setTimeout(() => amountRef.current?.focus(), 80);
+    } else if (open) {
       setDate(defaultDate);
       setDescription("Cash injection");
       setAmount("");
       setTimeout(() => amountRef.current?.focus(), 80);
     }
-  }, [open, defaultDate]);
+  }, [open, editingEvent?.id, defaultDate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = parseFloat(amount);
-    if (!amt || amt <= 0 || !accountId) return;
+    if (!amt || amt <= 0) return;
     setSaving(true);
     try {
-      await createBalanceAdjustment({ accountId, date, amount: amt, description: description.trim() || "Cash injection" });
+      if (isEditing && editingEvent?.adjustmentId) {
+        await updateBalanceAdjustment(editingEvent.adjustmentId, {
+          date,
+          amount: amt,
+          description: description.trim() || "Cash injection",
+        });
+      } else {
+        if (!accountId) return;
+        await createBalanceAdjustment({ accountId, date, amount: amt, description: description.trim() || "Cash injection" });
+      }
       onSaved();
       onClose();
     } finally {
@@ -294,20 +311,20 @@ function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved 
       <div
         className={cn(
           "fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200",
-          open ? "opacity-100" : "pointer-events-none opacity-0"
+          isOpen ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={onClose}
       />
       <div
         className={cn(
           "fixed bottom-0 left-0 right-0 z-[60] flex flex-col rounded-t-2xl bg-background shadow-xl transition-transform duration-250 ease-out",
-          open ? "translate-y-0" : "translate-y-full"
+          isOpen ? "translate-y-0" : "translate-y-full"
         )}
       >
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
 
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
-          <h2 className="text-base font-semibold">Add Cash Injection</h2>
+          <h2 className="text-base font-semibold">{isEditing ? "Edit Cash Injection" : "Add Cash Injection"}</h2>
           <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
@@ -636,9 +653,11 @@ function eventIcon(type: CashFlowEvent["type"]) {
 function MobileEventsLedger({
   events,
   onCCPaymentTap,
+  onInjectionTap,
 }: {
   events: CashFlowEvent[];
   onCCPaymentTap?: (event: CashFlowEvent) => void;
+  onInjectionTap?: (event: CashFlowEvent) => void;
 }) {
   if (events.length === 0) {
     return (
@@ -652,23 +671,23 @@ function MobileEventsLedger({
     <div className="mt-4 border-t border-border">
       {events.map((event) => {
         const isCCPayment = event.type === "CC_PAYMENT";
-        const Wrapper = isCCPayment ? "button" : "div";
+        const isInjection = event.type === "BALANCE_ADJUSTMENT";
+        const isTappable = isCCPayment || isInjection;
+        const Wrapper = isTappable ? "button" : "div";
         return (
           <Wrapper
             key={event.id}
-            {...(isCCPayment
+            {...(isTappable
               ? {
                   type: "button" as const,
-                  onClick: () => onCCPaymentTap?.(event),
+                  onClick: () => isCCPayment ? onCCPaymentTap?.(event) : onInjectionTap?.(event),
                   className: cn(
                     "w-full text-left border-b border-border/50 py-2.5 active:bg-muted/40 transition-colors",
+                    isInjection && "bg-amber-50/50 active:bg-amber-100/60",
                   ),
                 }
               : {
-                  className: cn(
-                    "border-b border-border/50 py-2.5",
-                    event.type === "BALANCE_ADJUSTMENT" && "bg-amber-50/50",
-                  ),
+                  className: "border-b border-border/50 py-2.5",
                 })}
           >
             {/* Line 1: icon + description + amount + chevron for CC_PAYMENT */}
@@ -740,6 +759,7 @@ function ProjectionSection({
   onEditBalance: () => void;
   onAddInjection: (defaultDate: string) => void;
   onCCPaymentTap?: (event: CashFlowEvent) => void;
+  onInjectionTap?: (event: CashFlowEvent) => void;
 }) {
   const firstNegativeEntry = projection.dailyBalances.find((d) => d.balance < 0);
   const firstNegativeDate = firstNegativeEntry?.date;
@@ -800,7 +820,7 @@ function ProjectionSection({
       )}
 
       {/* Ledger */}
-      <MobileEventsLedger events={projection.events} onCCPaymentTap={onCCPaymentTap} />
+      <MobileEventsLedger events={projection.events} onCCPaymentTap={onCCPaymentTap} onInjectionTap={onInjectionTap} />
     </div>
   );
 }
@@ -844,6 +864,7 @@ export function MobileCashFlow() {
   const [injectionOpen, setInjectionOpen]           = useState(false);
   const [injectionDefaultDate, setInjectionDefaultDate] = useState("");
   const [ccPaymentEvent, setCCPaymentEvent]         = useState<CashFlowEvent | null>(null);
+  const [editingInjection, setEditingInjection]     = useState<CashFlowEvent | null>(null);
 
   const projections = data?.projections ?? [];
   const personal = projections.filter((p) => !p.isJoint).sort((a, b) => b.startBalance - a.startBalance);
@@ -904,6 +925,7 @@ export function MobileCashFlow() {
           onEditBalance={() => setEditingAccount(selectedBankingAccount)}
           onAddInjection={(defaultDate) => { setInjectionDefaultDate(defaultDate); setInjectionOpen(true); }}
           onCCPaymentTap={(event) => setCCPaymentEvent(event)}
+          onInjectionTap={(event) => setEditingInjection(event)}
         />
       )}
 
@@ -914,13 +936,14 @@ export function MobileCashFlow() {
         onSave={handleSaveBalance}
       />
 
-      {/* Add cash injection sheet */}
+      {/* Add / edit cash injection sheet */}
       <AddCashInjectionSheet
         open={injectionOpen}
         accountId={selectedId}
         defaultDate={injectionDefaultDate}
-        onClose={() => setInjectionOpen(false)}
+        onClose={() => { setInjectionOpen(false); setEditingInjection(null); }}
         onSaved={() => { refetch(); refetchAccounts(); }}
+        editingEvent={editingInjection}
       />
 
       {/* CC payment sheet */}
