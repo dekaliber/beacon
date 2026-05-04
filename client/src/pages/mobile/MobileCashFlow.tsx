@@ -9,7 +9,7 @@ import {
   Tooltip as RechartsTooltip,
   ReferenceLine,
 } from "recharts";
-import { AlertTriangle, TrendingDown, Landmark, Pencil, Info, X, TrendingUp, CreditCard, ArrowDownLeft, ArrowUpRight, Sparkles, Wallet, PlusCircle, ChevronRight } from "lucide-react";
+import { AlertTriangle, TrendingDown, Landmark, Pencil, Info, X, TrendingUp, CreditCard, ArrowDownLeft, ArrowUpRight, Sparkles, Wallet, PlusCircle } from "lucide-react";
 import { Card } from "@/components/Card";
 import { useApi } from "@/hooks/useApi";
 import { getCashFlow, getInvestmentAccounts, updateAccount, createBalanceAdjustment, upsertStatementOverride, getExpenses } from "@/api";
@@ -679,17 +679,12 @@ function MobileEventsLedger({
                 </span>
                 <p className="truncate font-medium">{event.description}</p>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <span className={cn(
-                  "tabular-nums font-medium",
-                  event.amount > 0 ? "text-green-600" : "text-red-500",
-                )}>
-                  {event.amount > 0 ? "+" : ""}{formatCurrency(event.amount)}
-                </span>
-                {isCCPayment && (
-                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
-                )}
-              </div>
+              <span className={cn(
+                "shrink-0 tabular-nums font-medium",
+                event.amount > 0 ? "text-green-600" : "text-red-500",
+              )}>
+                {event.amount > 0 ? "+" : ""}{formatCurrency(event.amount)}
+              </span>
             </div>
 
             {/* Line 2: date · secondary info + running balance */}
