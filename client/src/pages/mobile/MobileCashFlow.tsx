@@ -752,6 +752,7 @@ function ProjectionSection({
   onEditBalance,
   onAddInjection,
   onCCPaymentTap,
+  onInjectionTap,
 }: {
   projection: CashFlowProjection;
   windowEnd: string;
