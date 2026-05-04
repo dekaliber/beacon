@@ -9,12 +9,12 @@ import {
   Tooltip as RechartsTooltip,
   ReferenceLine,
 } from "recharts";
-import { AlertTriangle, TrendingDown, Landmark, Pencil, Info, X, TrendingUp, CreditCard, ArrowDownLeft, ArrowUpRight, Sparkles, Wallet, PlusCircle } from "lucide-react";
+import { AlertTriangle, TrendingDown, Landmark, Pencil, Info, X, TrendingUp, CreditCard, ArrowDownLeft, ArrowUpRight, Sparkles, Wallet, PlusCircle, ChevronRight } from "lucide-react";
 import { Card } from "@/components/Card";
 import { useApi } from "@/hooks/useApi";
-import { getCashFlow, getInvestmentAccounts, updateAccount, createBalanceAdjustment } from "@/api";
+import { getCashFlow, getInvestmentAccounts, updateAccount, createBalanceAdjustment, upsertStatementOverride, getExpenses } from "@/api";
 import { formatCurrency, cn } from "@/lib/utils";
-import type { CashFlowProjection, CashFlowEvent, DailyBalance, InvestmentAccountSummary } from "@/types";
+import type { CashFlowProjection, CashFlowEvent, DailyBalance, InvestmentAccountSummary, Expense } from "@/types";
 
 function fmtDate(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
@@ -376,6 +376,203 @@ function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved 
   );
 }
 
+// ── CC payment bottom sheet ───────────────────────────────────────────────────
+
+function CCPaymentSheet({
+  event,
+  onClose,
+  onSaved,
+}: {
+  event: CashFlowEvent | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [value, setValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [loadingExpenses, setLoadingExpenses] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!event) return;
+    setValue(Math.abs(event.amount).toFixed(2));
+    setTimeout(() => inputRef.current?.focus(), 80);
+
+    if (!event.statementPeriodStart || !event.periodStart || !event.relatedAccountId) {
+      setExpenses([]);
+      return;
+    }
+    setLoadingExpenses(true);
+    getExpenses({
+      accountId: event.relatedAccountId,
+      startDate: event.statementPeriodStart,
+      endDate: event.periodStart,
+      limit: "200",
+      sortBy: "date",
+      sortOrder: "asc",
+    })
+      .then((res) => setExpenses(res.data))
+      .catch(() => setExpenses([]))
+      .finally(() => setLoadingExpenses(false));
+  }, [event?.id]);
+
+  const handleConfirm = async () => {
+    if (!event?.periodStart || !event?.periodEnd) return;
+    setSaving(true);
+    try {
+      await upsertStatementOverride({
+        accountId: event.relatedAccountId ?? "",
+        periodStart: event.periodStart,
+        periodEnd: event.periodEnd,
+        amount: parseFloat(value),
+      });
+      onSaved();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isConfirmed = !!event?.overrideId;
+  const periodLabel =
+    event?.statementPeriodStart && event?.periodStart
+      ? `${fmtDate(event.statementPeriodStart)} – ${fmtDate(event.periodStart)}`
+      : null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className={cn(
+          "fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200",
+          event ? "opacity-100" : "pointer-events-none opacity-0"
+        )}
+        onClick={onClose}
+      />
+      {/* Sheet */}
+      <div
+        className={cn(
+          "fixed bottom-0 left-0 right-0 z-[60] flex flex-col rounded-t-2xl bg-background shadow-xl transition-transform duration-250 ease-out max-h-[85vh]",
+          event ? "translate-y-0" : "translate-y-full"
+        )}
+      >
+        {/* Handle */}
+        <div className="mx-auto mt-3 mb-4 h-1 w-10 rounded-full bg-muted-foreground/30 shrink-0" />
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
+          <div>
+            <h2 className="text-base font-semibold">{event?.description ?? "CC Payment"}</h2>
+            {periodLabel && (
+              <p className="text-xs text-muted-foreground mt-0.5">Statement period: {periodLabel}</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-2 text-muted-foreground hover:bg-accent"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-4 pt-4 pb-2 space-y-5">
+          {/* Amount field */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-sm font-medium">Payment Amount</label>
+              {isConfirmed ? (
+                <span className="rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                  Confirmed
+                </span>
+              ) : (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                  Estimated
+                </span>
+              )}
+            </div>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                $
+              </span>
+              <input
+                ref={inputRef}
+                type="text"
+                inputMode="decimal"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+          </div>
+
+          {/* Statement transactions */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Statement Transactions
+                {event?.relatedAccountName && (
+                  <span className="font-normal normal-case ml-1">· {event.relatedAccountName}</span>
+                )}
+              </p>
+            </div>
+
+            {loadingExpenses ? (
+              <p className="py-4 text-center text-xs text-muted-foreground">Loading…</p>
+            ) : expenses.length === 0 ? (
+              <p className="py-4 text-center text-xs text-muted-foreground">No transactions found</p>
+            ) : (
+              <div className="rounded-md border border-border overflow-hidden">
+                {expenses.map((exp, i) => (
+                  <div
+                    key={exp.id}
+                    className={cn(
+                      "flex items-center justify-between gap-3 px-3 py-2.5 text-xs",
+                      i < expenses.length - 1 && "border-b border-border/50"
+                    )}
+                  >
+                    <span className="text-muted-foreground shrink-0 w-10">
+                      {fmtMD(exp.date.slice(0, 10))}
+                    </span>
+                    <span className="flex-1 truncate">{exp.vendor}</span>
+                    <span className="tabular-nums text-red-500 shrink-0">
+                      {formatCurrency(Math.abs(parseFloat(exp.amount)))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="shrink-0 border-t border-border p-4">
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirm}
+              disabled={saving || !value || parseFloat(value) <= 0}
+              className="flex-1 rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Confirm"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Banking tile ──────────────────────────────────────────────────────────────
 
 function BankingTile({
@@ -436,7 +633,13 @@ function eventIcon(type: CashFlowEvent["type"]) {
   }
 }
 
-function MobileEventsLedger({ events }: { events: CashFlowEvent[] }) {
+function MobileEventsLedger({
+  events,
+  onCCPaymentTap,
+}: {
+  events: CashFlowEvent[];
+  onCCPaymentTap?: (event: CashFlowEvent) => void;
+}) {
   if (events.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
@@ -447,62 +650,81 @@ function MobileEventsLedger({ events }: { events: CashFlowEvent[] }) {
 
   return (
     <div className="mt-4 border-t border-border">
-      {events.map((event) => (
-        <div
-          key={event.id}
-          className={cn(
-            "border-b border-border/50 py-2.5",
-            event.type === "BALANCE_ADJUSTMENT" && "bg-amber-50/50",
-          )}
-        >
-          {/* Line 1: icon + description + amount */}
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 flex-1 items-start gap-1.5">
-              <span className={cn("mt-0.5 shrink-0", event.amount > 0 ? "text-green-600" : "text-red-500")}>
-                {eventIcon(event.type)}
-              </span>
-              <p className="truncate font-medium">{event.description}</p>
+      {events.map((event) => {
+        const isCCPayment = event.type === "CC_PAYMENT";
+        const Wrapper = isCCPayment ? "button" : "div";
+        return (
+          <Wrapper
+            key={event.id}
+            {...(isCCPayment
+              ? {
+                  type: "button" as const,
+                  onClick: () => onCCPaymentTap?.(event),
+                  className: cn(
+                    "w-full text-left border-b border-border/50 py-2.5 active:bg-muted/40 transition-colors",
+                  ),
+                }
+              : {
+                  className: cn(
+                    "border-b border-border/50 py-2.5",
+                    event.type === "BALANCE_ADJUSTMENT" && "bg-amber-50/50",
+                  ),
+                })}
+          >
+            {/* Line 1: icon + description + amount + chevron for CC_PAYMENT */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 flex-1 items-start gap-1.5">
+                <span className={cn("mt-0.5 shrink-0", event.amount > 0 ? "text-green-600" : "text-red-500")}>
+                  {eventIcon(event.type)}
+                </span>
+                <p className="truncate font-medium">{event.description}</p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <span className={cn(
+                  "tabular-nums font-medium",
+                  event.amount > 0 ? "text-green-600" : "text-red-500",
+                )}>
+                  {event.amount > 0 ? "+" : ""}{formatCurrency(event.amount)}
+                </span>
+                {isCCPayment && (
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+                )}
+              </div>
             </div>
-            <span className={cn(
-              "shrink-0 tabular-nums font-medium",
-              event.amount > 0 ? "text-green-600" : "text-red-500",
-            )}>
-              {event.amount > 0 ? "+" : ""}{formatCurrency(event.amount)}
-            </span>
-          </div>
 
-          {/* Line 2: date · secondary info + running balance */}
-          <div className="mt-0.5 flex items-start justify-between gap-3 pl-5">
-            <p className="text-sm text-muted-foreground">
-              {fmtMD(event.date)}
-              {event.relatedAccountName && event.type !== "CC_CHARGE" && (
-                <> · {event.type === "TRANSFER_IN" ? "from " : event.type === "TRANSFER_OUT" ? "to " : ""}{event.relatedAccountName}</>
-              )}
-              {event.confidence === "KNOWN" && event.type !== "CC_PAYMENT" && (
-                <span className="ml-1.5 rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
-                  Confirmed
-                </span>
-              )}
-              {event.type === "CC_PAYMENT" && !event.overrideId && (
-                <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                  Estimated
-                </span>
-              )}
-              {event.overrideId && (
-                <span className="ml-1.5 rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
-                  Confirmed
-                </span>
-              )}
-            </p>
-            <span className={cn(
-              "shrink-0 text-sm tabular-nums font-semibold",
-              event.runningBalance < 0 ? "text-red-600" : "text-muted-foreground",
-            )}>
-              {formatCurrency(event.runningBalance)}
-            </span>
-          </div>
-        </div>
-      ))}
+            {/* Line 2: date · secondary info + running balance */}
+            <div className="mt-0.5 flex items-start justify-between gap-3 pl-5">
+              <p className="text-sm text-muted-foreground">
+                {fmtMD(event.date)}
+                {event.relatedAccountName && event.type !== "CC_CHARGE" && (
+                  <> · {event.type === "TRANSFER_IN" ? "from " : event.type === "TRANSFER_OUT" ? "to " : ""}{event.relatedAccountName}</>
+                )}
+                {event.confidence === "KNOWN" && event.type !== "CC_PAYMENT" && (
+                  <span className="ml-1.5 rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                    Confirmed
+                  </span>
+                )}
+                {event.type === "CC_PAYMENT" && !event.overrideId && (
+                  <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                    Estimated
+                  </span>
+                )}
+                {event.overrideId && (
+                  <span className="ml-1.5 rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                    Confirmed
+                  </span>
+                )}
+              </p>
+              <span className={cn(
+                "shrink-0 text-sm tabular-nums font-semibold",
+                event.runningBalance < 0 ? "text-red-600" : "text-muted-foreground",
+              )}>
+                {formatCurrency(event.runningBalance)}
+              </span>
+            </div>
+          </Wrapper>
+        );
+      })}
     </div>
   );
 }
@@ -515,12 +737,14 @@ function ProjectionSection({
   bankingAccount,
   onEditBalance,
   onAddInjection,
+  onCCPaymentTap,
 }: {
   projection: CashFlowProjection;
   windowEnd: string;
   bankingAccount: InvestmentAccountSummary | null;
   onEditBalance: () => void;
   onAddInjection: (defaultDate: string) => void;
+  onCCPaymentTap?: (event: CashFlowEvent) => void;
 }) {
   const firstNegativeEntry = projection.dailyBalances.find((d) => d.balance < 0);
   const firstNegativeDate = firstNegativeEntry?.date;
@@ -581,7 +805,7 @@ function ProjectionSection({
       )}
 
       {/* Ledger */}
-      <MobileEventsLedger events={projection.events} />
+      <MobileEventsLedger events={projection.events} onCCPaymentTap={onCCPaymentTap} />
     </div>
   );
 }
@@ -624,6 +848,7 @@ export function MobileCashFlow() {
   const [editingAccount, setEditingAccount]         = useState<InvestmentAccountSummary | null>(null);
   const [injectionOpen, setInjectionOpen]           = useState(false);
   const [injectionDefaultDate, setInjectionDefaultDate] = useState("");
+  const [ccPaymentEvent, setCCPaymentEvent]         = useState<CashFlowEvent | null>(null);
 
   const projections = data?.projections ?? [];
   const personal = projections.filter((p) => !p.isJoint).sort((a, b) => b.startBalance - a.startBalance);
@@ -683,6 +908,7 @@ export function MobileCashFlow() {
           bankingAccount={selectedBankingAccount}
           onEditBalance={() => setEditingAccount(selectedBankingAccount)}
           onAddInjection={(defaultDate) => { setInjectionDefaultDate(defaultDate); setInjectionOpen(true); }}
+          onCCPaymentTap={(event) => setCCPaymentEvent(event)}
         />
       )}
 
@@ -700,6 +926,13 @@ export function MobileCashFlow() {
         defaultDate={injectionDefaultDate}
         onClose={() => setInjectionOpen(false)}
         onSaved={() => { refetch(); refetchAccounts(); }}
+      />
+
+      {/* CC payment sheet */}
+      <CCPaymentSheet
+        event={ccPaymentEvent}
+        onClose={() => setCCPaymentEvent(null)}
+        onSaved={() => { refetch(); }}
       />
     </div>
   );
