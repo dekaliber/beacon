@@ -463,6 +463,7 @@ export const getConfirmedDividend = (activityId: string) =>
 export const updateConfirmedDividend = (pendingDividendId: string, data: {
   paymentDate?: string;
   amount?: number;
+  notes?: string | null;
 }) => api.patch<{ pendingDividend: PendingDividend; activity: InvestmentActivity; income: Income | null }>(
   `/pending-dividends/${pendingDividendId}`,
   data,

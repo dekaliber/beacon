@@ -3267,6 +3267,7 @@ function EditConfirmedDividendModal({
   const [dividendInfo, setDividendInfo] = useState<ConfirmedDividendInfo | null>(null);
   const [paymentDate, setPaymentDate] = useState("");
   const [amount, setAmount] = useState("");
+  const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -3276,6 +3277,7 @@ function EditConfirmedDividendModal({
         setDividendInfo(info);
         setPaymentDate(info.paymentDate.split("T")[0]);
         setAmount(info.amount.toFixed(2));
+        setNotes(info.notes ?? "");
       })
       .catch(() => setFetchError("Failed to load dividend information."))
       .finally(() => setLoading(false));
@@ -3291,7 +3293,7 @@ function EditConfirmedDividendModal({
     setSaving(true);
     setError(null);
     try {
-      await updateConfirmedDividend(dividendInfo.pendingDividendId, { paymentDate, amount: parsedAmount });
+      await updateConfirmedDividend(dividendInfo.pendingDividendId, { paymentDate, amount: parsedAmount, notes: notes || null });
       onSaved();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save changes.");
@@ -3361,6 +3363,20 @@ function EditConfirmedDividendModal({
               onChange={(e) => setAmount(e.target.value)}
               readOnly={dividendInfo.isDrip}
               className={dividendInfo.isDrip ? readonlyCls : inputCls}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">
+              Notes <span className="font-normal opacity-60">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              readOnly={dividendInfo.isDrip}
+              className={dividendInfo.isDrip ? readonlyCls : inputCls}
+              placeholder="e.g. Q1 dividend"
             />
           </div>
 
@@ -3697,7 +3713,7 @@ function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHo
                         {a.notes ?? ""}
                       </td>
                       <td className="py-3 pl-2 pr-4 text-right">
-                        {(isSale || (!isSale && !isPurchase)) && (
+                        {(isSale || (!isSale && !isPurchase && !isTransfer)) && (
                           <button
                             onClick={() => isSale
                               ? setEditingActivity(a)

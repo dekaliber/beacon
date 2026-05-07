@@ -297,9 +297,10 @@ interface NewAdjustmentRowProps {
   defaultDate: string;
   accountId: string;
   onSaved: () => void;
+  variant?: "warning" | "neutral";
 }
 
-function NewAdjustmentRow({ defaultDate, accountId, onSaved }: NewAdjustmentRowProps) {
+function NewAdjustmentRow({ defaultDate, accountId, onSaved, variant = "warning" }: NewAdjustmentRowProps) {
   const today = useMemo(() => new Date().toLocaleDateString("en-CA"), []);
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(defaultDate);
@@ -324,11 +325,14 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved }: NewAdjustmentRowP
 
   if (!open) {
     return (
-      <tr className="border-b border-dashed border-red-200">
+      <tr className={cn("border-b border-dashed", variant === "warning" ? "border-red-200" : "border-border")}>
         <td colSpan={5} className="py-1.5 px-1">
           <button
             onClick={() => { setDate(defaultDate); setOpen(true); }}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-red-600 transition-colors"
+            className={cn(
+              "flex items-center gap-1.5 text-xs text-muted-foreground transition-colors",
+              variant === "warning" ? "hover:text-red-600" : "hover:text-foreground",
+            )}
           >
             <PlusCircle className="h-3.5 w-3.5" />
             Add cash injection
@@ -339,7 +343,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved }: NewAdjustmentRowP
   }
 
   return (
-    <tr className="border-b border-dashed border-red-300 bg-red-50/50">
+    <tr className={cn("border-b border-dashed", variant === "warning" ? "border-red-300 bg-red-50/50" : "border-border bg-muted/20")}>
       <td className="py-1.5 pr-4">
         <input
           type="date"
@@ -708,8 +712,8 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
         </thead>
         <tbody>
           {events.map((event, idx) => (
-            <React.Fragment key={event.id}>
-              {idx === firstNegativeIdx && (
+            <React.Fragment key={`event-${event.id}`}>
+              {idx === firstNegativeIdx && firstNegativeIdx !== -1 && (
                 <NewAdjustmentRow
                   defaultDate={event.date}
                   accountId={accountId}
@@ -805,6 +809,14 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
               )}
             </React.Fragment>
           ))}
+          {firstNegativeIdx === -1 && events.length > 0 && (
+            <NewAdjustmentRow
+              defaultDate={events[events.length - 1].date}
+              accountId={accountId}
+              onSaved={onRefetch}
+              variant="neutral"
+            />
+          )}
         </tbody>
       </table>
     </div>

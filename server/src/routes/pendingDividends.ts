@@ -386,7 +386,7 @@ pendingDividendRoutes.get("/confirmed/:activityId", async (req, res) => {
 
   const activity = await prisma.investmentActivity.findUnique({
     where: { id: activityId },
-    select: { date: true, amount: true },
+    select: { date: true, amount: true, notes: true },
   });
   if (!activity) return res.status(404).json({ error: "Activity not found" });
 
@@ -397,6 +397,7 @@ pendingDividendRoutes.get("/confirmed/:activityId", async (req, res) => {
     isDrip: drip,
     paymentDate: activity.date.toISOString(),
     amount: Number(activity.amount),
+    notes: activity.notes,
     exDate: pending.exDate.toISOString(),
     ticker: pending.ticker,
     perShareAmount: Number(pending.perShareAmount),
@@ -409,6 +410,7 @@ pendingDividendRoutes.get("/confirmed/:activityId", async (req, res) => {
 const updateConfirmedSchema = z.object({
   paymentDate: z.string().optional(),
   amount: z.number().positive().optional(),
+  notes: z.string().nullable().optional(),
 });
 
 pendingDividendRoutes.patch("/:id", async (req, res) => {
@@ -417,9 +419,9 @@ pendingDividendRoutes.patch("/:id", async (req, res) => {
   const parsed = updateConfirmedSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const { paymentDate, amount } = parsed.data;
-  if (!paymentDate && amount === undefined) {
-    return res.status(400).json({ error: "At least one of paymentDate or amount must be provided" });
+  const { paymentDate, amount, notes } = parsed.data;
+  if (!paymentDate && amount === undefined && notes === undefined) {
+    return res.status(400).json({ error: "At least one field must be provided" });
   }
 
   const pending = await prisma.pendingDividend.findFirst({ where: { id, account: { userId } } });
@@ -446,6 +448,7 @@ pendingDividendRoutes.patch("/:id", async (req, res) => {
       data: {
         ...(newDate && { date: newDate }),
         ...(amount !== undefined && { amount }),
+        ...(notes !== undefined && { notes: notes ?? null }),
       },
     });
 
@@ -461,6 +464,7 @@ pendingDividendRoutes.patch("/:id", async (req, res) => {
         incomeData.amount = amount;
         incomeData.taxableAmount = income.taxClassification === "RETURN_OF_CAPITAL" ? 0 : amount;
       }
+      if (notes !== undefined) incomeData.notes = notes ?? null;
       updatedIncome = await tx.income.update({
         where: { id: income.id },
         data: incomeData,

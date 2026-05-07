@@ -438,6 +438,7 @@ export interface ConfirmedDividendInfo {
   isDrip: boolean;
   paymentDate: string;
   amount: number;
+  notes: string | null;
   exDate: string;
   ticker: string;
   perShareAmount: number;

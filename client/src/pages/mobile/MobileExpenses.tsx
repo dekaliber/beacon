@@ -1658,9 +1658,9 @@ export function MobileExpenses() {
               <div className="divide-y divide-border">
                 {visibleUpcoming.map((expense) => (
                   <React.Fragment key={expense.id}>
-                    <ExpenseRow expense={expense} upcoming />
+                    <ExpenseRow expense={expense} upcoming onTap={() => setEditingExpense(expense)} />
                     {expense.offsets?.map((offset) => (
-                      <ExpenseRow key={offset.id} expense={offset} upcoming isOffset parentFullyOffset={isFullyOffset(expense)} />
+                      <ExpenseRow key={offset.id} expense={offset} upcoming isOffset parentFullyOffset={isFullyOffset(expense)} onTap={() => setEditingExpense(offset)} />
                     ))}
                   </React.Fragment>
                 ))}

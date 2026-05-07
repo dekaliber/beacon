@@ -50,7 +50,11 @@ export function MultiSelectDropdown({
   };
 
   const visibleOptions = searchable && search.trim()
-    ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
+    ? options.filter((o) => {
+        const terms = search.toLowerCase().split(/\s+/);
+        const words = o.label.toLowerCase().split(/\s+/).map((w) => w.replace(/^[^a-z]+/, ""));
+        return terms.every((t) => words.some((w) => w.startsWith(t)));
+      })
     : options;
 
   const selectAll = () => {

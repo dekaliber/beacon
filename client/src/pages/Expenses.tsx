@@ -152,7 +152,7 @@ function CurrencyInput({ name, defaultValue, required, onChange, autoFocus }: { 
         />
       </div>
       <input type="hidden" name={name} value={numericValue.toFixed(2)} />
-      {required && numericValue === 0 && <input type="text" required value="" className="hidden" tabIndex={-1} onChange={() => {}} />}
+      {required && numericValue === 0 && <input type="text" required value="" style={{ opacity: 0, position: "absolute", pointerEvents: "none", width: 0, height: 0 }} tabIndex={-1} onChange={() => {}} />}
     </>
   );
 }
@@ -306,7 +306,7 @@ function CategoryTypeahead({
     const terms = search.toLowerCase().split(/\s+/);
     return flatOptions.filter((o) => {
       const text = (o.parentLabel ? o.parentLabel + " " : "") + o.label;
-      const words = text.toLowerCase().split(/\s+/);
+      const words = text.toLowerCase().split(/\s+/).map((w) => w.replace(/^[^a-z]+/, ""));
       return terms.every((t) => words.some((w) => w.startsWith(t)));
     });
   }, [search, flatOptions]);
@@ -353,7 +353,7 @@ function CategoryTypeahead({
   return (
     <div ref={ref} className="relative">
       <input type="hidden" name={name} value={value} />
-      {required && !value && <input type="text" required value="" className="hidden" tabIndex={-1} onChange={() => {}} />}
+      {required && !value && <input type="text" required value="" style={{ opacity: 0, position: "absolute", pointerEvents: "none", width: 0, height: 0 }} tabIndex={-1} onChange={() => {}} />}
       <button
         ref={triggerRef}
         type="button"
@@ -501,7 +501,7 @@ function AccountTypeahead({
   return (
     <div ref={ref} className="relative">
       <input type="hidden" name={name} value={value} />
-      {required && !value && <input type="text" required value="" className="hidden" tabIndex={-1} onChange={() => {}} />}
+      {required && !value && <input type="text" required value="" style={{ opacity: 0, position: "absolute", pointerEvents: "none", width: 0, height: 0 }} tabIndex={-1} onChange={() => {}} />}
       <button
         ref={triggerRef}
         type="button"
@@ -947,7 +947,7 @@ function EditableCategoryCell({
     const terms = search.toLowerCase().split(/\s+/);
     return flatOptions.filter((o) => {
       const text = (o.parentLabel ? o.parentLabel + " " : "") + o.label;
-      const words = text.toLowerCase().split(/\s+/);
+      const words = text.toLowerCase().split(/\s+/).map((w) => w.replace(/^[^a-z]+/, ""));
       return terms.every((t) => words.some((w) => w.startsWith(t)));
     });
   }, [search, flatOptions]);

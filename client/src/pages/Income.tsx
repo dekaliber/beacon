@@ -25,7 +25,7 @@ type SortField = "date" | "category" | "account" | "amount";
 type SortState = { field: SortField; order: "asc" | "desc" } | null;
 
 // ── Currency input ──
-function CurrencyInput({ name, defaultValue, required, autoFocus }: { name: string; defaultValue?: string; required?: boolean; autoFocus?: boolean }) {
+function CurrencyInput({ name, defaultValue, required, autoFocus, error, onValidChange }: { name: string; defaultValue?: string; required?: boolean; autoFocus?: boolean; error?: boolean; onValidChange?: () => void }) {
   const [rawValue, setRawValue] = useState(() => {
     if (!defaultValue) return "";
     const num = parseFloat(defaultValue);
@@ -44,6 +44,7 @@ function CurrencyInput({ name, defaultValue, required, autoFocus }: { name: stri
     const val = e.target.value;
     if (val === "" || /^\d*\.?\d{0,2}$/.test(val)) {
       setRawValue(val);
+      if (parseFloat(val) > 0) onValidChange?.();
     }
   };
 
@@ -73,13 +74,12 @@ function CurrencyInput({ name, defaultValue, required, autoFocus }: { name: stri
           onPaste={handlePaste}
           onBlur={handleBlur}
           autoFocus={autoFocus}
-          className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className={`w-full rounded-md border pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-1 ${error ? "border-destructive focus:border-destructive focus:ring-destructive/30" : "border-border focus:border-primary focus:ring-primary"}`}
           placeholder="0.00"
           inputMode="text"
         />
       </div>
       <input type="hidden" name={name} value={numericValue.toFixed(2)} />
-      {required && numericValue === 0 && <input type="text" required value="" className="hidden" tabIndex={-1} onChange={() => {}} />}
     </>
   );
 }
@@ -623,7 +623,7 @@ function CategoryTypeahead({
   return (
     <div ref={ref} className="relative">
       <input type="hidden" name={name} value={value} />
-      {required && !value && <input type="text" required value="" className="hidden" tabIndex={-1} onChange={() => {}} />}
+      {required && !value && <input type="text" required value="" style={{ opacity: 0, position: "absolute", pointerEvents: "none", width: 0, height: 0 }} tabIndex={-1} onChange={() => {}} />}
       <button
         ref={triggerRef}
         type="button"
@@ -692,7 +692,7 @@ function CategoryTypeahead({
 
 // ── Item typeahead (modal, shared for account, category, etc.) ──
 function ItemTypeahead({
-  name, defaultValue, items, placeholder, required, triggerRef: externalTriggerRef, onTabFromSearch,
+  name, defaultValue, items, placeholder, required, triggerRef: externalTriggerRef, onTabFromSearch, error, onSelect,
 }: {
   name: string;
   defaultValue?: string;
@@ -701,6 +701,8 @@ function ItemTypeahead({
   required?: boolean;
   triggerRef?: React.RefObject<HTMLButtonElement | null>;
   onTabFromSearch?: () => void;
+  error?: boolean;
+  onSelect?: () => void;
 }) {
   const [value, setValue] = useState(defaultValue ?? "");
   const [search, setSearch] = useState("");
@@ -747,6 +749,7 @@ function ItemTypeahead({
     setOpen(false);
     setSearch("");
     justSelectedRef.current = true;
+    onSelect?.();
     setTimeout(() => triggerRef.current?.focus(), 0);
   };
 
@@ -768,7 +771,6 @@ function ItemTypeahead({
   return (
     <div ref={ref} className="relative">
       <input type="hidden" name={name} value={value} />
-      {required && !value && <input type="text" required value="" className="hidden" tabIndex={-1} onChange={() => {}} />}
       <button
         ref={triggerRef}
         type="button"
@@ -795,7 +797,7 @@ function ItemTypeahead({
           }
           setOpen((o) => !o);
         }}
-        className="w-full rounded-md border border-border px-3 py-2 text-left text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+        className={`w-full rounded-md border px-3 py-2 text-left text-sm focus:outline-none focus:ring-1 ${error ? "border-destructive focus:border-destructive focus:ring-destructive/30" : "border-border focus:border-primary focus:ring-primary"}`}
       >
         {selectedLabel || <span className="text-muted-foreground">{placeholder ?? "Select..."}</span>}
       </button>
@@ -1171,6 +1173,8 @@ export function IncomePage() {
   }, [allIncomes, appliedSearch]);
 
   const anchorIdxRef = useRef<number | null>(null);
+  const anchorUpcomingIdxRef = useRef<number | null>(null);
+
   const handleCheckboxChange = useCallback((id: string, idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.nativeEvent instanceof MouseEvent && e.nativeEvent.shiftKey && anchorIdxRef.current !== null) {
       const anchor = anchorIdxRef.current;
@@ -1202,6 +1206,28 @@ export function IncomePage() {
       parseFloat(inc.amount).toFixed(2).includes(q)
     );
   }, [upcomingData, appliedSearch]);
+
+  const allUpcomingIncomeIds = useMemo(() => upcomingIncomes.map((i) => i.id), [upcomingIncomes]);
+
+  const handleUpcomingCheckboxChange = useCallback((id: string, idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.nativeEvent instanceof MouseEvent && e.nativeEvent.shiftKey && anchorUpcomingIdxRef.current !== null) {
+      const anchor = anchorUpcomingIdxRef.current;
+      const newState = !selectedIds.has(id);
+      const start = Math.min(anchor, idx);
+      const end = Math.max(anchor, idx);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        upcomingIncomes.slice(start, end + 1).forEach((item) => {
+          if (newState) next.add(item.id);
+          else next.delete(item.id);
+        });
+        return next;
+      });
+    } else {
+      toggleSelect(id);
+    }
+    anchorUpcomingIdxRef.current = idx;
+  }, [upcomingIncomes, toggleSelect, selectedIds]);
 
   const accountFilterOptions = useMemo<MultiSelectOption[]>(() => {
     const personal = eligibleAccounts
@@ -1346,6 +1372,21 @@ export function IncomePage() {
             <table className="w-full table-fixed text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="w-[44px] pb-3 pr-2 text-center">
+                    <input
+                      type="checkbox"
+                      ref={(el) => { if (el) { el.indeterminate = allUpcomingIncomeIds.some((id) => selectedIds.has(id)) && !allUpcomingIncomeIds.every((id) => selectedIds.has(id)); } }}
+                      checked={allUpcomingIncomeIds.length > 0 && allUpcomingIncomeIds.every((id) => selectedIds.has(id))}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedIds((prev) => new Set([...prev, ...allUpcomingIncomeIds]));
+                        } else {
+                          setSelectedIds((prev) => { const next = new Set(prev); allUpcomingIncomeIds.forEach((id) => next.delete(id)); return next; });
+                        }
+                      }}
+                      className="h-4 w-4 rounded border-border"
+                    />
+                  </th>
                   <th className="w-[70px] pb-3 pr-3 text-xs font-medium uppercase tracking-wide">Date</th>
                   <th className="pb-3 pr-3 text-xs font-medium uppercase tracking-wide">Source</th>
                   <th className="w-[130px] pb-3 pr-3 text-xs font-medium uppercase tracking-wide">Category</th>
@@ -1357,8 +1398,16 @@ export function IncomePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {upcomingIncomes.map((income) => (
-                  <tr key={income.id} className="italic opacity-60 hover:opacity-80">
+                {upcomingIncomes.map((income, idx) => (
+                  <tr key={income.id} className={`italic ${selectedIds.has(income.id) ? "bg-primary/5 opacity-80" : "opacity-60 hover:opacity-80"}`}>
+                    <td className="w-[44px] py-2 pr-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(income.id)}
+                        onChange={(e) => handleUpcomingCheckboxChange(income.id, idx, e)}
+                        className="h-4 w-4 rounded border-border"
+                      />
+                    </td>
                     <td className="w-[70px] py-2 pr-3">
                       <EditableCell value={income.date} type="date" onSave={(v) => handleInlineUpdate(income.id, "date", v)} />
                     </td>
@@ -1609,10 +1658,10 @@ export function IncomePage() {
           onBulkDelete={() => bulkDeleteIncome([...selectedIds])}
           onClear={() => setSelectedIds(new Set())}
           onSuccess={() => { setSelectedIds(new Set()); refetchAll(); }}
-          deleteDisabled={allIncomes.some((i) => selectedIds.has(i.id) && i.activityId != null)}
+          deleteDisabled={[...allIncomes, ...upcomingIncomes].some((i) => selectedIds.has(i.id) && i.activityId != null)}
           showTaxStatus
           deleteDisabledTitle="Deselect investment-linked transactions (Div / Sale) to enable delete"
-          selectedTransactions={allIncomes
+          selectedTransactions={[...allIncomes, ...upcomingIncomes]
             .filter((i) => selectedIds.has(i.id))
             .map((i) => ({ amount: i.amount, isJoint: i.account.isJoint }))}
         />
@@ -1639,6 +1688,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showOptional, setShowOptional] = useState(false);
   const [taxClassification, setTaxClassification] = useState<string>("");
+  const [errors, setErrors] = useState<{ amount?: string; accountId?: string }>({});
   const categoryTriggerRef = useRef<HTMLButtonElement>(null);
   const accountTriggerRef = useRef<HTMLButtonElement>(null);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
@@ -1648,20 +1698,33 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
       setConfirmDelete(false);
       setTaxClassification(income?.taxClassification ?? "");
       setShowOptional(!!(income?.notes || income?.taxClassification));
+      setErrors({});
     }
   }, [open, income]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setSaving(true);
     const form = new FormData(e.currentTarget);
+    const amount = parseFloat(form.get("amount") as string);
+    const accountId = form.get("accountId") as string;
+
+    const newErrors: typeof errors = {};
+    if (!amount || amount <= 0) newErrors.amount = "Amount is required";
+    if (!accountId) newErrors.accountId = "Account is required";
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setSaving(true);
+    setErrors({});
     const categoryId = form.get("categoryId") as string;
     await onSave({
-      amount: parseFloat(form.get("amount") as string),
+      amount,
       categoryId: categoryId || undefined,
       source: (form.get("source") as string) || undefined,
       date: form.get("date") as string,
-      accountId: form.get("accountId") as string,
+      accountId,
       taxClassification: taxClassification || null,
       notes: (form.get("notes") as string) || undefined,
     });
@@ -1684,7 +1747,15 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="mb-1 block text-sm font-medium">Amount</label>
-          <CurrencyInput name="amount" defaultValue={income?.amount} required autoFocus />
+          <CurrencyInput
+            name="amount"
+            defaultValue={income?.amount}
+            required
+            autoFocus
+            error={!!errors.amount}
+            onValidChange={() => setErrors((e) => ({ ...e, amount: undefined }))}
+          />
+          {errors.amount && <p className="mt-1 text-xs text-destructive">{errors.amount}</p>}
         </div>
 
         <div>
@@ -1726,7 +1797,10 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
             placeholder="Select account"
             triggerRef={accountTriggerRef}
             onTabFromSearch={() => submitBtnRef.current?.focus()}
+            error={!!errors.accountId}
+            onSelect={() => setErrors((e) => ({ ...e, accountId: undefined }))}
           />
+          {errors.accountId && <p className="mt-1 text-xs text-destructive">{errors.accountId}</p>}
         </div>
 
         {/* Collapsible optional section */}

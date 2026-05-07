@@ -9,10 +9,10 @@ import {
   Tooltip as RechartsTooltip,
   ReferenceLine,
 } from "recharts";
-import { AlertTriangle, TrendingDown, Landmark, Pencil, Info, X, TrendingUp, CreditCard, ArrowDownLeft, ArrowUpRight, Sparkles, Wallet, PlusCircle } from "lucide-react";
+import { AlertTriangle, TrendingDown, Landmark, Pencil, Info, X, TrendingUp, CreditCard, ArrowDownLeft, ArrowUpRight, Sparkles, Wallet, PlusCircle, Trash2 } from "lucide-react";
 import { Card } from "@/components/Card";
 import { useApi } from "@/hooks/useApi";
-import { getCashFlow, getInvestmentAccounts, updateAccount, createBalanceAdjustment, updateBalanceAdjustment, upsertStatementOverride, getExpenses } from "@/api";
+import { getCashFlow, getInvestmentAccounts, updateAccount, createBalanceAdjustment, updateBalanceAdjustment, deleteBalanceAdjustment, upsertStatementOverride, getExpenses } from "@/api";
 import { formatCurrency, cn } from "@/lib/utils";
 import type { CashFlowProjection, CashFlowEvent, DailyBalance, InvestmentAccountSummary, Expense } from "@/types";
 
@@ -268,6 +268,8 @@ function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved,
   const [description, setDescription] = useState("Cash injection");
   const [amount, setAmount] = useState("");
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const amountRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -275,11 +277,13 @@ function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved,
       setDate(editingEvent.date);
       setDescription(editingEvent.description);
       setAmount(Math.abs(editingEvent.amount).toFixed(2));
+      setConfirmDelete(false);
       setTimeout(() => amountRef.current?.focus(), 80);
     } else if (open) {
       setDate(defaultDate);
       setDescription("Cash injection");
       setAmount("");
+      setConfirmDelete(false);
       setTimeout(() => amountRef.current?.focus(), 80);
     }
   }, [open, editingEvent?.id, defaultDate]);
@@ -371,9 +375,41 @@ function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved,
 
         <div className="shrink-0 border-t border-border p-4">
           <div className="flex gap-3">
+            {isEditing && (
+              confirmDelete ? (
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={async () => {
+                    if (!editingEvent?.adjustmentId) return;
+                    setDeleting(true);
+                    try {
+                      await deleteBalanceAdjustment(editingEvent.adjustmentId);
+                      onSaved();
+                      onClose();
+                    } finally {
+                      setDeleting(false);
+                      setConfirmDelete(false);
+                    }
+                  }}
+                  className="rounded-md bg-destructive px-3 py-2.5 text-sm font-medium text-destructive-foreground disabled:opacity-50 transition-colors"
+                >
+                  {deleting ? "Deleting…" : "Confirm?"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(true)}
+                  className="rounded-md border border-border p-2.5 text-muted-foreground hover:border-destructive hover:text-destructive transition-colors"
+                  aria-label="Delete cash injection"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )
+            )}
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => { onClose(); setConfirmDelete(false); }}
               disabled={saving}
               className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
             >
@@ -655,10 +691,14 @@ function MobileEventsLedger({
   events,
   onCCPaymentTap,
   onInjectionTap,
+  onAddInjection,
+  showAddInjection,
 }: {
   events: CashFlowEvent[];
   onCCPaymentTap?: (event: CashFlowEvent) => void;
   onInjectionTap?: (event: CashFlowEvent) => void;
+  onAddInjection?: () => void;
+  showAddInjection?: boolean;
 }) {
   if (events.length === 0) {
     return (
@@ -740,6 +780,16 @@ function MobileEventsLedger({
           </Wrapper>
         );
       })}
+      {showAddInjection && (
+        <button
+          type="button"
+          onClick={onAddInjection}
+          className="w-full flex items-center gap-1.5 py-2.5 text-xs text-muted-foreground hover:text-foreground border-b border-dashed border-border transition-colors"
+        >
+          <PlusCircle className="h-3.5 w-3.5" />
+          Add cash injection
+        </button>
+      )}
     </div>
   );
 }
@@ -822,7 +872,13 @@ function ProjectionSection({
       )}
 
       {/* Ledger */}
-      <MobileEventsLedger events={projection.events} onCCPaymentTap={onCCPaymentTap} onInjectionTap={onInjectionTap} />
+      <MobileEventsLedger
+        events={projection.events}
+        onCCPaymentTap={onCCPaymentTap}
+        onInjectionTap={onInjectionTap}
+        showAddInjection={!firstNegativeDate && projection.events.length > 0}
+        onAddInjection={() => onAddInjection(windowEnd)}
+      />
     </div>
   );
 }
