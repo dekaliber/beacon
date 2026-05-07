@@ -16,6 +16,7 @@ import { useApi } from "@/hooks/useApi";
 import { getDashboard, getFlatCategories, getCategoryOutliers, getCategoryAverages, getMtdChart, getOutlierTransactions, getDataRange, getNetWorth } from "@/api";
 import { formatCurrency } from "@/lib/utils";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
+import { useDemo } from "@/context/DemoContext";
 import type { Category } from "@/types";
 
 type ChartView = "total" | "personal" | "joint";
@@ -43,6 +44,16 @@ export function Dashboard() {
   const { data: outlierTransactions } = useApi(() => getOutlierTransactions(year, month), [year, month]);
   const { data: dataRange } = useApi(() => getDataRange(), []);
   const { data: netWorth } = useApi(() => getNetWorth(), []);
+  const { isDemoMode, demoFactor } = useDemo();
+
+  const scaledNetWorth = useMemo(() => {
+    if (!netWorth) return null;
+    if (!isDemoMode) return netWorth;
+    const investments = netWorth.investments * demoFactor;
+    const investmentCash = netWorth.investmentCash * demoFactor;
+    const delta = (investments - netWorth.investments) + (investmentCash - netWorth.investmentCash);
+    return { ...netWorth, investments, investmentCash, total: netWorth.total + delta };
+  }, [netWorth, isDemoMode, demoFactor]);
 
   const chartMergedData = useMemo(() => {
     if (!mtdChart) return [];
@@ -163,13 +174,13 @@ export function Dashboard() {
     <div className="space-y-6">
 
       {/* ── Net Worth ──────────────────────────────────────────────────────── */}
-      {netWorth && (
+      {scaledNetWorth && (
         <Card>
           <div className="grid grid-cols-6 gap-x-6 gap-y-3 items-center">
             {/* Headline — spans 2 cols */}
             <div className="col-span-6 sm:col-span-2 sm:border-r sm:border-border sm:pr-6">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Net Worth</p>
-              <p className="text-3xl font-bold tabular-nums">{formatCurrency(netWorth.total)}</p>
+              <p className="text-3xl font-bold tabular-nums">{formatCurrency(scaledNetWorth.total)}</p>
             </div>
 
             {/* Investments */}
@@ -178,7 +189,7 @@ export function Dashboard() {
                 <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Investments</p>
               </div>
-              <p className="text-base font-semibold tabular-nums">{formatCurrency(netWorth.investments)}</p>
+              <p className="text-base font-semibold tabular-nums">{formatCurrency(scaledNetWorth.investments)}</p>
             </div>
 
             {/* Investment Cash */}
@@ -187,7 +198,7 @@ export function Dashboard() {
                 <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Inv. Cash</p>
               </div>
-              <p className="text-base font-semibold tabular-nums">{formatCurrency(netWorth.investmentCash)}</p>
+              <p className="text-base font-semibold tabular-nums">{formatCurrency(scaledNetWorth.investmentCash)}</p>
             </div>
 
             {/* Banking Cash */}
@@ -196,7 +207,7 @@ export function Dashboard() {
                 <Landmark className="h-3.5 w-3.5 text-muted-foreground" />
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Banking Cash</p>
               </div>
-              <p className="text-base font-semibold tabular-nums">{formatCurrency(netWorth.bankingCash)}</p>
+              <p className="text-base font-semibold tabular-nums">{formatCurrency(scaledNetWorth.bankingCash)}</p>
             </div>
 
             {/* Credit Cards */}
@@ -205,7 +216,7 @@ export function Dashboard() {
                 <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Credit Cards</p>
               </div>
-              <p className="text-base font-semibold tabular-nums text-destructive">−{formatCurrency(netWorth.creditCardDebt)}</p>
+              <p className="text-base font-semibold tabular-nums text-destructive">−{formatCurrency(scaledNetWorth.creditCardDebt)}</p>
             </div>
           </div>
         </Card>

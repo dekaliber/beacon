@@ -35,6 +35,7 @@ import {
 } from "@/api";
 import { formatCurrency } from "@/lib/utils";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
+import { useDemo } from "@/context/DemoContext";
 
 type ChartView = "total" | "personal" | "joint";
 
@@ -56,6 +57,16 @@ export function MobileDashboard() {
   const { data: outlierTransactions } = useApi(() => getOutlierTransactions(year, month), [year, month]);
   const { data: dataRange } = useApi(() => getDataRange(), []);
   const { data: netWorth } = useApi(() => getNetWorth(), []);
+  const { isDemoMode, demoFactor } = useDemo();
+
+  const scaledNetWorth = useMemo(() => {
+    if (!netWorth) return null;
+    if (!isDemoMode) return netWorth;
+    const investments = netWorth.investments * demoFactor;
+    const investmentCash = netWorth.investmentCash * demoFactor;
+    const delta = (investments - netWorth.investments) + (investmentCash - netWorth.investmentCash);
+    return { ...netWorth, investments, investmentCash, total: netWorth.total + delta };
+  }, [netWorth, isDemoMode, demoFactor]);
 
   const chartMergedData = useMemo(() => {
     if (!mtdChart) return [];
@@ -184,38 +195,38 @@ export function MobileDashboard() {
       <div className="space-y-4">
 
         {/* ── Net Worth ──────────────────────────────────────────────────────── */}
-        {netWorth && (
+        {scaledNetWorth && (
           <Card>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Net Worth</p>
-            <p className="mt-0.5 text-3xl font-bold tabular-nums">{formatCurrency(netWorth.total)}</p>
+            <p className="mt-0.5 text-3xl font-bold tabular-nums">{formatCurrency(scaledNetWorth.total)}</p>
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border pt-3">
               <div>
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Investments</p>
                 </div>
-                <p className="text-sm font-semibold tabular-nums">{formatCurrency(netWorth.investments)}</p>
+                <p className="text-sm font-semibold tabular-nums">{formatCurrency(scaledNetWorth.investments)}</p>
               </div>
               <div>
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Inv. Cash</p>
                 </div>
-                <p className="text-sm font-semibold tabular-nums">{formatCurrency(netWorth.investmentCash)}</p>
+                <p className="text-sm font-semibold tabular-nums">{formatCurrency(scaledNetWorth.investmentCash)}</p>
               </div>
               <div>
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <Landmark className="h-3.5 w-3.5 text-muted-foreground" />
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Banking Cash</p>
                 </div>
-                <p className="text-sm font-semibold tabular-nums">{formatCurrency(netWorth.bankingCash)}</p>
+                <p className="text-sm font-semibold tabular-nums">{formatCurrency(scaledNetWorth.bankingCash)}</p>
               </div>
               <div>
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Credit Cards</p>
                 </div>
-                <p className="text-sm font-semibold tabular-nums text-destructive">−{formatCurrency(netWorth.creditCardDebt)}</p>
+                <p className="text-sm font-semibold tabular-nums text-destructive">−{formatCurrency(scaledNetWorth.creditCardDebt)}</p>
               </div>
             </div>
           </Card>
