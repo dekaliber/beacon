@@ -49,6 +49,7 @@ import {
   updateLot,
   deleteLot,
   searchTickers,
+  searchCryptoTickers,
   resolveTicker,
   getTickerPrice,
   importInvestments,
@@ -249,6 +250,8 @@ function DollarInput({
 
 // ── Ticker search autocomplete ────────────────────────────────────────────────
 
+type SearchMode = "stocks" | "crypto";
+
 function TickerSearch({
   onSelect,
   onCancel,
@@ -256,6 +259,7 @@ function TickerSearch({
   onSelect: (r: TickerSearchResult) => void;
   onCancel: () => void;
 }) {
+  const [mode, setMode] = useState<SearchMode>("stocks");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<TickerSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -269,14 +273,22 @@ function TickerSearch({
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  const search = useCallback((q: string) => {
+  // Re-run the search whenever the mode changes (if there's already a query)
+  useEffect(() => {
+    if (query.trim()) search(query, mode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
+  const search = useCallback((q: string, currentMode: SearchMode) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setEmptyQuery(""); // clear fallback while typing
     if (!q.trim()) { setResults([]); return; }
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const r = await searchTickers(q);
+        const r = currentMode === "crypto"
+          ? await searchCryptoTickers(q)
+          : await searchTickers(q);
         setResults(r);
         setHighlighted(0);
         if (r.length === 0) setEmptyQuery(q.trim());
@@ -284,6 +296,12 @@ function TickerSearch({
       finally { setLoading(false); }
     }, 300);
   }, []);
+
+  const handleModeChange = (newMode: SearchMode) => {
+    setMode(newMode);
+    setResults([]);
+    setEmptyQuery("");
+  };
 
   const handleResolve = async () => {
     const ticker = emptyQuery.toUpperCase();
@@ -308,59 +326,82 @@ function TickerSearch({
   };
 
   return (
-    <div className="relative">
-      <input
-        ref={inputRef}
-        type="text"
-        value={query}
-        onChange={(e) => { setQuery(e.target.value); search(e.target.value); }}
-        onKeyDown={handleKeyDown}
-        placeholder="Search ticker or name (e.g. AAPL, Vanguard S&P)"
-        className="w-full rounded-md border border-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-      />
-      {loading && (
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">Searching…</div>
-      )}
-      {results.length > 0 && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-md border border-border bg-background shadow-lg max-h-64 overflow-y-auto">
-          {results.map((r, i) => (
-            <button
-              key={r.ticker}
-              className={`w-full flex items-center justify-between px-3 py-2 text-left hover:bg-accent transition-colors ${i === highlighted ? "bg-accent" : ""}`}
-              onMouseEnter={() => setHighlighted(i)}
-              onClick={() => onSelect(r)}
-            >
-              <div className="flex flex-col min-w-0">
-                <span className="font-semibold text-sm leading-tight">{r.ticker}</span>
-                <span className="text-xs text-muted-foreground truncate">{r.name}</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground flex-shrink-0 ml-3">
-                <span className="rounded bg-muted px-1.5 py-0.5">{r.type}</span>
-                <span>{r.exchange}</span>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-      {!loading && emptyQuery.length > 0 && results.length === 0 && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-md border border-border bg-background shadow-lg">
-          <div className="px-3 py-2.5 text-sm text-muted-foreground border-b border-border">
-            No results for "{emptyQuery}"
+    <div className="space-y-3">
+      {/* Mode toggle */}
+      <div className="flex rounded-md border border-border overflow-hidden text-sm">
+        <button
+          type="button"
+          onClick={() => handleModeChange("stocks")}
+          className={`flex-1 px-3 py-1.5 font-medium transition-colors ${mode === "stocks" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-accent"}`}
+        >
+          Stocks &amp; Funds
+        </button>
+        <button
+          type="button"
+          onClick={() => handleModeChange("crypto")}
+          className={`flex-1 px-3 py-1.5 font-medium transition-colors border-l border-border ${mode === "crypto" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-accent"}`}
+        >
+          Crypto
+        </button>
+      </div>
+
+      {/* Search input */}
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); search(e.target.value, mode); }}
+          onKeyDown={handleKeyDown}
+          placeholder={mode === "crypto" ? "Search coin name or symbol (e.g. BTC, Bitcoin)" : "Search ticker or name (e.g. AAPL, Vanguard S&P)"}
+          className="w-full rounded-md border border-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+        />
+        {loading && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">Searching…</div>
+        )}
+        {results.length > 0 && (
+          <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-md border border-border bg-background shadow-lg max-h-64 overflow-y-auto">
+            {results.map((r, i) => (
+              <button
+                key={r.coinGeckoId ?? r.ticker}
+                className={`w-full flex items-center justify-between px-3 py-2 text-left hover:bg-accent transition-colors ${i === highlighted ? "bg-accent" : ""}`}
+                onMouseEnter={() => setHighlighted(i)}
+                onClick={() => onSelect(r)}
+              >
+                <div className="flex flex-col min-w-0">
+                  <span className="font-semibold text-sm leading-tight">{r.ticker}</span>
+                  <span className="text-xs text-muted-foreground truncate">{r.name}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground flex-shrink-0 ml-3">
+                  <span className="rounded bg-muted px-1.5 py-0.5">{r.type}</span>
+                  {mode === "stocks" && <span>{r.exchange}</span>}
+                </div>
+              </button>
+            ))}
           </div>
-          <button
-            onClick={handleResolve}
-            disabled={resolving}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-accent transition-colors disabled:opacity-60"
-          >
-            <Plus className="h-3.5 w-3.5 text-primary flex-shrink-0" />
-            <span className="text-sm">
-              {resolving
-                ? `Looking up ${emptyQuery.toUpperCase()}…`
-                : `Add "${emptyQuery.toUpperCase()}" as a ticker`}
-            </span>
-          </button>
-        </div>
-      )}
+        )}
+        {!loading && emptyQuery.length > 0 && results.length === 0 && (
+          <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-md border border-border bg-background shadow-lg">
+            <div className="px-3 py-2.5 text-sm text-muted-foreground border-b border-border">
+              No results for "{emptyQuery}"
+            </div>
+            {mode === "stocks" && (
+              <button
+                onClick={handleResolve}
+                disabled={resolving}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-accent transition-colors disabled:opacity-60"
+              >
+                <Plus className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                <span className="text-sm">
+                  {resolving
+                    ? `Looking up ${emptyQuery.toUpperCase()}…`
+                    : `Add "${emptyQuery.toUpperCase()}" as a ticker`}
+                </span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -406,7 +447,7 @@ function LotFormEntry({
           type="number"
           value={lot.quantity}
           onChange={(e) => onChange("quantity", e.target.value)}
-          step="0.000001"
+          step="any"
           min="0"
           placeholder="0.00"
           required
@@ -525,6 +566,7 @@ function AddInvestmentModal({
         name: selectedTicker.name,
         type: selectedTicker.type,
         group: group.trim() || null,
+        coinGeckoId: selectedTicker.coinGeckoId ?? null,
       });
       for (const lot of lots) {
         const qty = parseFloat(lot.quantity);

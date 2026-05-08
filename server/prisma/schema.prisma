@@ -411,12 +411,13 @@ model TaxQuarterlyPayment {
 // ── Investment models ───────────────────────────────────────────────────────────
 
 model InvestmentHolding {
-  id         String   @id @default(cuid())
-  accountId  String
-  ticker     String
-  name       String
-  type       String?
-  assetClass String?
+  id          String   @id @default(cuid())
+  accountId   String
+  ticker      String
+  name        String
+  type        String?
+  assetClass  String?
+  coinGeckoId String?
   instrumentId String?
   instrument   Instrument? @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
@@ -451,8 +452,8 @@ model ManualInvestment {
 model InvestmentLot {
   id           String    @id @default(cuid())
   holdingId    String
-  quantity     Decimal   @db.Decimal(18, 6)
-  costPerShare Decimal   @db.Decimal(18, 6)
+  quantity     Decimal   @db.Decimal(18, 8)
+  costPerShare Decimal   @db.Decimal(18, 8)
   // Null for managed/robo-advisor holdings where lot-level acquisition dates
   // are unavailable. A null date signals that short/long-term gain calculation
   // cannot be performed for this lot.
@@ -491,7 +492,7 @@ model RealizedGainSnapshot {
 model TickerPrice {
   id          String   @id @default(cuid())
   ticker      String   @unique
-  price       Decimal  @db.Decimal(12, 4)
+  price       Decimal  @db.Decimal(18, 8)
   priceDate   DateTime
   priceSource String   @default("YAHOO") // "YAHOO" | "TIINGO"
   updatedAt   DateTime @updatedAt
@@ -506,7 +507,7 @@ model TickerPriceHistory {
   id         String   @id @default(cuid())
   ticker     String
   date       DateTime @db.Date
-  closePrice Decimal  @db.Decimal(12, 4)
+  closePrice Decimal  @db.Decimal(18, 8)
   createdAt  DateTime @default(now())
 
   @@unique([ticker, date])

@@ -23,10 +23,17 @@ function cutoffToday8pmET(now: Date): Date {
   return new Date(`${get("year")}-${get("month")}-${get("day")}T20:00:00${offsetStr}`);
 }
 
+// Crypto markets trade 24/7. Refresh crypto prices if they are older than this.
+const CRYPTO_PRICE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
+
 // Returns true if any holding has a stale price and a refresh should be triggered.
-// Prices are considered stale once it is past 8PM Eastern today and the last fetch
-// predates that cutoff. Mutual fund NAVs are typically published 1-2 hours after
-// the 4PM ET close, so 8PM gives them plenty of time to settle.
+//
+// For stock/fund holdings: prices are considered stale once it is past 8PM Eastern
+// today and the last fetch predates that cutoff. Mutual fund NAVs are typically
+// published 1-2 hours after the 4PM ET close, so 8PM gives them plenty of time.
+//
+// For crypto holdings: prices are considered stale if older than 5 minutes, since
+// crypto trades continuously 24/7.
 export function isPriceRefreshNeeded(holdings: InvestmentHolding[]): boolean {
   if (holdings.length === 0) return false;
 
@@ -39,11 +46,14 @@ export function isPriceRefreshNeeded(holdings: InvestmentHolding[]): boolean {
 
     const lastUpdated = new Date(holding.priceUpdatedAt);
 
-    // Price is from a previous calendar day (ET) — always refresh
-    if (lastUpdated < prevCutoff) return true;
-
-    // It's past 8PM ET and the last update predates today's cutoff — refresh
-    if (now >= cutoff && lastUpdated < cutoff) return true;
+    if (holding.type === "Crypto") {
+      // Crypto: refresh if price is older than 5 minutes
+      if (now.getTime() - lastUpdated.getTime() > CRYPTO_PRICE_MAX_AGE_MS) return true;
+    } else {
+      // Stocks / funds: refresh once per day after 8PM ET
+      if (lastUpdated < prevCutoff) return true;
+      if (now >= cutoff && lastUpdated < cutoff) return true;
+    }
   }
 
   return false;

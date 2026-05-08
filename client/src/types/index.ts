@@ -316,6 +316,8 @@ export interface InvestmentHolding {
   type: string | null;
   /** Optional grouping label e.g. "US Stocks", "Commodities" */
   group: string | null;
+  /** CoinGecko coin ID for crypto holdings (e.g. "bitcoin"), null for stocks/funds */
+  coinGeckoId?: string | null;
   currentPrice: number | null;
   priceDate: string | null;
   priceUpdatedAt: string | null;
@@ -457,8 +459,10 @@ export interface ManualInvestment {
 export interface TickerSearchResult {
   ticker: string;
   name: string;
-  type: string; // "Equity", "ETF", "Mutual Fund"
+  type: string; // "Equity", "ETF", "Mutual Fund", "Money Market", "Crypto"
   exchange: string;
+  /** CoinGecko coin ID — only present for Crypto results (e.g. "bitcoin") */
+  coinGeckoId?: string | null;
 }
 
 // ── Asset allocation types ────────────────────────────────────────────────────
