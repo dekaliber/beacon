@@ -342,7 +342,21 @@ function YoYPanel({ history }: { history: RecurringHistoryMonth[] }) {
         <BarChart data={history} margin={{ top: 4, right: 4, left: -18, bottom: 0 }} barCategoryGap="30%">
           <XAxis dataKey="month" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
           <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={(v: number) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}`} />
-          <Tooltip formatter={(v: number | undefined, key: string | undefined) => [formatCurrency(v ?? 0), (key ?? "") === "thisYear" ? String(currYear) : String(prevYear)]} contentStyle={{ fontSize: 11 }} />
+          <Tooltip
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null;
+              return (
+                <div className="rounded border border-border bg-background p-2 text-xs shadow-md">
+                  <p className="mb-1.5 font-medium">{label}</p>
+                  {payload.map((p) => (
+                    <p key={p.dataKey as string} className="mt-1" style={{ color: p.fill as string }}>
+                      {(p.dataKey as string) === "thisYear" ? String(currYear) : String(prevYear)}: {formatCurrency(p.value as number)}
+                    </p>
+                  ))}
+                </div>
+              );
+            }}
+          />
           {hasLastYear && <Bar dataKey="lastYear" fill={CHART_PRIOR_PERIOD_COLOR} radius={[2,2,0,0]} name={String(prevYear)} />}
           <Bar dataKey="thisYear" fill={CHART_EXPENSE_COLOR} radius={[2,2,0,0]} name={String(currYear)} />
           {hasLastYear && <Legend iconType="square" iconSize={8} formatter={(v) => v} wrapperStyle={{ fontSize: 11, paddingTop: 4, textAlign: "center", width: "100%", left: 0 }} />}

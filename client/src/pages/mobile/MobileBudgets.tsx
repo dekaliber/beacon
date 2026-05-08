@@ -26,7 +26,6 @@ import { Button } from "@/components/Button";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeadingMenu } from "@/components/PageHeadingMenu";
-import { SpendingOverTimeChart } from "@/components/SpendingOverTimeChart";
 import { useApi } from "@/hooks/useApi";
 import { getBudgetOverview, setAnnualBudget, getDataRange, getCategoryOutliersYtd, getCategoryTrend, getCategoryYearTrends } from "@/api";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -1003,8 +1002,8 @@ function CategoryPacingTable({ outliers, year }: { outliers: CategoryOutliersDat
         <thead>
           <tr className="border-b border-border text-muted-foreground">
             <th className="pb-1.5 text-left font-medium">Category</th>
-            <th className="pb-1.5 text-right font-medium">{year} YTD</th>
-            <th className="pb-1.5 text-right font-medium">{year - 1}</th>
+            <th className="px-2 pb-1.5 text-right font-medium">{year} YTD</th>
+            <th className="px-2 pb-1.5 text-right font-medium">{year - 1}</th>
             <th className="pb-1.5 text-right font-medium">Change</th>
           </tr>
         </thead>
@@ -1188,7 +1187,6 @@ export function MobileBudgets() {
   const hasAnyBudget =
     data && (data.personal.annualBudget != null || data.joint.annualBudget != null);
 
-  const trendMonth = year < curYear ? 12 : curMonthIdx + 1;
 
   return (
     <div>
@@ -1307,9 +1305,6 @@ export function MobileBudgets() {
           {outliersData && outliersData.outliers.length > 0 && (
             <CategoryPacingTable outliers={outliersData} year={year} />
           )}
-
-          {/* Spending by Category YTD */}
-          <SpendingOverTimeChart year={year} month={trendMonth} />
 
           {/* Monthly Average by Category */}
           {completedMonthCount > 0 && (
