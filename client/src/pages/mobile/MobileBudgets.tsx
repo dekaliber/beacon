@@ -1,7 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
-  LineChart,
-  Line,
   BarChart,
   Bar,
   XAxis,
@@ -21,15 +19,19 @@ import {
   X,
   Info,
   Calendar,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 import { Button } from "@/components/Button";
+import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeadingMenu } from "@/components/PageHeadingMenu";
+import { SpendingOverTimeChart } from "@/components/SpendingOverTimeChart";
 import { useApi } from "@/hooks/useApi";
-import { getBudgetOverview, setAnnualBudget, getDataRange } from "@/api";
+import { getBudgetOverview, setAnnualBudget, getDataRange, getCategoryOutliersYtd, getCategoryTrend, getCategoryYearTrends } from "@/api";
 import { formatCurrency, cn } from "@/lib/utils";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
-import type { BudgetPanel, ChartDay, MonthlyTotal } from "@/types";
+import type { BudgetPanel, MonthlyTotal, CategoryOutliersData, CategoryOutlier } from "@/types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -46,18 +48,11 @@ function pctLabel(v: number): string {
   return `${Math.abs(Math.round(v * 1000) / 10).toFixed(1)}%`;
 }
 
-function mergeChartData(
-  current: ChartDay[],
-  previous: ChartDay[],
-  priorYear: ChartDay[],
-) {
-  const len = Math.max(current.length, previous.length, priorYear.length);
-  return Array.from({ length: len }, (_, i) => ({
-    day: i + 1,
-    current:   current[i]?.cumulative   ?? null,
-    previous:  previous[i]?.cumulative  ?? null,
-    priorYear: priorYear[i]?.cumulative ?? null,
-  }));
+function fmtK(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 10_000) return `$${Math.round(abs / 1000)}K`;
+  if (abs >= 1_000)  return `$${(abs / 1000).toFixed(1)}K`;
+  return `$${Math.round(abs)}`;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -323,128 +318,50 @@ function ProjectionModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ── Monthly comparison chart ──────────────────────────────────────────────────
+// ── Forecast range explanation modal ─────────────────────────────────────
 
-function ComparisonChart({
-  chart,
-  currentMonthName,
-  prevMonthName,
-  priorYearMonthName,
-  todayDay,
-  monthlyBudget,
-}: {
-  chart: BudgetPanel["chart"];
-  currentMonthName: string;
-  prevMonthName: string;
-  priorYearMonthName: string;
-  todayDay?: number;
-  monthlyBudget?: number;
-}) {
-  const rawData = useMemo(
-    () => mergeChartData(chart.current, chart.previous, chart.priorYear),
-    [chart],
-  );
-
-  const data = useMemo(() => {
-    if (!todayDay) {
-      return rawData.map((d) => ({ ...d, currentSolid: d.current, currentFuture: null }));
-    }
-    return rawData.map((d) => ({
-      ...d,
-      currentSolid:  d.day <= todayDay ? d.current : null,
-      currentFuture: d.day >= todayDay ? d.current : null,
-    }));
-  }, [rawData, todayDay]);
-
-  const hasData = rawData.some((d) => d.current || d.previous || d.priorYear);
-  if (!hasData) return null;
-
-  const rawDataMax = Math.max(
-    0,
-    ...rawData.flatMap((d) => [d.current ?? 0, d.previous ?? 0, d.priorYear ?? 0]),
-  );
-  const yMax = Math.ceil((rawDataMax + 500) / 1000) * 1000;
-  const yIncrement = [1000, 2000, 5000, 10000, 20000, 50000].find((i) => yMax / i <= 5) ?? 50000;
-  const yTickCount = Math.round(yMax / yIncrement) + 1;
-
-  const colorPrimary = "var(--color-primary)";
-  const colorMuted   = "var(--color-muted-foreground)";
-
+function ForecastRangeModal({ onClose }: { onClose: () => void }) {
   return (
-    <div>
-      <ResponsiveContainer width="100%" height={160}>
-        <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-          <XAxis
-            dataKey="day"
-            tick={{ fontSize: 11, fill: colorMuted }}
-            tickLine={false}
-            interval={4}
-          />
-          <YAxis
-            tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-            tick={{ fontSize: 11, fill: colorMuted }}
-            tickLine={false}
-            axisLine={false}
-            width={40}
-            domain={[0, yMax]}
-            tickCount={yTickCount}
-            interval={0}
-          />
-          <Tooltip
-            content={({ active, payload, label }) => {
-              if (!active || !payload?.length) return null;
-              const labels: Record<string, string> = {
-                currentSolid:  currentMonthName,
-                currentFuture: currentMonthName,
-                previous:      prevMonthName,
-                priorYear:     priorYearMonthName,
-              };
-              const items = payload.filter((p) => p.dataKey !== "currentFuture");
-              return (
-                <div className="rounded border border-border bg-background p-3 text-xs shadow-md">
-                  <p className="mb-2 font-medium">Day {label}</p>
-                  {items.map((p) => (
-                    <p key={p.dataKey as string} className="mt-1.5" style={{ color: p.stroke as string }}>
-                      {labels[p.dataKey as string] ?? p.dataKey} : {formatCurrency(p.value as number)}
-                    </p>
-                  ))}
-                </div>
-              );
-            }}
-          />
-          <Line type="monotone" dataKey="currentSolid"  stroke={colorPrimary} strokeWidth={2}   dot={false} connectNulls name="currentSolid" />
-          <Line type="monotone" dataKey="currentFuture" stroke={colorPrimary} strokeWidth={2}   dot={false} connectNulls strokeDasharray="6 3" name="currentFuture" />
-          <Line type="monotone" dataKey="previous"      stroke={colorMuted}   strokeWidth={1.5} dot={false} connectNulls strokeOpacity={0.6} name="previous" />
-          <Line type="monotone" dataKey="priorYear"     stroke={colorPrimary} strokeWidth={1.5} dot={false} connectNulls strokeOpacity={0.3} name="priorYear" />
-          <ReferenceLine y={0} stroke="var(--color-border)" />
-          {monthlyBudget != null && monthlyBudget > 0 && (
-            <ReferenceLine
-              y={monthlyBudget}
-              stroke="var(--color-destructive)"
-              strokeWidth={1}
-              strokeDasharray="3 3"
-              strokeOpacity={0.5}
-            />
-          )}
-        </LineChart>
-      </ResponsiveContainer>
-      <div className="mt-2 flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <svg width="28" height="8">
-            <line x1="0" y1="4" x2="14" y2="4" stroke={colorPrimary} strokeWidth="2" />
-            <line x1="14" y1="4" x2="28" y2="4" stroke={colorPrimary} strokeWidth="2" strokeDasharray="4 3" />
-          </svg>
-          {currentMonthName}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke={colorMuted} strokeWidth="1.5" strokeOpacity="0.6" /></svg>
-          {prevMonthName}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke={colorPrimary} strokeWidth="1.5" strokeOpacity="0.3" /></svg>
-          {priorYearMonthName}
-        </span>
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-sm p-1 text-muted-foreground opacity-70 hover:opacity-100 hover:bg-accent"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        <h3 className="mb-1 text-base font-semibold">How the forecast range works</h3>
+        <p className="mb-5 text-xs text-muted-foreground">
+          The range shows a statistical confidence band for your annual spend, based on how variable your monthly spending has been so far this year.
+        </p>
+
+        <div className="space-y-5 text-sm">
+          <section>
+            <h4 className="mb-1.5 font-semibold text-foreground">The core idea</h4>
+            <p className="text-muted-foreground leading-relaxed">
+              Your past monthly spend has a center (the average) and a spread (how much it varies month to month). The range projects that variability forward: the more erratic your spending has been, the wider the band.
+            </p>
+          </section>
+          <section>
+            <h4 className="mb-1.5 font-semibold text-foreground">How it's calculated</h4>
+            <p className="text-muted-foreground leading-relaxed">
+              The spread is the standard deviation of your completed monthly totals, scaled by the square root of the number of months remaining. The final range is the annual projection ± that spread.
+            </p>
+          </section>
+          <section>
+            <h4 className="mb-1.5 font-semibold text-foreground">When it appears</h4>
+            <p className="text-muted-foreground leading-relaxed">
+              The forecast range is shown once you have at least two completed months of data and a budget is set.
+            </p>
+          </section>
+        </div>
       </div>
     </div>
   );
@@ -501,12 +418,8 @@ interface PanelProps {
   onToggleDiscretionary: () => void;
   budgetLabel?: string;
   currentMonthName: string;
-  prevMonthName: string;
-  priorYearMonthName: string;
   today: Date;
-  todayDay?: number;
   monthlyTotals: MonthlyTotal[];
-  panelType: "total" | "personal" | "joint";
 }
 
 function BudgetPanelSection({
@@ -520,14 +433,11 @@ function BudgetPanelSection({
   onToggleDiscretionary,
   budgetLabel = "Annual Budget",
   currentMonthName,
-  prevMonthName,
-  priorYearMonthName,
   today,
-  todayDay,
   monthlyTotals,
-  panelType,
 }: PanelProps) {
   const [showModal, setShowModal] = useState(false);
+  const [showForecastModal, setShowForecastModal] = useState(false);
   const [showSubtitleTip, setShowSubtitleTip] = useState(false);
 
   const isCompletedYear = completedMonthCount === 12;
@@ -559,6 +469,31 @@ function BudgetPanelSection({
 
   const remainingValue = showDiscretionary ? panel.remaining : panel.remainingFull;
   const monthlyTarget  = monthsRemaining > 0 ? remainingValue / monthsRemaining : null;
+
+  // Remaining spend target for current month
+  const thisMonthBudget = panel.effectiveAnnualBudget > 0
+    ? (panel.monthlyBudgets
+        ? panel.monthlyBudgets[today.getMonth()].amount
+        : panel.effectiveAnnualBudget / 12)
+    : null;
+  const remainingMonthly = thisMonthBudget !== null ? thisMonthBudget - panel.mtdTotal : null;
+  const remainingDaily   = remainingMonthly !== null && daysLeft > 0 ? remainingMonthly / daysLeft : null;
+
+  // Forecast range: std-dev of completed monthly totals × √months remaining
+  const completedMonthlyAmounts = monthlyTotals
+    .filter((m) => m.month <= completedMonthCount)
+    .map((m) => m.personalSpent + m.jointSpent)
+    .filter((v) => v > 0);
+
+  let projectionLow: number | null = null;
+  let projectionHigh: number | null = null;
+  if (completedMonthlyAmounts.length >= 2 && !isNoBudget && !isCompletedYear) {
+    const avg      = completedMonthlyAmounts.reduce((a, b) => a + b, 0) / completedMonthlyAmounts.length;
+    const variance = completedMonthlyAmounts.reduce((sum, x) => sum + Math.pow(x - avg, 2), 0) / completedMonthlyAmounts.length;
+    const spread   = Math.sqrt(variance) * Math.sqrt(Math.max(monthsRemaining, 0));
+    projectionLow  = Math.max(0, panel.projectedAnnual - spread);
+    projectionHigh = panel.projectedAnnual + spread;
+  }
 
   const completedLabel =
     completedMonthCount === 0
@@ -623,100 +558,41 @@ function BudgetPanelSection({
   const thisMonthBand = (
     <div className="space-y-2">
       <BandLabel>This month</BandLabel>
-      <Metric
-        plain
-        label={`${mtdMonthLabel} so far`}
-        value={completedMonthCount > 0 || isCurrentYear ? fmt(panel.mtdTotal) : "—"}
-        valueClass={
-          panel.effectiveAnnualBudget > 0 && (completedMonthCount > 0 || isCurrentYear)
-            ? panel.mtdTotal > panel.effectiveAnnualBudget / 12
-              ? "text-destructive"
-              : "text-success"
-            : undefined
-        }
-        sub={isCurrentYear && daysLeft > 0 ? `${daysLeft} days remaining` : "month complete"}
-      />
-      <ComparisonChart
-        chart={panel.chart}
-        currentMonthName={currentMonthName}
-        prevMonthName={prevMonthName}
-        priorYearMonthName={priorYearMonthName}
-        todayDay={todayDay}
-        monthlyBudget={panel.effectiveAnnualBudget > 0 ? panel.effectiveAnnualBudget / 12 : undefined}
-      />
-    </div>
-  );
-
-  const showPersonalBar = panelType === "total" || panelType === "personal";
-  const showJointBar    = panelType === "total" || panelType === "joint";
-  const monthlySpendBand = (
-    <div className="space-y-2">
-      <BandLabel>Monthly Spend</BandLabel>
-      <ResponsiveContainer width="100%" height={160}>
-        <BarChart data={monthlyTotals} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-          <XAxis dataKey="label" fontSize={12} axisLine={false} tickLine={false} />
-          <YAxis
-            fontSize={12}
-            tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`}
-            axisLine={false}
-            tickLine={false}
-          />
-          <Tooltip
-            content={({ active, payload, label }) => {
-              if (!active || !payload?.length) return null;
-              return (
-                <div className="rounded border border-border bg-background p-3 text-xs shadow-md">
-                  <p className="mb-2 font-medium">{label}</p>
-                  {payload.map((p) => (
-                    <p key={p.dataKey as string} className="mt-1.5" style={{ color: p.fill as string }}>
-                      {p.name} : {formatCurrency(p.value as number)}
-                    </p>
-                  ))}
-                </div>
-              );
-            }}
-            cursor={{ fill: "var(--color-muted)" }}
-          />
-          {showPersonalBar && (
-            <Bar dataKey="personalSpent" name="Personal" stackId="a" fill={PERSONAL_COLOR} />
-          )}
-          {showJointBar && (
-            <Bar dataKey="jointSpent" name="Joint" stackId="a" fill={JOINT_COLOR} radius={[4, 4, 0, 0]} />
-          )}
-          {panel.effectiveAnnualBudget > 0 && (
-            <ReferenceLine
-              y={panel.effectiveAnnualBudget / 12}
-              stroke="#EF4444"
-              strokeWidth={1}
-              strokeDasharray="3 3"
-              strokeOpacity={0.5}
+      <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex gap-3">
+          <div className="min-w-[125px]">
+            <Metric
+              plain
+              label={`${mtdMonthLabel} so far`}
+              value={completedMonthCount > 0 || isCurrentYear ? fmt(panel.mtdTotal) : "—"}
+              valueClass={
+                panel.effectiveAnnualBudget > 0 && (completedMonthCount > 0 || isCurrentYear)
+                  ? panel.mtdTotal > panel.effectiveAnnualBudget / 12
+                    ? "text-destructive"
+                    : "text-success"
+                  : undefined
+              }
+              sub={isCurrentYear && daysLeft > 0 ? `${daysLeft} days remaining` : "month complete"}
             />
-          )}
-        </BarChart>
-      </ResponsiveContainer>
-      <div className="mt-1 flex items-center justify-center gap-5">
-        {showPersonalBar && (
-          <div className="flex items-center gap-1.5">
-            <svg width={12} height={12}><rect width={12} height={12} rx={2} fill={PERSONAL_COLOR} /></svg>
-            <span className="text-xs text-muted-foreground">Personal</span>
           </div>
-        )}
-        {showJointBar && (
-          <div className="flex items-center gap-1.5">
-            <svg width={12} height={12}><rect width={12} height={12} rx={2} fill={JOINT_COLOR} /></svg>
-            <span className="text-xs text-muted-foreground">Joint</span>
+          <div className="min-w-[125px]">
+            <Metric
+              plain
+              label="Remaining spend target"
+              value={remainingDaily !== null ? fmt(remainingDaily) : "—"}
+              valueClass={remainingDaily !== null && remainingDaily < 0 ? "text-destructive" : undefined}
+              sub={daysLeft > 0 ? "per day" : isCurrentYear ? "month complete" : undefined}
+            />
           </div>
-        )}
-        {panel.effectiveAnnualBudget > 0 && (
-          <div className="flex items-center gap-1.5">
-            <svg width={20} height={8}>
-              <line x1="0" y1="4" x2="20" y2="4" stroke="#EF4444" strokeWidth="1" strokeDasharray="3 3" strokeOpacity="0.5" />
-            </svg>
-            <span className="text-xs text-muted-foreground">Avg monthly budget</span>
-          </div>
-        )}
+        </div>
       </div>
+      {!isNoBudget && (
+        <PaceBar
+          normalizedYTD={panel.normalizedYTD}
+          budget={panel.effectiveAnnualBudget}
+          pctElapsed={pctElapsed}
+        />
+      )}
     </div>
   );
 
@@ -806,15 +682,62 @@ function BudgetPanelSection({
               }
             />
           </div>
+          {projectionLow !== null && projectionHigh !== null && (
+            <div className="min-w-[140px]">
+              <Metric
+                plain
+                label="Forecast range"
+                value={`${fmtK(projectionLow)} – ${fmtK(projectionHigh)}`}
+                sub="annual range"
+              />
+            </div>
+          )}
         </div>
       </div>
-      {!isNoBudget && (
-        <PaceBar
-          normalizedYTD={panel.normalizedYTD}
-          budget={panel.effectiveAnnualBudget}
-          pctElapsed={pctElapsed}
-        />
-      )}
+      {projectionLow !== null && projectionHigh !== null && (() => {
+        const scaleMax  = Math.max(projectionHigh, panel.effectiveAnnualBudget) * 1.15;
+        const lowPct    = Math.min((projectionLow  / scaleMax) * 100, 100);
+        const centerPct = Math.min((panel.projectedAnnual / scaleMax) * 100, 100);
+        const highPct   = Math.min((projectionHigh / scaleMax) * 100, 100);
+        const budgetPct = Math.min((panel.effectiveAnnualBudget / scaleMax) * 100, 100);
+        return (
+          <div>
+            <div className="mb-1 flex items-center gap-1">
+              <p className="text-xs text-muted-foreground">Annual forecast range</p>
+              <button
+                onClick={() => setShowForecastModal(true)}
+                className="inline-flex items-center text-muted-foreground hover:text-foreground"
+                title="How is this calculated?"
+              >
+                <Info className="h-3 w-3" />
+              </button>
+            </div>
+            <div className="relative h-4">
+              <span
+                className="absolute -translate-x-1/2 whitespace-nowrap text-[10px] text-muted-foreground"
+                style={{ left: `${centerPct}%` }}
+              >
+                <span className="font-medium text-foreground">{fmtK(projectionLow)}</span>
+                {" – "}
+                <span className="font-medium text-foreground">{fmtK(projectionHigh)}</span>
+              </span>
+            </div>
+            <div className="relative h-2 rounded-full bg-secondary">
+              <div className="absolute top-0 h-full rounded-full bg-primary/20" style={{ left: `${lowPct}%`, width: `${highPct - lowPct}%` }} />
+              <div className="absolute top-0 h-full w-0.5 rounded-full bg-primary" style={{ left: `${centerPct}%` }} />
+              <div className="absolute top-0 h-full w-0.5 rounded-full bg-destructive/60" style={{ left: `${budgetPct}%` }} />
+            </div>
+            <div className="relative mt-1 h-4">
+              <span
+                className="absolute -translate-x-1/2 whitespace-nowrap text-[10px] text-muted-foreground"
+                style={{ left: `${budgetPct}%` }}
+              >
+                Budget {fmtK(panel.effectiveAnnualBudget)}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 
@@ -876,7 +799,6 @@ function BudgetPanelSection({
     <>
       {pastBand}
       {completedYearPaceBar}
-      {monthlySpendBand}
     </>
   ) : (
     <>
@@ -889,11 +811,317 @@ function BudgetPanelSection({
   return (
     <>
       {showModal && <ProjectionModal onClose={() => setShowModal(false)} />}
+      {showForecastModal && <ForecastRangeModal onClose={() => setShowForecastModal(false)} />}
       <div className="flex flex-col gap-5">
         {header}
         {bands}
       </div>
     </>
+  );
+}
+
+// ── Personal / Joint split ────────────────────────────────────────────────────
+
+function SplitSection({ personal, joint }: { personal: BudgetPanel; joint: BudgetPanel }) {
+  const personalYTD = personal.ytdCompletedMonths + personal.mtdTotal;
+  const jointYTD    = joint.ytdCompletedMonths    + joint.mtdTotal;
+  const grandTotal  = personalYTD + jointYTD;
+
+  if (grandTotal === 0) return null;
+
+  const actualPersonalPct = personalYTD / grandTotal;
+  const actualJointPct    = 1 - actualPersonalPct;
+  const totalBudget       = personal.effectiveAnnualBudget + joint.effectiveAnnualBudget;
+  const hasBudgets        = totalBudget > 0;
+  const targetPersonalPct = hasBudgets ? personal.effectiveAnnualBudget / totalBudget : null;
+  const targetJointPct    = targetPersonalPct != null ? 1 - targetPersonalPct : null;
+
+  function StreamCol({ label, color, ytd, actualPct, targetPct }: {
+    label: string; color: string; ytd: number;
+    actualPct: number; targetPct: number | null;
+  }) {
+    const overTarget  = targetPct != null && actualPct > targetPct;
+    const underTarget = targetPct != null && actualPct < targetPct;
+    return (
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+        </div>
+        <p className="text-xl font-bold leading-tight">{fmt(ytd)}</p>
+        <div className="space-y-0.5 text-xs">
+          <p className={overTarget ? "text-destructive font-medium" : underTarget ? "text-success font-medium" : "text-muted-foreground"}>
+            {Math.round(actualPct * 100)}% of actual spend
+          </p>
+          {targetPct != null && (
+            <p className="text-muted-foreground">{Math.round(targetPct * 100)}% budget share</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Personal vs. Joint</CardTitle>
+        <p className="mt-0.5 text-xs text-muted-foreground">YTD spend composition</p>
+      </CardHeader>
+      <div className="mb-4 space-y-1">
+        <div className="relative h-5 overflow-hidden rounded-sm">
+          <div className="absolute inset-0 flex">
+            <div className="h-full shrink-0" style={{ width: `${actualPersonalPct * 100}%`, backgroundColor: PERSONAL_COLOR }} />
+            <div className="h-full flex-1" style={{ backgroundColor: JOINT_COLOR }} />
+          </div>
+          {targetPersonalPct != null && (
+            <div className="absolute top-0 h-full w-px bg-foreground/60" style={{ left: `${targetPersonalPct * 100}%` }} />
+          )}
+        </div>
+        {targetPersonalPct != null && (
+          <div className="relative h-4">
+            <span
+              className="absolute -translate-x-1/2 whitespace-nowrap text-xs text-muted-foreground"
+              style={{ left: `${targetPersonalPct * 100}%` }}
+            >
+              target {Math.round(targetPersonalPct * 100)}% / {Math.round(targetJointPct! * 100)}%
+            </span>
+          </div>
+        )}
+      </div>
+      <div className="flex gap-6">
+        <StreamCol label="Personal" color={PERSONAL_COLOR} ytd={personalYTD} actualPct={actualPersonalPct} targetPct={targetPersonalPct} />
+        <div className="w-px shrink-0 bg-border" />
+        <StreamCol label="Joint" color={JOINT_COLOR} ytd={jointYTD} actualPct={actualJointPct} targetPct={targetJointPct} />
+      </div>
+    </Card>
+  );
+}
+
+// ── Monthly trend ─────────────────────────────────────────────────────────────
+
+function MonthlyTrendSection({ monthlyTotals, monthlyBudget }: { monthlyTotals: MonthlyTotal[]; monthlyBudget: number | null }) {
+  const hasData = monthlyTotals.some((m) => m.personalSpent + m.jointSpent > 0);
+  if (!hasData) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Monthly Trend</CardTitle>
+      </CardHeader>
+      <ResponsiveContainer width="100%" height={140}>
+        <BarChart data={monthlyTotals} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+          <XAxis dataKey="label" fontSize={10} axisLine={false} tickLine={false} />
+          <YAxis
+            fontSize={10}
+            tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`}
+            axisLine={false}
+            tickLine={false}
+            width={32}
+          />
+          <Tooltip
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null;
+              const total = payload.reduce((s, p) => s + (p.value as number), 0);
+              return (
+                <div className="rounded border border-border bg-background p-2 text-xs shadow-md">
+                  <p className="mb-1.5 font-medium">{label}</p>
+                  {payload.map((p) => (
+                    <p key={p.dataKey as string} className="mt-1" style={{ color: p.fill as string }}>
+                      {p.name}: {formatCurrency(p.value as number)}
+                    </p>
+                  ))}
+                  <p className="mt-1.5 border-t border-border pt-1 font-medium text-foreground">
+                    Total: {formatCurrency(total)}
+                  </p>
+                </div>
+              );
+            }}
+            cursor={{ fill: "var(--color-muted)" }}
+          />
+          <Bar dataKey="personalSpent" name="Personal" stackId="a" fill={PERSONAL_COLOR} />
+          <Bar dataKey="jointSpent" name="Joint" stackId="a" fill={JOINT_COLOR} radius={[3, 3, 0, 0]} />
+          {monthlyBudget != null && monthlyBudget > 0 && (
+            <ReferenceLine y={monthlyBudget} stroke="var(--color-destructive)" strokeWidth={1} strokeDasharray="3 3" strokeOpacity={0.5} />
+          )}
+        </BarChart>
+      </ResponsiveContainer>
+      <div className="mt-2 flex items-center justify-center gap-4">
+        <div className="flex items-center gap-1.5">
+          <svg width={10} height={10}><rect width={10} height={10} rx={2} fill={PERSONAL_COLOR} /></svg>
+          <span className="text-xs text-muted-foreground">Personal</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <svg width={10} height={10}><rect width={10} height={10} rx={2} fill={JOINT_COLOR} /></svg>
+          <span className="text-xs text-muted-foreground">Joint</span>
+        </div>
+        {monthlyBudget != null && monthlyBudget > 0 && (
+          <div className="flex items-center gap-1.5">
+            <svg width={16} height={8}>
+              <line x1="0" y1="4" x2="16" y2="4" stroke="var(--color-destructive)" strokeWidth="1" strokeDasharray="3 3" strokeOpacity="0.5" />
+            </svg>
+            <span className="text-xs text-muted-foreground">Monthly budget</span>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// ── Category pacing table ─────────────────────────────────────────────────────
+
+function CategoryPacingTable({ outliers, year }: { outliers: CategoryOutliersData; year: number }) {
+  const [showAll, setShowAll] = useState(false);
+
+  const items = [...outliers.outliers]
+    .filter((o) => o.currentAmount > 0 || o.previousAmount > 0)
+    .sort((a, b) => {
+      const aDev = a.previousAmount > 0 ? Math.abs(a.currentAmount / a.previousAmount - 1) : 1;
+      const bDev = b.previousAmount > 0 ? Math.abs(b.currentAmount / b.previousAmount - 1) : 1;
+      return bDev - aDev;
+    });
+
+  if (items.length === 0) return null;
+
+  const significantItems = items.filter((o) => {
+    if (o.previousAmount === 0) return true;
+    return Math.abs(o.currentAmount / o.previousAmount - 1) >= 0.05;
+  });
+  const minorItems = items.filter((o) => {
+    if (o.previousAmount === 0) return false;
+    return Math.abs(o.currentAmount / o.previousAmount - 1) < 0.05;
+  });
+  const visibleItems = showAll ? items : significantItems;
+
+  return (
+    <Card>
+      <div className="mb-3">
+        <p className="text-sm font-medium text-card-foreground">Category Pacing</p>
+        <p className="text-xs text-muted-foreground">YTD spend vs same period {year - 1}</p>
+      </div>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-border text-muted-foreground">
+            <th className="pb-1.5 text-left font-medium">Category</th>
+            <th className="pb-1.5 text-right font-medium">{year} YTD</th>
+            <th className="pb-1.5 text-right font-medium">{year - 1}</th>
+            <th className="pb-1.5 text-right font-medium">Change</th>
+          </tr>
+        </thead>
+        <tbody>
+          {visibleItems.map((item: CategoryOutlier, i: number) => {
+            const pct   = item.previousAmount > 0 ? item.currentAmount / item.previousAmount - 1 : null;
+            const over  = pct !== null && pct > 0;
+            const changeColor = over ? "text-destructive" : item.currentAmount > 0 ? "text-success" : "text-muted-foreground";
+            return (
+              <tr
+                key={item.categoryId ?? `__cat${i}__`}
+                className={`border-b border-border last:border-0 ${i % 2 === 0 ? "bg-muted/15" : ""}`}
+              >
+                <td className="py-1.5 pr-2">
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.color ?? "#9CA3AF" }} />
+                    {item.categoryName}
+                  </span>
+                </td>
+                <td className="py-1.5 px-2 text-right tabular-nums">{formatCurrency(item.currentAmount)}</td>
+                <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">
+                  {item.previousAmount > 0 ? formatCurrency(item.previousAmount) : "—"}
+                </td>
+                <td className={`py-1.5 pl-2 text-right tabular-nums font-semibold ${changeColor}`}>
+                  {pct !== null
+                    ? `${over ? "+" : ""}${Math.round(pct * 100)}%`
+                    : item.previousAmount === 0 ? "new" : "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {minorItems.length > 0 && (
+        <button
+          className="mt-2 text-xs text-primary hover:underline"
+          onClick={() => setShowAll((v) => !v)}
+        >
+          {showAll ? "Show less" : `Show ${minorItems.length} more (within ±5%)`}
+        </button>
+      )}
+    </Card>
+  );
+}
+
+// ── Monthly average by category ───────────────────────────────────────────────
+
+function YoYBadge({ avgByYear, years, year }: { avgByYear: number[]; years: number[]; year: number }) {
+  const curIdx  = years.indexOf(year);
+  const prevIdx = years.indexOf(year - 1);
+  if (curIdx === -1 || prevIdx === -1) return null;
+  const cur  = avgByYear[curIdx];
+  const prev = avgByYear[prevIdx];
+  if (!prev) return null;
+
+  const pct  = (cur - prev) / Math.abs(prev);
+  const up   = pct > 0;
+  const Icon = up ? TrendingUp : TrendingDown;
+  const abs  = Math.abs(Math.round(pct * 100));
+
+  return (
+    <div className={`w-20 flex flex-col items-center rounded-md p-2 ${
+      up ? "bg-destructive/10 text-destructive" : "bg-success/10 text-success"
+    }`}>
+      <div className="flex items-center gap-1">
+        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <span className="text-base font-semibold leading-none">{abs}%</span>
+      </div>
+      <p className="mt-1 text-xs opacity-75">vs {year - 1}</p>
+    </div>
+  );
+}
+
+function CategoryAvgMonthlyGrid({ year, completedMonths }: { year: number; completedMonths: number }) {
+  const { data }         = useApi(() => getCategoryTrend(year, completedMonths), [year, completedMonths]);
+  const { data: trends } = useApi(() => getCategoryYearTrends(), []);
+  if (!data || data.series.length === 0) return null;
+
+  const trendsMap = new Map(trends?.series.map((s: { categoryId: string }) => [s.categoryId, s]) ?? []);
+  const items = data.series.map((s: { categoryId: string; name: string; color: string; values: number[] }) => ({
+    categoryId: s.categoryId,
+    name:       s.name,
+    color:      s.color,
+    avgMonthly: s.values.reduce((sum: number, v: number) => sum + v, 0) / completedMonths,
+    trend:      trendsMap.get(s.categoryId),
+  }));
+
+  const monthLabel = completedMonths === 12 ? "all 12 months" : `first ${completedMonths} months`;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Monthly Average by Category</CardTitle>
+        <p className="mt-0.5 text-xs text-muted-foreground">Average monthly spend across {monthLabel}</p>
+      </CardHeader>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+        {items.map((item: { categoryId: string; name: string; color: string; avgMonthly: number; trend: { avgByYear: number[] } | undefined }) => (
+          <div key={item.categoryId} className="bg-muted/40 px-3 py-2.5 border-t border-border">
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+              <p className="truncate text-xs text-muted-foreground">{item.name}</p>
+            </div>
+            <div className="flex items-center mt-0.5">
+              <div className="w-1/2">
+                <p className="text-base font-bold leading-tight">{formatCurrency(item.avgMonthly)}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">avg / month</p>
+              </div>
+              <div className="w-1/2 flex justify-center">
+                {item.trend && trends && (
+                  <YoYBadge avgByYear={(item.trend as { avgByYear: number[] }).avgByYear} years={trends.years} year={year} />
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 
@@ -913,7 +1141,8 @@ export function MobileBudgets() {
     [year],
   );
 
-  const { data: dataRange } = useApi(() => getDataRange(), []);
+  const { data: dataRange }    = useApi(() => getDataRange(), []);
+  const { data: outliersData } = useApi(() => getCategoryOutliersYtd(year), [year]);
 
   const handleSaveBudgets = async (personal: number | null, joint: number | null) => {
     const promises: Promise<unknown>[] = [];
@@ -942,16 +1171,10 @@ export function MobileBudgets() {
     year > curYear ? 12 :
     11 - curMonthIdx;
 
-  const chartMonthIdx    = year < curYear ? 11 : year > curYear ? 0 : curMonthIdx;
-  const chartYear        = year < curYear ? year : year > curYear ? year : curYear;
-  const prevChartIdx     = chartMonthIdx === 0 ? 11 : chartMonthIdx - 1;
-  const prevChartYear    = chartMonthIdx === 0 ? chartYear - 1 : chartYear;
+  const chartMonthIdx = year < curYear ? 11 : year > curYear ? 0 : curMonthIdx;
+  const chartYear     = year < curYear ? year : year > curYear ? year : curYear;
 
-  const currentMonthName   = `${SHORT_MONTHS[chartMonthIdx]} ${chartYear}`;
-  const prevMonthName      = `${SHORT_MONTHS[prevChartIdx]} ${prevChartYear}`;
-  const priorYearMonthName = `${SHORT_MONTHS[chartMonthIdx]} ${chartYear - 1}`;
-
-  const todayDay = year === curYear ? now.getDate() : undefined;
+  const currentMonthName = `${SHORT_MONTHS[chartMonthIdx]} ${chartYear}`;
 
   const sharedPanelProps = {
     completedMonthCount,
@@ -959,14 +1182,13 @@ export function MobileBudgets() {
     showDiscretionary,
     onToggleDiscretionary: () => setShowDiscretionary((v) => !v),
     currentMonthName,
-    prevMonthName,
-    priorYearMonthName,
     today: now,
-    todayDay,
   };
 
   const hasAnyBudget =
     data && (data.personal.annualBudget != null || data.joint.annualBudget != null);
+
+  const trendMonth = year < curYear ? 12 : curMonthIdx + 1;
 
   return (
     <div>
@@ -1031,7 +1253,6 @@ export function MobileBudgets() {
             pctElapsed={data.pctElapsed}
             budgetLabel="Annual Budget (derived)"
             monthlyTotals={data.monthlyTotals}
-            panelType="total"
             {...sharedPanelProps}
           />
 
@@ -1055,7 +1276,6 @@ export function MobileBudgets() {
                 panel={data.personal}
                 pctElapsed={data.pctElapsed}
                 monthlyTotals={data.monthlyTotals.map((m) => ({ ...m, jointSpent: 0 }))}
-                panelType="personal"
                 {...sharedPanelProps}
               />
               <div className="h-px bg-border" />
@@ -1065,10 +1285,35 @@ export function MobileBudgets() {
                 panel={data.joint}
                 pctElapsed={data.pctElapsed}
                 monthlyTotals={data.monthlyTotals.map((m) => ({ ...m, personalSpent: 0 }))}
-                panelType="joint"
                 {...sharedPanelProps}
               />
             </div>
+          )}
+
+          {/* Personal vs. Joint split */}
+          <SplitSection personal={data.personal} joint={data.joint} />
+
+          {/* Monthly Trend */}
+          <MonthlyTrendSection
+            monthlyTotals={data.monthlyTotals.map((m) =>
+              year < curYear || m.month <= curMonthIdx + 1
+                ? m
+                : { ...m, personalSpent: 0, jointSpent: 0 }
+            )}
+            monthlyBudget={data.total.effectiveAnnualBudget > 0 ? data.total.effectiveAnnualBudget / 12 : null}
+          />
+
+          {/* Category Pacing */}
+          {outliersData && outliersData.outliers.length > 0 && (
+            <CategoryPacingTable outliers={outliersData} year={year} />
+          )}
+
+          {/* Spending by Category YTD */}
+          <SpendingOverTimeChart year={year} month={trendMonth} />
+
+          {/* Monthly Average by Category */}
+          {completedMonthCount > 0 && (
+            <CategoryAvgMonthlyGrid year={year} completedMonths={completedMonthCount} />
           )}
         </>
       )}
