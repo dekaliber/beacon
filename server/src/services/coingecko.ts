@@ -40,11 +40,16 @@ export interface CoinPrice {
 }
 
 // ── Shared fetch helper ───────────────────────────────────────────────────────
+// Includes the Demo API key when COINGECKO_API_KEY is set in the environment.
+// The key is optional — omitting it falls back to the unauthenticated free tier,
+// which works fine for local dev but is aggressively rate-limited for cloud IPs.
 
 async function cgFetch(path: string): Promise<Response> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { Accept: "application/json" },
-  });
+  const headers: Record<string, string> = { Accept: "application/json" };
+  const apiKey = process.env.COINGECKO_API_KEY;
+  if (apiKey) headers["x-cg-demo-api-key"] = apiKey;
+
+  const res = await fetch(`${BASE}${path}`, { headers });
   return res;
 }
 
