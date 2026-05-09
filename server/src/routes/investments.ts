@@ -1698,6 +1698,9 @@ investmentRoutes.get("/prices/status", async (_req, res) => {
 investmentRoutes.get("/prices/:ticker", async (req, res) => {
   const ticker = req.params.ticker.toUpperCase();
   const dateParam = (req.query.date as string | undefined)?.trim();
+  // Optional: caller can supply the CoinGecko ID directly (e.g. before a holding
+  // is saved to the DB) so we never accidentally fall back to Yahoo Finance.
+  const coinGeckoIdParam = (req.query.coinGeckoId as string | undefined)?.trim() || null;
 
   // ── Historical price lookup (Yahoo Finance) ───────────────────────────────
   if (dateParam) {
@@ -1712,13 +1715,21 @@ investmentRoutes.get("/prices/:ticker", async (req, res) => {
 
   // ── Current price (cached or live) ───────────────────────────────────────
   try {
-    // For crypto: cache expires after 5 minutes (24/7 market).
-    // For stocks: cache expires after 1 hour.
-    const cryptoHolding = await prisma.investmentHolding.findFirst({
-      where: { ticker, coinGeckoId: { not: null } },
-      select: { coinGeckoId: true },
-    });
-    const isCrypto = !!cryptoHolding?.coinGeckoId;
+    // Resolve whether this is a crypto ticker.
+    // Priority: explicit coinGeckoId query param → DB lookup on existing holding.
+    // The query param path handles the "add new holding" flow where no DB row
+    // exists yet and we must not fall through to Yahoo Finance (which would
+    // return a completely unrelated asset with the same symbol, e.g. "BTC" →
+    // Grayscale Bitcoin Mini Trust).
+    const resolvedCoinGeckoId =
+      coinGeckoIdParam ??
+      (await prisma.investmentHolding.findFirst({
+        where: { ticker, coinGeckoId: { not: null } },
+        select: { coinGeckoId: true },
+      }))?.coinGeckoId ??
+      null;
+
+    const isCrypto = !!resolvedCoinGeckoId;
     const cacheMaxAgeMs = isCrypto ? 5 * 60 * 1000 : 60 * 60 * 1000;
 
     // Return cached price if it's still fresh
@@ -1738,9 +1749,9 @@ investmentRoutes.get("/prices/:ticker", async (req, res) => {
     let priceDate: Date;
     let priceSource: string;
 
-    if (isCrypto && cryptoHolding?.coinGeckoId) {
+    if (isCrypto && resolvedCoinGeckoId) {
       // Fetch live from CoinGecko
-      const coinPrice = await getCoinGeckoPrice(cryptoHolding.coinGeckoId);
+      const coinPrice = await getCoinGeckoPrice(resolvedCoinGeckoId);
       if (!coinPrice) {
         return res.status(404).json({ error: { message: "Price not available for " + ticker } });
       }

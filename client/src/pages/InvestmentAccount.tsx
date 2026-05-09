@@ -538,7 +538,7 @@ function AddInvestmentModal({
     } else {
       setFetchingPrice(true);
       try {
-        const data = await getTickerPrice(result.ticker);
+        const data = await getTickerPrice(result.ticker, undefined, result.coinGeckoId);
         setFetchedPrice(data.price);
       } catch {
         // Price fetch is non-fatal; just don't show it
