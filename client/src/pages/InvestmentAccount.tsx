@@ -81,7 +81,7 @@ import type { SellPreviewResult } from "@/api";
 import { ApiError } from "@/api/client";
 import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/utils";
 import { useNotifications } from "@/context/NotificationContext";
-import { isPriceRefreshNeeded } from "@/lib/priceUtils";
+import { isPriceRefreshNeeded, formatQuantity } from "@/lib/priceUtils";
 import { useDemo } from "@/context/DemoContext";
 import { scaleGrowthPoints, scaleManuals, scaleHolding } from "@/lib/demo";
 import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity, GrowthPoint, GrowthEvent, PendingDividend, TaxClassification, Category, ConfirmedDividendInfo } from "@/types";
@@ -862,7 +862,7 @@ function LotRow({
         </td>
         <td className="py-2 px-2 tabular-nums">{formatCurrency(lot.costPerShare)}</td>
         <td className="py-2 px-2 tabular-nums">
-          {parseFloat(lot.quantity).toLocaleString(undefined, { maximumFractionDigits: 6 })}
+          {parseFloat(lot.quantity).toLocaleString(undefined, { maximumFractionDigits: 8 })}
         </td>
         <td className="py-2 px-2 tabular-nums">{formatCurrency(gains.totalCost)}</td>
         <td className="py-2 px-2 tabular-nums">
@@ -1178,7 +1178,7 @@ function HoldingRow({
           {holding.currentPrice != null ? formatCurrency(holding.currentPrice) : <span className="text-muted-foreground">—</span>}
         </td>
         <td className="py-3 px-2 text-sm tabular-nums">
-          {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+          {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}
         </td>
         <td className="py-3 px-2 text-sm tabular-nums">{formatCurrency(holding.totalCost)}</td>
         <td className="py-3 px-2 text-sm tabular-nums font-medium">
@@ -1240,7 +1240,7 @@ function HoldingRow({
                   <div>
                     <p className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Total Shares</p>
                     <p className="font-medium tabular-nums">
-                      {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                      {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}
                     </p>
                   </div>
                   <div>
@@ -1673,7 +1673,7 @@ function ImportInvestmentsModal({
                       </td>
                       <td className="px-2 py-1.5 text-right tabular-nums">
                         {row.quantity > 0
-                          ? row.quantity.toLocaleString(undefined, { maximumFractionDigits: 6 })
+                          ? row.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })
                           : "—"}
                       </td>
                       <td className="px-2 py-1.5">
@@ -2082,7 +2082,7 @@ function StickyHoldingRow({
                       {holding.currentPrice != null ? formatCurrency(holding.currentPrice) : <span className="text-muted-foreground">—</span>}
                     </td>
                     <td className="py-3 px-2 text-sm tabular-nums">
-                      {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                      {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}
                     </td>
                     <td className="py-3 px-2 text-sm tabular-nums">{formatCurrency(holding.totalCost)}</td>
                     <td className="py-3 px-2 text-sm tabular-nums font-medium">
@@ -2215,7 +2215,7 @@ function SellModal({
       if (selectionMode === "method") {
         const sharesToMove = parseFloat(shares);
         if (isNaN(sharesToMove) || sharesToMove <= 0) return setError("Enter a valid number of shares.");
-        if (sharesToMove > maxShares + 0.000001) return setError(`Cannot transfer more than ${maxShares.toLocaleString(undefined, { maximumFractionDigits: 6 })} shares.`);
+        if (sharesToMove > maxShares + 0.000001) return setError(`Cannot transfer more than ${maxShares.toLocaleString(undefined, { maximumFractionDigits: 8 })} shares.`);
       } else {
         if (lotAllocations.length === 0) return setError("Enter shares to transfer for at least one lot.");
         for (const lot of sortedLots) {
@@ -2237,10 +2237,10 @@ function SellModal({
     if (selectionMode === "method") {
       const sharesToSell = parseFloat(shares);
       if (isNaN(sharesToSell) || sharesToSell <= 0) return setError("Enter a valid number of shares.");
-      if (sharesToSell > maxShares + 0.000001) return setError(`Cannot sell more than ${maxShares.toLocaleString(undefined, { maximumFractionDigits: 6 })} shares.`);
+      if (sharesToSell > maxShares + 0.000001) return setError(`Cannot sell more than ${maxShares.toLocaleString(undefined, { maximumFractionDigits: 8 })} shares.`);
     } else {
       if (lotAllocations.length === 0) return setError("Enter shares to sell for at least one lot.");
-      if (lotTotalShares > maxShares + 0.000001) return setError(`Total shares (${lotTotalShares.toLocaleString(undefined, { maximumFractionDigits: 6 })}) exceeds available ${maxShares.toLocaleString(undefined, { maximumFractionDigits: 6 })}.`);
+      if (lotTotalShares > maxShares + 0.000001) return setError(`Total shares (${lotTotalShares.toLocaleString(undefined, { maximumFractionDigits: 8 })}) exceeds available ${maxShares.toLocaleString(undefined, { maximumFractionDigits: 8 })}.`);
       for (const lot of sortedLots) {
         const requested = parseFloat(lotInputs[lot.id] || "0") || 0;
         const available = parseFloat(lot.quantity);
@@ -2349,7 +2349,7 @@ function SellModal({
           </div>
 
           <p className="text-sm text-muted-foreground">
-            Available: <span className="font-medium text-foreground">{maxShares.toLocaleString(undefined, { maximumFractionDigits: 6 })} shares</span>
+            Available: <span className="font-medium text-foreground">{maxShares.toLocaleString(undefined, { maximumFractionDigits: 8 })} shares</span>
           </p>
 
           {/* Lot selection mode toggle */}
@@ -2447,7 +2447,7 @@ function SellModal({
                               {lot.acquiredDate ? formatDate(lot.acquiredDate) : "—"}
                             </td>
                             <td className="py-2 px-3 text-right tabular-nums">
-                              {available.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                              {available.toLocaleString(undefined, { maximumFractionDigits: 8 })}
                             </td>
                             <td className="py-2 px-3 text-right tabular-nums">
                               {formatCurrency(parseFloat(lot.costPerShare))}
@@ -2488,7 +2488,7 @@ function SellModal({
                   <input
                     type="text"
                     readOnly
-                    value={lotTotalShares > 0 ? lotTotalShares.toLocaleString(undefined, { maximumFractionDigits: 6 }) : ""}
+                    value={lotTotalShares > 0 ? lotTotalShares.toLocaleString(undefined, { maximumFractionDigits: 8 }) : ""}
                     placeholder="0"
                     className="w-full rounded border border-border px-3 py-2 text-sm tabular-nums bg-muted text-muted-foreground cursor-default"
                   />
@@ -2593,7 +2593,7 @@ function SellModal({
                   <tr key={i} className="border-t border-border">
                     <td className="py-2 px-3 tabular-nums">{formatDate(lot.acquiredDate)}</td>
                     <td className="py-2 px-3 text-right tabular-nums">
-                      {lot.shares.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                      {lot.shares.toLocaleString(undefined, { maximumFractionDigits: 8 })}
                     </td>
                     <td className="py-2 px-3 text-right tabular-nums">{formatCurrency(lot.costPerShare)}</td>
                     <td className="py-2 px-3">
@@ -2684,7 +2684,7 @@ function SellModal({
             <div className="flex justify-between border-t border-border pt-2 mt-1">
               <span className="text-muted-foreground">Total Shares</span>
               <span className="font-medium tabular-nums">
-                {(selectionMode === "method" ? parseFloat(shares) : lotTotalShares).toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                {(selectionMode === "method" ? parseFloat(shares) : lotTotalShares).toLocaleString(undefined, { maximumFractionDigits: 8 })}
               </span>
             </div>
             <div className="flex justify-between">
@@ -2709,7 +2709,7 @@ function SellModal({
                     <tr key={i} className="border-t border-border">
                       <td className="py-2 px-3 tabular-nums">{lot.acquiredDate ? formatDate(lot.acquiredDate) : "—"}</td>
                       <td className="py-2 px-3 text-right tabular-nums">
-                        {lot.shares.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                        {lot.shares.toLocaleString(undefined, { maximumFractionDigits: 8 })}
                       </td>
                       <td className="py-2 px-3 text-right tabular-nums">{formatCurrency(lot.costPerShare)}</td>
                       <td className="py-2 px-3 text-right tabular-nums">{formatCurrency(lot.shares * lot.costPerShare)}</td>
@@ -2800,7 +2800,7 @@ function EditSaleActivityModal({
           {
             label: "Shares",
             value: activity.shares != null
-              ? activity.shares.toLocaleString(undefined, { maximumFractionDigits: 6 })
+              ? activity.shares.toLocaleString(undefined, { maximumFractionDigits: 8 })
               : "—",
           },
         ].map(({ label, value, mono }) => (
@@ -2947,7 +2947,7 @@ function ReviewDividendModal({
         const total = parseFloat(totalAmountRef.current);
         const price = parseFloat(p);
         if (!isNaN(total) && total > 0 && !isNaN(price) && price > 0) {
-          setReinvestQuantity((total / price).toFixed(6));
+          setReinvestQuantity((total / price).toFixed(8));
         }
       })
       .catch(() => { /* price stays blank; user can enter manually */ })
@@ -2984,7 +2984,7 @@ function ReviewDividendModal({
     const p = parseFloat(val);
     const total = parseFloat(totalAmount);
     if (!isNaN(p) && p > 0 && !isNaN(total) && total > 0) {
-      setReinvestQuantity((total / p).toFixed(6));
+      setReinvestQuantity((total / p).toFixed(8));
     }
   };
 
@@ -3378,7 +3378,7 @@ function EditConfirmedDividendModal({
             </div>
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">Shares at Ex-Date</label>
-              <input readOnly value={dividendInfo.sharesAtExDate.toLocaleString(undefined, { maximumFractionDigits: 6 })} className={readonlyCls} />
+              <input readOnly value={dividendInfo.sharesAtExDate.toLocaleString(undefined, { maximumFractionDigits: 8 })} className={readonlyCls} />
             </div>
           </div>
 
@@ -3723,7 +3723,7 @@ function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHo
                       <td className="py-3 px-2 font-mono font-bold text-xs">{a.ticker}</td>
                       <td className="py-3 px-2 text-right tabular-nums">
                         {a.shares != null
-                          ? a.shares.toLocaleString(undefined, { maximumFractionDigits: 6 })
+                          ? a.shares.toLocaleString(undefined, { maximumFractionDigits: 8 })
                           : "—"}
                       </td>
                       <td className="py-3 px-2 text-right tabular-nums">
@@ -4356,7 +4356,7 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
                   <div key={ticker} className="flex items-baseline justify-between gap-2">
                     <span className="font-mono text-[11px] text-foreground">{ticker}</span>
                     <span className="tabular-nums text-muted-foreground">
-                      {shares.toLocaleString(undefined, { maximumFractionDigits: 6 })} sh
+                      {shares.toLocaleString(undefined, { maximumFractionDigits: 8 })} sh
                     </span>
                   </div>
                 );

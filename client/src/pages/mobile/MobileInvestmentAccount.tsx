@@ -674,7 +674,7 @@ function HoldingDetailSheet({
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Shares</p>
                   <p className="text-sm font-medium tabular-nums">
-                    {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                    {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}
                   </p>
                 </div>
                 <div>
@@ -741,7 +741,7 @@ function HoldingDetailSheet({
                               )}
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-sm tabular-nums">
-                                  {parseFloat(lot.quantity).toLocaleString(undefined, { maximumFractionDigits: 6 })} sh
+                                  {parseFloat(lot.quantity).toLocaleString(undefined, { maximumFractionDigits: 8 })} sh
                                 </span>
                                 <span className="text-xs text-muted-foreground">
                                   @ {formatCurrency(parseFloat(lot.costPerShare))}/sh
@@ -951,7 +951,7 @@ function ActivityDetailSheet({
           <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-2.5 pb-8">
             <Row label="Date" value={formatDate(a.date)} />
             {a.shares != null && (
-              <Row label="Shares" value={a.shares.toLocaleString(undefined, { maximumFractionDigits: 6 })} />
+              <Row label="Shares" value={a.shares.toLocaleString(undefined, { maximumFractionDigits: 8 })} />
             )}
             {a.pricePerShare != null && (
               <Row label="Price / Share" value={formatCurrency(a.pricePerShare)} />

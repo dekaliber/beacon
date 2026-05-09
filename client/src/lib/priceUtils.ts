@@ -1,5 +1,16 @@
 import type { InvestmentHolding } from "@/types";
 
+/**
+ * Format a share/unit quantity for display.
+ *
+ * Shows up to 8 decimal places with no trailing zeros — correctly handles
+ * both whole-share stock quantities (e.g. 100) and high-precision crypto
+ * amounts (e.g. 0.11080827).
+ */
+export function formatQuantity(value: number): string {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 8 });
+}
+
 // Returns a Date representing 8:00 PM Eastern today.
 // Uses the current ET UTC offset (via shortOffset) so DST is handled automatically.
 function cutoffToday8pmET(now: Date): Date {
