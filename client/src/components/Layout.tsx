@@ -14,6 +14,7 @@ import {
   Keyboard,
   Waves,
   LogOut,
+  Sigma,
 } from "lucide-react";
 import { useClerk, useUser } from "@clerk/react";
 import { cn } from "@/lib/utils";
@@ -109,6 +110,7 @@ const navItems = [
   { to: "/income", icon: TrendingUp, label: "Income" },
   { to: "/budgets", icon: PiggyBank, label: "Budgets" },
   { to: "/investments", icon: LineChart, label: "Investments" },
+  { to: "/options", icon: Sigma, label: "Options" },
   { to: "/cash-flow", icon: Waves, label: "Cash Flow" },
   { to: "/recurring", icon: Repeat, label: "Recurring" },
 ];

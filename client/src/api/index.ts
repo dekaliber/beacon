@@ -667,3 +667,140 @@ export const updateTaxQuarterlyPayments = (
   year: number,
   data: { federal: (number | null)[]; ca: (number | null)[] },
 ) => api.put<TaxAssumptions>(`/tax-assumptions/${year}/quarterly`, data);
+
+// ── Options Trading ────────────────────────────────────────────────────────────
+
+export type OptionType = "CALL" | "PUT";
+export type OptionSide = "BUY" | "SELL";
+export type OptionStatus = "OPEN" | "CLOSED" | "EXPIRED" | "ASSIGNED";
+export type OptionOutcome = "EXPIRED_WORTHLESS" | "CLOSED_EARLY" | "ROLLED" | "ASSIGNED";
+
+export interface OptionsSettings {
+  id: string;
+  startingBasis: number;
+  targetReturn: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OptionsTicker {
+  id: string;
+  userId: string;
+  symbol: string;
+  opportunityCostStartDate: string | null;
+  opportunityCostStartPrice: number | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OptionsPosition {
+  id: string;
+  userId: string;
+  tickerId: string;
+  groupId: string | null;
+  sequenceInGroup: number | null;
+  optionType: OptionType;
+  side: OptionSide;
+  strikePrice: number;
+  expirationDate: string; // YYYY-MM-DD
+  openedAt: string;       // ISO UTC datetime
+  contracts: number;
+  premiumPerShare: number;
+  feesOpen: number | null;
+  shareCostBasis: number | null;
+  stockPriceAtOpen: number | null;
+  notes: string | null;
+  status: OptionStatus;
+  outcome: OptionOutcome | null;
+  closedAt: string | null;
+  closePremiumPerShare: number | null;
+  feesClose: number | null;
+  contractsAssigned: number | null;
+  assignedFromPositionId: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  ticker: OptionsTicker;
+  group: OptionsPositionGroup | null;
+}
+
+export interface OptionsPositionGroup {
+  id: string;
+  userId: string;
+  label: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  positions?: OptionsPosition[];
+}
+
+export type OptionsPositionInput = {
+  tickerId: string;
+  groupId?: string | null;
+  sequenceInGroup?: number | null;
+  optionType: OptionType;
+  side?: OptionSide;
+  strikePrice: number;
+  expirationDate: string;
+  openedAt: string;
+  contracts: number;
+  premiumPerShare: number;
+  feesOpen?: number | null;
+  shareCostBasis?: number | null;
+  stockPriceAtOpen?: number | null;
+  notes?: string | null;
+  assignedFromPositionId?: string | null;
+};
+
+export type OptionsCloseInput = {
+  status: Exclude<OptionStatus, "OPEN">;
+  outcome: OptionOutcome;
+  closedAt?: string | null;
+  closePremiumPerShare?: number | null;
+  feesClose?: number | null;
+  contractsAssigned?: number | null;
+};
+
+// Settings
+export const getOptionsSettings = () =>
+  api.get<OptionsSettings | null>("/options/settings");
+
+export const updateOptionsSettings = (data: Partial<OptionsSettings>) =>
+  api.put<OptionsSettings>("/options/settings", data);
+
+// Tickers
+export const getOptionsTickers = () =>
+  api.get<OptionsTicker[]>("/options/tickers");
+
+export const createOptionsTicker = (data: { symbol: string; opportunityCostStartDate?: string | null; opportunityCostStartPrice?: number | null }) =>
+  api.post<OptionsTicker>("/options/tickers", data);
+
+export const updateOptionsTicker = (id: string, data: Partial<OptionsTicker>) =>
+  api.put<OptionsTicker>(`/options/tickers/${id}`, data);
+
+// Position Groups
+export const getOptionsGroups = () =>
+  api.get<OptionsPositionGroup[]>("/options/groups");
+
+export const createOptionsGroup = (data: { label?: string | null }) =>
+  api.post<OptionsPositionGroup>("/options/groups", data);
+
+export const updateOptionsGroup = (id: string, data: { label?: string | null }) =>
+  api.put<OptionsPositionGroup>(`/options/groups/${id}`, data);
+
+// Positions
+export const getOptionsPositions = (status?: "open" | "closed") =>
+  api.get<OptionsPosition[]>(`/options/positions${status ? `?status=${status}` : ""}`);
+
+export const createOptionsPosition = (data: OptionsPositionInput) =>
+  api.post<OptionsPosition>("/options/positions", data);
+
+export const updateOptionsPosition = (id: string, data: Partial<OptionsPositionInput>) =>
+  api.put<OptionsPosition>(`/options/positions/${id}`, data);
+
+export const closeOptionsPosition = (id: string, data: OptionsCloseInput) =>
+  api.put<OptionsPosition>(`/options/positions/${id}`, data);
+
+export const deleteOptionsPosition = (id: string) =>
+  api.delete(`/options/positions/${id}`);
