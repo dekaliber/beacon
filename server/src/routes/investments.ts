@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/client.js";
 import { getMetadata as getTiingoMeta, getDividendScanResult } from "../services/tiingo.js";
+import { searchCoins, getPrices, getPrice as getCoinGeckoPrice, getMarketChart } from "../services/coingecko.js";
 import { deactivateIfOrphaned } from "./instruments.js";
 import { getUserId } from "../middleware/auth.js";
 
@@ -203,7 +204,10 @@ function effectiveLastTradingDay(): Date {
 // (after 8 PM ET). This ensures we never accidentally store a mid-day quote
 // as a historical closing price.
 
-async function fillPriceGaps(tickers: string[]): Promise<number> {
+async function fillPriceGaps(
+  tickers: string[],
+  coinGeckoIdByTicker: Map<string, string> = new Map(),
+): Promise<number> {
   if (tickers.length === 0) return 0;
 
   // Only fill up to the last finalized trading day (8 PM ET cutoff). Before
@@ -231,18 +235,33 @@ async function fillPriceGaps(tickers: string[]): Promise<number> {
     const latest = latestByTicker.get(ticker);
     if (latest && latest >= targetDay) continue; // already current through the finalized day
 
-    const fromDate = latest
-      ? new Date(latest.getTime() + 24 * 60 * 60 * 1000)
-      : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    const coinGeckoId = coinGeckoIdByTicker.get(ticker);
+    let points: Array<{ date: Date; closePrice: number }> = [];
 
-    const points = await fetchYahooHistory(ticker, fromDate, fetchToDate);
+    if (coinGeckoId) {
+      // Crypto: use CoinGecko market chart. Request enough days to cover the gap.
+      const gapMs = targetDay.getTime() - (latest?.getTime() ?? (Date.now() - 90 * 24 * 60 * 60 * 1000));
+      const days = Math.ceil(gapMs / (24 * 60 * 60 * 1000)) + 2;
+      const allPoints = await getMarketChart(coinGeckoId, Math.min(days, 365));
+      // Filter to only the dates we actually need
+      const fromMs = latest ? latest.getTime() + 24 * 60 * 60 * 1000 : 0;
+      points = allPoints.filter((p) => p.date.getTime() >= fromMs && p.date <= targetDay);
+      await new Promise((r) => setTimeout(r, 200)); // be polite to CoinGecko
+    } else {
+      // Stocks/ETFs/funds: use Yahoo Finance
+      const fromDate = latest
+        ? new Date(latest.getTime() + 24 * 60 * 60 * 1000)
+        : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+      points = await fetchYahooHistory(ticker, fromDate, fetchToDate);
+      await new Promise((r) => setTimeout(r, 150));
+    }
+
     if (points.length === 0) continue;
     const result = await prisma.tickerPriceHistory.createMany({
       data: points.map((p) => ({ ticker, date: p.date, closePrice: p.closePrice })),
       skipDuplicates: true,
     });
     totalInserted += result.count;
-    await new Promise((r) => setTimeout(r, 150));
   }
   return totalInserted;
 }
@@ -875,6 +894,7 @@ const createHoldingSchema = z.object({
   name: z.string().min(1).max(200),
   type: z.string().max(50).nullable().optional(),
   group: z.string().max(100).nullable().optional(),
+  coinGeckoId: z.string().max(100).nullable().optional(),
 });
 
 investmentRoutes.post("/holdings", async (req, res) => {
@@ -896,6 +916,7 @@ investmentRoutes.post("/holdings", async (req, res) => {
         name: body.name,
         type: body.type ?? null,
         assetClass: body.group ?? null,
+        coinGeckoId: body.coinGeckoId ?? null,
         instrumentId,
       },
       include: { lots: true },
@@ -1259,6 +1280,32 @@ investmentRoutes.get("/search/resolve", async (req, res) => {
   }
 });
 
+// ── GET /api/investments/search/crypto?q= ─────────────────────────────────
+// Proxy CoinGecko coin search. Returns results shaped identically to the
+// Yahoo Finance search endpoint so the client can use the same TickerSearchResult type.
+
+investmentRoutes.get("/search/crypto", async (req, res) => {
+  try {
+    const q = (req.query.q as string)?.trim();
+    if (!q || q.length < 1) return res.json([]);
+
+    const coins = await searchCoins(q);
+
+    const results = coins.map((c) => ({
+      ticker: c.symbol,
+      name: c.name,
+      type: "Crypto",
+      exchange: "CoinGecko",
+      coinGeckoId: c.id,
+    }));
+
+    res.json(results);
+  } catch (err) {
+    console.error("[search/crypto]", err);
+    res.json([]);
+  }
+});
+
 // ── POST /api/investments/holdings/backfill-meta ──────────────────────────
 // One-time: populate name/type for holdings where type is null.
 // Deduplicates API calls across all accounts sharing the same ticker.
@@ -1322,11 +1369,20 @@ investmentRoutes.post("/prices/refresh", async (req, res) => {
 
     const holdings = await prisma.investmentHolding.findMany({
       where: { accountId: { in: userAccountIds } },
-      select: { ticker: true },
+      select: { ticker: true, coinGeckoId: true },
     });
 
     const tickers = [...new Set(holdings.map((h) => h.ticker))];
     if (tickers.length === 0) return res.json({ updated: 0, tickers: [] });
+
+    // Build a ticker → coinGeckoId map for crypto holdings (deduplicated by ticker).
+    const coinGeckoIdByTicker = new Map<string, string>();
+    for (const h of holdings) {
+      if (h.coinGeckoId && !coinGeckoIdByTicker.has(h.ticker)) {
+        coinGeckoIdByTicker.set(h.ticker, h.coinGeckoId);
+      }
+    }
+    const cryptoTickers = new Set(coinGeckoIdByTicker.keys());
 
     // Identify tickers already known to require Tiingo (e.g. money market funds).
     // These skip Yahoo entirely — no wasted request, no misleading null warning.
@@ -1338,8 +1394,13 @@ investmentRoutes.post("/prices/refresh", async (req, res) => {
 
     console.log(
       `[price-refresh] triggered from ${source} — ${tickers.length} ticker(s)` +
+      (cryptoTickers.size > 0 ? ` (${cryptoTickers.size} crypto via CoinGecko)` : "") +
       (tiingoTickers.size > 0 ? ` (${tiingoTickers.size} via Tiingo)` : ""),
     );
+
+    // Batch-fetch all crypto prices in one CoinGecko call.
+    const cryptoCoinIds = [...cryptoTickers].map((t) => coinGeckoIdByTicker.get(t)!);
+    const cryptoPriceMap = cryptoCoinIds.length > 0 ? await getPrices(cryptoCoinIds) : new Map();
 
     let updated = 0;
     const results: string[] = [];
@@ -1349,7 +1410,18 @@ investmentRoutes.post("/prices/refresh", async (req, res) => {
       let priceDate: Date | null = null;
       let priceSource: string;
 
-      if (tiingoTickers.has(ticker)) {
+      if (cryptoTickers.has(ticker)) {
+        // Crypto: price was already fetched in the batch call above.
+        const coinGeckoId = coinGeckoIdByTicker.get(ticker)!;
+        const cryptoPrice = cryptoPriceMap.get(coinGeckoId);
+        if (cryptoPrice) {
+          price = cryptoPrice.price;
+          priceDate = cryptoPrice.updatedAt;
+        } else {
+          console.warn(`[price-refresh] ${ticker}: no data returned from CoinGecko (id: ${coinGeckoId})`);
+        }
+        priceSource = "COINGECKO";
+      } else if (tiingoTickers.has(ticker)) {
         // Tiingo-sourced ticker: use close (unadjusted), correct for MMFs.
         // Scan window: just the last 7 days to get today's NAV efficiently.
         const today = new Date().toISOString().slice(0, 10);
@@ -1626,6 +1698,9 @@ investmentRoutes.get("/prices/status", async (_req, res) => {
 investmentRoutes.get("/prices/:ticker", async (req, res) => {
   const ticker = req.params.ticker.toUpperCase();
   const dateParam = (req.query.date as string | undefined)?.trim();
+  // Optional: caller can supply the CoinGecko ID directly (e.g. before a holding
+  // is saved to the DB) so we never accidentally fall back to Yahoo Finance.
+  const coinGeckoIdParam = (req.query.coinGeckoId as string | undefined)?.trim() || null;
 
   // ── Historical price lookup (Yahoo Finance) ───────────────────────────────
   if (dateParam) {
@@ -1638,13 +1713,30 @@ investmentRoutes.get("/prices/:ticker", async (req, res) => {
     return res.json({ ticker, price, priceDate: dateParam });
   }
 
-  // ── Current price (Yahoo Finance, cached) ─────────────────────────────────
+  // ── Current price (cached or live) ───────────────────────────────────────
   try {
-    // Return cached price if updated within the last hour
+    // Resolve whether this is a crypto ticker.
+    // Priority: explicit coinGeckoId query param → DB lookup on existing holding.
+    // The query param path handles the "add new holding" flow where no DB row
+    // exists yet and we must not fall through to Yahoo Finance (which would
+    // return a completely unrelated asset with the same symbol, e.g. "BTC" →
+    // Grayscale Bitcoin Mini Trust).
+    const resolvedCoinGeckoId =
+      coinGeckoIdParam ??
+      (await prisma.investmentHolding.findFirst({
+        where: { ticker, coinGeckoId: { not: null } },
+        select: { coinGeckoId: true },
+      }))?.coinGeckoId ??
+      null;
+
+    const isCrypto = !!resolvedCoinGeckoId;
+    const cacheMaxAgeMs = isCrypto ? 5 * 60 * 1000 : 60 * 60 * 1000;
+
+    // Return cached price if it's still fresh
     const existing = await prisma.tickerPrice.findUnique({ where: { ticker } });
     if (existing) {
       const ageMs = Date.now() - existing.updatedAt.getTime();
-      if (ageMs < 60 * 60 * 1000) {
+      if (ageMs < cacheMaxAgeMs) {
         return res.json({
           ticker,
           price: parseFloat(existing.price.toString()),
@@ -1653,16 +1745,34 @@ investmentRoutes.get("/prices/:ticker", async (req, res) => {
       }
     }
 
-    // Fetch live from Yahoo Finance
-    const priceData = await fetchYahooPrice(ticker);
-    if (!priceData) {
-      return res.status(404).json({ error: { message: "Price not available for " + ticker } });
+    let price: number;
+    let priceDate: Date;
+    let priceSource: string;
+
+    if (isCrypto && resolvedCoinGeckoId) {
+      // Fetch live from CoinGecko
+      const coinPrice = await getCoinGeckoPrice(resolvedCoinGeckoId);
+      if (!coinPrice) {
+        return res.status(404).json({ error: { message: "Price not available for " + ticker } });
+      }
+      price = coinPrice.price;
+      priceDate = coinPrice.updatedAt;
+      priceSource = "COINGECKO";
+    } else {
+      // Fetch live from Yahoo Finance
+      const priceData = await fetchYahooPrice(ticker);
+      if (!priceData) {
+        return res.status(404).json({ error: { message: "Price not available for " + ticker } });
+      }
+      price = priceData.price;
+      priceDate = priceData.priceDate;
+      priceSource = "YAHOO";
     }
 
     const record = await prisma.tickerPrice.upsert({
       where: { ticker },
-      create: { ticker, price: priceData.price, priceDate: priceData.priceDate, updatedAt: new Date() },
-      update: { price: priceData.price, priceDate: priceData.priceDate, updatedAt: new Date() },
+      create: { ticker, price, priceDate, priceSource, updatedAt: new Date() },
+      update: { price, priceDate, priceSource, updatedAt: new Date() },
     });
 
     res.json({
@@ -2031,8 +2141,14 @@ investmentRoutes.get("/growth/:accountId", async (req, res) => {
 
     if (allTickers.length === 0) return res.json({ points: [] });
 
+    // Build coinGeckoId map for crypto holdings in this account
+    const coinGeckoIdByTickerGrowth = new Map<string, string>();
+    for (const h of holdings) {
+      if (h.coinGeckoId) coinGeckoIdByTickerGrowth.set(h.ticker, h.coinGeckoId);
+    }
+
     // Lazy gap-fill: bring price history current before computing
-    await fillPriceGaps(allTickers);
+    await fillPriceGaps(allTickers, coinGeckoIdByTickerGrowth);
 
     // Earliest date: min of first lot acquisition and first sale date
     const allLots = holdingsWithLots.flatMap((h) => h.lots);

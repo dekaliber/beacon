@@ -273,7 +273,7 @@ export const getAllocationSummary = (filter?: "all" | "taxable" | "tax-advantage
   );
 export const getInvestmentHoldings = (accountId: string) =>
   api.get<InvestmentHolding[]>(`/investments/holdings/${accountId}`);
-export const createHolding = (data: { accountId: string; ticker: string; name: string; type?: string | null; group?: string | null }) =>
+export const createHolding = (data: { accountId: string; ticker: string; name: string; type?: string | null; group?: string | null; coinGeckoId?: string | null }) =>
   api.post<InvestmentHolding>("/investments/holdings", data);
 export const patchHolding = (id: string, data: { group?: string | null; name?: string }) =>
   api.patch<InvestmentHolding>(`/investments/holdings/${id}`, data);
@@ -287,11 +287,16 @@ export const deleteLot = (id: string, force = false) =>
   api.delete(`/investments/lots/${id}${force ? "?force=true" : ""}`);
 export const searchTickers = (q: string) =>
   api.get<TickerSearchResult[]>(`/investments/search?q=${encodeURIComponent(q)}`);
+export const searchCryptoTickers = (q: string) =>
+  api.get<TickerSearchResult[]>(`/investments/search/crypto?q=${encodeURIComponent(q)}`);
 export const resolveTicker = (q: string) =>
   api.get<TickerSearchResult>(`/investments/search/resolve?q=${encodeURIComponent(q)}`);
 export const refreshPrices = (source: string) => api.post<{ updated: number; tickers: string[] }>("/investments/prices/refresh", { source });
-export const getTickerPrice = (ticker: string, date?: string) => {
-  const query = date ? `?date=${encodeURIComponent(date)}` : "";
+export const getTickerPrice = (ticker: string, date?: string, coinGeckoId?: string | null) => {
+  const params = new URLSearchParams();
+  if (date) params.set("date", date);
+  if (coinGeckoId) params.set("coinGeckoId", coinGeckoId);
+  const query = params.size > 0 ? `?${params.toString()}` : "";
   return api.get<{ ticker: string; price: number; priceDate: string }>(
     `/investments/prices/${encodeURIComponent(ticker)}${query}`,
   );
