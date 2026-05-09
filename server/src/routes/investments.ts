@@ -1348,6 +1348,66 @@ investmentRoutes.post("/holdings/backfill-meta", async (_req, res) => {
   }
 });
 
+// ── Price refresh helpers ─────────────────────────────────────────────────
+
+// Server-side mirror of the client's cutoffToday8pmET — needed for staleness checks.
+function cutoffToday8pmET(now: Date): Date {
+  const dateParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const get = (type: string) => dateParts.find((p) => p.type === type)!.value;
+  const tzPart = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    timeZoneName: "shortOffset",
+  }).formatToParts(now).find((p) => p.type === "timeZoneName")!.value;
+  const offsetMatch = tzPart.match(/GMT([+-])(\d+)/)!;
+  const offsetStr = `${offsetMatch[1]}${offsetMatch[2].padStart(2, "0")}:00`;
+  return new Date(`${get("year")}-${get("month")}-${get("day")}T20:00:00${offsetStr}`);
+}
+
+function isTickerStale(updatedAt: Date | null, isCrypto: boolean, now: Date): boolean {
+  if (!updatedAt) return true;
+  if (isCrypto) return now.getTime() - updatedAt.getTime() > 5 * 60 * 1000;
+  const cutoff = cutoffToday8pmET(now);
+  const prevCutoff = new Date(cutoff.getTime() - 24 * 60 * 60 * 1000);
+  if (updatedAt < prevCutoff) return true;
+  if (now >= cutoff && updatedAt < cutoff) return true;
+  return false;
+}
+
+// Upserts a price into both TickerPrice (current) and TickerPriceHistory (daily).
+// The history date is normalized to ET calendar date stored as UTC midnight.
+async function upsertTickerPrice(
+  ticker: string,
+  price: number,
+  priceDate: Date,
+  priceSource: string,
+): Promise<void> {
+  const etDateStr = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(priceDate);
+  const [etMonth, etDay, etYear] = etDateStr.split("/");
+  const historyDate = new Date(Date.UTC(Number(etYear), Number(etMonth) - 1, Number(etDay)));
+
+  await prisma.tickerPrice.upsert({
+    where: { ticker },
+    create: { ticker, price, priceDate, priceSource },
+    update: { price, priceDate, priceSource },
+  });
+
+  await prisma.tickerPriceHistory.upsert({
+    where: { ticker_date: { ticker, date: historyDate } },
+    create: { ticker, date: historyDate, closePrice: price },
+    update: { closePrice: price },
+  });
+}
+
 // ── POST /api/investments/prices/refresh ──────────────────────────────────
 // Fetch latest prices for all tracked tickers and upsert into both TickerPrice
 // and TickerPriceHistory. TickerPrice is always kept current (live quote during
@@ -1484,6 +1544,147 @@ investmentRoutes.post("/prices/refresh", async (req, res) => {
   } catch (err) {
     console.error("[price-refresh] ERROR:", err);
     res.status(500).json({ error: { message: "Failed to refresh prices" } });
+  }
+});
+
+// ── GET /api/investments/prices/refresh/stream ────────────────────────────
+// SSE endpoint that streams per-ticker price refresh progress.
+// Performs a server-side staleness check and skips up-to-date tickers so that
+// both the Dashboard and Investments pages can call this safely on every load.
+//
+// Events: { type:"start", total } | { type:"progress", count, total } | { type:"done", updated, total }
+
+investmentRoutes.get("/prices/refresh/stream", async (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  const send = (data: object) => {
+    if (!res.writableEnded) res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    const userId = getUserId(req);
+    const source: string = (req.query.source as string) ?? "unknown";
+
+    const userAccounts = await prisma.account.findMany({
+      where: { type: "INVESTMENT", userId },
+      select: { id: true },
+    });
+    const userAccountIds = userAccounts.map((a) => a.id);
+
+    const holdings = await prisma.investmentHolding.findMany({
+      where: { accountId: { in: userAccountIds } },
+      select: { ticker: true, coinGeckoId: true },
+    });
+
+    const tickers = [...new Set(holdings.map((h) => h.ticker))];
+
+    const coinGeckoIdByTicker = new Map<string, string>();
+    for (const h of holdings) {
+      if (h.coinGeckoId && !coinGeckoIdByTicker.has(h.ticker)) {
+        coinGeckoIdByTicker.set(h.ticker, h.coinGeckoId);
+      }
+    }
+    const cryptoTickers = new Set(coinGeckoIdByTicker.keys());
+
+    // Server-side staleness check — skip tickers whose prices are still fresh.
+    const now = new Date();
+    const priceRows = await prisma.tickerPrice.findMany({
+      where: { ticker: { in: tickers } },
+      select: { ticker: true, updatedAt: true },
+    });
+    const priceUpdatedAtMap = new Map(priceRows.map((r) => [r.ticker, r.updatedAt]));
+
+    const staleTickers = tickers.filter((t) =>
+      isTickerStale(priceUpdatedAtMap.get(t) ?? null, cryptoTickers.has(t), now),
+    );
+
+    if (staleTickers.length === 0) {
+      send({ type: "done", updated: 0, total: 0 });
+      res.end();
+      return;
+    }
+
+    const tiingoRows = await prisma.tickerPrice.findMany({
+      where: { ticker: { in: staleTickers }, priceSource: "TIINGO" },
+      select: { ticker: true },
+    });
+    const tiingoTickers = new Set(tiingoRows.map((r) => r.ticker));
+
+    const staleCrypto = staleTickers.filter((t) => cryptoTickers.has(t));
+    const staleOther = staleTickers.filter((t) => !cryptoTickers.has(t));
+    const total = staleTickers.length;
+
+    console.log(
+      `[price-refresh/stream] triggered from ${source} — ${total} stale ticker(s)` +
+        (staleCrypto.length > 0 ? ` (${staleCrypto.length} crypto)` : ""),
+    );
+
+    send({ type: "start", total });
+
+    let count = 0;
+
+    // Batch-fetch all crypto in one CoinGecko call.
+    if (staleCrypto.length > 0) {
+      const coinIds = staleCrypto.map((t) => coinGeckoIdByTicker.get(t)!);
+      const cryptoPriceMap = await getPrices(coinIds);
+
+      for (const ticker of staleCrypto) {
+        const entry = cryptoPriceMap.get(coinGeckoIdByTicker.get(ticker)!);
+        if (entry) {
+          await upsertTickerPrice(ticker, entry.price, entry.updatedAt, "COINGECKO");
+          console.log(`[price-refresh/stream] ${ticker}: $${entry.price} [COINGECKO]`);
+        }
+        send({ type: "progress", count: ++count, total });
+      }
+    }
+
+    // Sequential fetch for stocks/funds.
+    for (const ticker of staleOther) {
+      let price: number | null = null;
+      let priceDate: Date | null = null;
+      let priceSource: string;
+
+      if (tiingoTickers.has(ticker)) {
+        const today = new Date().toISOString().slice(0, 10);
+        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const result = await getDividendScanResult(ticker, weekAgo, today);
+        if (result.latestClose != null && result.latestCloseDate != null) {
+          price = result.latestClose;
+          priceDate = new Date(result.latestCloseDate + "T00:00:00Z");
+        }
+        priceSource = "TIINGO";
+      } else {
+        const priceData = await fetchYahooPrice(ticker);
+        if (priceData) {
+          price = priceData.price;
+          priceDate = priceData.priceDate;
+        } else {
+          console.warn(`[price-refresh/stream] ${ticker}: no data from Yahoo Finance`);
+        }
+        priceSource = "YAHOO";
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+
+      if (price != null && priceDate != null) {
+        await upsertTickerPrice(ticker, price, priceDate, priceSource);
+        console.log(`[price-refresh/stream] ${ticker}: $${price} [${priceSource}]`);
+      }
+
+      send({ type: "progress", count: ++count, total });
+    }
+
+    console.log(`[price-refresh/stream] done — ${count} of ${total} processed`);
+    send({ type: "done", updated: count, total });
+    res.end();
+  } catch (err) {
+    console.error("[price-refresh/stream] ERROR:", err);
+    if (!res.writableEnded) {
+      send({ type: "error", message: "Failed to refresh prices" });
+      res.end();
+    }
   }
 });
 

@@ -1,5 +1,11 @@
 import type { InvestmentHolding } from "@/types";
 
+// Next 8 PM ET cutoff for stocks/funds — same logic used client and server side.
+export function nextStockCutoff(now: Date): Date {
+  const cutoff = cutoffToday8pmET(now);
+  return now < cutoff ? cutoff : new Date(cutoff.getTime() + 24 * 60 * 60 * 1000);
+}
+
 /**
  * Format a share/unit quantity for display.
  *
@@ -68,4 +74,56 @@ export function isPriceRefreshNeeded(holdings: InvestmentHolding[]): boolean {
   }
 
   return false;
+}
+
+// Returns when prices will next become stale for the given holdings.
+// For crypto: 5 minutes after the oldest crypto priceUpdatedAt.
+// For stocks: the next 8 PM ET cutoff.
+export function getNextUpdateTime(holdings: InvestmentHolding[]): Date | null {
+  if (holdings.length === 0) return null;
+
+  const now = new Date();
+  let nextTime: Date | null = null;
+
+  const cryptoUpdates = holdings
+    .filter((h) => h.type === "Crypto" && h.priceUpdatedAt)
+    .map((h) => new Date(h.priceUpdatedAt!).getTime());
+
+  if (cryptoUpdates.length > 0) {
+    const oldest = Math.min(...cryptoUpdates);
+    const cryptoNext = new Date(oldest + CRYPTO_PRICE_MAX_AGE_MS);
+    if (!nextTime || cryptoNext < nextTime) nextTime = cryptoNext;
+  }
+
+  const hasStocks = holdings.some((h) => h.type !== "Crypto");
+  if (hasStocks) {
+    const stockNext = nextStockCutoff(now);
+    if (!nextTime || stockNext < nextTime) nextTime = stockNext;
+  }
+
+  return nextTime;
+}
+
+// Formats a next-update Date as a friendly string like "Today at 8 PM EDT" or "May 10 at 8 PM EDT".
+export function formatNextUpdateTime(date: Date): string {
+  const now = new Date();
+  const toDay = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
+  const timePart = date.toLocaleString("en-US", {
+    hour: "numeric",
+    minute: date.getMinutes() > 0 ? "2-digit" : undefined,
+    timeZoneName: "short",
+  });
+
+  if (toDay(date) === toDay(now)) return `Today at ${timePart}`;
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  if (toDay(date) === toDay(tomorrow)) return `Tomorrow at ${timePart}`;
+
+  const datePart = date.toLocaleString("en-US", {
+    month: "long",
+    day: "numeric",
+    ...(date.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}),
+  });
+  return `${datePart} at ${timePart}`;
 }

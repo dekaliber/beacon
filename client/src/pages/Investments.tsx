@@ -4,9 +4,10 @@ import { TrendingUp, TrendingDown, LineChart, ChevronRight, Library, Target, Arr
 import { Card } from "@/components/Card";
 import { Modal } from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
-import { getInvestmentAccounts, getAllocationSummary, refreshPrices, getWithdrawalSummary, getInvestmentSettings } from "@/api";
+import { getInvestmentAccounts, getAllocationSummary, getWithdrawalSummary, getInvestmentSettings } from "@/api";
 import { formatCurrency } from "@/lib/utils";
-import { isPriceRefreshNeeded } from "@/lib/priceUtils";
+import { formatNextUpdateTime } from "@/lib/priceUtils";
+import { usePriceRefresh } from "@/hooks/usePriceRefresh";
 import { useNotifications } from "@/context/NotificationContext";
 import { useDemo } from "@/context/DemoContext";
 import { scaleInvestmentAccounts, scaleAllocationSummary } from "@/lib/demo";
@@ -1120,7 +1121,6 @@ export function Investments() {
     []
   );
   const { data: investmentSettings } = useApi(() => getInvestmentSettings(), []);
-  const refreshedRef = useRef(false);
   const { notifications } = useNotifications();
   const pendingDividendAccountIds = new Set(
     notifications?.pendingDividends.map((g) => g.accountId) ?? []
@@ -1135,16 +1135,23 @@ export function Investments() {
     [allocation, isDemoMode, demoFactor]
   );
 
+  const investmentHoldings = useMemo(
+    () => accounts?.filter((a) => a.type === "INVESTMENT").flatMap((a) => a.holdings) ?? null,
+    [accounts],
+  );
+
+  const { phase: refreshPhase, count: refreshCount, total: refreshTotal, nextUpdateAt } =
+    usePriceRefresh({ holdings: investmentHoldings, source: "Investments" });
+
+  // Reload data once the price refresh completes.
+  const prevRefreshPhaseRef = useRef(refreshPhase);
   useEffect(() => {
-    if (!accounts || refreshedRef.current) return;
-    const holdings = accounts.filter((a) => a.type === "INVESTMENT").flatMap((a) => a.holdings);
-    if (isPriceRefreshNeeded(holdings)) {
-      refreshedRef.current = true;
-      refreshPrices("Investments")
-        .then(() => { refetch(); refetchAllocation(); })
-        .catch(() => { /* server logs the error */ });
+    if (prevRefreshPhaseRef.current !== "done" && refreshPhase === "done") {
+      refetch();
+      refetchAllocation();
     }
-  }, [accounts, refetch]);
+    prevRefreshPhaseRef.current = refreshPhase;
+  }, [refreshPhase, refetch, refetchAllocation]);
 
 if (!displayAccounts) return null;
 
@@ -1268,6 +1275,15 @@ if (!displayAccounts) return null;
               {totalDayGain !== 0 && (
                 <GainBadge value={totalDayGain} pct={totalDayGainPct} label="1-day" className="mt-0.5" />
               )}
+              <p className="text-xs text-muted-foreground mt-1">
+                {refreshPhase === "running"
+                  ? refreshTotal > 0
+                    ? `Fetching latest prices… ${refreshCount} of ${refreshTotal} securities`
+                    : "Fetching latest prices…"
+                  : nextUpdateAt
+                    ? `Next update: ${formatNextUpdateTime(nextUpdateAt)}`
+                    : null}
+              </p>
             </div>
 
             {/* Divider */}
