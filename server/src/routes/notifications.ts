@@ -27,27 +27,47 @@ notificationRoutes.get("/", async (req, res) => {
   });
   const userAccountIds = userAccounts.map((a) => a.id);
 
-  const counts = await prisma.pendingDividend.groupBy({
-    by: ["accountId"],
-    where: { status: "PENDING", accountId: { in: userAccountIds } },
-    _count: { id: true },
-  });
+  const [dividendCounts, buyCounts] = await Promise.all([
+    prisma.pendingDividend.groupBy({
+      by: ["accountId"],
+      where: { status: "PENDING", accountId: { in: userAccountIds } },
+      _count: { id: true },
+    }),
+    prisma.pendingBuy.groupBy({
+      by: ["accountId"],
+      where: { status: "PENDING", accountId: { in: userAccountIds } },
+      _count: { id: true },
+    }),
+  ]);
 
-  const countMap = new Map(counts.map((c) => [c.accountId, c._count.id]));
+  const dividendCountMap = new Map(dividendCounts.map((c) => [c.accountId, c._count.id]));
+  const buyCountMap = new Map(buyCounts.map((c) => [c.accountId, c._count.id]));
 
-  // 3. Resolve account names for accounts that have pending dividends
+  // 3. Resolve account names for all accounts that have any pending items
+  const accountIdsWithPending = new Set([
+    ...dividendCountMap.keys(),
+    ...buyCountMap.keys(),
+  ]);
   const accounts = await prisma.account.findMany({
-    where: { id: { in: [...countMap.keys()] }, userId },
+    where: { id: { in: [...accountIdsWithPending] }, userId },
     select: { id: true, name: true },
   });
 
-  const pendingDividends = accounts.map((a) => ({
-    accountId: a.id,
-    accountName: a.name,
-    count: countMap.get(a.id)!,
-  }));
+  type AccountGroup = { accountId: string; accountName: string; count: number };
 
-  const totalCount = pendingDividends.reduce((sum, g) => sum + g.count, 0);
+  const pendingDividends: AccountGroup[] = [];
+  const pendingBuys: AccountGroup[] = [];
 
-  res.json({ pendingDividends, totalCount });
+  for (const a of accounts) {
+    const dc = dividendCountMap.get(a.id);
+    const bc = buyCountMap.get(a.id);
+    if (dc) pendingDividends.push({ accountId: a.id, accountName: a.name, count: dc });
+    if (bc) pendingBuys.push({ accountId: a.id, accountName: a.name, count: bc });
+  }
+
+  const totalCount =
+    pendingDividends.reduce((s, g) => s + g.count, 0) +
+    pendingBuys.reduce((s, g) => s + g.count, 0);
+
+  res.json({ pendingDividends, pendingBuys, totalCount });
 });

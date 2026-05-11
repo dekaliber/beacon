@@ -306,6 +306,7 @@ export interface InvestmentLot {
   costPerShare: string;
   // Null for managed/robo-advisor holdings where acquisition date is unavailable
   acquiredDate: string | null;
+  fromOptionsPositionId: string | null;
 }
 
 export interface InvestmentHolding {
@@ -373,6 +374,7 @@ export interface InvestmentAccountSummary {
   cashBalanceUpdatedAt: string | null;
   isTaxAdvantaged: boolean;
   taxAdvantageType: TaxAdvantageType | null;
+  isManaged: boolean;
   // Composition helpers: cash-classified holding value and untracked (no instrument weights) value
   classifiedCashValue: number;
   untrackedValue: number;
@@ -745,7 +747,39 @@ export interface NotificationAccountGroup {
 
 export interface NotificationData {
   pendingDividends: NotificationAccountGroup[];
+  pendingBuys: NotificationAccountGroup[];
   totalCount: number;
+}
+
+export type PendingBuyStatus = "PENDING" | "CONFIRMED" | "DISMISSED";
+
+export interface PendingBuy {
+  id: string;
+  userId: string;
+  accountId: string;
+  optionsPositionId: string;
+  ticker: string;
+  status: PendingBuyStatus;
+  quantity: string;       // Decimal serialized as string
+  costPerShare: string;   // Decimal serialized as string
+  acquiredDate: string;   // ISO date
+  confirmedAt: string | null;
+  dismissedAt: string | null;
+  lotId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  optionsPosition: {
+    id: string;
+    ticker: { symbol: string; id: string };
+    strikePrice: string;
+    contracts: number;
+    contractsAssigned: number | null;
+    expirationDate: string;
+    premiumPerShare: string;
+    feesOpen: string | null;
+    feesClose: string | null;
+    optionType: string;
+  };
 }
 
 // Legacy — kept for backwards compatibility during transition

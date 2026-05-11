@@ -102,7 +102,7 @@ export function TagsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <h2 className="text-2xl font-bold">Tags</h2>
         <Button onClick={() => { setEditing(null); setModalOpen(true); }}>
           <Plus className="h-4 w-4" /> Add Tag
@@ -367,7 +367,7 @@ function TagModal({ open, onClose, onSave, onDelete, tag }: TagModalProps) {
     <Modal open={open} onClose={handleClose} title={tag ? "Edit Tag" : "Add Tag"}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium">Name</label>
+          <label className="block text-xs font-medium mb-1">Name</label>
           <input
             name="name"
             type="text"
@@ -379,7 +379,7 @@ function TagModal({ open, onClose, onSave, onDelete, tag }: TagModalProps) {
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium">Color</label>
+          <label className="block text-xs font-medium mb-2">Color</label>
           <div className="grid w-fit grid-cols-8 gap-2">
             {PRESET_COLORS.map((c) => (
               <button
@@ -396,7 +396,7 @@ function TagModal({ open, onClose, onSave, onDelete, tag }: TagModalProps) {
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">
+          <label className="block text-xs font-medium mb-1">
             Group{" "}
             <span className="font-normal text-muted-foreground">(optional)</span>
           </label>

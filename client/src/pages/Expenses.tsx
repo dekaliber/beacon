@@ -2056,7 +2056,7 @@ export function Expenses() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <h2 className="text-2xl font-bold">Expenses</h2>
         <div className="flex items-center gap-2">
           {/* Uncategorized quick filter */}
@@ -2123,7 +2123,7 @@ export function Expenses() {
         <Card>
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Account</label>
+              <label className="block text-xs font-medium mb-1">Account</label>
               <MultiSelectDropdown
                 options={accountFilterOptions}
                 selected={staged.accountIds}
@@ -2133,7 +2133,7 @@ export function Expenses() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Category</label>
+              <label className="block text-xs font-medium mb-1">Category</label>
               <MultiSelectDropdown
                 options={categoryFilterOptions}
                 selected={staged.categoryIds}
@@ -2143,7 +2143,7 @@ export function Expenses() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Tag</label>
+              <label className="block text-xs font-medium mb-1">Tag</label>
               <MultiSelectDropdown
                 options={tagFilterOptions}
                 selected={staged.tagIds}
@@ -2152,7 +2152,7 @@ export function Expenses() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Date Range</label>
+              <label className="block text-xs font-medium mb-1">Date Range</label>
               <div className="flex items-center gap-1.5">
                 <div className="relative">
                   <select
@@ -3316,12 +3316,12 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
         )}
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Amount</label>
+          <label className="block text-xs font-medium mb-1">Amount</label>
           <CurrencyInput name="amount" defaultValue={isOffsetMode ? String(-Math.abs(parseFloat(offsetParent.amount))) : expense?.amount} required autoFocus onChange={(v) => !isOffsetMode && setAmountIsNegative(v < 0)} />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Description</label>
+          <label className="block text-xs font-medium mb-1">Description</label>
           <input
             name="description"
             type="text"
@@ -3333,7 +3333,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Vendor</label>
+          <label className="block text-xs font-medium mb-1">Vendor</label>
           <VendorAutocomplete
             name="vendor"
             defaultValue={isOffsetMode ? offsetParent.vendor : expense?.vendor}
@@ -3345,7 +3345,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="mb-1 block text-sm font-medium">Date</label>
+            <label className="block text-xs font-medium mb-1">Date</label>
             <input
               name="date"
               type="date"
@@ -3357,7 +3357,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
             <span tabIndex={0} className="sr-only" onFocus={(e) => { if (e.relatedTarget !== accountTriggerRef.current) accountTriggerRef.current?.focus(); }} />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium">Account</label>
+            <label className="block text-xs font-medium mb-1">Account</label>
             <AccountTypeahead
               name="accountId"
               required
@@ -3370,7 +3370,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Category</label>
+          <label className="block text-xs font-medium mb-1">Category</label>
           <CategoryTypeahead
             name="categoryId"
             defaultValue={selectedCategoryId}
@@ -3382,7 +3382,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Tags</label>
+          <label className="block text-xs font-medium mb-1">Tags</label>
           <TagTypeahead
             tags={tags}
             selectedIds={selectedTagIds}
@@ -3408,7 +3408,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
             {showOptional && (
               <div className="mt-3 space-y-4">
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Notes</label>
+                  <label className="block text-xs font-medium mb-1">Notes</label>
                   <textarea
                     name="notes"
                     rows={2}
@@ -3531,7 +3531,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
         {/* Notes field for offset mode (standalone, no reimbursement/recurring) */}
         {isOffsetMode && (
           <div>
-            <label className="mb-1 block text-sm font-medium">Notes</label>
+            <label className="block text-xs font-medium mb-1">Notes</label>
             <textarea
               name="notes"
               rows={2}

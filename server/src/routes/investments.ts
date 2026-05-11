@@ -791,6 +791,7 @@ investmentRoutes.get("/accounts", async (req, res) => {
         cashBalanceUpdatedAt: account.cashBalanceUpdatedAt,
         isTaxAdvantaged: account.isTaxAdvantaged,
         taxAdvantageType: account.taxAdvantageType,
+        isManaged: account.isManaged,
         // Composition helpers (investment accounts only; 0 for banking accounts)
         classifiedCashValue,
         untrackedValue,

@@ -232,7 +232,7 @@ export function SecuritiesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate("/investments")}

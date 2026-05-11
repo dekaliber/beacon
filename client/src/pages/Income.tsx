@@ -1250,7 +1250,7 @@ export function IncomePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <h2 className="text-2xl font-bold">Income</h2>
         <div className="flex items-center gap-2">
           <Link
@@ -1292,7 +1292,7 @@ export function IncomePage() {
         <Card>
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Account</label>
+              <label className="block text-xs font-medium mb-1">Account</label>
               <MultiSelectDropdown
                 options={accountFilterOptions}
                 selected={staged.accountIds}
@@ -1302,7 +1302,7 @@ export function IncomePage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Category</label>
+              <label className="block text-xs font-medium mb-1">Category</label>
               <MultiSelectDropdown
                 options={categoryFilterOptions}
                 selected={staged.categoryIds}
@@ -1312,7 +1312,7 @@ export function IncomePage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Date Range</label>
+              <label className="block text-xs font-medium mb-1">Date Range</label>
               <div className="flex items-center gap-1.5">
                 <div className="relative">
                   <select
@@ -1746,7 +1746,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
     <Modal open={open} onClose={onClose} title={income ? "Edit Income" : "Add Income"}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium">Amount</label>
+          <label className="block text-xs font-medium mb-1">Amount</label>
           <CurrencyInput
             name="amount"
             defaultValue={income?.amount}
@@ -1759,7 +1759,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Source</label>
+          <label className="block text-xs font-medium mb-1">Source</label>
           <input
             name="source"
             type="text"
@@ -1770,14 +1770,14 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Date</label>
+          <label className="block text-xs font-medium mb-1">Date</label>
           <input name="date" type="date" required defaultValue={toDateInputValue(income?.date)} className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
           {/* Relay: captures focus as it exits the date field and forwards to Category, but not on Shift+Tab backwards from Category */}
           <span tabIndex={0} className="sr-only" onFocus={(e) => { if (e.relatedTarget !== categoryTriggerRef.current) categoryTriggerRef.current?.focus(); }} />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Category</label>
+          <label className="block text-xs font-medium mb-1">Category</label>
           <CategoryTypeahead
             name="categoryId"
             defaultValue={income?.categoryId ?? ""}
@@ -1788,7 +1788,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Account</label>
+          <label className="block text-xs font-medium mb-1">Account</label>
           <ItemTypeahead
             name="accountId"
             required
@@ -1812,7 +1812,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
           {showOptional && (
             <div className="mt-3 space-y-3">
               <div>
-                <label className="mb-1 block text-sm font-medium">Tax Status</label>
+                <label className="block text-xs font-medium mb-1">Tax Status</label>
                 <div className="relative">
                   <select
                     value={taxClassification}
@@ -1830,7 +1830,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Notes</label>
+                <label className="block text-xs font-medium mb-1">Notes</label>
                 <textarea name="notes" rows={2} defaultValue={income?.notes ?? ""} className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Additional notes..." />
               </div>
             </div>

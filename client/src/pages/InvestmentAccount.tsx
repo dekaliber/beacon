@@ -76,6 +76,9 @@ import {
   getConfirmedDividend,
   updateConfirmedDividend,
   getFlatCategories,
+  getPendingBuys,
+  confirmPendingBuy,
+  dismissPendingBuy,
 } from "@/api";
 import type { SellPreviewResult } from "@/api";
 import { ApiError } from "@/api/client";
@@ -84,7 +87,7 @@ import { useNotifications } from "@/context/NotificationContext";
 import { isPriceRefreshNeeded, formatQuantity } from "@/lib/priceUtils";
 import { useDemo } from "@/context/DemoContext";
 import { scaleGrowthPoints, scaleManuals, scaleHolding } from "@/lib/demo";
-import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity, GrowthPoint, GrowthEvent, PendingDividend, TaxClassification, Category, ConfirmedDividendInfo } from "@/types";
+import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity, GrowthPoint, GrowthEvent, PendingDividend, TaxClassification, Category, ConfirmedDividendInfo, PendingBuy } from "@/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -431,7 +434,7 @@ function LotFormEntry({
     <div className="flex gap-3 items-end">
       {!hideDate && (
         <div className="flex-1 min-w-0">
-          <label className="text-xs text-muted-foreground block mb-0.5">Acquired Date</label>
+          <label className="block text-xs font-medium mb-1">Acquired Date</label>
           <SmartDateInput
             value={lot.acquiredDate}
             onChange={(v) => onChange("acquiredDate", v)}
@@ -442,7 +445,7 @@ function LotFormEntry({
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <label className="text-xs text-muted-foreground block mb-0.5">{hideDate ? "Total Shares" : "Quantity (shares)"}</label>
+        <label className="block text-xs font-medium mb-1">{hideDate ? "Total Shares" : "Quantity (shares)"}</label>
         <input
           type="number"
           value={lot.quantity}
@@ -455,7 +458,7 @@ function LotFormEntry({
         />
       </div>
       <div className="flex-1 min-w-0">
-        <label className="text-xs text-muted-foreground block mb-0.5">{hideDate ? "Total Cost" : "Cost Per Share"}</label>
+        <label className="block text-xs font-medium mb-1">{hideDate ? "Total Cost" : "Cost Per Share"}</label>
         <DollarInput
           value={lot.costPerShare}
           onChange={(v) => onChange("costPerShare", v)}
@@ -644,7 +647,7 @@ function AddInvestmentModal({
 
           {/* Group */}
           <div>
-            <label className="text-xs text-muted-foreground block mb-0.5">Group <span className="italic">(optional)</span></label>
+            <label className="block text-xs font-medium mb-1">Group <span className="font-normal text-muted-foreground">(optional)</span></label>
             <input
               type="text"
               value={group}
@@ -999,7 +1002,7 @@ function AddLotRow({
     return (
       <form onSubmit={handleSave} className="flex gap-3 items-end">
         <div className="flex-1 min-w-0">
-          <label className="text-xs text-muted-foreground block mb-0.5">Total Shares</label>
+          <label className="block text-xs font-medium mb-1">Total Shares</label>
           <input
             type="number"
             value={qty}
@@ -1012,7 +1015,7 @@ function AddLotRow({
           />
         </div>
         <div className="flex-1 min-w-0">
-          <label className="text-xs text-muted-foreground block mb-0.5">Total Cost</label>
+          <label className="block text-xs font-medium mb-1">Total Cost</label>
           <div className="relative">
             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none select-none">$</span>
             <input
@@ -1027,7 +1030,7 @@ function AddLotRow({
           </div>
         </div>
         <div className="flex-1 min-w-0">
-          <label className="text-xs text-muted-foreground block mb-0.5">Group <span className="italic font-normal">(optional)</span></label>
+          <label className="block text-xs font-medium mb-1">Group <span className="font-normal text-muted-foreground">(optional)</span></label>
           <input
             type="text"
             value={group}
@@ -1827,7 +1830,7 @@ function AddManualInvestmentModal({
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-medium block mb-1">Name</label>
+            <label className="block text-xs font-medium mb-1">Name</label>
             <input
               type="text"
               value={name}
@@ -1839,8 +1842,8 @@ function AddManualInvestmentModal({
             />
           </div>
           <div>
-            <label className="text-sm font-medium block mb-1">
-              Group <span className="text-muted-foreground font-normal text-xs">(optional)</span>
+            <label className="block text-xs font-medium mb-1">
+              Group <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
             <input
               type="text"
@@ -1854,14 +1857,14 @@ function AddManualInvestmentModal({
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-medium block mb-1">
+            <label className="block text-xs font-medium mb-1">
               Total Cost{" "}
-              <span className="text-muted-foreground font-normal text-xs">(optional)</span>
+              <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
             <DollarInput value={totalCost} onChange={setTotalCost} placeholder="0.00" />
           </div>
           <div>
-            <label className="text-sm font-medium block mb-1">Market Value</label>
+            <label className="block text-xs font-medium mb-1">Market Value</label>
             <DollarInput value={marketValue} onChange={setMarketValue} placeholder="0.00" required />
           </div>
         </div>
@@ -2526,7 +2529,7 @@ function SellModal({
             </div>
             {mode === "sell" && (
               <div>
-                <label className="block text-xs font-medium mb-1">Fees (optional)</label>
+                <label className="block text-xs font-medium mb-1">Fees <span className="font-normal text-muted-foreground">(optional)</span></label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
                   <input
@@ -2805,7 +2808,7 @@ function EditSaleActivityModal({
           },
         ].map(({ label, value, mono }) => (
           <div key={label}>
-            <p className="text-xs text-muted-foreground mb-1">{label}</p>
+            <label className="block text-xs font-medium mb-1">{label}</label>
             <div className={`rounded border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground select-none ${mono ? "font-mono font-bold" : ""}`}>
               {value}
             </div>
@@ -2816,18 +2819,18 @@ function EditSaleActivityModal({
       {/* Editable fields */}
       <div className="grid grid-cols-2 gap-3 mb-4">
         <div>
-          <label className="text-xs font-medium">Price / Share</label>
+          <label className="block text-xs font-medium mb-1">Price / Share</label>
           <input
             type="number"
-            step="0.0001"
-            min="0.0001"
+            step="0.000001"
+            min="0.000001"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
-            className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            className="w-full rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
         </div>
         <div>
-          <label className="text-xs font-medium">Fees</label>
+          <label className="block text-xs font-medium mb-1">Fees</label>
           <input
             type="number"
             step="0.01"
@@ -2835,7 +2838,7 @@ function EditSaleActivityModal({
             value={fees}
             onChange={(e) => setFees(e.target.value)}
             placeholder="0.00"
-            className="mt-1 w-full rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            className="w-full rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
         </div>
       </div>
@@ -3082,7 +3085,7 @@ function ReviewDividendModal({
         {/* Per-share amount + shares at ex-date */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Per Share Amount</label>
+            <label className="block text-xs font-medium mb-1">Per Share Amount</label>
             <input
               type="number"
               step="0.000001"
@@ -3093,7 +3096,7 @@ function ReviewDividendModal({
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Shares at Ex-Date</label>
+            <label className="block text-xs font-medium mb-1">Shares at Ex-Date</label>
             <input
               type="number"
               step="0.000001"
@@ -3107,7 +3110,7 @@ function ReviewDividendModal({
 
         {/* Total amount */}
         <div>
-          <label className="block text-xs font-medium text-muted-foreground mb-1">Total Amount</label>
+          <label className="block text-xs font-medium mb-1">Total Amount</label>
           <input
             type="number"
             step="0.01"
@@ -3120,7 +3123,7 @@ function ReviewDividendModal({
 
         {/* Disposition toggle */}
         <div>
-          <label className="block text-xs font-medium text-muted-foreground mb-2">Disposition</label>
+          <label className="block text-xs font-medium mb-2">Disposition</label>
           <div className="flex gap-2">
             {(["income", "reinvest"] as const).map((d) => (
               <button
@@ -3143,7 +3146,7 @@ function ReviewDividendModal({
         {disposition === "income" && (
           <>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Payment Date</label>
+              <label className="block text-xs font-medium mb-1">Payment Date</label>
               <input
                 type="date"
                 value={paymentDate}
@@ -3152,8 +3155,8 @@ function ReviewDividendModal({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">
-                Category <span className="font-normal opacity-60">(optional)</span>
+              <label className="block text-xs font-medium mb-1">
+                Category <span className="font-normal text-muted-foreground">(optional)</span>
               </label>
               <div className="relative">
                 <select
@@ -3176,7 +3179,7 @@ function ReviewDividendModal({
         {disposition === "reinvest" && (
           <>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Reinvest Date</label>
+              <label className="block text-xs font-medium mb-1">Reinvest Date</label>
               <input
                 type="date"
                 value={reinvestDate}
@@ -3186,7 +3189,7 @@ function ReviewDividendModal({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                <label className="block text-xs font-medium mb-1">
                   Reinvest Price / Share
                   {reinvestPriceFetching && (
                     <span className="ml-1 font-normal opacity-60">fetching…</span>
@@ -3203,7 +3206,7 @@ function ReviewDividendModal({
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Shares Reinvested</label>
+                <label className="block text-xs font-medium mb-1">Shares Reinvested</label>
                 <input
                   type="number"
                   step="0.000001"
@@ -3230,8 +3233,8 @@ function ReviewDividendModal({
 
         {/* Dividend type — applies to both paths */}
         <div>
-          <label className="block text-xs font-medium text-muted-foreground mb-1">
-            Dividend Type <span className="font-normal opacity-60">(optional)</span>
+          <label className="block text-xs font-medium mb-1">
+            Dividend Type <span className="font-normal text-muted-foreground">(optional)</span>
           </label>
           <div className="relative">
             <select
@@ -3252,8 +3255,8 @@ function ReviewDividendModal({
 
         {/* Notes — applies to both paths */}
         <div>
-          <label className="block text-xs font-medium text-muted-foreground mb-1">
-            Notes <span className="font-normal opacity-60">(optional)</span>
+          <label className="block text-xs font-medium mb-1">
+            Notes <span className="font-normal text-muted-foreground">(optional)</span>
           </label>
           <textarea
             value={notes}
@@ -3373,17 +3376,17 @@ function EditConfirmedDividendModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Per Share Amount</label>
+              <label className="block text-xs font-medium mb-1">Per Share Amount</label>
               <input readOnly value={dividendInfo.perShareAmount.toFixed(6)} className={readonlyCls} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Shares at Ex-Date</label>
+              <label className="block text-xs font-medium mb-1">Shares at Ex-Date</label>
               <input readOnly value={dividendInfo.sharesAtExDate.toLocaleString(undefined, { maximumFractionDigits: 8 })} className={readonlyCls} />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">
+            <label className="block text-xs font-medium mb-1">
               {dividendInfo.isDrip ? "Reinvest Date" : "Payment Date"}
             </label>
             <input
@@ -3396,7 +3399,7 @@ function EditConfirmedDividendModal({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Total Amount</label>
+            <label className="block text-xs font-medium mb-1">Total Amount</label>
             <input
               type={dividendInfo.isDrip ? "text" : "number"}
               step="0.01"
@@ -3409,8 +3412,8 @@ function EditConfirmedDividendModal({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">
-              Notes <span className="font-normal opacity-60">(optional)</span>
+            <label className="block text-xs font-medium mb-1">
+              Notes <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
             <input
               type="text"
@@ -3440,6 +3443,132 @@ function EditConfirmedDividendModal({
   );
 }
 
+// ── Pending Buy Review Modal ───────────────────────────────────────────────────
+
+interface PendingBuyModalProps {
+  pendingBuy: PendingBuy;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps) {
+  const pos = pendingBuy.optionsPosition;
+  const defaultAcquiredDate = pendingBuy.acquiredDate.split("T")[0];
+  const defaultQuantity = Number(pendingBuy.quantity);
+  const defaultCostPerShare = Number(pendingBuy.costPerShare);
+
+  const [acquiredDate, setAcquiredDate] = useState(defaultAcquiredDate);
+  const [quantity, setQuantity] = useState(defaultQuantity.toString());
+  const [costPerShare, setCostPerShare] = useState(defaultCostPerShare.toFixed(6).replace(/\.?0+$/, ""));
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const totalCost = (parseFloat(quantity) || 0) * (parseFloat(costPerShare) || 0);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      await confirmPendingBuy(pendingBuy.id, {
+        acquiredDate,
+        quantity: parseFloat(quantity),
+        costPerShare: parseFloat(costPerShare),
+        notes: notes || null,
+      });
+      onSaved();
+    } catch {
+      setError("Failed to confirm buy.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputClass = "w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
+  const dollarInputClass = "w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
+
+  return (
+    <Modal open onClose={onClose} title={`Review Pending Buy — ${pendingBuy.ticker}`}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Origin summary */}
+        <div className="rounded-md bg-muted/30 px-3 py-2 text-sm space-y-0.5">
+          <div className="flex items-center gap-3">
+            <span className="font-medium text-foreground">{pos.ticker.symbol}</span>
+            <span className="text-muted-foreground">${Number(pos.strikePrice).toFixed(2)} {pos.optionType} · {pos.contracts} contract{pos.contracts !== 1 ? "s" : ""}</span>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Assigned from options position · Premium ${Number(pos.premiumPerShare).toFixed(4)}/share
+            {(Number(pos.feesOpen) || Number(pos.feesClose)) ? ` · Fees $${((Number(pos.feesOpen) || 0) + (Number(pos.feesClose) || 0)).toFixed(2)}` : ""}
+          </div>
+        </div>
+
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 flex gap-2">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <span>Verify all amounts against your brokerage confirmation before confirming.</span>
+        </div>
+
+        {/* Acquired Date */}
+        <div>
+          <label className="block text-xs font-medium mb-1">Acquired Date</label>
+          <input
+            type="date" required
+            value={acquiredDate} onChange={(e) => setAcquiredDate(e.target.value)}
+            className={inputClass}
+          />
+        </div>
+
+        {/* Quantity / Cost per Share */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium mb-1">Shares Acquired</label>
+            <input
+              type="number" step="1" min="1" required
+              value={quantity} onChange={(e) => setQuantity(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1">Cost Per Share</label>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+              <input
+                type="number" step="0.000001" min="0" required
+                value={costPerShare} onChange={(e) => setCostPerShare(e.target.value)}
+                className={dollarInputClass}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Total cost */}
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">Total Cost</span>
+          <span className="font-semibold">{formatCurrency(totalCost)}</span>
+        </div>
+
+        {/* Notes */}
+        <div>
+          <label className="block text-xs font-medium mb-1">Notes <span className="text-muted-foreground font-normal">(optional)</span></label>
+          <textarea
+            rows={2}
+            value={notes} onChange={(e) => setNotes(e.target.value)}
+            placeholder="e.g. CSP assigned"
+            className="w-full rounded-md border border-border px-3 py-2 text-sm resize-none focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit" disabled={saving}>{saving ? "Confirming…" : "Confirm Purchase"}</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 // ── Activity Tab ──────────────────────────────────────────────────────────────
 
 function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHoldingsChanged?: () => void }) {
@@ -3451,12 +3580,17 @@ function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHo
     () => getPendingDividends(accountId),
     [accountId]
   );
+  const { data: pendingBuys, loading: buysLoading, refetch: refetchBuys } = useApi(
+    () => getPendingBuys(accountId),
+    [accountId]
+  );
   const { data: allCategories } = useApi(() => getFlatCategories("INCOME"), []);
   const { refetch: refetchNotifications } = useNotifications();
 
   const [editingActivity, setEditingActivity] = useState<InvestmentActivity | null>(null);
   const [editingDividendActivityId, setEditingDividendActivityId] = useState<string | null>(null);
   const [reviewingDividend, setReviewingDividend] = useState<PendingDividend | null>(null);
+  const [reviewingBuy, setReviewingBuy] = useState<PendingBuy | null>(null);
 
   // Filter state — empty Set means "no filter / show all"
   const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
@@ -3506,8 +3640,10 @@ function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHo
     });
   }, [activities, selectedTickers, selectedTypes]);
 
-  const loading = activitiesLoading || dividendsLoading;
-  const hasPending = pendingDividends && pendingDividends.length > 0;
+  const loading = activitiesLoading || dividendsLoading || buysLoading;
+  const hasPendingDividends = pendingDividends && pendingDividends.length > 0;
+  const hasPendingBuys = pendingBuys && pendingBuys.length > 0;
+  const hasPending = hasPendingDividends || hasPendingBuys;
 
   if (loading) {
     return (
@@ -3537,21 +3673,84 @@ function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHo
 
   return (
     <>
+      {/* Pending Buys card */}
+      {hasPendingBuys && (
+        <Card className="overflow-hidden mb-4">
+          <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+            <Clock className="h-4 w-4 text-amber-500" />
+            <h3 className="font-semibold text-sm">Pending Buys</h3>
+            <span className="ml-1 inline-flex items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5">
+              {pendingBuys!.length}
+            </span>
+            <span className="ml-auto text-sm font-semibold text-amber-600">
+              {formatCurrency(pendingBuys!.reduce((sum, pb) => sum + Number(pb.quantity) * Number(pb.costPerShare), 0))}
+            </span>
+          </div>
+          <div className="divide-y divide-border">
+            {pendingBuys!.map((pb) => {
+              const shares = Number(pb.quantity);
+              const cps = Number(pb.costPerShare);
+              const acquired = pb.acquiredDate.split("T")[0];
+              return (
+                <div key={pb.id} className="flex items-center gap-3 px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-xs">{pb.ticker}</span>
+                      <span className="text-xs text-muted-foreground">from options assignment · {acquired}</span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-0.5">
+                      <span className="text-xs text-muted-foreground">
+                        {shares.toLocaleString()} shares @ ${cps.toFixed(4)}/share
+                      </span>
+                      <span className="text-xs font-medium">≈ {formatCurrency(shares * cps)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs h-7 px-2 text-muted-foreground"
+                      onClick={async () => {
+                        try {
+                          await dismissPendingBuy(pb.id);
+                          refetchBuys();
+                          refetchNotifications();
+                        } catch { /* ignore */ }
+                      }}
+                    >
+                      Dismiss
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="text-xs h-7 px-3 flex items-center gap-1"
+                      onClick={() => setReviewingBuy(pb)}
+                    >
+                      Review
+                      <ChevronRight className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
       {/* Pending Dividends card */}
-      {hasPending && (
+      {hasPendingDividends && (
         <Card className="overflow-hidden mb-4">
           <div className="px-4 py-3 border-b border-border flex items-center gap-2">
             <Clock className="h-4 w-4 text-violet-500" />
             <h3 className="font-semibold text-sm">Pending Dividends</h3>
             <span className="ml-1 inline-flex items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-semibold px-1.5 py-0.5">
-              {pendingDividends.length}
+              {pendingDividends!.length}
             </span>
             <span className="ml-auto text-sm font-semibold text-violet-600">
-              {formatCurrency(pendingDividends.reduce((sum, pd) => sum + parseFloat(pd.estimatedTotal), 0))}
+              {formatCurrency(pendingDividends!.reduce((sum, pd) => sum + parseFloat(pd.estimatedTotal), 0))}
             </span>
           </div>
           <div className="divide-y divide-border">
-            {pendingDividends.map((pd) => (
+            {pendingDividends!.map((pd) => (
               <div key={pd.id} className="flex items-center gap-3 px-4 py-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -3818,6 +4017,20 @@ function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHo
           }}
         />
       )}
+
+      {reviewingBuy && (
+        <PendingBuyModal
+          pendingBuy={reviewingBuy}
+          onClose={() => setReviewingBuy(null)}
+          onSaved={() => {
+            setReviewingBuy(null);
+            refetchBuys();
+            refetchActivities();
+            refetchNotifications();
+            onHoldingsChanged?.();
+          }}
+        />
+      )}
     </>
   );
 }
@@ -3989,7 +4202,7 @@ function RealizedGainSnapshotPanel({
           { label: "Short-Term Loss", key: "shortTermLoss" },
         ].map(({ label, key }) => (
           <div key={key}>
-            <label className="text-xs text-muted-foreground block mb-0.5">{label}</label>
+            <label className="block text-xs font-medium mb-1">{label}</label>
             <DollarInput
               value={form[key as keyof typeof form]}
               onChange={(v) => setForm((prev) => ({ ...prev, [key]: v }))}
@@ -3999,7 +4212,7 @@ function RealizedGainSnapshotPanel({
         ))}
       </div>
       <div className="max-w-sm">
-        <label className="text-xs text-muted-foreground block mb-0.5">Notes <span className="italic">(optional)</span></label>
+        <label className="block text-xs font-medium mb-1">Notes <span className="font-normal text-muted-foreground">(optional)</span></label>
         <input
           type="text"
           value={form.notes}

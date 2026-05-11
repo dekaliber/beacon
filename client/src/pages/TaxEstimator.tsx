@@ -258,7 +258,7 @@ function NumberInput({
 }) {
   return (
     <div>
-      <label className="mb-1 block text-xs font-medium text-muted-foreground">{label}</label>
+      <label className="block text-xs font-medium mb-1">{label}</label>
       <div className="relative">
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
         <input
@@ -723,7 +723,7 @@ export function TaxEstimatorPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
@@ -763,7 +763,7 @@ export function TaxEstimatorPage() {
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Filing Status</label>
+            <label className="block text-xs font-medium mb-1">Filing Status</label>
             <div className="relative">
               <select
                 value={filingStatus}

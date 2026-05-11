@@ -40,6 +40,7 @@ import type {
   QfxTransactionInput,
   QfxDividendInput,
   OrphanedOffset,
+  PendingBuy,
 } from "../types";
 
 // Accounts
@@ -679,6 +680,7 @@ export interface OptionsSettings {
   id: string;
   startingBasis: number;
   targetReturn: number;
+  startingWeek: string | null; // ISO date of Monday of starting week, e.g. "2026-04-20"
   createdAt: string;
   updatedAt: string;
 }
@@ -710,6 +712,7 @@ export interface OptionsPosition {
   feesOpen: number | null;
   shareCostBasis: number | null;
   stockPriceAtOpen: number | null;
+  currentPremiumPerShare: number | null;
   notes: string | null;
   status: OptionStatus;
   outcome: OptionOutcome | null;
@@ -717,7 +720,11 @@ export interface OptionsPosition {
   closePremiumPerShare: number | null;
   feesClose: number | null;
   contractsAssigned: number | null;
-  assignedFromPositionId: string | null;
+  stockPriceAtClose: number | null;
+  assignedFromStrikePrice: number | null;
+  assignedFromExpirationDate: string | null;
+  investmentAccountId: string | null;
+  isDraft: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -749,8 +756,12 @@ export type OptionsPositionInput = {
   feesOpen?: number | null;
   shareCostBasis?: number | null;
   stockPriceAtOpen?: number | null;
+  currentPremiumPerShare?: number | null;
   notes?: string | null;
-  assignedFromPositionId?: string | null;
+  assignedFromStrikePrice?: number | null;
+  assignedFromExpirationDate?: string | null;
+  investmentAccountId?: string | null;
+  isDraft?: boolean;
 };
 
 export type OptionsCloseInput = {
@@ -760,6 +771,19 @@ export type OptionsCloseInput = {
   closePremiumPerShare?: number | null;
   feesClose?: number | null;
   contractsAssigned?: number | null;
+  stockPriceAtClose?: number | null;
+  investmentAccountId?: string | null;
+};
+
+export type OptionsRollInput = {
+  closedAt?: string | null;
+  closePremiumPerShare?: number | null;
+  feesClose?: number | null;
+  newPremiumPerShare: number;
+  newStrikePrice: number;
+  newExpirationDate: string;
+  newStockPriceAtOpen?: number | null;
+  newFeesOpen?: number | null;
 };
 
 // Settings
@@ -802,5 +826,81 @@ export const updateOptionsPosition = (id: string, data: Partial<OptionsPositionI
 export const closeOptionsPosition = (id: string, data: OptionsCloseInput) =>
   api.put<OptionsPosition>(`/options/positions/${id}`, data);
 
+export const rollOptionsPosition = (id: string, data: OptionsRollInput) =>
+  api.post<{ closed: OptionsPosition; opened: OptionsPosition }>(`/options/positions/${id}/roll`, data);
+
+export type OptionsCloseEditInput = {
+  outcome?: OptionOutcome;
+  status?: Exclude<OptionStatus, "OPEN">;
+  closedAt?: string | null;
+  closePremiumPerShare?: number | null;
+  feesClose?: number | null;
+  contractsAssigned?: number | null;
+  stockPriceAtClose?: number | null;
+  investmentAccountId?: string | null;
+};
+
+export const editClosedPosition = (id: string, data: OptionsCloseEditInput) =>
+  api.put<OptionsPosition>(`/options/positions/${id}`, data);
+
 export const deleteOptionsPosition = (id: string) =>
   api.delete(`/options/positions/${id}`);
+
+export const importOptionsPositions = (positions: Record<string, unknown>[]) =>
+  api.post<{ imported: number; errors: Array<{ row: number; message: string }> }>(
+    "/options/positions/import", { positions }
+  );
+
+export type OptionQuote = {
+  bid: number | null;
+  ask: number | null;
+  lastPrice: number | null;
+  mark: number | null;
+  impliedVolatility: number | null;
+  volume: number | null;
+  openInterest: number | null;
+  inTheMoney: boolean | null;
+};
+
+export const getOptionQuote = (params: {
+  symbol: string;
+  type: "CALL" | "PUT";
+  strike: number;
+  expiration: string; // YYYY-MM-DD
+}) => {
+  const qs = new URLSearchParams({
+    symbol: params.symbol,
+    type: params.type,
+    strike: String(params.strike),
+    expiration: params.expiration,
+  });
+  return api.get<OptionQuote>(`/options/option-quote?${qs}`);
+};
+
+// ── Pending Buys ──────────────────────────────────────────────────────────────
+
+export const getPendingBuys = (accountId: string) =>
+  api.get<PendingBuy[]>(`/pending-buys/${accountId}`);
+
+export const confirmPendingBuy = (
+  id: string,
+  data: { acquiredDate: string; quantity: number; costPerShare: number; notes?: string | null }
+) => api.post<{ pendingBuy: PendingBuy }>(`/pending-buys/${id}/confirm`, data);
+
+export const dismissPendingBuy = (id: string) =>
+  api.post<PendingBuy>(`/pending-buys/${id}/dismiss`, {});
+
+export type AssignmentBatch = {
+  strikePrice: string;
+  expirationDate: string; // YYYY-MM-DD
+  totalContracts: number;
+  totalShares: number;
+  contractsCovered: number;
+  contractsRemaining: number;
+  weightedCostPerShare: number | null;
+};
+
+export const getOptionAssignedBatches = (ticker: string, accountId: string) =>
+  api.get<AssignmentBatch[]>(
+    `/pending-buys/lots/by-assignment?ticker=${encodeURIComponent(ticker)}&accountId=${encodeURIComponent(accountId)}`
+  );

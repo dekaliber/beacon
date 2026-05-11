@@ -47,6 +47,12 @@ enum PendingDividendStatus {
   DISMISSED
 }
 
+enum PendingBuyStatus {
+  PENDING
+  CONFIRMED
+  DISMISSED
+}
+
 enum DividendElection {
   REINVEST
   CASH
@@ -115,6 +121,8 @@ model Account {
   investmentActivities  InvestmentActivity[]
   gainSnapshots         RealizedGainSnapshot[]
   pendingDividends      PendingDividend[]
+  pendingBuys           PendingBuy[]
+  optionsPositions      OptionsPosition[]     @relation("OptionsInvestmentAccount")
   statementOverrides    StatementOverride[]
   transfersFrom         Transfer[]     @relation("TransferFrom")
   transfersTo           Transfer[]     @relation("TransferTo")
@@ -458,11 +466,15 @@ model InvestmentLot {
   // are unavailable. A null date signals that short/long-term gain calculation
   // cannot be performed for this lot.
   acquiredDate DateTime?
+  // Set when this lot was created via an options assignment (CSP assigned)
+  fromOptionsPositionId String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  holding  InvestmentHolding   @relation(fields: [holdingId], references: [id], onDelete: Cascade)
-  activity InvestmentActivity?
+  holding              InvestmentHolding   @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  activity             InvestmentActivity?
+  fromOptionsPosition  OptionsPosition?    @relation("LotFromAssignment", fields: [fromOptionsPositionId], references: [id], onDelete: SetNull)
+  pendingBuy           PendingBuy?
 
   @@map("investment_lots")
 }
@@ -691,6 +703,32 @@ model PendingDividend {
   @@map("pending_dividends")
 }
 
+// Tracks a pending share purchase created when a CSP is assigned.
+// Confirmed entries produce an InvestmentActivity (PURCHASE) + InvestmentLot.
+model PendingBuy {
+  id                String         @id @default(cuid())
+  userId            String
+  accountId         String
+  optionsPositionId String         @unique
+  ticker            String
+  status            PendingBuyStatus @default(PENDING)
+  quantity          Decimal        @db.Decimal(18, 8)
+  costPerShare      Decimal        @db.Decimal(18, 8)
+  acquiredDate      DateTime       @db.Date
+  confirmedAt       DateTime?
+  dismissedAt       DateTime?
+  lotId             String?        @unique
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  account         Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  optionsPosition OptionsPosition @relation(fields: [optionsPositionId], references: [id], onDelete: Cascade)
+  lot             InvestmentLot?  @relation(fields: [lotId], references: [id], onDelete: SetNull)
+
+  @@index([accountId, status])
+  @@map("pending_buys")
+}
+
 // ── Cash flow models ─────────────────────────────────────────────────────────
 
 // Template for a recurring inter-account transfer (e.g. monthly paycheck split
@@ -818,6 +856,7 @@ model OptionsSettings {
   userId        String   @unique
   startingBasis Decimal  @db.Decimal(12, 2)
   targetReturn  Decimal  @db.Decimal(5, 4) // e.g. 0.25 for 25%
+  startingWeek  String?  // ISO date of Monday of the starting week, e.g. "2026-04-20"
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -863,6 +902,9 @@ model OptionsPosition {
   groupId         String?
   sequenceInGroup Int?     // 1-based order within a group
 
+  // Investment account where shares land on assignment (optional)
+  investmentAccountId String?
+
   // Contract terms
   optionType      OptionType
   side            OptionSide @default(SELL)
@@ -872,8 +914,9 @@ model OptionsPosition {
   contracts       Int
   premiumPerShare Decimal    @db.Decimal(12, 4)
   feesOpen        Decimal?   @db.Decimal(12, 2)
-  shareCostBasis  Decimal?   @db.Decimal(12, 2) // CC only: per-share cost basis of underlying
-  stockPriceAtOpen Decimal?  @db.Decimal(12, 4)
+  shareCostBasis  Decimal?   @db.Decimal(18, 8) // CC only: per-share cost basis of underlying
+  stockPriceAtOpen       Decimal? @db.Decimal(12, 4)
+  currentPremiumPerShare Decimal? @db.Decimal(12, 4) // last manually-entered market price for live P&L
   notes           String?
 
   // Outcome (user-entered when position is closed/expired/assigned)
@@ -883,19 +926,28 @@ model OptionsPosition {
   closePremiumPerShare Decimal? @db.Decimal(12, 4) // 0 for expired worthless
   feesClose       Decimal?   @db.Decimal(12, 2)
   contractsAssigned Int?
+  stockPriceAtClose Decimal? @db.Decimal(12, 4) // underlying price at market close on assignment date
+
+  // Draft positions (planned/limit orders not yet executed)
+  isDraft   Boolean  @default(false)
 
   // Soft delete
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  ticker OptionsTicker        @relation(fields: [tickerId], references: [id])
-  group  OptionsPositionGroup? @relation(fields: [groupId], references: [id])
+  ticker              OptionsTicker        @relation(fields: [tickerId], references: [id])
+  group               OptionsPositionGroup? @relation(fields: [groupId], references: [id])
+  investmentAccount   Account?             @relation("OptionsInvestmentAccount", fields: [investmentAccountId], references: [id], onDelete: SetNull)
 
-  // Assignment chain: a CSP opened after a CC was assigned links back here
-  assignedFromPositionId String?
-  assignedFromPosition   OptionsPosition?  @relation("AssignmentChain", fields: [assignedFromPositionId], references: [id])
-  assignedToPositions    OptionsPosition[] @relation("AssignmentChain")
+  // Assignment recovery: when a CC is written to recover a prior CSP assignment,
+  // record the original strike + expiry so we can group and track remaining contracts.
+  assignedFromStrikePrice    Decimal?  @db.Decimal(12, 2)
+  assignedFromExpirationDate DateTime? @db.Date
+
+  // Back-relations
+  pendingBuy         PendingBuy?
+  assignedLots       InvestmentLot[] @relation("LotFromAssignment")
 
   @@index([userId, status])
   @@index([tickerId])

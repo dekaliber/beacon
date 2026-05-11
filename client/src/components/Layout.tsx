@@ -129,6 +129,19 @@ function NotificationBell() {
 
   const totalCount = notifications?.totalCount ?? 0;
   const pendingDividends = notifications?.pendingDividends ?? [];
+  const pendingBuys = notifications?.pendingBuys ?? [];
+
+  // Merge per-account: build a map of accountId → { name, dividends, buys }
+  const accountMap = new Map<string, { accountId: string; accountName: string; dividends: number; buys: number }>();
+  for (const g of pendingDividends) {
+    accountMap.set(g.accountId, { accountId: g.accountId, accountName: g.accountName, dividends: g.count, buys: 0 });
+  }
+  for (const g of pendingBuys) {
+    const existing = accountMap.get(g.accountId);
+    if (existing) existing.buys = g.count;
+    else accountMap.set(g.accountId, { accountId: g.accountId, accountName: g.accountName, dividends: 0, buys: g.count });
+  }
+  const mergedAccounts = [...accountMap.values()];
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -179,28 +192,26 @@ function NotificationBell() {
             </div>
           ) : (
             <div>
-              {pendingDividends.length > 0 && (
-                <div>
-                  <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-                    Pending Dividends
-                  </p>
-                  {pendingDividends.map((group) => (
-                    <button
-                      key={group.accountId}
-                      onClick={() => handleItemClick(group.accountId)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
-                    >
-                      <div>
-                        <p className="font-medium">{group.accountName}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {group.count} pending {group.count === 1 ? "dividend" : "dividends"} to review
-                        </p>
-                      </div>
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-2" />
-                    </button>
-                  ))}
-                </div>
-              )}
+              {mergedAccounts.map((a) => {
+                const parts: string[] = [];
+                if (a.dividends > 0) parts.push(`${a.dividends} pending ${a.dividends === 1 ? "dividend" : "dividends"}`);
+                if (a.buys > 0) parts.push(`${a.buys} pending ${a.buys === 1 ? "buy" : "buys"}`);
+                return (
+                  <button
+                    key={a.accountId}
+                    onClick={() => handleItemClick(a.accountId)}
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
+                  >
+                    <div>
+                      <p className="font-medium">{a.accountName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {parts.join(" & ")} to review
+                      </p>
+                    </div>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-2" />
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
