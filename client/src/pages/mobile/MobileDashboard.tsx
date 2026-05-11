@@ -34,6 +34,8 @@ import {
   getNetWorth,
 } from "@/api";
 import { formatCurrency } from "@/lib/utils";
+import { formatNextUpdateTime } from "@/lib/priceUtils";
+import { usePriceRefresh } from "@/hooks/usePriceRefresh";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import { useDemo } from "@/context/DemoContext";
 
@@ -58,6 +60,9 @@ export function MobileDashboard() {
   const { data: dataRange } = useApi(() => getDataRange(), []);
   const { data: netWorth } = useApi(() => getNetWorth(), []);
   const { isDemoMode, demoFactor } = useDemo();
+
+  const { phase: refreshPhase, count: refreshCount, total: refreshTotal, nextUpdateAt } =
+    usePriceRefresh({ source: "Dashboard" });
 
   const scaledNetWorth = useMemo(() => {
     if (!netWorth) return null;
@@ -199,6 +204,15 @@ export function MobileDashboard() {
           <Card>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Net Worth</p>
             <p className="mt-0.5 text-3xl font-bold tabular-nums">{formatCurrency(scaledNetWorth.total)}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {refreshPhase === "running"
+                ? refreshTotal > 0
+                  ? `Fetching latest prices… ${refreshCount} of ${refreshTotal} securities`
+                  : "Fetching latest prices…"
+                : nextUpdateAt
+                  ? `Next update: ${formatNextUpdateTime(nextUpdateAt)}`
+                  : null}
+            </p>
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border pt-3">
               <div>
                 <div className="flex items-center gap-1.5 mb-0.5">

@@ -15,6 +15,8 @@ import { OutlierTransactionsList } from "@/components/OutlierTransactionsList";
 import { useApi } from "@/hooks/useApi";
 import { getDashboard, getFlatCategories, getCategoryOutliers, getCategoryAverages, getMtdChart, getOutlierTransactions, getDataRange, getNetWorth } from "@/api";
 import { formatCurrency } from "@/lib/utils";
+import { formatNextUpdateTime } from "@/lib/priceUtils";
+import { usePriceRefresh } from "@/hooks/usePriceRefresh";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import { useDemo } from "@/context/DemoContext";
 import type { Category } from "@/types";
@@ -45,6 +47,9 @@ export function Dashboard() {
   const { data: dataRange } = useApi(() => getDataRange(), []);
   const { data: netWorth } = useApi(() => getNetWorth(), []);
   const { isDemoMode, demoFactor } = useDemo();
+
+  const { phase: refreshPhase, count: refreshCount, total: refreshTotal, nextUpdateAt } =
+    usePriceRefresh({ source: "Dashboard" });
 
   const scaledNetWorth = useMemo(() => {
     if (!netWorth) return null;
@@ -181,6 +186,15 @@ export function Dashboard() {
             <div className="col-span-6 sm:col-span-2 sm:border-r sm:border-border sm:pr-6">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Net Worth</p>
               <p className="text-3xl font-bold tabular-nums">{formatCurrency(scaledNetWorth.total)}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {refreshPhase === "running"
+                  ? refreshTotal > 0
+                    ? `Fetching latest prices… ${refreshCount} of ${refreshTotal} securities`
+                    : "Fetching latest prices…"
+                  : nextUpdateAt
+                    ? `Next update: ${formatNextUpdateTime(nextUpdateAt)}`
+                    : null}
+              </p>
             </div>
 
             {/* Investments */}
@@ -223,7 +237,7 @@ export function Dashboard() {
       )}
 
       {/* Month selector */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <h2 className="text-2xl font-bold">Dashboard</h2>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={prevMonth} disabled={atMin}>
