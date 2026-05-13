@@ -1369,9 +1369,20 @@ function cutoffToday8pmET(now: Date): Date {
   return new Date(`${get("year")}-${get("month")}-${get("day")}T20:00:00${offsetStr}`);
 }
 
+function currentHourET(now: Date): number {
+  return parseInt(
+    new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false })
+      .formatToParts(now)
+      .find((p) => p.type === "hour")!.value,
+    10,
+  );
+}
+
 function isTickerStale(updatedAt: Date | null, isCrypto: boolean, now: Date): boolean {
   if (!updatedAt) return true;
   if (isCrypto) return now.getTime() - updatedAt.getTime() > 5 * 60 * 1000;
+  // After 5 PM ET, markets are closed and stock/option prices won't change.
+  if (currentHourET(now) >= 17) return false;
   const cutoff = cutoffToday8pmET(now);
   const prevCutoff = new Date(cutoff.getTime() - 24 * 60 * 60 * 1000);
   if (updatedAt < prevCutoff) return true;

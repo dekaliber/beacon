@@ -1878,14 +1878,14 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
             <td className={tdClass}>${fmtUSD(c.breakeven)}</td>
             <td className={tdClass}>
               {c.pctOtmAtOpen != null
-                ? <span className={cn(c.pctOtmAtOpen <= 0 ? "text-green-600" : "text-red-600")}>{fmtPct(c.pctOtmAtOpen)}</span>
+                ? <span className={cn((p.optionType === "CALL" ? c.pctOtmAtOpen >= 0 : c.pctOtmAtOpen <= 0) ? "text-green-600" : "text-red-600")}>{fmtPct(c.pctOtmAtOpen)}</span>
                 : "—"}
             </td>
           </>
         ) : (
           <td className={cn(tdClass, "border-l border-border/50")}>
             {c.pctOtmAtOpen != null
-              ? <span className={cn(c.pctOtmAtOpen <= 0 ? "text-green-600" : "text-red-600")}>{fmtPct(c.pctOtmAtOpen)}</span>
+              ? <span className={cn((p.optionType === "CALL" ? c.pctOtmAtOpen >= 0 : c.pctOtmAtOpen <= 0) ? "text-green-600" : "text-red-600")}>{fmtPct(c.pctOtmAtOpen)}</span>
               : "—"}
           </td>
         )}
@@ -1945,7 +1945,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
             </td>
             <td className={tdClass}>
               {pctOtmNow != null
-                ? <span className={cn(pctOtmNow <= 0 ? "text-green-600" : "text-red-600")}>{fmtPct(pctOtmNow)}</span>
+                ? <span className={cn((p.optionType === "CALL" ? pctOtmNow >= 0 : pctOtmNow <= 0) ? "text-green-600" : "text-red-600")}>{fmtPct(pctOtmNow)}</span>
                 : <span className="text-muted-foreground">—</span>}
             </td>
             <td className={tdClass}>
@@ -2861,6 +2861,16 @@ function SummaryCards({
     .filter((p) => p.closedAt && new Date(p.closedAt) >= lastMonday)
     .reduce((sum, p) => sum + (calcPosition(p).pnl ?? 0), 0);
 
+  // Pending premium = max profit (totalPremiumNet) for open positions expiring this week
+  const endOfWeek = new Date(lastMonday);
+  endOfWeek.setDate(lastMonday.getDate() + 6);
+  endOfWeek.setHours(23, 59, 59, 999);
+  const pendingThisWeek = openPositions.reduce((sum, p) => {
+    const expDate = new Date(p.expirationDate.split("T")[0] + "T20:00:00Z");
+    if (expDate < lastMonday || expDate > endOfWeek) return sum;
+    return sum + calcPosition(p).totalPremiumNet;
+  }, 0);
+
   // Annualized rate: cumulative pnl / basis over time elapsed since the starting week
   const annReturnFirstDate = (() => {
     if (settings?.startingWeek) {
@@ -2876,41 +2886,60 @@ function SummaryCards({
     return (cumulativePremium / settings.startingBasis) * (365 / elapsedDays) * 100;
   })();
 
-  const cards = [
-    {
-      label: "Capital at Risk",
-      value: totalCapitalAtRisk > 0 ? `$${totalCapitalAtRisk.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—",
-      sub: openPositions.length > 0 ? `${openPositions.length} open position${openPositions.length !== 1 ? "s" : ""}` : "No open positions",
-    },
-    {
-      label: "Premium This Week",
-      value: premiumThisWeek !== 0 ? `$${fmtUSD(premiumThisWeek)}` : "$0.00",
-      sub: "Since Monday",
-      valueClass: premiumThisWeek >= 0 ? "text-green-600" : "text-red-600",
-    },
-    {
-      label: "Cumulative Premium",
-      value: `$${fmtUSD(cumulativePremium)}`,
-      sub: settings ? `Basis: $${Number(settings.startingBasis).toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "Set starting basis in settings",
-      valueClass: cumulativePremium >= 0 ? "text-green-600" : "text-red-600",
-    },
-    {
-      label: "Ann. Rate of Return",
-      value: annReturn != null ? fmtPct(annReturn) : "—",
-      sub: annReturnFirstDate != null ? `since ${fmtDateTimeShort(new Date(annReturnFirstDate).toISOString())}` : "—",
-      valueClass: annReturn != null ? (annReturn >= (settings?.targetReturn ?? 0) * 100 ? "text-green-600" : "text-amber-600") : undefined,
-    },
-  ];
-
   return (
     <div className="grid grid-cols-4 gap-4">
-      {cards.map((c) => (
-        <Card key={c.label} className="p-4">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{c.label}</p>
-          <p className={cn("text-xl font-semibold mt-1 truncate", c.valueClass)}>{c.value}</p>
-          <p className="text-xs text-muted-foreground mt-0.5 truncate">{c.sub}</p>
-        </Card>
-      ))}
+      {/* Capital at Risk */}
+      <Card className="p-4">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Capital at Risk</p>
+        <p className="text-xl font-semibold mt-1 truncate">
+          {totalCapitalAtRisk > 0 ? `$${totalCapitalAtRisk.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}
+        </p>
+        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+          {openPositions.length > 0 ? `${openPositions.length} open position${openPositions.length !== 1 ? "s" : ""}` : "No open positions"}
+        </p>
+      </Card>
+
+      {/* Premium This Week — split realized / pending */}
+      <Card className="p-4">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Premium This Week</p>
+        <div className="flex items-end gap-3 mt-1">
+          <div className="min-w-0">
+            <p className={cn("text-xl font-semibold truncate", premiumThisWeek >= 0 ? "text-green-600" : "text-red-600")}>
+              {premiumThisWeek !== 0 ? `$${fmtUSD(premiumThisWeek)}` : "$0.00"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">realized</p>
+          </div>
+          <div className="w-px bg-border self-stretch shrink-0" />
+          <div className="min-w-0">
+            <p className="text-xl font-semibold text-muted-foreground truncate">
+              {pendingThisWeek > 0 ? `$${fmtUSD(pendingThisWeek)}` : "—"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">pending</p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Cumulative Premium */}
+      <Card className="p-4">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cumulative Premium</p>
+        <p className={cn("text-xl font-semibold mt-1 truncate", cumulativePremium >= 0 ? "text-green-600" : "text-red-600")}>
+          {`$${fmtUSD(cumulativePremium)}`}
+        </p>
+        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+          {settings ? `Basis: $${Number(settings.startingBasis).toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "Set starting basis in settings"}
+        </p>
+      </Card>
+
+      {/* Ann. Rate of Return */}
+      <Card className="p-4">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Ann. Rate of Return</p>
+        <p className={cn("text-xl font-semibold mt-1 truncate", annReturn != null ? (annReturn >= (settings?.targetReturn ?? 0) * 100 ? "text-green-600" : "text-amber-600") : undefined)}>
+          {annReturn != null ? fmtPct(annReturn) : "—"}
+        </p>
+        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+          {annReturnFirstDate != null ? `since ${fmtDateTimeShort(new Date(annReturnFirstDate).toISOString())}` : "—"}
+        </p>
+      </Card>
     </div>
   );
 }
