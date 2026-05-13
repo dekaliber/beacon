@@ -2586,9 +2586,11 @@ function weekFridayLabel(mondayMs: number): string {
 }
 
 function PerformanceCharts({
+  openPositions,
   closedPositions,
   settings,
 }: {
+  openPositions: OptionsPosition[];
   closedPositions: OptionsPosition[];
   settings: OptionsSettings | null;
 }) {
@@ -2606,6 +2608,17 @@ function PerformanceCharts({
     return map;
   }, [closedPositions]);
 
+  // Pending premium per week: max profit for open positions bucketed by expiration week
+  const pendingPnlMap = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const p of openPositions) {
+      const expDate = new Date(p.expirationDate.split("T")[0] + "T20:00:00Z");
+      const ms = getWeekStart(expDate).getTime();
+      map.set(ms, (map.get(ms) ?? 0) + calcPosition(p).totalPremiumNet);
+    }
+    return map;
+  }, [openPositions]);
+
   // First trade week: use the setting if provided, otherwise first week with a close
   const firstTradeWeekMs = useMemo(() => {
     if (settings?.startingWeek) {
@@ -2621,18 +2634,19 @@ function PerformanceCharts({
   // Bar chart: W1 → current week + 12
   const weeklyData = useMemo(() => {
     if (firstTradeWeekMs == null) return [];
-    const weeks: { week: string; premium: number; isFuture: boolean }[] = [];
+    const weeks: { week: string; premium: number; pending: number; isFuture: boolean }[] = [];
     let weekNum = 0;
     for (let ms = firstTradeWeekMs; ms <= projectionEndMs; ms += 7 * 86_400_000) {
       weekNum++;
       weeks.push({
         week: weekFridayLabel(ms),
         premium: weekPnlMap.get(ms) ?? 0,
+        pending: pendingPnlMap.get(ms) ?? 0,
         isFuture: ms > currentWeekMs,
       });
     }
     return weeks;
-  }, [firstTradeWeekMs, weekPnlMap, currentWeekMs, projectionEndMs]);
+  }, [firstTradeWeekMs, weekPnlMap, pendingPnlMap, currentWeekMs, projectionEndMs]);
 
   // Cumulative chart: W1 → current week + 12
   // actual is null for future weeks so the line stops at the current week
@@ -2698,11 +2712,14 @@ function PerformanceCharts({
               cursor={{ fill: "var(--color-muted)" }}
               content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null;
-                const val = payload[0].value as number;
+                const realized = (payload.find((p) => p.dataKey === "premium")?.value ?? 0) as number;
+                const pending = (payload.find((p) => p.dataKey === "pending")?.value ?? 0) as number;
                 return (
                   <div className="rounded border border-border bg-background p-2 text-xs shadow-md">
                     <p className="mb-1 font-medium">{label}</p>
-                    <p style={{ color: "var(--color-primary)" }}>Premium: ${fmtUSD(val)}</p>
+                    {realized !== 0 && <p style={{ color: "var(--color-primary)" }}>Realized: ${fmtUSD(realized)}</p>}
+                    {pending > 0 && <p className="text-muted-foreground">Pending: ${fmtUSD(pending)}</p>}
+                    {realized === 0 && pending === 0 && <p style={{ color: "var(--color-primary)" }}>$0.00</p>}
                     {targetWeekly != null && (
                       <p className="mt-0.5 text-muted-foreground">Target: ${fmtUSD(targetWeekly)}</p>
                     )}
@@ -2710,17 +2727,54 @@ function PerformanceCharts({
                 );
               }}
             />
+            {/* Realized premium — solid bar */}
             <Bar
               dataKey="premium"
-              radius={[3, 3, 0, 0]}
+              stackId="a"
               maxBarSize={32}
               fill="var(--color-primary)"
               shape={(props: Record<string, unknown>) => {
-                const { x, y, width, height, fill, isFuture } = props as {
-                  x: number; y: number; width: number; height: number; fill: string; isFuture: boolean;
+                const { x, y, width, height, pending } = props as {
+                  x: number; y: number; width: number; height: number; pending: number;
                 };
-                if (height <= 0) return <rect x={x} y={y} width={width} height={0} fill={fill} />;
-                return <rect x={x} y={y} width={width} height={height} fill={fill} fillOpacity={isFuture ? 0 : 1} rx={3} />;
+                const hasRadius = (pending ?? 0) <= 0;
+                if (!height || height <= 0) return <g />;
+                return <rect x={x} y={y} width={width} height={height} fill="var(--color-primary)" rx={hasRadius ? 3 : 0} style={{ borderRadius: hasRadius ? "3px 3px 0 0" : undefined }} />;
+              }}
+            />
+            {/* Pending premium — diagonal stripe bar stacked on top */}
+            <Bar
+              dataKey="pending"
+              stackId="a"
+              maxBarSize={32}
+              shape={(props: Record<string, unknown>) => {
+                const { x, y, width, height } = props as { x: number; y: number; width: number; height: number };
+                if (!height || height <= 0 || !width || width <= 0) return <g />;
+                const clipId = `pending-clip-${Math.round(x * 10)}`;
+                const step = 5;
+                const lines: React.ReactElement[] = [];
+                for (let offset = -height; offset < width + height; offset += step) {
+                  lines.push(
+                    <line
+                      key={offset}
+                      x1={x + offset} y1={y + height}
+                      x2={x + offset + height} y2={y}
+                      stroke="white" strokeOpacity={0.55} strokeWidth={2}
+                      clipPath={`url(#${clipId})`}
+                    />
+                  );
+                }
+                return (
+                  <g>
+                    <defs>
+                      <clipPath id={clipId}>
+                        <rect x={x} y={y} width={width} height={height} rx={3} />
+                      </clipPath>
+                    </defs>
+                    <rect x={x} y={y} width={width} height={height} fill="var(--color-primary)" fillOpacity={0.3} rx={3} />
+                    {lines}
+                  </g>
+                );
               }}
             />
             {targetWeekly != null && (
@@ -3044,6 +3098,7 @@ export function OptionsTrading() {
 
       {/* Performance Charts */}
       <PerformanceCharts
+        openPositions={openPositions}
         closedPositions={closedPositions}
         settings={settings ?? null}
       />
