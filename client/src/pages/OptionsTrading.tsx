@@ -334,6 +334,8 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
   const quoteDebounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
+    // Don't auto-fill premium for existing open positions — the transaction already occurred
+    if (editing) return;
     if (quoteDebounce.current) clearTimeout(quoteDebounce.current);
     const strikeNum = parseFloat(strikePrice);
     if (!selectedTicker || !strikePrice || isNaN(strikeNum) || strikeNum <= 0 || !expirationDate) {
@@ -352,7 +354,7 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
     }, 600);
     return () => { if (quoteDebounce.current) clearTimeout(quoteDebounce.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTicker, optionType, strikePrice, expirationDate]);
+  }, [editing, selectedTicker, optionType, strikePrice, expirationDate]);
 
   const handleTickerSearch = (q: string) => {
     const upper = q.toUpperCase();
