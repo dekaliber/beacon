@@ -1381,8 +1381,6 @@ function currentHourET(now: Date): number {
 function isTickerStale(updatedAt: Date | null, isCrypto: boolean, now: Date): boolean {
   if (!updatedAt) return true;
   if (isCrypto) return now.getTime() - updatedAt.getTime() > 5 * 60 * 1000;
-  // After 5 PM ET, markets are closed and stock/option prices won't change.
-  if (currentHourET(now) >= 17) return false;
   const cutoff = cutoffToday8pmET(now);
   const prevCutoff = new Date(cutoff.getTime() - 24 * 60 * 60 * 1000);
   if (updatedAt < prevCutoff) return true;
@@ -1949,7 +1947,9 @@ investmentRoutes.get("/prices/:ticker", async (req, res) => {
     const existing = await prisma.tickerPrice.findUnique({ where: { ticker } });
     if (existing) {
       const ageMs = Date.now() - existing.updatedAt.getTime();
-      if (ageMs < cacheMaxAgeMs) {
+      // After 5 PM ET markets are closed — any cached price is good for the rest of the day.
+      const marketClosed = !isCrypto && currentHourET(new Date()) >= 17;
+      if (marketClosed || ageMs < cacheMaxAgeMs) {
         return res.json({
           ticker,
           price: parseFloat(existing.price.toString()),

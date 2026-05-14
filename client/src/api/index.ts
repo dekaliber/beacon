@@ -773,6 +773,7 @@ export type OptionsCloseInput = {
   contractsAssigned?: number | null;
   stockPriceAtClose?: number | null;
   investmentAccountId?: string | null;
+  bankingAccountId?: string | null;
 };
 
 export type OptionsRollInput = {

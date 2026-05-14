@@ -192,6 +192,7 @@ const positionCloseSchema = z.object({
   feesClose: z.coerce.number().nonnegative().nullable().optional(),
   contractsAssigned: z.coerce.number().int().nonnegative().nullable().optional(),
   stockPriceAtClose: z.coerce.number().positive().nullable().optional(),
+  bankingAccountId: z.string().nullable().optional(),
 });
 
 optionsRoutes.get("/positions", async (req, res) => {
@@ -266,6 +267,10 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
   if (typeof data.assignedFromExpirationDate === "string") {
     data.assignedFromExpirationDate = new Date(data.assignedFromExpirationDate + "T20:00:00.000Z");
   }
+  // bankingAccountId is not a position field — extract before updating
+  const bankingAccountId = typeof data.bankingAccountId === "string" ? data.bankingAccountId : null;
+  delete data.bankingAccountId;
+
   if (Object.keys(data).length === 0) {
     return res.status(400).json({ error: "No valid fields provided" });
   }
@@ -323,6 +328,66 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
       where: { id: updated.pendingBuy.id },
       data: { accountId: updated.investmentAccountId },
     });
+  }
+
+  // Auto-create an Income record for income-generating close outcomes
+  if (
+    updated &&
+    bankingAccountId &&
+    (updated.outcome === "EXPIRED_WORTHLESS" ||
+      updated.outcome === "CLOSED_EARLY" ||
+      updated.outcome === "ASSIGNED")
+  ) {
+    const contracts =
+      updated.outcome === "ASSIGNED"
+        ? Number(updated.contractsAssigned ?? updated.contracts)
+        : Number(updated.contracts);
+    const shares = contracts * 100;
+    const premiumPerShare = Number(updated.premiumPerShare);
+    const closePremiumPerShare =
+      updated.outcome === "CLOSED_EARLY" ? Number(updated.closePremiumPerShare ?? 0) : 0;
+    const feesOpen = Number(updated.feesOpen ?? 0);
+    const feesClose = Number(updated.feesClose ?? 0);
+    const netAmount = (premiumPerShare - closePremiumPerShare) * shares - feesOpen - feesClose;
+
+    if (netAmount > 0) {
+      // Find or create "Options Premium" income category for this user
+      let category = await prisma.category.findFirst({
+        where: { userId, name: "Options Premium", kind: "INCOME" },
+      });
+      if (!category) {
+        category = await prisma.category.create({
+          data: { userId, name: "Options Premium", kind: "INCOME" },
+        });
+      }
+
+      // Format expiration date as YY.MM.DD for the source string
+      const exp = updated.expirationDate;
+      const yy = String(exp.getUTCFullYear()).slice(2);
+      const mm = String(exp.getUTCMonth() + 1).padStart(2, "0");
+      const dd = String(exp.getUTCDate()).padStart(2, "0");
+      const expStr = `${yy}.${mm}.${dd}`;
+
+      const strike = Number(updated.strikePrice);
+      const strikeStr = strike === Math.floor(strike) ? `$${Math.floor(strike)}` : `$${strike}`;
+      const optionType = updated.optionType === "CALL" ? "Call" : "Put";
+      const source = `${updated.ticker.symbol} ${expStr} ${optionType} ${strikeStr} x${contracts}`;
+
+      // Use close date as transaction date; fall back to expiration for EXPIRED_WORTHLESS
+      const incomeDate = updated.closedAt ?? updated.expirationDate;
+
+      await prisma.income.create({
+        data: {
+          amount: netAmount,
+          categoryId: category.id,
+          source,
+          date: incomeDate,
+          accountId: bankingAccountId,
+          taxClassification: "ORDINARY",
+          taxableAmount: netAmount,
+        },
+      });
+    }
   }
 
   res.json(updated);

@@ -18,6 +18,7 @@ import {
   getOptionQuote,
   searchTickers,
   getTickerPrice,
+  getAccounts,
   getInvestmentAccounts,
   getOptionAssignedBatches,
   type AssignmentBatch,
@@ -217,6 +218,71 @@ function calcPosition(p: OptionsPosition) {
     pnl,
     daysInTrade,
     closedAnnReturn,
+  };
+}
+
+// ── Performance Metrics ────────────────────────────────────────────────────────
+
+interface PerformanceMetrics {
+  tradeCount: number;
+  contractCount: number;
+  closedCount: number;
+  winRate: number | null;
+  assignmentRate: number | null;
+  avgActualDays: number | null;
+  avgExpectedDays: number | null;
+  totalPremium: number;
+  weightedArr: number | null;
+}
+
+function computePerformanceMetrics(positions: OptionsPosition[]): PerformanceMetrics {
+  const closed = positions.filter((p) => p.status !== "OPEN");
+
+  const tradeCount = positions.length;
+  const contractCount = positions.reduce((s, p) => s + p.contracts, 0);
+
+  const closedWithOutcome = closed.filter((p) => p.outcome != null);
+  const isWin = (p: OptionsPosition) => {
+    if (p.outcome === "EXPIRED_WORTHLESS") return true;
+    if (p.outcome === "ASSIGNED") return false;
+    return (p.closePremiumPerShare ?? 0) < p.premiumPerShare;
+  };
+  const winContracts = closedWithOutcome.filter(isWin).reduce((s, p) => s + p.contracts, 0);
+  const closedWithOutcomeContracts = closedWithOutcome.reduce((s, p) => s + p.contracts, 0);
+  const winRate = closedWithOutcomeContracts > 0 ? (winContracts / closedWithOutcomeContracts) * 100 : null;
+
+  const assignedContracts = closed.filter((p) => p.outcome === "ASSIGNED").reduce((s, p) => s + p.contracts, 0);
+  const closedContracts = closed.reduce((s, p) => s + p.contracts, 0);
+  const assignmentRate = closedContracts > 0 ? (assignedContracts / closedContracts) * 100 : null;
+
+  let sumActual = 0, sumExpected = 0, daysN = 0;
+  let totalPremium = 0;
+  let arrNumer = 0, arrDenom = 0;
+
+  for (const p of closed) {
+    const c = calcPosition(p);
+    totalPremium += c.pnl ?? 0;
+    if (c.daysInTrade != null) {
+      sumActual += c.daysInTrade * p.contracts;
+      sumExpected += c.durationDays * p.contracts;
+      daysN += p.contracts;
+    }
+    if (c.closedAnnReturn != null && c.capitalAtRisk > 0) {
+      arrNumer += c.closedAnnReturn * c.capitalAtRisk;
+      arrDenom += c.capitalAtRisk;
+    }
+  }
+
+  return {
+    tradeCount,
+    contractCount,
+    closedCount: closed.length,
+    winRate,
+    assignmentRate,
+    avgActualDays: daysN > 0 ? sumActual / daysN : null,
+    avgExpectedDays: daysN > 0 ? sumExpected / daysN : null,
+    totalPremium,
+    weightedArr: arrDenom > 0 ? arrNumer / arrDenom : null,
   };
 }
 
@@ -787,8 +853,11 @@ function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
   const [contractsAssigned, setContractsAssigned] = useState("");
   const [stockPriceAtClose, setStockPriceAtClose] = useState("");
   const [investmentAccountId, setInvestmentAccountId] = useState(position.investmentAccountId ?? "");
+  const [bankingAccountId, setBankingAccountId] = useState("");
 
   const { data: investmentAccounts } = useApi(() => getInvestmentAccounts(), []);
+  const { data: allAccounts } = useApi(() => getAccounts(), []);
+  const bankingAccounts = (allAccounts ?? []).filter((a) => a.type === "CHECKING" || a.type === "SAVINGS");
 
   // Roll-specific: new position fields
   const [newPremiumPerShare, setNewPremiumPerShare] = useState("");
@@ -873,6 +942,7 @@ function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
           contractsAssigned: isAssigned && contractsAssigned ? parseInt(contractsAssigned, 10) : null,
           stockPriceAtClose: isAssigned && stockPriceAtClose ? parseFloat(stockPriceAtClose) : null,
           investmentAccountId: isAssigned ? (investmentAccountId || null) : undefined,
+          bankingAccountId: bankingAccountId || null,
         };
         await closeOptionsPosition(position.id, data);
       }
@@ -1000,6 +1070,24 @@ function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
               ) : null;
             })()}
           </>
+        )}
+
+        {!isRolled && bankingAccounts.length > 0 && (
+          <div>
+            <label className="block text-xs font-medium mb-1">
+              Destination Account <span className="text-muted-foreground font-normal">(for income record)</span>
+            </label>
+            <select
+              value={bankingAccountId}
+              onChange={(e) => setBankingAccountId(e.target.value)}
+              className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
+            >
+              <option value="">None</option>
+              {bankingAccounts.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
         )}
 
         <div>
@@ -2882,6 +2970,101 @@ function PerformanceCharts({
   );
 }
 
+// ── Performance Table ──────────────────────────────────────────────────────────
+
+function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (positions.length === 0) return null;
+
+  const symbols = Array.from(new Set(positions.map((p) => p.ticker.symbol))).sort();
+  const aggregate = computePerformanceMetrics(positions);
+  const byTicker = symbols.map((sym) => ({
+    symbol: sym,
+    metrics: computePerformanceMetrics(positions.filter((p) => p.ticker.symbol === sym)),
+  }));
+
+  const fmtDays = (d: number | null) => (d != null ? d.toFixed(1) : "—");
+  const fmtRate = (r: number | null) => (r != null ? `${r.toFixed(1)}%` : "—");
+
+  function MetricCells({ m }: { m: PerformanceMetrics }) {
+    const tdCls = "px-4 py-2 text-right tabular-nums";
+    return (
+      <>
+        <td className={tdCls}>{m.tradeCount}</td>
+        <td className={tdCls}>{m.contractCount}</td>
+        <td className={tdCls}>
+          {m.winRate != null ? (
+            <span className={m.winRate >= 50 ? "text-green-600" : "text-red-600"}>{fmtRate(m.winRate)}</span>
+          ) : "—"}
+        </td>
+        <td className={tdCls}>{fmtRate(m.assignmentRate)}</td>
+        <td className={tdCls}>
+          {m.avgActualDays != null && m.avgExpectedDays != null ? (
+            <span>{fmtDays(m.avgActualDays)}<span className="text-muted-foreground"> / {fmtDays(m.avgExpectedDays)}</span></span>
+          ) : "—"}
+        </td>
+        <td className={tdCls}>
+          {m.closedCount > 0 ? (
+            <span className={m.totalPremium >= 0 ? "text-green-600" : "text-red-600"}>
+              {m.totalPremium >= 0 ? "" : "−"}${fmtUSD(Math.abs(m.totalPremium))}
+            </span>
+          ) : "—"}
+        </td>
+        <td className={tdCls}>
+          {m.weightedArr != null ? (
+            <span className={m.weightedArr >= 0 ? "text-green-600" : "text-red-600"}>{fmtPct(m.weightedArr)}</span>
+          ) : "—"}
+        </td>
+      </>
+    );
+  }
+
+  return (
+    <Card className="p-4">
+      <div className="pb-3 border-b border-border">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Performance Details</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Ticker</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Trades</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Contracts</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Win Rate</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Assign. Rate</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">Avg Days (actual / exp.)</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">Total Premium</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">Wtd. Ann. Return</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              className="border-b border-border bg-muted/40 font-medium cursor-pointer hover:bg-muted/60 transition-colors"
+              onClick={() => setExpanded((v) => !v)}
+            >
+              <td className="px-4 py-2 text-sm">
+                <span className="inline-flex items-center gap-1.5">
+                  All
+                  {expanded ? <ChevronUp className="h-3 w-3 text-muted-foreground" /> : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
+                </span>
+              </td>
+              <MetricCells m={aggregate} />
+            </tr>
+            {expanded && byTicker.map(({ symbol, metrics }) => (
+              <tr key={symbol} className="border-b border-border last:border-0 hover:bg-accent/40 transition-colors">
+                <td className="px-4 py-2 font-medium">{symbol}</td>
+                <MetricCells m={metrics} />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
 // ── Summary Cards ──────────────────────────────────────────────────────────────
 
 function SummaryCards({
@@ -3102,6 +3285,9 @@ export function OptionsTrading() {
         closedPositions={closedPositions}
         settings={settings ?? null}
       />
+
+      {/* Performance Table */}
+      <PerformanceTable positions={normalizedPositions.filter((p) => !p.isDraft)} />
 
       {/* Tabs */}
       <Card>
