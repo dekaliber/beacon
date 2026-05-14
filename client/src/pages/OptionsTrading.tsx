@@ -1707,15 +1707,14 @@ const COL_GROUPS = [
   { key: "details", label: "Details", count: 4 },
   { key: "return",  label: "Return",  count: 3 },
   { key: "risk",    label: "Risk",    count: 4 },
-  { key: "live",    label: "Live",  count: 5 },
+  { key: "live",    label: "Live",  count: 6 },
 ] as const;
 type ColGroupKey = (typeof COL_GROUPS)[number]["key"];
 
 function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, onEdit, onClose, onConfirm, onDelete, onPositionUpdated }: OpenPositionsTableProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<OptionsPosition | null>(null);
-  // Trade Details and Live collapsed by default; Return and Risk visible
-  const [openColGroups, setOpenColGroups] = useState<Set<ColGroupKey>>(new Set(["return", "risk"]));
+  const [openColGroups, setOpenColGroups] = useState<Set<ColGroupKey>>(new Set(["live"]));
   // Live data: auto-fetched stock prices; editing buffer for the inline prem field
   const [livePrices, setLivePrices] = useState<Map<string, number>>(new Map());
   const [editingPremId, setEditingPremId] = useState<string | null>(null);
@@ -2048,6 +2047,13 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
                   </span>
                 : <span className="text-muted-foreground">—</span>}
             </td>
+            <td className={tdClass}>
+              {livePnl != null && c.totalPremiumNet !== 0
+                ? <span className={cn("font-medium", livePnl >= 0 ? "text-green-600" : "text-red-600")}>
+                    {fmtPct(livePnl / c.totalPremiumNet * 100)}
+                  </span>
+                : <span className="text-muted-foreground">—</span>}
+            </td>
           </>
         ) : (
           <td className={cn(tdClass, "border-l border-border/50")}>
@@ -2165,6 +2171,13 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
                 </span>
               )}
             </td>
+            <td className={ctd}>
+              {chainLivePnl != null && chainNet != null && chainNet !== 0 && (
+                <span className={cn("font-medium", chainLivePnl >= 0 ? "text-green-600" : "text-red-600")}>
+                  {fmtPct(chainLivePnl / chainNet * 100)}
+                </span>
+              )}
+            </td>
           </>
         ) : (
           <td className={cn(ctd, "border-l border-border/50")}>
@@ -2262,9 +2275,10 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
               <>
                 <th className={cn(thClass, "border-l border-border/50")}>Stock Now</th>
                 <th className={thClass}>Cur. Prem</th>
-                <th className={thClass}>% OTM Now</th>
-                <th className={thClass}>Cur. Ann. Ret</th>
+                <th className={thClass}>% OTM</th>
+                <th className={thClass}>Ann. Return</th>
                 <th className={thClass}>Live P&L</th>
+                <th className={thClass}>% Gain</th>
               </>
             ) : (
               <th className={cn(thClass, "border-l border-border/50 text-muted-foreground/40 italic")}>Live P&L</th>
@@ -3128,26 +3142,41 @@ function SummaryCards({
       {/* Capital at Risk */}
       <Card className="p-4">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Capital at Risk</p>
-        <p className="text-xl font-semibold mt-1 truncate">
-          {totalCapitalAtRisk > 0 ? `$${totalCapitalAtRisk.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}
-        </p>
-        <p className="text-xs text-muted-foreground mt-0.5 truncate">
-          {openPositions.length > 0 ? `${openPositions.length} open position${openPositions.length !== 1 ? "s" : ""}` : "No open positions"}
-        </p>
+        <div className="flex items-end mt-1">
+          <div className="flex-1 min-w-0">
+            <p className="text-xl font-semibold truncate">
+              {totalCapitalAtRisk > 0 ? `$${totalCapitalAtRisk.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+              {openPositions.length > 0 ? `${openPositions.length} open position${openPositions.length !== 1 ? "s" : ""}` : "No open positions"}
+            </p>
+          </div>
+          {settings?.startingBasis != null && (
+            <>
+              <div className="w-px bg-border self-stretch shrink-0" />
+              <div className="flex-1 min-w-0 pl-3">
+                <p className="text-xl font-semibold text-muted-foreground truncate">
+                  {`$${(settings.startingBasis - totalCapitalAtRisk).toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">capital available</p>
+              </div>
+            </>
+          )}
+        </div>
       </Card>
 
       {/* Premium This Week — split realized / pending */}
       <Card className="p-4">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Premium This Week</p>
-        <div className="flex items-end gap-3 mt-1">
-          <div className="min-w-0">
+        <div className="flex items-end mt-1">
+          <div className="flex-1 min-w-0">
             <p className={cn("text-xl font-semibold truncate", premiumThisWeek >= 0 ? "text-green-600" : "text-red-600")}>
               {premiumThisWeek !== 0 ? `$${fmtUSD(premiumThisWeek)}` : "$0.00"}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">realized</p>
           </div>
           <div className="w-px bg-border self-stretch shrink-0" />
-          <div className="min-w-0">
+          <div className="flex-1 min-w-0 pl-3">
             <p className="text-xl font-semibold text-muted-foreground truncate">
               {pendingThisWeek > 0 ? `$${fmtUSD(pendingThisWeek)}` : "—"}
             </p>
@@ -3163,7 +3192,7 @@ function SummaryCards({
           {`$${fmtUSD(cumulativePremium)}`}
         </p>
         <p className="text-xs text-muted-foreground mt-0.5 truncate">
-          {settings ? `Basis: $${Number(settings.startingBasis).toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "Set starting basis in settings"}
+          {annReturnFirstDate != null ? `since ${fmtDateTimeShort(new Date(annReturnFirstDate).toISOString())}` : "—"}
         </p>
       </Card>
 
@@ -3174,7 +3203,7 @@ function SummaryCards({
           {annReturn != null ? fmtPct(annReturn) : "—"}
         </p>
         <p className="text-xs text-muted-foreground mt-0.5 truncate">
-          {annReturnFirstDate != null ? `since ${fmtDateTimeShort(new Date(annReturnFirstDate).toISOString())}` : "—"}
+          {settings?.targetReturn != null ? `target: ${fmtPct(settings.targetReturn * 100)}` : "—"}
         </p>
       </Card>
     </div>

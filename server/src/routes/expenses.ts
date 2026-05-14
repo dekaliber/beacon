@@ -301,12 +301,15 @@ expenseRoutes.get("/vendor-category", async (req, res) => {
   const vendor = req.query.vendor as string;
   if (!vendor) return res.json({ categoryId: null });
 
-  const expense = await prisma.expense.findFirst({
-    where: { account: { userId }, vendor: { equals: vendor, mode: "insensitive" } },
-    orderBy: { date: "desc" },
-    select: { categoryId: true },
+  const today = (req.query.today as string) || new Date().toISOString().slice(0, 10);
+  const groups = await prisma.expense.groupBy({
+    by: ["categoryId"],
+    where: { account: { userId }, vendor: { equals: vendor, mode: "insensitive" }, date: { lte: new Date(today) }, categoryId: { not: null } },
+    _count: { categoryId: true },
+    orderBy: { _count: { categoryId: "desc" } },
+    take: 1,
   });
-  res.json({ categoryId: expense?.categoryId ?? null });
+  res.json({ categoryId: groups[0]?.categoryId ?? null });
 });
 
 // Count uncategorized expenses (exclude offsets)

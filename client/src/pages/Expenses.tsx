@@ -3210,7 +3210,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
   const handleVendorSelect = async (vendor: string) => {
     if (!expense && vendor) {
       try {
-        const result = await getVendorCategory(vendor);
+        const result = await getVendorCategory(vendor, localToday());
         if (result.categoryId) {
           setSelectedCategoryId(result.categoryId);
         }
