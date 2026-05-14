@@ -22,6 +22,8 @@ import { statementOverrideRoutes } from "./routes/statementOverrides.js";
 import { cashFlowRoutes } from "./routes/cashFlow.js";
 import { withdrawalRoutes } from "./routes/withdrawals.js";
 import { taxAssumptionsRoutes } from "./routes/taxAssumptions.js";
+import { optionsRoutes } from "./routes/options.js";
+import { pendingBuyRoutes } from "./routes/pendingBuys.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -58,6 +60,8 @@ app.use("/api/statement-overrides", statementOverrideRoutes);
 app.use("/api/cash-flow", cashFlowRoutes);
 app.use("/api/withdrawals", withdrawalRoutes);
 app.use("/api/tax-assumptions", taxAssumptionsRoutes);
+app.use("/api/options", optionsRoutes);
+app.use("/api/pending-buys", pendingBuyRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {

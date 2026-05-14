@@ -753,7 +753,7 @@ function TransferRuleModal({
     <Modal open={open} onClose={onClose} title={rule ? "Edit Recurring Transfer" : "New Recurring Transfer"}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium">Description</label>
+          <label className="block text-xs font-medium mb-1">Description</label>
           <input
             type="text"
             required
@@ -765,7 +765,7 @@ function TransferRuleModal({
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Amount</label>
+          <label className="block text-xs font-medium mb-1">Amount</label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
@@ -781,7 +781,7 @@ function TransferRuleModal({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-sm font-medium">From</label>
+            <label className="block text-xs font-medium mb-1">From</label>
             <div className="relative">
               <select
                 required
@@ -798,7 +798,7 @@ function TransferRuleModal({
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium">To</label>
+            <label className="block text-xs font-medium mb-1">To</label>
             <div className="relative">
               <select
                 required
@@ -818,7 +818,7 @@ function TransferRuleModal({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-sm font-medium">Frequency</label>
+            <label className="block text-xs font-medium mb-1">Frequency</label>
             <div className="relative">
               <select
                 value={form.frequency ?? "MONTHLY"}
@@ -834,7 +834,7 @@ function TransferRuleModal({
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium">Every</label>
+            <label className="block text-xs font-medium mb-1">Every</label>
             <input
               type="number"
               min={1}
@@ -847,7 +847,7 @@ function TransferRuleModal({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-sm font-medium">Start Date</label>
+            <label className="block text-xs font-medium mb-1">Start Date</label>
             <input
               type="date"
               required={!rule}
@@ -857,7 +857,7 @@ function TransferRuleModal({
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium">
+            <label className="block text-xs font-medium mb-1">
               End Date <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
             <input
@@ -1518,7 +1518,7 @@ export function Recurring() {
         <div className="space-y-4">
           {/* Description */}
           <div>
-            <label className="mb-1 block text-sm font-medium">Description</label>
+            <label className="block text-xs font-medium mb-1">Description</label>
             <input
               type="text"
               value={editForm.description}
@@ -1529,7 +1529,7 @@ export function Recurring() {
 
           {/* Amount */}
           <div>
-            <label className="mb-1 block text-sm font-medium">Amount</label>
+            <label className="block text-xs font-medium mb-1">Amount</label>
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
@@ -1544,7 +1544,7 @@ export function Recurring() {
 
           {/* Account */}
           <div>
-            <label className="mb-1 block text-sm font-medium">Account</label>
+            <label className="block text-xs font-medium mb-1">Account</label>
             <div className="relative">
               <select
                 value={editForm.accountId}
@@ -1567,7 +1567,7 @@ export function Recurring() {
 
           {/* Category */}
           <div>
-            <label className="mb-1 block text-sm font-medium">Category</label>
+            <label className="block text-xs font-medium mb-1">Category</label>
             <div className="relative">
               <select
                 value={editForm.categoryId}
@@ -1584,7 +1584,7 @@ export function Recurring() {
 
           {/* Group */}
           <div>
-            <label className="mb-1 block text-sm font-medium">
+            <label className="block text-xs font-medium mb-1">
               Group{" "}
               <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
@@ -1599,7 +1599,7 @@ export function Recurring() {
 
           {/* End date */}
           <div>
-            <label className="mb-1 block text-sm font-medium">
+            <label className="block text-xs font-medium mb-1">
               End date{" "}
               <span className="font-normal text-muted-foreground">(optional)</span>
             </label>

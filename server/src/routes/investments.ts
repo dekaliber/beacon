@@ -791,6 +791,7 @@ investmentRoutes.get("/accounts", async (req, res) => {
         cashBalanceUpdatedAt: account.cashBalanceUpdatedAt,
         isTaxAdvantaged: account.isTaxAdvantaged,
         taxAdvantageType: account.taxAdvantageType,
+        isManaged: account.isManaged,
         // Composition helpers (investment accounts only; 0 for banking accounts)
         classifiedCashValue,
         untrackedValue,
@@ -1368,6 +1369,16 @@ function cutoffToday8pmET(now: Date): Date {
   return new Date(`${get("year")}-${get("month")}-${get("day")}T20:00:00${offsetStr}`);
 }
 
+function currentHourET(now: Date): number {
+  return parseInt(
+    new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false })
+      .formatToParts(now)
+      .find((p) => p.type === "hour")!.value,
+    10,
+  );
+}
+
+
 function isTickerStale(updatedAt: Date | null, isCrypto: boolean, now: Date): boolean {
   if (!updatedAt) return true;
   if (isCrypto) return now.getTime() - updatedAt.getTime() > 5 * 60 * 1000;
@@ -1937,7 +1948,9 @@ investmentRoutes.get("/prices/:ticker", async (req, res) => {
     const existing = await prisma.tickerPrice.findUnique({ where: { ticker } });
     if (existing) {
       const ageMs = Date.now() - existing.updatedAt.getTime();
-      if (ageMs < cacheMaxAgeMs) {
+      // After 5 PM ET markets are closed — any cached price is good for the rest of the day.
+      const marketClosed = !isCrypto && currentHourET(new Date()) >= 17;
+      if (marketClosed || ageMs < cacheMaxAgeMs) {
         return res.json({
           ticker,
           price: parseFloat(existing.price.toString()),

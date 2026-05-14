@@ -1,0 +1,254 @@
+import { Router } from "express";
+import { prisma } from "../db/client.js";
+import { z } from "zod";
+import { getUserId } from "../middleware/auth.js";
+
+export const pendingBuyRoutes = Router();
+
+// ── List ───────────────────────────────────────────────────────────────────────
+
+pendingBuyRoutes.get("/:accountId", async (req, res) => {
+  const userId = getUserId(req);
+
+  // Verify account belongs to user
+  const account = await prisma.account.findFirst({
+    where: { id: req.params.accountId, userId },
+  });
+  if (!account) return res.status(404).json({ error: "Account not found" });
+
+  const pendingBuys = await prisma.pendingBuy.findMany({
+    where: { accountId: req.params.accountId, status: "PENDING" },
+    include: { optionsPosition: { include: { ticker: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  res.json(pendingBuys);
+});
+
+// ── Confirm ────────────────────────────────────────────────────────────────────
+
+const confirmSchema = z.object({
+  acquiredDate: z.string(), // YYYY-MM-DD
+  quantity: z.coerce.number().positive(),
+  costPerShare: z.coerce.number().nonnegative(),
+  notes: z.string().nullable().optional(),
+});
+
+pendingBuyRoutes.post("/:id/confirm", async (req, res) => {
+  const userId = getUserId(req);
+  const parsed = confirmSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const pendingBuy = await prisma.pendingBuy.findFirst({
+    where: { id: req.params.id, userId, status: "PENDING" },
+    include: { optionsPosition: { include: { ticker: true } } },
+  });
+  if (!pendingBuy) return res.status(404).json({ error: "Pending buy not found" });
+
+  const { acquiredDate, quantity, costPerShare, notes } = parsed.data;
+  const acquiredAt = new Date(acquiredDate + "T20:00:00.000Z"); // treat as date-only (4pm ET)
+  const amount = Math.round(quantity * costPerShare * 100) / 100;
+
+  const result = await prisma.$transaction(async (tx) => {
+    // Find or create holding for this ticker in this account
+    let holding = await tx.investmentHolding.findFirst({
+      where: { accountId: pendingBuy.accountId, ticker: pendingBuy.ticker },
+    });
+    if (!holding) {
+      const name = pendingBuy.optionsPosition.ticker.symbol;
+      holding = await tx.investmentHolding.create({
+        data: {
+          accountId: pendingBuy.accountId,
+          ticker: pendingBuy.ticker,
+          name,
+        },
+      });
+    }
+
+    // Create the lot (with back-link to the options position)
+    const lot = await tx.investmentLot.create({
+      data: {
+        holdingId: holding.id,
+        quantity,
+        costPerShare,
+        acquiredDate: acquiredAt,
+        fromOptionsPositionId: pendingBuy.optionsPositionId,
+      },
+    });
+
+    // Create the linked PURCHASE activity
+    const activity = await tx.investmentActivity.create({
+      data: {
+        accountId: pendingBuy.accountId,
+        holdingId: holding.id,
+        lotId: lot.id,
+        ticker: pendingBuy.ticker,
+        type: "PURCHASE",
+        date: acquiredAt,
+        shares: quantity,
+        pricePerShare: costPerShare,
+        amount,
+        notes: notes ?? null,
+      },
+    });
+
+    // Confirm the pending buy
+    const confirmed = await tx.pendingBuy.update({
+      where: { id: pendingBuy.id },
+      data: {
+        status: "CONFIRMED",
+        confirmedAt: new Date(),
+        lotId: lot.id,
+        quantity,
+        costPerShare,
+        acquiredDate: acquiredAt,
+      },
+      include: { optionsPosition: { include: { ticker: true } } },
+    });
+
+    return { pendingBuy: confirmed, lot, activity };
+  });
+
+  res.json(result);
+});
+
+// ── Dismiss ────────────────────────────────────────────────────────────────────
+
+pendingBuyRoutes.post("/:id/dismiss", async (req, res) => {
+  const userId = getUserId(req);
+
+  const pendingBuy = await prisma.pendingBuy.findFirst({
+    where: { id: req.params.id, userId, status: "PENDING" },
+  });
+  if (!pendingBuy) return res.status(404).json({ error: "Pending buy not found" });
+
+  const dismissed = await prisma.pendingBuy.update({
+    where: { id: req.params.id },
+    data: { status: "DISMISSED", dismissedAt: new Date() },
+  });
+
+  res.json(dismissed);
+});
+
+// ── Lots from options assignments (for CC position modal) ──────────────────────
+
+pendingBuyRoutes.get("/lots/by-assignment", async (req, res) => {
+  const userId = getUserId(req);
+  const { ticker, accountId } = req.query as { ticker?: string; accountId?: string };
+
+  if (!ticker || !accountId) {
+    return res.status(400).json({ error: "ticker and accountId are required" });
+  }
+
+  const account = await prisma.account.findFirst({ where: { id: accountId, userId } });
+  if (!account) return res.status(404).json({ error: "Account not found" });
+
+  // All assigned CSPs for this ticker + account (include id for lot lookup)
+  const assignedCsps = await prisma.optionsPosition.findMany({
+    where: {
+      userId,
+      outcome: "ASSIGNED",
+      isActive: true,
+      investmentAccountId: accountId,
+      ticker: { symbol: ticker },
+    },
+    select: {
+      id: true,
+      strikePrice: true,
+      expirationDate: true,
+      contractsAssigned: true,
+      contracts: true,
+    },
+  });
+
+  if (assignedCsps.length === 0) return res.json([]);
+
+  // Group by strikePrice + expirationDate, collecting position IDs per batch
+  type BatchKey = string;
+  const batchMap = new Map<BatchKey, {
+    strikePrice: string;
+    expirationDate: string;
+    totalContracts: number;
+    positionIds: string[];
+  }>();
+
+  for (const csp of assignedCsps) {
+    const expStr = csp.expirationDate.toISOString().split("T")[0];
+    const key: BatchKey = `${csp.strikePrice}|${expStr}`;
+    const existing = batchMap.get(key);
+    const contracts = csp.contractsAssigned ?? csp.contracts;
+    if (existing) {
+      existing.totalContracts += contracts;
+      existing.positionIds.push(csp.id);
+    } else {
+      batchMap.set(key, {
+        strikePrice: csp.strikePrice.toString(),
+        expirationDate: expStr,
+        totalContracts: contracts,
+        positionIds: [csp.id],
+      });
+    }
+  }
+
+  // For each batch, count open CC contracts and compute weighted avg cost basis
+  const batches = await Promise.all(
+    Array.from(batchMap.values()).map(async (batch) => {
+      const expDate = new Date(batch.expirationDate + "T20:00:00.000Z");
+
+      const [openCcs, lots] = await Promise.all([
+        prisma.optionsPosition.aggregate({
+          where: {
+            userId,
+            optionType: "CALL",
+            status: "OPEN",
+            isActive: true,
+            ticker: { symbol: ticker },
+            assignedFromStrikePrice: parseFloat(batch.strikePrice),
+            assignedFromExpirationDate: expDate,
+          },
+          _sum: { contracts: true },
+        }),
+        prisma.investmentLot.findMany({
+          where: {
+            fromOptionsPositionId: { in: batch.positionIds },
+            holding: { accountId, ticker },
+          },
+          select: { quantity: true, costPerShare: true },
+        }),
+      ]);
+
+      const contractsCovered = openCcs._sum.contracts ?? 0;
+
+      // Weighted average: SUM(qty * cost) / SUM(qty)
+      let weightedCostPerShare: number | null = null;
+      if (lots.length > 0) {
+        let totalQty = 0;
+        let totalCost = 0;
+        for (const lot of lots) {
+          const qty = Number(lot.quantity);
+          totalQty += qty;
+          totalCost += qty * Number(lot.costPerShare);
+        }
+        weightedCostPerShare = totalQty > 0 ? totalCost / totalQty : null;
+      }
+
+      return {
+        strikePrice: batch.strikePrice,
+        expirationDate: batch.expirationDate,
+        totalContracts: batch.totalContracts,
+        totalShares: batch.totalContracts * 100,
+        contractsCovered,
+        contractsRemaining: Math.max(0, batch.totalContracts - contractsCovered),
+        weightedCostPerShare,
+      };
+    })
+  );
+
+  // Sort by strikePrice desc, then expirationDate desc
+  batches.sort((a, b) =>
+    parseFloat(b.strikePrice) - parseFloat(a.strikePrice) ||
+    b.expirationDate.localeCompare(a.expirationDate)
+  );
+
+  res.json(batches);
+});

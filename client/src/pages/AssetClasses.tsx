@@ -125,7 +125,7 @@ export function AssetClassesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <div>
           <h2 className="text-2xl font-bold">Asset Classes</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -382,7 +382,7 @@ function AssetClassModal({ open, onClose, onSave, onDelete, editing, isChild }: 
         {/* Name — hidden for system class (can only change color) */}
         {(!editing || !editing.isSystem) && (
           <div>
-            <label className="mb-1 block text-sm font-medium">Name</label>
+            <label className="block text-xs font-medium mb-1">Name</label>
             <input
               name="name"
               type="text"
@@ -396,7 +396,7 @@ function AssetClassModal({ open, onClose, onSave, onDelete, editing, isChild }: 
 
         {showDerivedTarget && (
           <div>
-            <label className="mb-1 block text-sm font-medium">Target Allocation</label>
+            <label className="block text-xs font-medium mb-1">Target Allocation</label>
             <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
               <span>{derivedVal != null ? `${derivedVal.toFixed(1)}%` : "—"}</span>
               <span className="opacity-60">∑ derived from sub-classes</span>
@@ -406,7 +406,7 @@ function AssetClassModal({ open, onClose, onSave, onDelete, editing, isChild }: 
 
         {showTargetInput && (
           <div>
-            <label className="mb-1 block text-sm font-medium">Target Allocation</label>
+            <label className="block text-xs font-medium mb-1">Target Allocation</label>
             <p className="mb-2 text-xs text-muted-foreground">
               Percentage of your portfolio to allocate here. Leave blank to remove.
             </p>
@@ -428,7 +428,7 @@ function AssetClassModal({ open, onClose, onSave, onDelete, editing, isChild }: 
 
         {!isChild && (
           <div>
-            <label className="mb-2 block text-sm font-medium">Color</label>
+            <label className="block text-xs font-medium mb-2">Color</label>
             <div className="grid w-fit grid-cols-6 gap-2">
               {PRESET_COLORS.map((c) => (
                 <button

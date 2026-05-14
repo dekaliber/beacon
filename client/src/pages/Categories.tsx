@@ -76,7 +76,7 @@ export function Categories() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <h2 className="text-2xl font-bold">Categories</h2>
         <Button onClick={openAdd}><Plus className="h-4 w-4" /> Add Category</Button>
       </div>
@@ -304,7 +304,7 @@ function CategoryModal({ open, onClose, onSave, onDelete, category, parentId, ki
       <form onSubmit={handleSubmit} className="space-y-4">
         {isTopLevelAdd && (
           <div>
-            <label className="mb-1 block text-sm font-medium">Type</label>
+            <label className="block text-xs font-medium mb-1">Type</label>
             <div className="relative">
               <select
                 value={selectedKind}
@@ -319,7 +319,7 @@ function CategoryModal({ open, onClose, onSave, onDelete, category, parentId, ki
           </div>
         )}
         <div>
-          <label className="mb-1 block text-sm font-medium">Name</label>
+          <label className="block text-xs font-medium mb-1">Name</label>
           <input
             name="name"
             type="text"
@@ -332,7 +332,7 @@ function CategoryModal({ open, onClose, onSave, onDelete, category, parentId, ki
 
         {!parentId && (
           <div>
-            <label className="mb-1 block text-sm font-medium">Color</label>
+            <label className="block text-xs font-medium mb-1">Color</label>
             <input type="hidden" name="color" value={selectedColor} />
             <div className="grid w-fit grid-cols-10 gap-2">
               {CATEGORY_COLORS.map((color) => (

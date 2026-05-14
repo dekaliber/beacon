@@ -237,7 +237,7 @@ export function Dashboard() {
       )}
 
       {/* Month selector */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <h2 className="text-2xl font-bold">Dashboard</h2>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={prevMonth} disabled={atMin}>

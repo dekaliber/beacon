@@ -43,11 +43,21 @@ function cutoffToday8pmET(now: Date): Date {
 // Crypto markets trade 24/7. Refresh crypto prices if they are older than this.
 const CRYPTO_PRICE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
 
+function currentHourET(now: Date): number {
+  return parseInt(
+    new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false })
+      .formatToParts(now)
+      .find((p) => p.type === "hour")!.value,
+    10,
+  );
+}
+
 // Returns true if any holding has a stale price and a refresh should be triggered.
 //
 // For stock/fund holdings: prices are considered stale once it is past 8PM Eastern
 // today and the last fetch predates that cutoff. Mutual fund NAVs are typically
 // published 1-2 hours after the 4PM ET close, so 8PM gives them plenty of time.
+// No refreshes are triggered after 5PM ET — markets are closed and prices won't change.
 //
 // For crypto holdings: prices are considered stale if older than 5 minutes, since
 // crypto trades continuously 24/7.
@@ -57,6 +67,7 @@ export function isPriceRefreshNeeded(holdings: InvestmentHolding[]): boolean {
   const now = new Date();
   const cutoff = cutoffToday8pmET(now);
   const prevCutoff = new Date(cutoff.getTime() - 24 * 60 * 60 * 1000);
+  const afterMarketClose = currentHourET(now) >= 17;
 
   for (const holding of holdings) {
     if (!holding.priceUpdatedAt) return true;
@@ -67,7 +78,8 @@ export function isPriceRefreshNeeded(holdings: InvestmentHolding[]): boolean {
       // Crypto: refresh if price is older than 5 minutes
       if (now.getTime() - lastUpdated.getTime() > CRYPTO_PRICE_MAX_AGE_MS) return true;
     } else {
-      // Stocks / funds: refresh once per day after 8PM ET
+      // Stocks / funds: no refreshes after 5PM ET (market closed, prices frozen)
+      if (afterMarketClose) continue;
       if (lastUpdated < prevCutoff) return true;
       if (now >= cutoff && lastUpdated < cutoff) return true;
     }
@@ -83,7 +95,7 @@ export function getNextUpdateTime(holdings: InvestmentHolding[]): Date | null {
   if (holdings.length === 0) return null;
 
   const now = new Date();
-  let nextTime: Date | null = null;
+  const candidates: Date[] = [];
 
   const cryptoUpdates = holdings
     .filter((h) => h.type === "Crypto" && h.priceUpdatedAt)
@@ -91,17 +103,16 @@ export function getNextUpdateTime(holdings: InvestmentHolding[]): Date | null {
 
   if (cryptoUpdates.length > 0) {
     const oldest = Math.min(...cryptoUpdates);
-    const cryptoNext = new Date(oldest + CRYPTO_PRICE_MAX_AGE_MS);
-    if (!nextTime || cryptoNext < nextTime) nextTime = cryptoNext;
+    candidates.push(new Date(oldest + CRYPTO_PRICE_MAX_AGE_MS));
   }
 
   const hasStocks = holdings.some((h) => h.type !== "Crypto");
   if (hasStocks) {
-    const stockNext = nextStockCutoff(now);
-    if (!nextTime || stockNext < nextTime) nextTime = stockNext;
+    candidates.push(nextStockCutoff(now));
   }
 
-  return nextTime;
+  if (candidates.length === 0) return null;
+  return candidates.reduce((a, b) => (a.getTime() < b.getTime() ? a : b));
 }
 
 // Formats a next-update Date as a friendly string like "Today at 8 PM EDT" or "May 10 at 8 PM EDT".

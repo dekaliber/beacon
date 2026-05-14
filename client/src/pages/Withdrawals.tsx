@@ -329,8 +329,8 @@ function TransferModal({
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* From account */}
         <div>
-          <label className="mb-1 block text-sm font-medium">
-            From Account <span className="text-destructive">*</span>
+          <label className="block text-xs font-medium mb-1">
+            From Account
           </label>
           <select
             value={form.fromAccountId}
@@ -354,8 +354,8 @@ function TransferModal({
 
         {/* To account */}
         <div>
-          <label className="mb-1 block text-sm font-medium">
-            To Account <span className="text-destructive">*</span>
+          <label className="block text-xs font-medium mb-1">
+            To Account
           </label>
           <select
             value={form.toAccountId}
@@ -380,8 +380,8 @@ function TransferModal({
         {/* Amount + Date */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-sm font-medium">
-              Amount <span className="text-destructive">*</span>
+            <label className="block text-xs font-medium mb-1">
+              Amount
             </label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
@@ -398,8 +398,8 @@ function TransferModal({
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium">
-              Date <span className="text-destructive">*</span>
+            <label className="block text-xs font-medium mb-1">
+              Date
             </label>
             <input
               type="date"
@@ -413,7 +413,7 @@ function TransferModal({
 
         {/* Description */}
         <div>
-          <label className="mb-1 block text-sm font-medium">Description</label>
+          <label className="block text-xs font-medium mb-1">Description <span className="font-normal text-muted-foreground">(optional)</span></label>
           <input
             type="text"
             value={form.description}
@@ -425,7 +425,7 @@ function TransferModal({
 
         {/* Notes */}
         <div>
-          <label className="mb-1 block text-sm font-medium text-muted-foreground">Notes</label>
+          <label className="block text-xs font-medium mb-1">Notes <span className="font-normal text-muted-foreground">(optional)</span></label>
           <textarea
             value={form.notes}
             onChange={set("notes")}
@@ -772,7 +772,7 @@ export function WithdrawalsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate("/investments")}

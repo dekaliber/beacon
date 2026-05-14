@@ -23,6 +23,7 @@ import { CashFlow } from "@/pages/CashFlow";
 import { WithdrawalsPage } from "@/pages/Withdrawals";
 import { MonthlySpending } from "@/pages/MonthlySpending";
 import { TaxEstimatorPage } from "@/pages/TaxEstimator";
+import { OptionsTrading } from "@/pages/OptionsTrading";
 import { Login } from "@/pages/Login";
 import { setTokenGetter } from "@/lib/authToken";
 import { NotAvailableOnMobile } from "@/pages/mobile/NotAvailableOnMobile";
@@ -104,6 +105,7 @@ function App() {
             <Route path="/investments/withdrawals" element={<ResponsivePage desktop={<WithdrawalsPage />} mobile={<MobileWithdrawals />} />} />
             <Route path="/investments/:accountId" element={<ResponsivePage desktop={<InvestmentAccount />} mobile={<MobileInvestmentAccount />} />} />
             <Route path="/asset-classes" element={<ResponsivePage desktop={<AssetClassesPage />} mobile={<MobileAssetClasses />} />} />
+            <Route path="/options" element={<ResponsivePage desktop={<OptionsTrading />} />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

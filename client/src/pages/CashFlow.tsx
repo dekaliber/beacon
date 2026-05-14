@@ -942,11 +942,11 @@ function EditTransferModal({
     <Modal open={!!target} onClose={onClose} title="Edit Transfer">
       <form onSubmit={handleSave} className="space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium">Description</label>
+          <label className="block text-xs font-medium mb-1">Description</label>
           <p className="text-sm text-muted-foreground">{target?.description}</p>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">Date</label>
+          <label className="block text-xs font-medium mb-1">Date</label>
           <input
             type="date"
             value={date}
@@ -955,7 +955,7 @@ function EditTransferModal({
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">Amount</label>
+          <label className="block text-xs font-medium mb-1">Amount</label>
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
@@ -1021,7 +1021,7 @@ function EditBalanceModal({
     <Modal open={!!account} onClose={onClose} title="Edit Balance">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium">
+          <label className="block text-xs font-medium mb-1">
             Current Balance — {account?.name}
           </label>
           <div className="relative">

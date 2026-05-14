@@ -105,7 +105,7 @@ function BudgetSettingsModal({
     <Modal open={open} onClose={onClose} title="Edit Budget">
       <div className="space-y-5">
         <div className="space-y-1.5">
-          <label className="mb-1 block text-sm font-medium">Personal Annual Budget</label>
+          <label className="block text-xs font-medium mb-1">Personal Annual Budget</label>
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
@@ -123,7 +123,7 @@ function BudgetSettingsModal({
         </div>
 
         <div className="space-y-1.5">
-          <label className="mb-1 block text-sm font-medium">Joint Annual Budget</label>
+          <label className="block text-xs font-medium mb-1">Joint Annual Budget</label>
           <p className="text-xs text-muted-foreground">
             Enter your share of joint expenses. Actual joint spending is automatically
             divided by your {Math.round(jointSplitRatio * 100)}% split ratio.
@@ -1255,7 +1255,7 @@ export function Budgets() {
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <h2 className="text-2xl font-bold">Budget</h2>
         <div className="flex items-center gap-3">
           <Link

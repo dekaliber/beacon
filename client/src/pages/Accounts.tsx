@@ -190,7 +190,7 @@ export function Accounts() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <h2 className="text-2xl font-bold">Accounts</h2>
         <div className="flex items-center gap-2">
           <button
@@ -425,7 +425,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
     <Modal open={open} onClose={onClose} title={account ? "Edit Account" : "Add Account"}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium">Name</label>
+          <label className="block text-xs font-medium mb-1">Name</label>
           <input
             name="name"
             type="text"
@@ -437,7 +437,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Type</label>
+          <label className="block text-xs font-medium mb-1">Type</label>
           <div className="relative">
             <select
               name="type"
@@ -460,7 +460,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
 
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Color</label>
+          <label className="block text-xs font-medium mb-1">Color</label>
           <input type="hidden" name="color" value={selectedColor} />
           <div className="grid w-fit grid-cols-10 gap-2">
             {ACCOUNT_COLORS.map((color) => (
@@ -513,7 +513,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
             </p>
             {isTaxAdvantaged && (
               <div className="mt-3 ml-6">
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Account type</label>
+                <label className="block text-xs font-medium mb-1">Account type</label>
                 <div className="relative">
                   <select
                     value={taxAdvantageType}
@@ -559,7 +559,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Credit Card Settings</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-sm font-medium">Closing Day</label>
+                <label className="block text-xs font-medium mb-1">Closing Day</label>
                 <input
                   type="number"
                   min={1}
@@ -572,7 +572,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
                 <p className="mt-1 text-xs text-muted-foreground">Day of month billing cycle closes</p>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Due Day</label>
+                <label className="block text-xs font-medium mb-1">Due Day</label>
                 <input
                   type="number"
                   min={1}
@@ -586,7 +586,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium">Paid from Account</label>
+              <label className="block text-xs font-medium mb-1">Paid from Account</label>
               <div className="relative">
                 <select
                   value={linkedBankAccountId}
@@ -610,7 +610,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
           <div className="space-y-3 rounded-md border border-border p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dividend Settings</p>
             <div>
-              <label className="mb-1 block text-sm font-medium">Default Election</label>
+              <label className="block text-xs font-medium mb-1">Default Election</label>
               <div className="relative">
                 <select
                   value={dividendElection}
@@ -626,7 +626,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
             </div>
             {dividendElection === "CASH" && (
               <div>
-                <label className="mb-1 block text-sm font-medium">Deposit to Account</label>
+                <label className="block text-xs font-medium mb-1">Deposit to Account</label>
                 <div className="relative">
                   <select
                     value={defaultCashAccountId}
