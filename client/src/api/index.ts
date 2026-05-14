@@ -713,6 +713,8 @@ export interface OptionsPosition {
   shareCostBasis: number | null;
   stockPriceAtOpen: number | null;
   currentPremiumPerShare: number | null;
+  deltaAtOpen: number | null;
+  deltaAtOpenCapturedAt: string | null; // ISO UTC datetime
   notes: string | null;
   status: OptionStatus;
   outcome: OptionOutcome | null;
@@ -757,6 +759,8 @@ export type OptionsPositionInput = {
   shareCostBasis?: number | null;
   stockPriceAtOpen?: number | null;
   currentPremiumPerShare?: number | null;
+  deltaAtOpen?: number | null;
+  deltaAtOpenCapturedAt?: string | null;
   notes?: string | null;
   assignedFromStrikePrice?: number | null;
   assignedFromExpirationDate?: string | null;
@@ -861,6 +865,8 @@ export type OptionQuote = {
   volume: number | null;
   openInterest: number | null;
   inTheMoney: boolean | null;
+  delta: number | null;
+  capturedAt: string | null; // ISO UTC timestamp
 };
 
 export const getOptionQuote = (params: {
@@ -877,6 +883,9 @@ export const getOptionQuote = (params: {
   });
   return api.get<OptionQuote>(`/options/option-quote?${qs}`);
 };
+
+export const getUnderlyingQuote = (symbol: string) =>
+  api.get<{ price: number; priceDate: string }>(`/options/stock-quote/${encodeURIComponent(symbol)}`);
 
 // ── Pending Buys ──────────────────────────────────────────────────────────────
 

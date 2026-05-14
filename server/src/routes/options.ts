@@ -5,37 +5,14 @@ import { getUserId } from "../middleware/auth.js";
 
 export const optionsRoutes = Router();
 
-// ── Yahoo Finance crumb cache ──────────────────────────────────────────────────
-// Yahoo requires a crumb+cookie pair obtained by first hitting fc.yahoo.com.
-// We cache it for 30 minutes to avoid re-authing on every quote request.
+// ── Tradier API helpers ────────────────────────────────────────────────────────
 
-type YahooCred = { crumb: string; cookie: string; fetchedAt: number };
-let _yahooCred: YahooCred | null = null;
-const CRUMB_TTL_MS = 30 * 60 * 1000;
+const TRADIER_BASE = "https://api.tradier.com/v1";
 
-async function getYahooCred(): Promise<YahooCred> {
-  if (_yahooCred && Date.now() - _yahooCred.fetchedAt < CRUMB_TTL_MS) {
-    return _yahooCred;
-  }
-
-  // Step 1: hit fc.yahoo.com to get auth cookies
-  const initRes = await fetch("https://fc.yahoo.com", {
-    headers: { "User-Agent": "Mozilla/5.0" },
-    redirect: "follow",
-  });
-  const rawCookies: string[] = initRes.headers.getSetCookie?.() ?? [];
-  const cookie = rawCookies.map((c) => c.split(";")[0]).join("; ");
-
-  // Step 2: exchange cookies for a crumb
-  const crumbRes = await fetch("https://query1.finance.yahoo.com/v1/test/getcrumb", {
-    headers: { "User-Agent": "Mozilla/5.0", Cookie: cookie },
-  });
-  if (!crumbRes.ok) throw new Error(`Failed to get Yahoo crumb: ${crumbRes.status}`);
-  const crumb = await crumbRes.text();
-  if (!crumb || crumb.includes("error")) throw new Error("Invalid crumb response");
-
-  _yahooCred = { crumb, cookie, fetchedAt: Date.now() };
-  return _yahooCred;
+function tradierHeaders(): Record<string, string> {
+  const token = process.env.TRADIER_API_TOKEN;
+  if (!token) throw new Error("TRADIER_API_TOKEN is not set in the server environment");
+  return { Authorization: `Bearer ${token}`, Accept: "application/json" };
 }
 
 // ── Settings ───────────────────────────────────────────────────────────────────
@@ -177,6 +154,8 @@ const positionOpenSchema = z.object({
   shareCostBasis: z.coerce.number().positive().nullable().optional(),
   stockPriceAtOpen: z.coerce.number().positive().nullable().optional(),
   currentPremiumPerShare: z.coerce.number().nonnegative().nullable().optional(),
+  deltaAtOpen: z.coerce.number().nullable().optional(),
+  deltaAtOpenCapturedAt: z.string().nullable().optional(), // ISO datetime string
   notes: z.string().nullable().optional(),
   assignedFromStrikePrice: z.coerce.number().positive().nullable().optional(),
   assignedFromExpirationDate: z.string().nullable().optional(), // YYYY-MM-DD
@@ -235,7 +214,7 @@ optionsRoutes.post("/positions", async (req, res) => {
     });
   }
 
-  const { openedAt: _openedAt, assignedFromExpirationDate, ...restData } = parsed.data;
+  const { openedAt: _openedAt, assignedFromExpirationDate, deltaAtOpenCapturedAt, ...restData } = parsed.data;
   const position = await prisma.optionsPosition.create({
     data: {
       userId,
@@ -245,6 +224,7 @@ optionsRoutes.post("/positions", async (req, res) => {
       assignedFromExpirationDate: assignedFromExpirationDate
         ? new Date(assignedFromExpirationDate + "T20:00:00.000Z")
         : null,
+      deltaAtOpenCapturedAt: deltaAtOpenCapturedAt ? new Date(deltaAtOpenCapturedAt) : null,
     },
     include: { ticker: true, group: true },
   });
@@ -266,6 +246,9 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
   }
   if (typeof data.assignedFromExpirationDate === "string") {
     data.assignedFromExpirationDate = new Date(data.assignedFromExpirationDate + "T20:00:00.000Z");
+  }
+  if (typeof data.deltaAtOpenCapturedAt === "string") {
+    data.deltaAtOpenCapturedAt = new Date(data.deltaAtOpenCapturedAt);
   }
   // bankingAccountId is not a position field — extract before updating
   const bankingAccountId = typeof data.bankingAccountId === "string" ? data.bankingAccountId : null;
@@ -493,7 +476,29 @@ optionsRoutes.delete("/positions/:id", async (req, res) => {
   res.status(204).send();
 });
 
-// ── Option Quote (Yahoo Finance) ───────────────────────────────────────────────
+// ── Stock Quote (Tradier) ──────────────────────────────────────────────────────
+
+optionsRoutes.get("/stock-quote/:symbol", async (req, res) => {
+  const symbol = req.params.symbol.toUpperCase();
+  try {
+    const url = `${TRADIER_BASE}/markets/quotes?symbols=${encodeURIComponent(symbol)}`;
+    const tradierRes = await fetch(url, { headers: tradierHeaders() });
+    if (!tradierRes.ok) {
+      return res.status(502).json({ error: `Tradier returned ${tradierRes.status}` });
+    }
+    const data = await tradierRes.json() as any;
+    const quote = data?.quotes?.quote;
+    if (!quote || quote.last == null) {
+      return res.status(404).json({ error: "No quote data found" });
+    }
+    res.json({ price: Number(quote.last), priceDate: quote.trade_date ?? new Date().toISOString() });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    res.status(500).json({ error: message });
+  }
+});
+
+// ── Option Quote (Tradier) ─────────────────────────────────────────────────────
 
 optionsRoutes.get("/option-quote", async (req, res) => {
   const { symbol, type, strike, expiration } = req.query;
@@ -502,45 +507,27 @@ optionsRoutes.get("/option-quote", async (req, res) => {
     return res.status(400).json({ error: "Missing required params: symbol, type, strike, expiration" });
   }
 
-  // Convert expiration YYYY-MM-DD to Unix timestamp for Yahoo Finance
-  const expDate = new Date((expiration as string) + "T00:00:00.000Z");
-  const expTimestamp = Math.floor(expDate.getTime() / 1000);
   const strikeNum = parseFloat(strike as string);
   const optionSide = (type as string).toUpperCase();
 
   try {
-    const fetchWithCred = async (cred: YahooCred) => {
-      const url = `https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol as string)}?date=${expTimestamp}&crumb=${encodeURIComponent(cred.crumb)}`;
-      return fetch(url, {
-        headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json", Cookie: cred.cookie },
-      });
-    };
-
-    let cred = await getYahooCred();
-    let yahooRes = await fetchWithCred(cred);
-
-    // Crumb may have expired — refresh once and retry
-    if (yahooRes.status === 401) {
-      _yahooCred = null;
-      cred = await getYahooCred();
-      yahooRes = await fetchWithCred(cred);
+    const url = `${TRADIER_BASE}/markets/options/chains?symbol=${encodeURIComponent(symbol as string)}&expiration=${encodeURIComponent(expiration as string)}&greeks=true`;
+    const tradierRes = await fetch(url, { headers: tradierHeaders() });
+    if (!tradierRes.ok) {
+      return res.status(502).json({ error: `Tradier returned ${tradierRes.status}` });
     }
 
-    if (!yahooRes.ok) {
-      return res.status(502).json({ error: `Yahoo Finance returned ${yahooRes.status}` });
+    const data = await tradierRes.json() as any;
+    const chain: any[] = data?.options?.option ?? [];
+    if (chain.length === 0) {
+      return res.status(404).json({ error: "No option chain data found" });
     }
 
-    const data = await yahooRes.json() as any;
-    const optionData = data?.optionChain?.result?.[0];
-    if (!optionData) return res.status(404).json({ error: "No option chain data found" });
-
-    const optionExp = optionData.options?.[0];
-    if (!optionExp) return res.status(404).json({ error: "No options for that expiration" });
-
-    const chain: any[] = optionSide === "CALL" ? (optionExp.calls ?? []) : (optionExp.puts ?? []);
-
-    // Find closest strike in case of floating-point mismatch
-    const option = chain.reduce((best: any, o: any) => {
+    // Filter to the requested side, then find the closest strike
+    const sideChain = chain.filter((o: any) =>
+      (o.option_type ?? "").toUpperCase() === (optionSide === "CALL" ? "call" : "put").toUpperCase()
+    );
+    const option = sideChain.reduce((best: any, o: any) => {
       if (!best) return o;
       return Math.abs(o.strike - strikeNum) < Math.abs(best.strike - strikeNum) ? o : best;
     }, null);
@@ -551,18 +538,21 @@ optionsRoutes.get("/option-quote", async (req, res) => {
 
     const bid: number | null = option.bid ?? null;
     const ask: number | null = option.ask ?? null;
-    const lastPrice: number | null = option.lastPrice ?? null;
+    const lastPrice: number | null = option.last ?? null;
     const mark = bid != null && ask != null ? (bid + ask) / 2 : lastPrice;
+    const delta: number | null = option.greeks?.delta ?? null;
 
     res.json({
       bid,
       ask,
       lastPrice,
       mark,
-      impliedVolatility: option.impliedVolatility ?? null,
+      impliedVolatility: option.greeks?.mid_iv ?? option.greeks?.smv_vol ?? null,
       volume: option.volume ?? null,
-      openInterest: option.openInterest ?? null,
-      inTheMoney: option.inTheMoney ?? null,
+      openInterest: option.open_interest ?? null,
+      inTheMoney: option.in_the_money ?? null,
+      delta,
+      capturedAt: new Date().toISOString(),
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";

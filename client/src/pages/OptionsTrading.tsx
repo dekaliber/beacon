@@ -16,6 +16,7 @@ import {
   createOptionsGroup,
   importOptionsPositions,
   getOptionQuote,
+  getUnderlyingQuote,
   searchTickers,
   getTickerPrice,
   getAccounts,
@@ -350,6 +351,8 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
   const [feesOpen, setFeesOpen] = useState(editing?.feesOpen?.toString() ?? "");
   const [shareCostBasis, setShareCostBasis] = useState(editing?.shareCostBasis?.toString() ?? "");
   const [stockPriceAtOpen, setStockPriceAtOpen] = useState(editing?.stockPriceAtOpen?.toString() ?? "");
+  const [deltaAtOpen, setDeltaAtOpen] = useState<number | null>(editing?.deltaAtOpen ?? null);
+  const [deltaAtOpenCapturedAt, setDeltaAtOpenCapturedAt] = useState<string | null>(editing?.deltaAtOpenCapturedAt ?? null);
   const [notes, setNotes] = useState(editing?.notes ?? "");
   const [groupId, setGroupId] = useState(editing?.groupId ?? "");
   const [investmentAccountId, setInvestmentAccountId] = useState(editing?.investmentAccountId ?? "");
@@ -389,7 +392,7 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
 
   const fetchPrice = useCallback(async (symbol: string) => {
     try {
-      const result = await getTickerPrice(symbol);
+      const result = await getUnderlyingQuote(symbol);
       setStockPriceAtOpen(result.price.toFixed(2));
     } catch { /* ignore — user can fill manually */ }
   }, []);
@@ -414,6 +417,10 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
         if (quote.lastPrice != null) {
           setPremiumPerShare(quote.lastPrice.toFixed(4));
           setQuoteAutoFilled(true);
+        }
+        if (quote.delta != null) {
+          setDeltaAtOpen(quote.delta);
+          setDeltaAtOpenCapturedAt(quote.capturedAt);
         }
       } catch { /* ignore — user can fill manually */ }
       finally { setQuoteFetching(false); }
@@ -513,6 +520,8 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
         feesOpen: feesOpen ? parseFloat(feesOpen) : null,
         shareCostBasis: isCoveredCall && shareCostBasis ? parseFloat(shareCostBasis) : null,
         stockPriceAtOpen: stockPriceAtOpen ? parseFloat(stockPriceAtOpen) : null,
+        deltaAtOpen: deltaAtOpen ?? null,
+        deltaAtOpenCapturedAt: deltaAtOpenCapturedAt ?? null,
         notes: notes || null,
         investmentAccountId: investmentAccountId || null,
         assignedFromStrikePrice: selectedBatchKey ? parseFloat(selectedBatchKey.split("|")[0]) : null,
@@ -1036,7 +1045,7 @@ function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
               <label className="block text-xs font-medium mb-1">
                 Stock Price at Assignment{" "}
                 <span className="text-muted-foreground font-normal">
-                  {assignedPriceFetching ? "(fetching…)" : "(from Yahoo Finance)"}
+                  {assignedPriceFetching ? "(fetching…)" : "(from Tradier)"}
                 </span>
               </label>
               <div className="relative">
@@ -1156,7 +1165,7 @@ function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
                   <label className="block text-xs font-medium mb-1">
                     Stock Price at Open{" "}
                     <span className="text-muted-foreground font-normal">
-                      {priceFetching ? "(fetching…)" : "(from Yahoo Finance)"}
+                      {priceFetching ? "(fetching…)" : "(from Tradier)"}
                     </span>
                   </label>
                   <div className="relative">
@@ -1375,7 +1384,7 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
               <label className="block text-xs font-medium mb-1">
                 Stock Price at Assignment{" "}
                 <span className="text-muted-foreground font-normal">
-                  {assignedPriceFetching ? "(fetching…)" : "(from Yahoo Finance)"}
+                  {assignedPriceFetching ? "(fetching…)" : "(from Tradier)"}
                 </span>
               </label>
               <div className="relative">
@@ -1581,7 +1590,7 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
   useEffect(() => {
     let cancelled = false;
     setPriceFetching(true);
-    getTickerPrice(position.ticker.symbol)
+    getUnderlyingQuote(position.ticker.symbol)
       .then((r) => { if (!cancelled) setStockPriceAtOpen(r.price.toFixed(2)); })
       .catch(() => {})
       .finally(() => { if (!cancelled) setPriceFetching(false); });
@@ -1652,7 +1661,7 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
           <label className="block text-xs font-medium mb-1">
             Stock Price at Open{" "}
             <span className="text-muted-foreground font-normal">
-              {priceFetching ? "(fetching…)" : "(from Yahoo Finance)"}
+              {priceFetching ? "(fetching…)" : "(from Tradier)"}
             </span>
           </label>
           <div className="relative">
@@ -1704,7 +1713,7 @@ interface OpenPositionsTableProps {
 }
 
 const COL_GROUPS = [
-  { key: "details", label: "Details", count: 4 },
+  { key: "details", label: "Details", count: 5 },
   { key: "return",  label: "Return",  count: 3 },
   { key: "risk",    label: "Risk",    count: 4 },
   { key: "live",    label: "Live",  count: 6 },
@@ -1725,7 +1734,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
   const fetchAllStockPrices = () => {
     const uniqueTickers = [...new Set([...positions, ...draftPositions].map((p) => p.ticker.symbol))];
     for (const ticker of uniqueTickers) {
-      getTickerPrice(ticker)
+      getUnderlyingQuote(ticker)
         .then((r) => setLivePrices((prev) => new Map(prev).set(ticker, r.price)))
         .catch(() => {});
     }
@@ -1929,6 +1938,9 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
               {isDraftRow ? <span className="text-muted-foreground italic text-xs">Draft</span> : fmtDateTimeShort(p.openedAt)}
             </td>
             <td className={tdClass}>{fmt(p.stockPriceAtOpen, 2, "$")}</td>
+            <td className={tdClass} title={p.deltaAtOpenCapturedAt != null ? `Captured ${new Date(p.deltaAtOpenCapturedAt).toLocaleString("en-US", { timeZone: "America/New_York", month: "numeric", day: "numeric", year: "2-digit", hour: "numeric", minute: "2-digit" })} ET` : undefined}>
+              {p.deltaAtOpen != null ? p.deltaAtOpen.toFixed(3) : <span className="text-muted-foreground">—</span>}
+            </td>
           </>
         ) : (
           <td className={cn(tdClass, "border-l border-border/50 text-muted-foreground text-xs")}>
@@ -2022,7 +2034,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
                   <button
                     onClick={() => fetchQuoteForPosition(p)}
                     disabled={fetchingQuotes.has(p.id)}
-                    title="Fetch live price from Yahoo Finance (delayed)"
+                    title="Fetch live price from Tradier"
                     className="p-0.5 rounded text-muted-foreground/30 hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-40"
                   >
                     <RefreshCw className={cn("h-3 w-3", fetchingQuotes.has(p.id) && "animate-spin")} />
@@ -2103,6 +2115,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
             <td className={ctd}>
               {chainNet != null && `$${fmtUSD(chainNet / (p.contracts * 100))} net`}
             </td>
+            <td className={ctd} />
             <td className={ctd} />
             <td className={ctd} />
           </>
@@ -2248,6 +2261,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
                 <th className={thClass}>Premium</th>
                 <th className={thClass}>Opened</th>
                 <th className={thClass}>Stock @ Open</th>
+                <th className={thClass}>Delta @ Open</th>
               </>
             ) : (
               <th className={cn(thClass, "border-l border-border/50 text-muted-foreground/40 italic")}>Contracts</th>
@@ -2352,10 +2366,10 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
             {lastFetchedAt.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit", timeZone: "America/New_York" })}
             {" "}
             {lastFetchedAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })}
-            {" ET from Yahoo Finance (delayed)"}
+            {" ET via Tradier"}
           </>
         ) : (
-          "Prices from Yahoo Finance (delayed)"
+          "Prices via Tradier"
         )}
       </span>
       <button

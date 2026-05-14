@@ -915,8 +915,10 @@ model OptionsPosition {
   premiumPerShare Decimal    @db.Decimal(12, 4)
   feesOpen        Decimal?   @db.Decimal(12, 2)
   shareCostBasis  Decimal?   @db.Decimal(18, 8) // CC only: per-share cost basis of underlying
-  stockPriceAtOpen       Decimal? @db.Decimal(12, 4)
-  currentPremiumPerShare Decimal? @db.Decimal(12, 4) // last manually-entered market price for live P&L
+  stockPriceAtOpen          Decimal? @db.Decimal(12, 4)
+  currentPremiumPerShare    Decimal? @db.Decimal(12, 4) // last manually-entered market price for live P&L
+  deltaAtOpen               Decimal? @db.Decimal(10, 6) // option delta captured at time of logging
+  deltaAtOpenCapturedAt     DateTime?                   // UTC timestamp when deltaAtOpen was fetched
   notes           String?
 
   // Outcome (user-entered when position is closed/expired/assigned)
