@@ -321,17 +321,41 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
       updated.outcome === "CLOSED_EARLY" ||
       updated.outcome === "ASSIGNED")
   ) {
+    // Helper: net premium for a single position leg
+    const legNet = (pos: {
+      outcome: string | null;
+      premiumPerShare: unknown;
+      closePremiumPerShare: unknown;
+      contracts: number;
+      contractsAssigned: number | null;
+      feesOpen: unknown;
+      feesClose: unknown;
+    }) => {
+      const c = pos.outcome === "ASSIGNED"
+        ? Number(pos.contractsAssigned ?? pos.contracts)
+        : Number(pos.contracts);
+      return (Number(pos.premiumPerShare) - Number(pos.closePremiumPerShare ?? 0)) * c * 100
+        - Number(pos.feesOpen ?? 0)
+        - Number(pos.feesClose ?? 0);
+    };
+
+    // For roll chains, sum net premium across all legs so the income record
+    // reflects the economics of the entire chain, not just the final leg.
+    let netAmount: number;
+    if (updated.groupId) {
+      const allLegs = await prisma.optionsPosition.findMany({
+        where: { groupId: updated.groupId },
+      });
+      netAmount = allLegs.reduce((sum, leg) => sum + legNet(leg), 0);
+    } else {
+      netAmount = legNet(updated);
+    }
+
+    // contracts/source still reference the final (current) position
     const contracts =
       updated.outcome === "ASSIGNED"
         ? Number(updated.contractsAssigned ?? updated.contracts)
         : Number(updated.contracts);
-    const shares = contracts * 100;
-    const premiumPerShare = Number(updated.premiumPerShare);
-    const closePremiumPerShare =
-      updated.outcome === "CLOSED_EARLY" ? Number(updated.closePremiumPerShare ?? 0) : 0;
-    const feesOpen = Number(updated.feesOpen ?? 0);
-    const feesClose = Number(updated.feesClose ?? 0);
-    const netAmount = (premiumPerShare - closePremiumPerShare) * shares - feesOpen - feesClose;
 
     if (netAmount > 0) {
       // Find or create "Options Premium" income category for this user
@@ -356,8 +380,11 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
       const optionType = updated.optionType === "CALL" ? "Call" : "Put";
       const source = `${updated.ticker.symbol} ${expStr} ${optionType} ${strikeStr} x${contracts}`;
 
-      // Use close date as transaction date; fall back to expiration for EXPIRED_WORTHLESS
-      const incomeDate = updated.closedAt ?? updated.expirationDate;
+      // Use close date as transaction date; fall back to expiration for EXPIRED_WORTHLESS.
+      // Truncate to midnight UTC so the date filter on the income page (which uses date-only
+      // boundaries) doesn't exclude same-day records due to a time component past midnight.
+      const rawDate = updated.closedAt ?? updated.expirationDate;
+      const incomeDate = new Date(Date.UTC(rawDate.getUTCFullYear(), rawDate.getUTCMonth(), rawDate.getUTCDate()));
 
       await prisma.income.create({
         data: {
