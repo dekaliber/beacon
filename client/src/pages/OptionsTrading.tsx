@@ -2571,7 +2571,7 @@ function ClosedPositionsTable({ positions, onEdit, onDelete }: ClosedPositionsTa
                 <td style={{ left: 0 }}   className={cn(tdClass, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE] pl-4 pr-2")}>
                   <div className="flex items-center gap-1.5">
                     <span className="font-medium">{p.ticker.symbol}</span>
-                    {p.outcome === "ROLLED" && <Link className="h-3 w-3 text-muted-foreground shrink-0" />}
+                    {p.groupId && <Link className="h-3 w-3 text-muted-foreground shrink-0" />}
                   </div>
                 </td>
                 <td style={{ left: 80 }}  className={cn(tdClass, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")}>
