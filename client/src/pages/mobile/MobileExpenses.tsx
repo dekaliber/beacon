@@ -409,7 +409,7 @@ function MobileExpenseModal({
   const handleVendorSelect = async (vendor: string) => {
     if (!isEditing && vendor) {
       try {
-        const result = await getVendorCategory(vendor);
+        const result = await getVendorCategory(vendor, localToday());
         if (result.categoryId) setAutofillCategoryId(result.categoryId);
       } catch { /* ignore */ }
     }
