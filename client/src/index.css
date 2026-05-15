@@ -29,3 +29,89 @@ body {
 .recharts-wrapper *:focus {
   outline: none;
 }
+
+/* Beacon loader — 5 equal circles (30×30px) orbiting clockwise.
+   Layout (d=30, container 60×90):
+     pos0=top-left(0,0)  pos1=mid-right(30,30)  pos2=bot-right(30,60)
+     pos3=bot-left(0,60)  pos4=mid-left(0,30)
+   Cycle: 3500ms = 5 × 700ms (500ms ease-out slide + 200ms hold). */
+
+@keyframes beacon-c0 {
+  /* path: pos0→1→2→3→4→0 */
+  0%   { left:  0px; top:  0px; animation-timing-function: ease-out; }
+  14%  { left: 30px; top: 30px; }
+  20%  { left: 30px; top: 30px; animation-timing-function: ease-out; }
+  34%  { left: 30px; top: 60px; }
+  40%  { left: 30px; top: 60px; animation-timing-function: ease-out; }
+  54%  { left:  0px; top: 60px; }
+  60%  { left:  0px; top: 60px; animation-timing-function: ease-out; }
+  74%  { left:  0px; top: 30px; }
+  80%  { left:  0px; top: 30px; animation-timing-function: ease-out; }
+  94%  { left:  0px; top:  0px; }
+  100% { left:  0px; top:  0px; }
+}
+
+@keyframes beacon-c1 {
+  /* path: pos1→2→3→4→0→1 */
+  0%   { left: 30px; top: 30px; animation-timing-function: ease-out; }
+  14%  { left: 30px; top: 60px; }
+  20%  { left: 30px; top: 60px; animation-timing-function: ease-out; }
+  34%  { left:  0px; top: 60px; }
+  40%  { left:  0px; top: 60px; animation-timing-function: ease-out; }
+  54%  { left:  0px; top: 30px; }
+  60%  { left:  0px; top: 30px; animation-timing-function: ease-out; }
+  74%  { left:  0px; top:  0px; }
+  80%  { left:  0px; top:  0px; animation-timing-function: ease-out; }
+  94%  { left: 30px; top: 30px; }
+  100% { left: 30px; top: 30px; }
+}
+
+@keyframes beacon-c2 {
+  /* path: pos2→3→4→0→1→2 */
+  0%   { left: 30px; top: 60px; animation-timing-function: ease-out; }
+  14%  { left:  0px; top: 60px; }
+  20%  { left:  0px; top: 60px; animation-timing-function: ease-out; }
+  34%  { left:  0px; top: 30px; }
+  40%  { left:  0px; top: 30px; animation-timing-function: ease-out; }
+  54%  { left:  0px; top:  0px; }
+  60%  { left:  0px; top:  0px; animation-timing-function: ease-out; }
+  74%  { left: 30px; top: 30px; }
+  80%  { left: 30px; top: 30px; animation-timing-function: ease-out; }
+  94%  { left: 30px; top: 60px; }
+  100% { left: 30px; top: 60px; }
+}
+
+@keyframes beacon-c3 {
+  /* path: pos3→4→0→1→2→3 */
+  0%   { left:  0px; top: 60px; animation-timing-function: ease-out; }
+  14%  { left:  0px; top: 30px; }
+  20%  { left:  0px; top: 30px; animation-timing-function: ease-out; }
+  34%  { left:  0px; top:  0px; }
+  40%  { left:  0px; top:  0px; animation-timing-function: ease-out; }
+  54%  { left: 30px; top: 30px; }
+  60%  { left: 30px; top: 30px; animation-timing-function: ease-out; }
+  74%  { left: 30px; top: 60px; }
+  80%  { left: 30px; top: 60px; animation-timing-function: ease-out; }
+  94%  { left:  0px; top: 60px; }
+  100% { left:  0px; top: 60px; }
+}
+
+@keyframes beacon-dot {
+  0%, 100% { opacity: 0.2; }
+  33% { opacity: 1; }
+}
+
+@keyframes beacon-c4 {
+  /* path: pos4→0→1→2→3→4 */
+  0%   { left:  0px; top: 30px; animation-timing-function: ease-out; }
+  14%  { left:  0px; top:  0px; }
+  20%  { left:  0px; top:  0px; animation-timing-function: ease-out; }
+  34%  { left: 30px; top: 30px; }
+  40%  { left: 30px; top: 30px; animation-timing-function: ease-out; }
+  54%  { left: 30px; top: 60px; }
+  60%  { left: 30px; top: 60px; animation-timing-function: ease-out; }
+  74%  { left:  0px; top: 60px; }
+  80%  { left:  0px; top: 60px; animation-timing-function: ease-out; }
+  94%  { left:  0px; top: 30px; }
+  100% { left:  0px; top: 30px; }
+}

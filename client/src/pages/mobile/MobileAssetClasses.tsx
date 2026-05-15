@@ -4,6 +4,7 @@ import { useApi } from "@/hooks/useApi";
 import { getAssetClasses, createAssetClass, updateAssetClass, deleteAssetClass, setAssetClassTarget, deleteAssetClassTarget } from "@/api";
 import type { AssetClass } from "@/types";
 import { cn } from "@/lib/utils";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 const PRESET_COLORS = [
   "#0891b2", "#059669", "#16a34a",
@@ -92,7 +93,7 @@ export function MobileAssetClasses() {
     refetch();
   };
 
-  if (!assetClasses) return null;
+  if (!assetClasses) return <BeaconLoader />;
 
   const leafTotal = totalLeafTarget(assetClasses);
   const anyTargetSet = countWithTargets(assetClasses) > 0;

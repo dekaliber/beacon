@@ -5,6 +5,7 @@ import { useApi } from "@/hooks/useApi";
 import { getTags, createTag, updateTag, deleteTag, getExpenses, getTagOrphanedOffsets } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Expense, OrphanedOffset, Tag } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 const PRESET_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e",
@@ -227,7 +228,7 @@ export function MobileTags() {
     refetch();
   };
 
-  if (!tags) return null;
+  if (!tags) return <BeaconLoader />;
 
   return (
     <>

@@ -31,6 +31,7 @@ import {
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useDemo } from "@/context/DemoContext";
 import type { WithdrawalEvent, WithdrawalType, InvestmentSettings } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -768,6 +769,8 @@ export function WithdrawalsPage() {
     settings?.withdrawalRateDenominator ?? currentPortfolioValue;
   const ytdRate = annualizedRate(ytdTotal, ytdMonths, effectiveDenominator);
   const targetRate = settings?.withdrawalRateTarget ?? null;
+
+  if (!events) return <BeaconLoader />;
 
   return (
     <div className="space-y-6">

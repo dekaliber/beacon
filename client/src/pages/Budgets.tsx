@@ -32,6 +32,7 @@ import { SpendingOverTimeChart } from "@/components/SpendingOverTimeChart";
 import { formatCurrency } from "@/lib/utils";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import type { BudgetPanel, CategoryOutliersData, CategoryOutlier, MonthlyTotal } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -1284,9 +1285,7 @@ export function Budgets() {
         </div>
       </div>
 
-      {loading && (
-        <div className="py-12 text-center text-muted-foreground">Loading…</div>
-      )}
+      {loading && <BeaconLoader />}
 
       {!loading && !hasAnyBudget && (
         <EmptyState

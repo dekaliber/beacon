@@ -12,6 +12,7 @@ import { useNotifications } from "@/context/NotificationContext";
 import { useDemo } from "@/context/DemoContext";
 import { scaleInvestmentAccounts, scaleAllocationSummary } from "@/lib/demo";
 import type { InvestmentAccountSummary, AllocationSummary, AllocationItem, WithdrawalSummary, InvestmentSettings } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 // ── Allocation card ──────────────────────────────────────────────────────────
 
@@ -1153,7 +1154,7 @@ export function Investments() {
     prevRefreshPhaseRef.current = refreshPhase;
   }, [refreshPhase, refetch, refetchAllocation]);
 
-if (!displayAccounts) return null;
+if (!displayAccounts) return <BeaconLoader />;
 
   const investmentAccounts = displayAccounts;
 

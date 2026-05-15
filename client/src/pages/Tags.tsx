@@ -9,6 +9,7 @@ import { useApi } from "@/hooks/useApi";
 import { getTags, createTag, updateTag, deleteTag, getExpenses, getTagOrphanedOffsets } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Expense, OrphanedOffset, Tag } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 const PRESET_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e",
@@ -99,6 +100,8 @@ export function TagsPage() {
     }
     return cols;
   }, [tagGroups]);
+
+  if (!tags) return <BeaconLoader />;
 
   return (
     <div className="space-y-6">

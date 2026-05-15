@@ -12,6 +12,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
+import { BeaconLoader } from "@/components/BeaconLoader";
 import { ToastContainer, useToast } from "@/components/Toast";
 import { MultiSelectDropdown } from "@/components/MultiSelectDropdown";
 import type { MultiSelectOption, MultiSelectGroup } from "@/components/MultiSelectDropdown";
@@ -2388,6 +2389,8 @@ export function Expenses() {
             )}
             <div ref={sentinelRef} className="h-1" />
           </>
+        ) : loading && currentPage === 1 ? (
+          <BeaconLoader />
         ) : (
           <EmptyState
             icon={Receipt}

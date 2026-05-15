@@ -4,6 +4,7 @@ import { useApi } from "@/hooks/useApi";
 import { getMonthlySpending, getDataRange } from "@/api";
 import { formatCurrency } from "@/lib/utils";
 import type { MonthlySpendingMonth, MonthlySpendingDay } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -334,9 +335,7 @@ export function MobileMonthlySpending() {
         ))}
       </div>
 
-      {loading && (
-        <div className="py-12 text-center text-muted-foreground">Loading…</div>
-      )}
+      {loading && <BeaconLoader className="h-64" />}
 
       {!loading && data && (
         <div className="space-y-3">

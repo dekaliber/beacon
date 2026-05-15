@@ -48,6 +48,7 @@ import {
 } from "@/api";
 import { formatCurrency, cn } from "@/lib/utils";
 import type { CashFlowProjection, CashFlowEvent, DailyBalance, InvestmentAccountSummary, Expense } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
 
@@ -1190,14 +1191,7 @@ export function CashFlow() {
     );
   }
 
-  if (!data) {
-    return (
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold">Cash Flow</h2>
-        <Card className="p-8 text-center text-sm text-muted-foreground">Loading projection…</Card>
-      </div>
-    );
-  }
+  if (!data) return <BeaconLoader />;
 
   if (projections.length === 0) {
     return (

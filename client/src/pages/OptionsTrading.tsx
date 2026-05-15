@@ -39,6 +39,7 @@ import { Modal } from "@/components/Modal";
 import { Plus, ChevronDown, ChevronUp, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw } from "lucide-react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+import { BeaconLoader } from "@/components/BeaconLoader";
 import {
   ResponsiveContainer,
   BarChart,
@@ -3284,6 +3285,8 @@ export function OptionsTrading() {
         ? "border-primary text-foreground"
         : "border-transparent text-muted-foreground hover:text-foreground"
     );
+
+  if (!allPositions) return <BeaconLoader />;
 
   return (
     <div className="space-y-6">

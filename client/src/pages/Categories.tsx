@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
 import { getCategories, getFlatCategories, createCategory, updateCategory, deleteCategory, getCategoryUsage } from "@/api";
 import type { Category } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 export function Categories() {
   const [modalOpen, setModalOpen] = useState(false);
@@ -73,6 +74,8 @@ export function Categories() {
     refetch();
     refetchFlat();
   };
+
+  if (!categories) return <BeaconLoader />;
 
   return (
     <div className="space-y-6">

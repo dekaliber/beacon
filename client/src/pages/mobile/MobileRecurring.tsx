@@ -21,6 +21,7 @@ import type {
   RecurrenceRule, Account, Category, TransferRule,
   UpcomingExpenseItem, RecurringHistoryMonth,
 } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 // ── Frequency helpers ─────────────────────────────────────────────────────────
 
@@ -1177,6 +1178,8 @@ export function MobileRecurring() {
     setActionLoading(false);
     refetchAll();
   };
+
+  if (!rules) return <BeaconLoader />;
 
   return (
     <>

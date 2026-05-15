@@ -14,6 +14,7 @@ import {
 } from "@/api";
 import type { AssetClass, Instrument } from "@/types";
 import { cn } from "@/lib/utils";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -671,6 +672,8 @@ function InstrumentSelect({
     else if (e.key === "Enter" && filtered[focusIdx]) { e.preventDefault(); select(filtered[focusIdx].primaryTicker); }
     else if (e.key === "Escape") { setEditing(false); setSearch(""); }
   };
+
+  if (!instruments) return <BeaconLoader />;
 
   return (
     <div ref={ref} className="flex items-center gap-2">

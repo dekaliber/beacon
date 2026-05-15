@@ -20,6 +20,7 @@ import type {
   InvestmentAccountSummary, AllocationSummary, AllocationItem,
   WithdrawalSummary, InvestmentSettings,
 } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 type AllocationFilter = "all" | "taxable" | "tax-advantaged";
 type RebalanceTab = "manual" | "auto";
@@ -730,7 +731,7 @@ export function MobileInvestments() {
     prevRefreshPhaseRef.current = refreshPhase;
   }, [refreshPhase, refetch, refetchAllocation]);
 
-  if (!displayAccounts) return null;
+  if (!displayAccounts) return <BeaconLoader />;
 
   const investmentAccounts = displayAccounts;
 

@@ -88,6 +88,7 @@ import { isPriceRefreshNeeded, formatQuantity } from "@/lib/priceUtils";
 import { useDemo } from "@/context/DemoContext";
 import { scaleGrowthPoints, scaleManuals, scaleHolding } from "@/lib/demo";
 import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity, GrowthPoint, GrowthEvent, PendingDividend, TaxClassification, Category, ConfirmedDividendInfo, PendingBuy } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -5193,7 +5194,7 @@ export function InvestmentAccount() {
   }, [displayHoldings, displayManuals]);
 
   const account = accounts?.find((a: Account) => a.id === accountId);
-  if (!account || !holdings) return null;
+  if (!account || !holdings) return <BeaconLoader />;
 
   const isBanking = account.type === "CHECKING" || account.type === "SAVINGS";
   const isInvestment = account.type === "INVESTMENT";

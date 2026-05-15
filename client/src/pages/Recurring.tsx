@@ -37,6 +37,7 @@ import {
 import type { UpcomingExpenseItem, RecurringHistoryMonth } from "@/types";
 import { formatCurrency, formatDate, toDateInputValue } from "@/lib/utils";
 import type { RecurrenceRule, Account, Category, TransferRule } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 // ── Frequency helpers ─────────────────────────────────────────────────────────
 
@@ -1088,6 +1089,8 @@ export function Recurring() {
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
+
+  if (!rules) return <BeaconLoader />;
 
   return (
     <div className="space-y-6">

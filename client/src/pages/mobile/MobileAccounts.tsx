@@ -6,6 +6,7 @@ import { getAccounts, createAccount, updateAccount, deleteAccount, getInvestment
 import { cn } from "@/lib/utils";
 import { useDemo } from "@/context/DemoContext";
 import type { Account, TaxAdvantageType } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 const ACCOUNT_COLORS = [
   "#e2e2df", "#d2d2cf", "#e2cfc4", "#f7d9c4", "#faedcb",
@@ -125,7 +126,7 @@ export function MobileAccounts() {
   const openAdd = () => { setEditing(null); setModalOpen(true); };
   const openEdit = (account: Account) => { setEditing(account); setModalOpen(true); };
 
-  if (!accounts) return null;
+  if (!accounts) return <BeaconLoader />;
 
   const renderSection = (
     label: string,

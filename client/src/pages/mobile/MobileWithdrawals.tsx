@@ -29,6 +29,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { useDemo } from "@/context/DemoContext";
 import { cn } from "@/lib/utils";
 import type { WithdrawalEvent, WithdrawalType, InvestmentSettings } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -756,6 +757,8 @@ export function MobileWithdrawals() {
   };
 
   const currentMonth = new Date().toLocaleDateString("en-CA").slice(0, 7);
+
+  if (!events) return <BeaconLoader />;
 
   return (
     <>

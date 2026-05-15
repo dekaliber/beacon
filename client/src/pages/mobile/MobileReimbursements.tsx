@@ -4,6 +4,7 @@ import { useApi } from "@/hooks/useApi";
 import { getExpenses, updateExpense } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 export function MobileReimbursements() {
   const { data: expenseData, refetch } = useApi(
@@ -32,6 +33,8 @@ export function MobileReimbursements() {
     closeSheet();
     refetch();
   };
+
+  if (!expenseData) return <BeaconLoader />;
 
   return (
     <>

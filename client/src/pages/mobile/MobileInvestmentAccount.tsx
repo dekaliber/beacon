@@ -23,6 +23,7 @@ import type {
   InvestmentHolding, InvestmentLot, TickerSearchResult,
   ManualInvestment, InvestmentActivity, GrowthPoint, PendingDividend,
 } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 // ── Constants & types ─────────────────────────────────────────────────────────
 
@@ -1591,7 +1592,7 @@ export function MobileInvestmentAccount() {
   }, [holdings, isDemoMode, demoFactor]);
 
   const account = accounts?.find((a) => a.id === accountId);
-  if (!account || !holdings) return null;
+  if (!account || !holdings) return <BeaconLoader />;
 
   const cashBalance = account.cashBalance != null ? parseFloat(account.cashBalance) : null;
 

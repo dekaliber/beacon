@@ -3,6 +3,7 @@ import { Plus, X, ChevronDown, ChevronRight, Tags, TrendingUp, EyeOff, Trash2, C
 import { useApi } from "@/hooks/useApi";
 import { getCategories, getFlatCategories, createCategory, updateCategory, deleteCategory, getCategoryUsage } from "@/api";
 import type { Category } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 const CATEGORY_COLORS = [
   "#C1121F", "#F94144", "#F3722C", "#F8961E", "#F9844A",
@@ -173,7 +174,7 @@ export function MobileCategories() {
     refetchFlat();
   };
 
-  if (!categories) return null;
+  if (!categories) return <BeaconLoader />;
 
   return (
     <>

@@ -10,6 +10,7 @@ import { getAccounts, createAccount, updateAccount, deleteAccount, getInvestment
 import { cn } from "@/lib/utils";
 import { useDemo } from "@/context/DemoContext";
 import type { Account, TaxAdvantageType } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 const accountTypeLabels: Record<string, string> = {
   CHECKING: "Checking",
@@ -78,7 +79,7 @@ export function Accounts() {
     setModalOpen(true);
   };
 
-  if (!accounts) return null;
+  if (!accounts) return <BeaconLoader />;
 
   const renderGroup = (group: GroupDef, isJoint: boolean) => {
     const groupAccounts = accounts.filter(

@@ -18,6 +18,7 @@ import { useApi, getApiCache } from "@/hooks/useApi";
 import { getIncome, getAccounts, getFlatCategories, createIncome, updateIncome, deleteIncome, importIncome, bulkUpdateIncome, bulkDeleteIncome } from "@/api";
 import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/utils";
 import type { Account, Category, Income } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 const INCOME_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "INVESTMENT"];
 
@@ -1604,6 +1605,8 @@ export function IncomePage() {
             )}
             <div ref={sentinelRef} className="h-1" />
           </>
+        ) : loading && currentPage === 1 ? (
+          <BeaconLoader />
         ) : (
           <EmptyState
             icon={TrendingUp}

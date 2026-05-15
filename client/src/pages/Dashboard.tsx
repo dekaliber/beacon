@@ -19,6 +19,7 @@ import { formatNextUpdateTime } from "@/lib/priceUtils";
 import { usePriceRefresh } from "@/hooks/usePriceRefresh";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import { useDemo } from "@/context/DemoContext";
+import { BeaconLoader } from "@/components/BeaconLoader";
 import type { Category } from "@/types";
 
 type ChartView = "total" | "personal" | "joint";
@@ -109,9 +110,7 @@ export function Dashboard() {
 
   const monthLabel = new Date(year, month - 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
-  if (loading) {
-    return <div className="flex h-64 items-center justify-center text-muted-foreground">Loading...</div>;
-  }
+  if (loading) return <BeaconLoader />;
 
   if (!data) return null;
 

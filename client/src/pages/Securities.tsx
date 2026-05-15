@@ -17,6 +17,7 @@ import {
 } from "@/api";
 import type { AssetClass, Instrument } from "@/types";
 import { cn } from "@/lib/utils";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -228,6 +229,8 @@ export function SecuritiesPage() {
       </tr>
     );
   };
+
+  if (!instruments) return <BeaconLoader />;
 
   return (
     <div className="space-y-6">

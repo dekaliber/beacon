@@ -15,6 +15,7 @@ import {
 } from "@/api";
 import type { AssetClass } from "@/types";
 import { cn } from "@/lib/utils";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 const PRESET_COLORS = [
   "#4f46e5", "#0891b2", "#059669", "#16a34a",
@@ -120,8 +121,10 @@ export function AssetClassesPage() {
     }
   };
 
-  const leafTotal = assetClasses ? totalLeafTarget(assetClasses) : 0;
-  const anyTargetSet = assetClasses ? countWithTargets(assetClasses) > 0 : false;
+  if (!assetClasses) return <BeaconLoader />;
+
+  const leafTotal = totalLeafTarget(assetClasses);
+  const anyTargetSet = countWithTargets(assetClasses) > 0;
 
   return (
     <div className="space-y-6">

@@ -6,6 +6,7 @@ import { Modal } from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
 import { getExpenses, updateExpense } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 export function ReimbursementsPage() {
   const { data: expenseData, refetch } = useApi(
@@ -25,7 +26,9 @@ export function ReimbursementsPage() {
     refetch();
   };
 
-  const expenses = expenseData?.data ?? [];
+  if (!expenseData) return <BeaconLoader />;
+
+  const expenses = expenseData.data ?? [];
 
   return (
     <div className="space-y-6">

@@ -6,9 +6,105 @@
     <link rel="apple-touch-icon" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Beacon</title>
+    <style>
+      body { margin: 0; background: #ffffff; }
+
+      /* Beacon loader — 5 equal 30×30px circles orbiting clockwise.
+         Layout (container 60×90): pos0=top-L(0,0) pos1=mid-R(30,30)
+         pos2=bot-R(30,60) pos3=bot-L(0,60) pos4=mid-L(0,30)
+         Cycle 3500ms = 5 × 700ms (500ms ease-out slide + 200ms hold). */
+
+      @keyframes beacon-dot {
+        0%, 100% { opacity: 0.2; }
+        33% { opacity: 1; }
+      }
+
+      @keyframes beacon-c0 {
+        0%   { left:  0px; top:  0px; animation-timing-function: ease-out; }
+        14%  { left: 30px; top: 30px; }
+        20%  { left: 30px; top: 30px; animation-timing-function: ease-out; }
+        34%  { left: 30px; top: 60px; }
+        40%  { left: 30px; top: 60px; animation-timing-function: ease-out; }
+        54%  { left:  0px; top: 60px; }
+        60%  { left:  0px; top: 60px; animation-timing-function: ease-out; }
+        74%  { left:  0px; top: 30px; }
+        80%  { left:  0px; top: 30px; animation-timing-function: ease-out; }
+        94%  { left:  0px; top:  0px; }
+        100% { left:  0px; top:  0px; }
+      }
+      @keyframes beacon-c1 {
+        0%   { left: 30px; top: 30px; animation-timing-function: ease-out; }
+        14%  { left: 30px; top: 60px; }
+        20%  { left: 30px; top: 60px; animation-timing-function: ease-out; }
+        34%  { left:  0px; top: 60px; }
+        40%  { left:  0px; top: 60px; animation-timing-function: ease-out; }
+        54%  { left:  0px; top: 30px; }
+        60%  { left:  0px; top: 30px; animation-timing-function: ease-out; }
+        74%  { left:  0px; top:  0px; }
+        80%  { left:  0px; top:  0px; animation-timing-function: ease-out; }
+        94%  { left: 30px; top: 30px; }
+        100% { left: 30px; top: 30px; }
+      }
+      @keyframes beacon-c2 {
+        0%   { left: 30px; top: 60px; animation-timing-function: ease-out; }
+        14%  { left:  0px; top: 60px; }
+        20%  { left:  0px; top: 60px; animation-timing-function: ease-out; }
+        34%  { left:  0px; top: 30px; }
+        40%  { left:  0px; top: 30px; animation-timing-function: ease-out; }
+        54%  { left:  0px; top:  0px; }
+        60%  { left:  0px; top:  0px; animation-timing-function: ease-out; }
+        74%  { left: 30px; top: 30px; }
+        80%  { left: 30px; top: 30px; animation-timing-function: ease-out; }
+        94%  { left: 30px; top: 60px; }
+        100% { left: 30px; top: 60px; }
+      }
+      @keyframes beacon-c3 {
+        0%   { left:  0px; top: 60px; animation-timing-function: ease-out; }
+        14%  { left:  0px; top: 30px; }
+        20%  { left:  0px; top: 30px; animation-timing-function: ease-out; }
+        34%  { left:  0px; top:  0px; }
+        40%  { left:  0px; top:  0px; animation-timing-function: ease-out; }
+        54%  { left: 30px; top: 30px; }
+        60%  { left: 30px; top: 30px; animation-timing-function: ease-out; }
+        74%  { left: 30px; top: 60px; }
+        80%  { left: 30px; top: 60px; animation-timing-function: ease-out; }
+        94%  { left:  0px; top: 60px; }
+        100% { left:  0px; top: 60px; }
+      }
+      @keyframes beacon-c4 {
+        0%   { left:  0px; top: 30px; animation-timing-function: ease-out; }
+        14%  { left:  0px; top:  0px; }
+        20%  { left:  0px; top:  0px; animation-timing-function: ease-out; }
+        34%  { left: 30px; top: 30px; }
+        40%  { left: 30px; top: 30px; animation-timing-function: ease-out; }
+        54%  { left: 30px; top: 60px; }
+        60%  { left: 30px; top: 60px; animation-timing-function: ease-out; }
+        74%  { left:  0px; top: 60px; }
+        80%  { left:  0px; top: 60px; animation-timing-function: ease-out; }
+        94%  { left:  0px; top: 30px; }
+        100% { left:  0px; top: 30px; }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Pre-React splash: same structure as <BeaconLoader /> in the React app. -->
+      <div style="display:flex;flex-direction:column;height:100vh;align-items:center;justify-content:center;gap:16px;">
+        <div style="position:relative;width:60px;height:90px;">
+          <div style="position:absolute;width:30px;height:30px;border-radius:50%;background:#FFC533;animation:beacon-c0 3.5s linear infinite;"></div>
+          <div style="position:absolute;width:30px;height:30px;border-radius:50%;background:#F5AF00;animation:beacon-c1 3.5s linear infinite;"></div>
+          <div style="position:absolute;width:30px;height:30px;border-radius:50%;background:#B88400;animation:beacon-c2 3.5s linear infinite;"></div>
+          <div style="position:absolute;width:30px;height:30px;border-radius:50%;background:#B88400;animation:beacon-c3 3.5s linear infinite;"></div>
+          <div style="position:absolute;width:30px;height:30px;border-radius:50%;background:#F5AF00;animation:beacon-c4 3.5s linear infinite;"></div>
+        </div>
+        <div style="display:flex;align-items:flex-end;font-size:14px;color:#64748B;font-family:Inter,system-ui,sans-serif;">
+          <span>Loading</span>
+          <span style="animation:beacon-dot 1.2s ease-in-out infinite;animation-delay:0s;">.</span>
+          <span style="animation:beacon-dot 1.2s ease-in-out infinite;animation-delay:0.4s;">.</span>
+          <span style="animation:beacon-dot 1.2s ease-in-out infinite;animation-delay:0.8s;">.</span>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

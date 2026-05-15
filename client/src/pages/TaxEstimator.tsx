@@ -8,6 +8,7 @@ import { useApi } from "@/hooks/useApi";
 import { getIncome, getAllGainSnapshots, getTaxAssumptions, updateTaxAssumptions, updateTaxQuarterlyPayments, getDataRange } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Income, RealizedGainSnapshotWithAccount } from "@/types";
+import { BeaconLoader } from "@/components/BeaconLoader";
 
 // ── 2026 Federal Tax Data ──────────────────────────────────────────────────────
 
@@ -719,6 +720,8 @@ export function TaxEstimatorPage() {
     }
     return <RateBadge label={`${fmtPct(calc.marginalOrdRate)} marginal ordinary rate`} className="bg-amber-50 text-amber-700" />;
   };
+
+  if (!taxData) return <BeaconLoader />;
 
   return (
     <div className="space-y-6">
