@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { Plus, X, ChevronDown, ChevronRight, AlertCircle, Check, CornerDownRight, ArrowUp, Trash2, Calendar, Search, Filter, Tag as TagIcon } from "lucide-react";
 import { PageHeadingMenu } from "@/components/PageHeadingMenu";
+import { BeaconLoader } from "@/components/BeaconLoader";
 import { useApi } from "@/hooks/useApi";
 import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, deleteExpense, getExpenseVendors, getTags, createTag, createRecurrenceRule, getVendorCategory } from "@/api";
 import { formatCurrency, formatDate, localToday, cn } from "@/lib/utils";
@@ -1604,6 +1605,8 @@ export function MobileExpenses() {
     setRefreshKey((k) => k + 1);
     refetchUpcoming();
   }, [refetchUpcoming]);
+
+  if (loadingExpenses && allExpenses.length === 0) return <BeaconLoader />;
 
   return (
     <>

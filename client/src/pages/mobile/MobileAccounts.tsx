@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import { Plus, X, ChevronDown, Landmark, CreditCard, TrendingUp, EyeOff, Eye, ArrowRight, Trash2, Check, Pencil } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
@@ -155,10 +155,10 @@ export function MobileAccounts() {
   const renderOwnership = (ownership: "Personal" | "Joint") => {
     const isJoint = ownership === "Joint";
     const sections = [
-      renderSection("Banking", Landmark, ["CHECKING", "SAVINGS"], isJoint),
-      renderSection("Investments", TrendingUp, ["INVESTMENT"], isJoint),
-      renderSection("Credit Cards", CreditCard, ["CREDIT_CARD"], isJoint),
-    ].filter(Boolean);
+      { key: "Banking",      el: renderSection("Banking",       Landmark,    ["CHECKING", "SAVINGS"], isJoint) },
+      { key: "Investments",  el: renderSection("Investments",   TrendingUp,  ["INVESTMENT"],          isJoint) },
+      { key: "Credit Cards", el: renderSection("Credit Cards",  CreditCard,  ["CREDIT_CARD"],         isJoint) },
+    ].filter(({ el }) => el !== null);
     if (sections.length === 0) return null;
     return (
       <div className="space-y-4">
@@ -168,7 +168,9 @@ export function MobileAccounts() {
           </span>
           <span className="text-sm font-semibold uppercase tracking-wider">{ownership}</span>
         </div>
-        <div className="space-y-5">{sections}</div>
+        <div className="space-y-5">
+          {sections.map(({ key, el }) => <Fragment key={key}>{el}</Fragment>)}
+        </div>
       </div>
     );
   };

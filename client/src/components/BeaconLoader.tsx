@@ -14,7 +14,7 @@ interface BeaconLoaderProps {
 
 const DOT_DELAYS = ["0s", "0.4s", "0.8s"];
 
-export function BeaconLoader({ className = "h-64" }: BeaconLoaderProps) {
+export function BeaconLoader({ className = "flex-1 min-h-[16rem]" }: BeaconLoaderProps) {
   return (
     <div className={`flex flex-col items-center justify-center gap-4 ${className}`}>
       <div className="relative" style={{ width: 60, height: 90 }}>

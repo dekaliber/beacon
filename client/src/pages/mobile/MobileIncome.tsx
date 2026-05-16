@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { Plus, X, ChevronDown, ChevronRight, Check, ArrowUp, Trash2, Calendar, Search, Filter } from "lucide-react";
+import { BeaconLoader } from "@/components/BeaconLoader";
 import { useApi } from "@/hooks/useApi";
 import { getIncome, getAccounts, getFlatCategories, createIncome, updateIncome, deleteIncome } from "@/api";
 import { formatCurrency, formatDate, localToday, cn } from "@/lib/utils";
@@ -1080,6 +1081,8 @@ export function MobileIncome() {
     setRefreshKey((k) => k + 1);
     refetchUpcoming();
   }, [refetchUpcoming]);
+
+  if (loadingIncome && allIncomes.length === 0) return <BeaconLoader />;
 
   return (
     <>

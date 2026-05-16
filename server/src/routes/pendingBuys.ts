@@ -106,6 +106,26 @@ pendingBuyRoutes.post("/:id/confirm", async (req, res) => {
       include: { optionsPosition: { include: { ticker: true } } },
     });
 
+    // Adjust settlement balance if it predates the assignment date.
+    // Use strike × shares (not cost basis) since the premium is already captured on the options side.
+    const account = await tx.account.findUnique({
+      where: { id: pendingBuy.accountId },
+      select: { cashBalance: true, cashBalanceUpdatedAt: true },
+    });
+    const pos = pendingBuy.optionsPosition;
+    if (
+      account?.cashBalance != null &&
+      account.cashBalanceUpdatedAt != null &&
+      account.cashBalanceUpdatedAt < pos.expirationDate
+    ) {
+      const shares = (pos.contractsAssigned ?? pos.contracts) * 100;
+      const deduction = Number(pos.strikePrice) * shares;
+      await tx.account.update({
+        where: { id: pendingBuy.accountId },
+        data: { cashBalance: { decrement: deduction } },
+      });
+    }
+
     return { pendingBuy: confirmed, lot, activity };
   });
 

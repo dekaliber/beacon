@@ -20,6 +20,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { Card } from "@/components/Card";
+import { BeaconLoader } from "@/components/BeaconLoader";
 import { PageHeadingMenu } from "@/components/PageHeadingMenu";
 import { CategoryVsAverageChart } from "@/components/CategoryVsAverageChart";
 import { OutlierTransactionsList } from "@/components/OutlierTransactionsList";
@@ -112,16 +113,7 @@ export function MobileDashboard() {
   });
 
 
-  if (loading) {
-    return (
-      <div>
-        <div className="mb-6 flex items-center gap-3">
-          <PageHeadingMenu title="Dashboard" items={[]} />
-        </div>
-        <div className="py-12 text-center text-muted-foreground">Loading…</div>
-      </div>
-    );
-  }
+  if (loading) return <BeaconLoader />;
 
   if (!data) return null;
 

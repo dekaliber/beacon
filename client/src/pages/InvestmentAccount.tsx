@@ -3572,7 +3572,7 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
 
 // ── Activity Tab ──────────────────────────────────────────────────────────────
 
-function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHoldingsChanged?: () => void }) {
+function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accountId: string; onHoldingsChanged?: () => void; onAccountChanged?: () => void }) {
   const { data: activities, loading: activitiesLoading, refetch: refetchActivities } = useApi(
     () => getInvestmentActivity(accountId),
     [accountId]
@@ -4029,6 +4029,7 @@ function ActivityTab({ accountId, onHoldingsChanged }: { accountId: string; onHo
             refetchActivities();
             refetchNotifications();
             onHoldingsChanged?.();
+            onAccountChanged?.();
           }}
         />
       )}
@@ -5433,7 +5434,7 @@ export function InvestmentAccount() {
 
       {/* Investment account — Activity tab */}
       {isInvestment && activeTab === "activity" && (
-        <ActivityTab accountId={accountId!} onHoldingsChanged={refetch} />
+        <ActivityTab accountId={accountId!} onHoldingsChanged={refetch} onAccountChanged={refetchAccounts} />
       )}
 
       {/* Sell modal */}

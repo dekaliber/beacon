@@ -240,12 +240,14 @@ export function MobileSecurities() {
     </div>
   );
 
+  if (!instruments) return <BeaconLoader />;
+
   return (
     <>
       <div className="space-y-5">
         <h1 className="text-2xl font-bold">Securities</h1>
 
-        {instruments && instruments.length > 0 ? (
+        {instruments.length > 0 ? (
           <div className="rounded-b-xl rounded-tr-xl border border-border overflow-hidden">
             {groups.map(({ slug, ac, instruments: groupInsts }, idx) =>
               renderSection(slug, ac, groupInsts, idx === 0),
@@ -253,7 +255,7 @@ export function MobileSecurities() {
             {unclassified.length > 0 &&
               renderSection("unclassified", null, unclassified, groups.length === 0)}
           </div>
-        ) : instruments ? (
+        ) : (
           <div className="rounded-xl border border-border">
             <EmptyState
               icon={Layers}
@@ -261,7 +263,7 @@ export function MobileSecurities() {
               description="Securities are created automatically when you add holdings to your investment accounts."
             />
           </div>
-        ) : null}
+        )}
       </div>
 
       <EditOverlay

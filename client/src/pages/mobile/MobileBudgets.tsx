@@ -23,6 +23,7 @@ import {
   TrendingDown,
 } from "lucide-react";
 import { Button } from "@/components/Button";
+import { BeaconLoader } from "@/components/BeaconLoader";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeadingMenu } from "@/components/PageHeadingMenu";
@@ -1188,6 +1189,8 @@ export function MobileBudgets() {
     data && (data.personal.annualBudget != null || data.joint.annualBudget != null);
 
 
+  if (loading) return <BeaconLoader />;
+
   return (
     <div>
       {/* Page header */}
@@ -1224,11 +1227,8 @@ export function MobileBudgets() {
       </div>
 
       <div className="space-y-9">
-      {loading && (
-        <div className="py-12 text-center text-muted-foreground">Loading…</div>
-      )}
 
-      {!loading && !hasAnyBudget && (
+      {!hasAnyBudget && (
         <EmptyState
           icon={PiggyBank}
           title="No budget set"
@@ -1242,7 +1242,7 @@ export function MobileBudgets() {
         />
       )}
 
-      {!loading && data && (
+      {data && (
         <>
           <BudgetPanelSection
             title="Total"

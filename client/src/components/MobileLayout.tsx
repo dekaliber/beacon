@@ -22,7 +22,7 @@ export function MobileLayout() {
         </div>
       </header>
 
-      <main className="flex-1 p-4 pb-24">
+      <main className="flex flex-1 flex-col p-4 pb-24">
         <Outlet />
       </main>
 

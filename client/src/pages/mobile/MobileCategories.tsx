@@ -44,9 +44,11 @@ function CategorySection({
         return (
           <div key={cat.id}>
             {/* Parent row — tap to expand/collapse */}
-            <button
-              type="button"
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => hasChildren && onToggleExpand(cat.id)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); hasChildren && onToggleExpand(cat.id); } }}
               className={`flex w-full items-center gap-3 bg-card px-4 py-3 text-left ${hasChildren ? "" : "cursor-default"}`}
             >
               <span className="w-4 shrink-0 text-muted-foreground">
@@ -81,7 +83,7 @@ function CategorySection({
                   <Pencil className="h-4 w-4 text-muted-foreground/40" />
                 </button>
               </span>
-            </button>
+            </div>
 
             {/* Children — tap to edit */}
             {isOpen && hasChildren && (

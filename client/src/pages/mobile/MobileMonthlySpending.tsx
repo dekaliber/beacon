@@ -294,6 +294,8 @@ export function MobileMonthlySpending() {
   const curMonth = now.getMonth() + 1;
   const todayDay = now.getDate();
 
+  if (loading) return <BeaconLoader />;
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -335,9 +337,7 @@ export function MobileMonthlySpending() {
         ))}
       </div>
 
-      {loading && <BeaconLoader className="h-64" />}
-
-      {!loading && data && (
+      {data && (
         <div className="space-y-3">
           {data.months.map((m) => {
             const isFuture = year > curYear || (year === curYear && m.month > curMonth);

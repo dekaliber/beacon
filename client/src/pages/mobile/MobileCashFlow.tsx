@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { AlertTriangle, TrendingDown, Landmark, Pencil, Info, X, TrendingUp, CreditCard, ArrowDownLeft, ArrowUpRight, Sparkles, Wallet, PlusCircle, Trash2 } from "lucide-react";
 import { Card } from "@/components/Card";
+import { BeaconLoader } from "@/components/BeaconLoader";
 import { useApi } from "@/hooks/useApi";
 import { getCashFlow, getInvestmentAccounts, updateAccount, createBalanceAdjustment, updateBalanceAdjustment, deleteBalanceAdjustment, upsertStatementOverride, getExpenses } from "@/api";
 import { formatCurrency, cn } from "@/lib/utils";
@@ -923,6 +924,8 @@ export function MobileCashFlow() {
   const [injectionDefaultDate, setInjectionDefaultDate] = useState("");
   const [ccPaymentEvent, setCCPaymentEvent]         = useState<CashFlowEvent | null>(null);
   const [editingInjection, setEditingInjection]     = useState<CashFlowEvent | null>(null);
+
+  if (!data) return <BeaconLoader />;
 
   const projections = data?.projections ?? [];
   const personal = projections.filter((p) => !p.isJoint).sort((a, b) => b.startBalance - a.startBalance);
