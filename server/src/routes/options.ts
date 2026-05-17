@@ -386,6 +386,11 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
       const rawDate = updated.closedAt ?? updated.expirationDate;
       const incomeDate = new Date(Date.UTC(rawDate.getUTCFullYear(), rawDate.getUTCMonth(), rawDate.getUTCDate()));
 
+      // Assigned premiums fold into cost basis (puts) or sale proceeds (calls),
+      // so they are not independently taxable — zero out taxableAmount to exclude
+      // them from the Tax Estimator while preserving the income record for cash-flow tracking.
+      const taxableAmount = updated.outcome === "ASSIGNED" ? 0 : netAmount;
+
       await prisma.income.create({
         data: {
           amount: netAmount,
@@ -394,7 +399,7 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
           date: incomeDate,
           accountId: bankingAccountId,
           taxClassification: "ORDINARY",
-          taxableAmount: netAmount,
+          taxableAmount,
         },
       });
     }
