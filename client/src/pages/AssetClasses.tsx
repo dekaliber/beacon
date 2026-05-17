@@ -416,10 +416,8 @@ function AssetClassModal({ open, onClose, onSave, onDelete, editing, isChild }: 
             <div className="relative">
               <input
                 name="targetPct"
-                type="number"
-                min={0}
-                max={100}
-                step={0.1}
+                type="text"
+                inputMode="decimal"
                 defaultValue={currentTarget ?? ""}
                 placeholder="e.g. 40"
                 className="w-full rounded-md border border-border px-3 py-2 pr-8 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"

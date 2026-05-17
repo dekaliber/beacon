@@ -39,7 +39,6 @@ function annualizedRate(total: number, months: number, denominator: number): num
   return (total * (12 / months)) / denominator;
 }
 
-const NO_SPINNER = "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
 function useBodyScrollLock(active: boolean) {
   useEffect(() => {
@@ -502,12 +501,12 @@ function RebalanceModal({
                       <div className="relative row-span-2 self-stretch col-start-2 row-start-1">
                         <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none select-none">$</span>
                         <input
-                          type="number"
+                          type="text"
                           inputMode="decimal"
                           value={manualAdj[item.id] ?? ""}
                           onChange={(e) => setManualAdj((prev) => ({ ...prev, [item.id]: e.target.value }))}
                           placeholder="0"
-                          className={`w-full h-full rounded-md border border-border bg-background pl-6 pr-3 py-2 text-sm text-right tabular-nums focus:outline-none focus:border-primary ${NO_SPINNER}`}
+                          className="w-full h-full rounded-md border border-border bg-background pl-6 pr-3 py-2 text-sm text-right tabular-nums focus:outline-none focus:border-primary"
                         />
                       </div>
                       {/* col 1, row 2 */}

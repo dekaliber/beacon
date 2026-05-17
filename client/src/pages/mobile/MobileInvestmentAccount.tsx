@@ -27,7 +27,6 @@ import { BeaconLoader } from "@/components/BeaconLoader";
 
 // ── Constants & types ─────────────────────────────────────────────────────────
 
-const NO_SPINNER = "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
 type ChartDuration = "WTD" | "MTD" | "YTD";
 
@@ -481,12 +480,12 @@ function LotEditScreen({
           <div>
             <label className="mb-1.5 block text-sm font-medium">Shares</label>
             <input
-              type="number"
+              type="text"
               inputMode="decimal"
               value={qty}
               onChange={(e) => setQty(e.target.value)}
               placeholder="0"
-              className={`w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none ${NO_SPINNER}`}
+              className={`w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none`}
             />
           </div>
           <div>
@@ -494,12 +493,12 @@ function LotEditScreen({
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
-                type="number"
+                type="text"
                 inputMode="decimal"
                 value={cps}
                 onChange={(e) => setCps(e.target.value)}
                 placeholder="0.00"
-                className={`w-full rounded-md border border-border pl-7 pr-3 py-2.5 text-sm focus:border-primary focus:outline-none ${NO_SPINNER}`}
+                className={`w-full rounded-md border border-border pl-7 pr-3 py-2.5 text-sm focus:border-primary focus:outline-none`}
               />
             </div>
           </div>
@@ -1265,12 +1264,12 @@ function AddInvestmentFullscreen({
                   <div>
                     <label className="mb-1 block text-sm font-medium">Shares</label>
                     <input
-                      type="number"
+                      type="text"
                       inputMode="decimal"
                       value={lot.quantity}
                       onChange={(e) => updateLot(i, "quantity", e.target.value)}
                       placeholder="0"
-                      className={`w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none ${NO_SPINNER}`}
+                      className={`w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none`}
                     />
                   </div>
                   <div>
@@ -1278,12 +1277,12 @@ function AddInvestmentFullscreen({
                     <div className="relative">
                       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                       <input
-                        type="number"
+                        type="text"
                         inputMode="decimal"
                         value={lot.costPerShare}
                         onChange={(e) => updateLot(i, "costPerShare", e.target.value)}
                         placeholder="0.00"
-                        className={`w-full rounded-md border border-border pl-7 pr-3 py-2.5 text-sm focus:border-primary focus:outline-none ${NO_SPINNER}`}
+                        className={`w-full rounded-md border border-border pl-7 pr-3 py-2.5 text-sm focus:border-primary focus:outline-none`}
                       />
                     </div>
                   </div>
@@ -1429,12 +1428,12 @@ function AddManualFullscreen({
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
-                type="number"
+                type="text"
                 inputMode="decimal"
                 value={totalCost}
                 onChange={(e) => setTotalCost(e.target.value)}
                 placeholder="0.00"
-                className={`w-full rounded-md border border-border pl-7 pr-3 py-2.5 text-sm focus:border-primary focus:outline-none ${NO_SPINNER}`}
+                className={`w-full rounded-md border border-border pl-7 pr-3 py-2.5 text-sm focus:border-primary focus:outline-none`}
               />
             </div>
           </div>
@@ -1443,12 +1442,12 @@ function AddManualFullscreen({
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
-                type="number"
+                type="text"
                 inputMode="decimal"
                 value={marketValue}
                 onChange={(e) => setMarketValue(e.target.value)}
                 placeholder="0.00"
-                className={`w-full rounded-md border border-border pl-7 pr-3 py-2.5 text-sm focus:border-primary focus:outline-none ${NO_SPINNER}`}
+                className={`w-full rounded-md border border-border pl-7 pr-3 py-2.5 text-sm focus:border-primary focus:outline-none`}
               />
             </div>
           </div>

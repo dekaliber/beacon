@@ -3475,9 +3475,8 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
                         <span className="text-muted-foreground">Repeats every</span>
                         <input
                           name="interval"
-                          type="number"
-                          min="1"
-                          max="99"
+                          type="text"
+                          inputMode="numeric"
                           value={recurringInterval}
                           onChange={(e) => setRecurringInterval(e.target.value)}
                           placeholder="1"

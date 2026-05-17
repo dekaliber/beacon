@@ -618,15 +618,13 @@ function WeightInput({ id, value, onChange }: { id: string; value: string; onCha
   return (
     <div className="relative w-20 shrink-0">
       <input
-        type="number"
+        type="text"
+        inputMode="decimal"
         id={id}
-        min={0}
-        max={100}
-        step={0.1}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="0"
-        className="w-full rounded border border-border px-2 py-1 pr-6 text-right text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        className="w-full rounded border border-border px-2 py-1 pr-6 text-right text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
       />
       <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
     </div>

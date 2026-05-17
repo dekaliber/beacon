@@ -150,9 +150,8 @@ function WithdrawalSettingsModal({
             <div className="ml-6 relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
-                type="number"
-                step="1000"
-                min="1"
+                type="text"
+                inputMode="decimal"
                 value={denominator}
                 onChange={(e) => setDenominator(e.target.value)}
                 autoFocus
@@ -176,10 +175,8 @@ function WithdrawalSettingsModal({
           </div>
           <div className="relative w-36">
             <input
-              type="number"
-              step="0.1"
-              min="0"
-              max="100"
+              type="text"
+              inputMode="decimal"
               value={targetPct}
               onChange={(e) => setTargetPct(e.target.value)}
               className="w-full rounded-md border border-border pl-3 pr-7 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
@@ -387,9 +384,8 @@ function TransferModal({
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
-                type="number"
-                step="0.01"
-                min="0.01"
+                type="text"
+                inputMode="decimal"
                 value={form.amount}
                 onChange={set("amount")}
                 required

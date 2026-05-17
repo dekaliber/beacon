@@ -257,12 +257,11 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
         <span className="inline-flex items-center justify-end gap-1">
           <span className="text-xs text-muted-foreground">$</span>
           <input
-            type="number"
-            step="0.01"
-            min="0"
+            type="text"
+            inputMode="decimal"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            className="w-24 rounded border border-border bg-background px-1.5 py-0.5 text-xs tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className="w-24 rounded border border-border bg-background px-1.5 py-0.5 text-xs tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-primary"
             autoFocus
             onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setOpen(false); }}
           />
@@ -365,14 +364,13 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved, variant = "warning"
       </td>
       <td className="py-1.5 pr-2 text-right">
         <input
-          type="number"
-          step="100"
-          min="0"
+          type="text"
+          inputMode="decimal"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           placeholder="0.00"
           autoFocus
-          className="w-28 rounded border border-border bg-background px-2 py-0.5 text-xs tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          className="w-28 rounded border border-border bg-background px-2 py-0.5 text-xs tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-primary"
           onKeyDown={(e) => {
             if (e.key === "Enter") handleSave();
             if (e.key === "Escape") setOpen(false);
@@ -510,12 +508,11 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
         <span className="inline-flex items-center justify-end gap-1">
           <span className="text-xs text-muted-foreground">$</span>
           <input
-            type="number"
-            step="100"
-            min="0"
+            type="text"
+            inputMode="decimal"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-24 rounded border border-border bg-background px-1.5 py-0.5 text-xs tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className="w-24 rounded border border-border bg-background px-1.5 py-0.5 text-xs tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-primary"
             onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setEditing(false); }}
           />
         </span>

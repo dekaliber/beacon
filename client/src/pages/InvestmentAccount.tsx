@@ -235,17 +235,15 @@ function DollarInput({
         $
       </span>
       <input
-        type="number"
+        type="text"
+        inputMode="decimal"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        step="0.000001"
-        min="0"
         placeholder={placeholder ?? "0.00"}
         required={required}
         className={
-          (inputClassName ??
-          "w-full rounded border border-border pl-7 pr-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary") +
-          " [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          inputClassName ??
+          "w-full rounded border border-border pl-7 pr-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         }
       />
     </div>
@@ -448,11 +446,10 @@ function LotFormEntry({
       <div className="flex-1 min-w-0">
         <label className="block text-xs font-medium mb-1">{hideDate ? "Total Shares" : "Quantity (shares)"}</label>
         <input
-          type="number"
+          type="text"
+          inputMode="decimal"
           value={lot.quantity}
           onChange={(e) => onChange("quantity", e.target.value)}
-          step="any"
-          min="0"
           placeholder="0.00"
           required
           className="w-full rounded border border-border px-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
@@ -823,20 +820,20 @@ function LotRow({
           <div className="relative">
             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none select-none">$</span>
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={cps}
-              step="0.000001"
               onChange={(e) => setCps(e.target.value)}
-              className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
             />
           </div>
         </td>
         {/* Col 4: quantity */}
         <td className="py-2 px-2">
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={qty}
-            step="0.000001"
             onChange={(e) => setQty(e.target.value)}
             className="w-full rounded border border-border px-2 py-1 text-xs tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
           />
@@ -1005,10 +1002,9 @@ function AddLotRow({
         <div className="flex-1 min-w-0">
           <label className="block text-xs font-medium mb-1">Total Shares</label>
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={qty}
-            step="0.000001"
-            min="0"
             placeholder="0.00"
             autoFocus
             onChange={(e) => setQty(e.target.value)}
@@ -1020,10 +1016,9 @@ function AddLotRow({
           <div className="relative">
             <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none select-none">$</span>
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={cps}
-              step="0.01"
-              min="0"
               placeholder="0.00"
               onChange={(e) => setCps(e.target.value)}
               className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
@@ -1067,10 +1062,9 @@ function AddLotRow({
         <div className="relative">
           <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none select-none">$</span>
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={cps}
-            step="0.000001"
-            min="0"
             placeholder="0.00"
             onChange={(e) => setCps(e.target.value)}
             className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
@@ -1079,10 +1073,9 @@ function AddLotRow({
       </td>
       <td className="py-2 px-2">
         <input
-          type="number"
+          type="text"
+          inputMode="decimal"
           value={qty}
-          step="0.000001"
-          min="0"
           placeholder="0.00"
           onChange={(e) => setQty(e.target.value)}
           className="w-full rounded border border-border px-2 py-1 text-xs tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
@@ -2380,11 +2373,9 @@ function SellModal({
                 <div>
                   <label className="block text-xs font-medium mb-1">{mode === "sell" ? "Shares to Sell" : "Shares to Transfer"}</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={shares}
-                    step="0.000001"
-                    min="0.000001"
-                    max={maxShares}
                     placeholder="0.000000"
                     onChange={(e) => setShares(e.target.value)}
                     className="w-full rounded border border-border px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
@@ -2396,10 +2387,9 @@ function SellModal({
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={price}
-                        step="0.000001"
-                        min="0"
                         placeholder="0.00"
                         onChange={(e) => setPrice(e.target.value)}
                         className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
@@ -2459,11 +2449,9 @@ function SellModal({
                             <td className="py-2 px-3">
                               <div className="flex items-center justify-end gap-1">
                                 <input
-                                  type="number"
+                                  type="text"
+                                  inputMode="numeric"
                                   value={lotInputs[lot.id] ?? ""}
-                                  step="1"
-                                  min="0"
-                                  max={available}
                                   placeholder="0"
                                   onChange={(e) => setLotInputs((prev) => ({ ...prev, [lot.id]: e.target.value }))}
                                   className="w-14 rounded border border-border px-2 py-1 text-left tabular-nums focus:outline-none focus:ring-1 focus:ring-primary text-xs"
@@ -2503,10 +2491,9 @@ function SellModal({
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="decimal"
                         value={price}
-                        step="0.000001"
-                        min="0"
                         placeholder="0.00"
                         onChange={(e) => setPrice(e.target.value)}
                         className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
@@ -2534,10 +2521,9 @@ function SellModal({
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={fees}
-                    step="0.01"
-                    min="0"
                     placeholder="0.00"
                     onChange={(e) => setFees(e.target.value)}
                     className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
@@ -2822,24 +2808,23 @@ function EditSaleActivityModal({
         <div>
           <label className="block text-xs font-medium mb-1">Price / Share</label>
           <input
-            type="number"
-            step="0.000001"
-            min="0.000001"
+            type="text"
+            inputMode="decimal"
             value={price}
+            placeholder="0.000000"
             onChange={(e) => setPrice(e.target.value)}
-            className="w-full rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            className="w-full rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
         <div>
           <label className="block text-xs font-medium mb-1">Fees</label>
           <input
-            type="number"
-            step="0.01"
-            min="0"
+            type="text"
+            inputMode="decimal"
             value={fees}
-            onChange={(e) => setFees(e.target.value)}
             placeholder="0.00"
-            className="w-full rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            onChange={(e) => setFees(e.target.value)}
+            className="w-full rounded border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
       </div>
@@ -3088,10 +3073,10 @@ function ReviewDividendModal({
           <div>
             <label className="block text-xs font-medium mb-1">Per Share Amount</label>
             <input
-              type="number"
-              step="0.000001"
-              min="0"
+              type="text"
+              inputMode="decimal"
               value={perShareAmount}
+              placeholder="0.000000"
               onChange={(e) => handlePerShareChange(e.target.value)}
               className={inputCls}
             />
@@ -3099,10 +3084,10 @@ function ReviewDividendModal({
           <div>
             <label className="block text-xs font-medium mb-1">Shares at Ex-Date</label>
             <input
-              type="number"
-              step="0.000001"
-              min="0"
+              type="text"
+              inputMode="decimal"
               value={shares}
+              placeholder="0.000000"
               onChange={(e) => handleSharesChange(e.target.value)}
               className={inputCls}
             />
@@ -3113,10 +3098,10 @@ function ReviewDividendModal({
         <div>
           <label className="block text-xs font-medium mb-1">Total Amount</label>
           <input
-            type="number"
-            step="0.01"
-            min="0"
+            type="text"
+            inputMode="decimal"
             value={totalAmount}
+            placeholder="0.00"
             onChange={(e) => setTotalAmount(e.target.value)}
             className={inputCls}
           />
@@ -3197,24 +3182,22 @@ function ReviewDividendModal({
                   )}
                 </label>
                 <input
-                  type="number"
-                  step="0.0001"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   value={reinvestPrice}
-                  onChange={(e) => handleReinvestPriceChange(e.target.value)}
                   placeholder="0.0000"
+                  onChange={(e) => handleReinvestPriceChange(e.target.value)}
                   className={inputCls}
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1">Shares Reinvested</label>
                 <input
-                  type="number"
-                  step="0.000001"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   value={reinvestQuantity}
-                  onChange={(e) => setReinvestQuantity(e.target.value)}
                   placeholder="0.000000"
+                  onChange={(e) => setReinvestQuantity(e.target.value)}
                   className={inputCls}
                 />
               </div>
@@ -3524,7 +3507,8 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
           <div>
             <label className="block text-xs font-medium mb-1">Shares Acquired</label>
             <input
-              type="number" step="1" min="1" required
+              type="text" inputMode="numeric" required
+              placeholder="0"
               value={quantity} onChange={(e) => setQuantity(e.target.value)}
               className={inputClass}
             />
@@ -3534,7 +3518,8 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
-                type="number" step="0.000001" min="0" required
+                type="text" inputMode="decimal" required
+                placeholder="0.000000"
                 value={costPerShare} onChange={(e) => setCostPerShare(e.target.value)}
                 className={dollarInputClass}
               />

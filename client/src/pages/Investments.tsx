@@ -237,9 +237,6 @@ function computeAutoRebalance(
   return adjustments;
 }
 
-// Suppress native number-input spinners on all browsers
-const NO_SPINNER = "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
-
 function RebalanceModal({
   data,
   isOpen,
@@ -441,11 +438,12 @@ function RebalanceModal({
                   <div className="relative">
                     <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none select-none">$</span>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       value={manualAdj[item.id] ?? ""}
                       onChange={(e) => setManualAdj((prev) => ({ ...prev, [item.id]: e.target.value }))}
                       placeholder="0"
-                      className={`w-full rounded border border-border bg-background pl-5 pr-2 py-1 text-xs text-right tabular-nums focus:outline-none focus:ring-1 focus:ring-primary ${NO_SPINNER}`}
+                      className="w-full rounded border border-border bg-background pl-5 pr-2 py-1 text-xs text-right tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </div>
                   <span className="text-right text-xs tabular-nums text-muted-foreground">

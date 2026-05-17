@@ -500,10 +500,9 @@ function MobileExpenseModal({
                 </span>
                 <input
                   name="amount"
-                  type="number"
-                  step="0.01"
-                  required
+                  type="text"
                   inputMode="decimal"
+                  required
                   placeholder="0.00"
                   defaultValue={expense ? parseFloat(expense.amount).toFixed(2) : undefined}
                   className="w-full rounded-md border border-border py-2.5 pl-7 pr-3 text-sm focus:border-primary focus:outline-none"
@@ -684,9 +683,8 @@ function MobileExpenseModal({
                             {/* Row 1: Repeats every [n] [freq] */}
                             <span className="text-sm text-muted-foreground">Repeats every</span>
                             <input
-                              type="number"
-                              min="1"
-                              max="99"
+                              type="text"
+                              inputMode="numeric"
                               value={recurringInterval}
                               onChange={(e) => setRecurringInterval(e.target.value)}
                               placeholder="1"

@@ -367,10 +367,7 @@ function MobileAssetClassModal({
               <div className="relative">
                 <input
                   name="targetPct"
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.1}
+                  type="text"
                   inputMode="decimal"
                   defaultValue={currentTarget ?? ""}
                   placeholder="e.g. 40"

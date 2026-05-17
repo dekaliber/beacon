@@ -582,12 +582,10 @@ function MobileAccountModal({
                 <div>
                   <label className="mb-1.5 block text-sm font-medium">Closing Day</label>
                   <input
-                    type="number"
-                    min={1}
-                    max={28}
+                    type="text"
+                    inputMode="numeric"
                     value={closingDay}
                     onChange={(e) => setClosingDay(e.target.value)}
-                    inputMode="numeric"
                     placeholder="e.g. 15"
                     className="w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
                   />
@@ -596,12 +594,10 @@ function MobileAccountModal({
                 <div>
                   <label className="mb-1.5 block text-sm font-medium">Due Day</label>
                   <input
-                    type="number"
-                    min={1}
-                    max={31}
+                    type="text"
+                    inputMode="numeric"
                     value={dueDay}
                     onChange={(e) => setDueDay(e.target.value)}
-                    inputMode="numeric"
                     placeholder="e.g. 8"
                     className="w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
                   />

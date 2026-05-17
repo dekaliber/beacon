@@ -121,7 +121,7 @@ function BudgetSettingsSheet({
   };
 
   const inputClass =
-    "w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+    "w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none";
 
   return (
     <>
@@ -141,13 +141,12 @@ function BudgetSettingsSheet({
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
-                type="number"
-                min="0"
-                step="100"
+                type="text"
+                inputMode="decimal"
                 value={personal}
                 onChange={(e) => setPersonal(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-                placeholder="0"
+                placeholder="0.00"
                 className={inputClass}
                 autoFocus={open}
               />
@@ -163,13 +162,12 @@ function BudgetSettingsSheet({
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
-                type="number"
-                min="0"
-                step="100"
+                type="text"
+                inputMode="decimal"
                 value={joint}
                 onChange={(e) => setJoint(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-                placeholder="0"
+                placeholder="0.00"
                 className={inputClass}
               />
             </div>

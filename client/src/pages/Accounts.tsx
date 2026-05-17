@@ -562,9 +562,8 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
               <div>
                 <label className="block text-xs font-medium mb-1">Closing Day</label>
                 <input
-                  type="number"
-                  min={1}
-                  max={28}
+                  type="text"
+                  inputMode="numeric"
                   value={closingDay}
                   onChange={(e) => setClosingDay(e.target.value)}
                   placeholder="e.g. 15"
@@ -575,9 +574,8 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
               <div>
                 <label className="block text-xs font-medium mb-1">Due Day</label>
                 <input
-                  type="number"
-                  min={1}
-                  max={31}
+                  type="text"
+                  inputMode="numeric"
                   value={dueDay}
                   onChange={(e) => setDueDay(e.target.value)}
                   placeholder="e.g. 8"

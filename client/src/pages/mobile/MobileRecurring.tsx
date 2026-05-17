@@ -589,7 +589,7 @@ function EditRuleModal({
             <label className="mb-1.5 block text-sm font-medium">Amount</label>
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-              <input type="text" inputMode="decimal" value={form.amount} onChange={(e) => set({ amount: e.target.value })} className={`${inputCls} pl-7`} />
+              <input type="text" inputMode="decimal" placeholder="0.00" value={form.amount} onChange={(e) => set({ amount: e.target.value })} className={`${inputCls} pl-7`} />
             </div>
           </div>
 
@@ -915,7 +915,7 @@ function TransferRuleModal({
             <label className="mb-1.5 block text-sm font-medium">Amount</label>
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-              <input type="text" inputMode="decimal" required value={form.amount ?? ""} onChange={(e) => set({ amount: e.target.value })} className={`${inputCls} pl-7`} />
+              <input type="text" inputMode="decimal" required placeholder="0.00" value={form.amount ?? ""} onChange={(e) => set({ amount: e.target.value })} className={`${inputCls} pl-7`} />
             </div>
           </div>
 
@@ -957,7 +957,7 @@ function TransferRuleModal({
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium">Every</label>
-              <input type="number" min={1} value={form.interval ?? 1} onChange={(e) => set({ interval: parseInt(e.target.value) || 1 })} className={inputCls} />
+              <input type="text" inputMode="numeric" value={form.interval ?? 1} onChange={(e) => set({ interval: parseInt(e.target.value) || 1 })} className={inputCls} />
             </div>
           </div>
 

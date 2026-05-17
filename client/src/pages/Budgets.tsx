@@ -100,7 +100,7 @@ function BudgetSettingsModal({
   };
 
   const inputClass =
-    "w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+    "w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
   return (
     <Modal open={open} onClose={onClose} title="Edit Budget">
@@ -110,10 +110,10 @@ function BudgetSettingsModal({
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
-              type="number"
-              min="0"
-              step="100"
+              type="text"
+              inputMode="decimal"
               value={personal}
+              placeholder="0.00"
               onChange={(e) => setPersonal(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
               placeholder="0"
@@ -132,10 +132,10 @@ function BudgetSettingsModal({
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
-              type="number"
-              min="0"
-              step="100"
+              type="text"
+              inputMode="decimal"
               value={joint}
+              placeholder="0.00"
               onChange={(e) => setJoint(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
               placeholder="0"

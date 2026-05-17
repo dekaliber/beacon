@@ -684,9 +684,9 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
-                type="number" step="0.01" min="0" required
+                type="text" inputMode="decimal" required
                 value={strikePrice} onChange={(e) => setStrikePrice(e.target.value)}
-                className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
           </div>
@@ -747,9 +747,9 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
           <div>
             <label className="block text-xs font-medium mb-1"># Contracts</label>
             <input
-              type="number" min="1" step="1" required
+              type="text" inputMode="numeric" required
               value={contracts} onChange={(e) => setContracts(e.target.value)}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
           <div>
@@ -762,11 +762,11 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
-                type="number" step="0.0001" min="0" required
+                type="text" inputMode="decimal" required
                 value={premiumPerShare}
                 onChange={(e) => { setPremiumPerShare(e.target.value); setQuoteAutoFilled(false); }}
                 placeholder={quoteFetching ? "Fetching…" : ""}
-                className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
           </div>
@@ -778,9 +778,9 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
-              type="number" step="0.0001" min="0"
+              type="text" inputMode="decimal"
               value={stockPriceAtOpen} onChange={(e) => setStockPriceAtOpen(e.target.value)}
-              className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
         </div>
@@ -792,9 +792,9 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
-                type="number" step="0.000001" min="0"
+                type="text" inputMode="decimal"
                 value={shareCostBasis} onChange={(e) => setShareCostBasis(e.target.value)}
-                className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
           </div>
@@ -806,9 +806,9 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
-              type="number" step="0.01" min="0"
+              type="text" inputMode="decimal"
               value={feesOpen} onChange={(e) => setFeesOpen(e.target.value)}
-              className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
         </div>
@@ -972,7 +972,7 @@ function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
   ];
 
   const inputClass = "w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
-  const dollarInputClass = "w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+  const dollarInputClass = "w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
   return (
     <Modal open onClose={onClose} title={`Close: ${position.ticker.symbol} $${position.strikePrice} ${position.optionType}`}>
@@ -1024,7 +1024,7 @@ function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
-                type="number" step="0.0001" min="0"
+                type="text" inputMode="decimal"
                 value={closePremiumPerShare} onChange={(e) => setClosePremiumPerShare(e.target.value)}
                 className={dollarInputClass}
               />
@@ -1037,7 +1037,7 @@ function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
             <div>
               <label className="block text-xs font-medium mb-1">Contracts Assigned</label>
               <input
-                type="number" min="1" step="1"
+                type="text" inputMode="numeric"
                 value={contractsAssigned} onChange={(e) => setContractsAssigned(e.target.value)}
                 className={inputClass}
               />
@@ -1052,7 +1052,7 @@ function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                 <input
-                  type="number" step="0.0001" min="0"
+                  type="text" inputMode="decimal"
                   value={stockPriceAtClose} onChange={(e) => setStockPriceAtClose(e.target.value)}
                   placeholder={assignedPriceFetching ? "Fetching…" : ""}
                   className={dollarInputClass}
@@ -1108,7 +1108,7 @@ function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
-              type="number" step="0.01" min="0"
+              type="text" inputMode="decimal"
               value={feesClose} onChange={(e) => setFeesClose(e.target.value)}
               className={dollarInputClass}
             />
@@ -1131,7 +1131,7 @@ function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
                   <div className="relative">
                     <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                     <input
-                      type="number" step="0.0001" min="0" required
+                      type="text" inputMode="decimal" required
                       value={newPremiumPerShare} onChange={(e) => setNewPremiumPerShare(e.target.value)}
                       className={dollarInputClass}
                     />
@@ -1145,7 +1145,7 @@ function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
                     <div className="relative">
                       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                       <input
-                        type="number" step="0.01" min="0" required
+                        type="text" inputMode="decimal" required
                         value={newStrikePrice} onChange={(e) => setNewStrikePrice(e.target.value)}
                         className={dollarInputClass}
                       />
@@ -1172,7 +1172,7 @@ function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
                   <div className="relative">
                     <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                     <input
-                      type="number" step="0.0001" min="0"
+                      type="text" inputMode="decimal"
                       value={newStockPriceAtOpen} onChange={(e) => setNewStockPriceAtOpen(e.target.value)}
                       placeholder={priceFetching ? "Fetching…" : ""}
                       className={dollarInputClass}
@@ -1186,7 +1186,7 @@ function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
                   <div className="relative">
                     <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                     <input
-                      type="number" step="0.01" min="0"
+                      type="text" inputMode="decimal"
                       value={newFeesOpen} onChange={(e) => setNewFeesOpen(e.target.value)}
                       className={dollarInputClass}
                     />
@@ -1309,7 +1309,7 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
   ];
 
   const inputClass = "w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
-  const dollarInputClass = "w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+  const dollarInputClass = "w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
   return (
     <Modal open onClose={onClose} title={`Edit Close: ${position.ticker.symbol} $${position.strikePrice} ${position.optionType}`}>
@@ -1363,7 +1363,7 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
-                type="number" step="0.0001" min="0"
+                type="text" inputMode="decimal"
                 value={closePremiumPerShare} onChange={(e) => setClosePremiumPerShare(e.target.value)}
                 className={dollarInputClass}
               />
@@ -1376,7 +1376,7 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
             <div>
               <label className="block text-xs font-medium mb-1">Contracts Assigned</label>
               <input
-                type="number" min="1" step="1"
+                type="text" inputMode="numeric"
                 value={contractsAssigned} onChange={(e) => setContractsAssigned(e.target.value)}
                 className={inputClass}
               />
@@ -1391,7 +1391,7 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                 <input
-                  type="number" step="0.0001" min="0"
+                  type="text" inputMode="decimal"
                   value={stockPriceAtClose} onChange={(e) => setStockPriceAtClose(e.target.value)}
                   placeholder={assignedPriceFetching ? "Fetching…" : ""}
                   className={dollarInputClass}
@@ -1426,7 +1426,7 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
-              type="number" step="0.01" min="0"
+              type="text" inputMode="decimal"
               value={feesClose} onChange={(e) => setFeesClose(e.target.value)}
               className={dollarInputClass}
             />
@@ -1528,9 +1528,9 @@ function SettingsModal({ current, onClose, onSaved }: SettingsModalProps) {
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
-              type="number" step="0.01" min="0" required
+              type="text" inputMode="decimal" required
               value={startingBasis} onChange={(e) => setStartingBasis(e.target.value)}
-              className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
         </div>
@@ -1553,7 +1553,7 @@ function SettingsModal({ current, onClose, onSaved }: SettingsModalProps) {
           <p className="text-xs text-muted-foreground mb-2">Used for premium target charts and performance benchmarking.</p>
           <div className="relative">
             <input
-              type="number" step="0.1" min="0" max="999" required
+              type="text" inputMode="decimal" required
               value={targetReturn} onChange={(e) => setTargetReturn(e.target.value)}
               className="w-full rounded-md border border-border px-3 pr-8 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
@@ -1620,7 +1620,7 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
   };
 
   const inputClass = "w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
-  const dollarInputClass = "w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+  const dollarInputClass = "w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
   return (
     <Modal open onClose={onClose} title={`Confirm: ${position.ticker.symbol} $${position.strikePrice} ${position.optionType}`}>
@@ -1640,7 +1640,7 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
           <div>
             <label className="block text-xs font-medium mb-1"># Contracts</label>
             <input
-              type="number" min="1" step="1" required
+              type="text" inputMode="numeric" required
               value={contracts} onChange={(e) => setContracts(e.target.value)}
               className={inputClass}
             />
@@ -1650,7 +1650,7 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
-                type="number" step="0.0001" min="0" required
+                type="text" inputMode="decimal" required
                 value={premiumPerShare} onChange={(e) => setPremiumPerShare(e.target.value)}
                 className={dollarInputClass}
               />
@@ -1668,7 +1668,7 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
-              type="number" step="0.0001" min="0"
+              type="text" inputMode="decimal"
               value={stockPriceAtOpen} onChange={(e) => setStockPriceAtOpen(e.target.value)}
               placeholder={priceFetching ? "Fetching…" : ""}
               className={dollarInputClass}
@@ -1681,7 +1681,7 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
-              type="number" step="0.01" min="0"
+              type="text" inputMode="decimal"
               value={feesOpen} onChange={(e) => setFeesOpen(e.target.value)}
               className={dollarInputClass}
             />
@@ -2002,9 +2002,8 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
               <div className="flex items-center gap-1">
                 {isEditingThisPrem ? (
                   <input
-                    type="number"
-                    step="0.0001"
-                    min="0"
+                    type="text"
+                    inputMode="decimal"
                     autoFocus
                     value={editingPremValue}
                     onChange={(e) => setEditingPremValue(e.target.value)}
@@ -2018,7 +2017,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
                       if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                       if (e.key === "Escape") { setEditingPremId(null); }
                     }}
-                    className="w-20 rounded border border-primary px-1 py-0.5 text-sm focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    className="w-20 rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
                   />
                 ) : (
                   <span

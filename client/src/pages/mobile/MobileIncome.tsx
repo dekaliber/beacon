@@ -272,10 +272,9 @@ function MobileIncomeModal({
                 </span>
                 <input
                   name="amount"
-                  type="number"
-                  step="0.01"
-                  required
+                  type="text"
                   inputMode="decimal"
+                  required
                   placeholder="0.00"
                   defaultValue={income ? parseFloat(income.amount).toFixed(2) : undefined}
                   className="w-full rounded-md border border-border py-2.5 pl-7 pr-3 text-sm focus:border-primary focus:outline-none"
