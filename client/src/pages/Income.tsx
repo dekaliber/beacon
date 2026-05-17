@@ -915,6 +915,9 @@ export function IncomePage() {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingMoreRef = useRef(false);
   const isFirstMount = useRef(true);
+  // Tracks which page number we're expecting next; discards stale out-of-order responses
+  // that fire when filterParams changes but currentPage hasn't reset to 1 yet.
+  const expectedPageRef = useRef(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [editing, setEditing] = useState<Income | null>(null);
@@ -998,6 +1001,7 @@ export function IncomePage() {
   // Reset accumulated data when filters/sort change (skip on initial mount to preserve cached data)
   useEffect(() => {
     if (isFirstMount.current) { isFirstMount.current = false; return; }
+    expectedPageRef.current = 1;
     setCurrentPage(1);
     setAllIncomes([]);
     setHasMore(false);
@@ -1008,11 +1012,17 @@ export function IncomePage() {
   useEffect(() => {
     if (!incomeData) return;
     const { data, pagination: pag } = incomeData;
+    // Discard stale responses: when filterParams changes, currentPage resets to 1
+    // asynchronously (via useEffect), causing an intermediate render where queryParams
+    // briefly becomes newFilter+oldPage. That spurious request's response would otherwise
+    // append out-of-order data and skip intermediate pages.
+    if (pag.page !== expectedPageRef.current) return;
     if (pag.page === 1) {
       setAllIncomes(data ?? []);
     } else {
       setAllIncomes((prev) => [...prev, ...(data ?? [])]);
     }
+    expectedPageRef.current = pag.page + 1;
     setHasMore(pag.page < pag.totalPages);
     loadingMoreRef.current = false;
   }, [incomeData]);
@@ -1096,6 +1106,8 @@ export function IncomePage() {
 
     setAllIncomes(freshItems);
     setHasMore(moreAvailable);
+    // Keep expectedPageRef in sync since we bypassed the accumulate effect
+    expectedPageRef.current = pagesToRefresh + 1;
   }, [currentPage, filterParams]);
 
   const refetchAll = useCallback(() => {
