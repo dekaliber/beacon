@@ -1940,7 +1940,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
             </td>
             <td className={tdClass}>{fmt(p.stockPriceAtOpen, 2, "$")}</td>
             <td className={tdClass} title={p.deltaAtOpenCapturedAt != null ? `Captured ${new Date(p.deltaAtOpenCapturedAt).toLocaleString("en-US", { timeZone: "America/New_York", month: "numeric", day: "numeric", year: "2-digit", hour: "numeric", minute: "2-digit" })} ET` : undefined}>
-              {p.deltaAtOpen != null ? p.deltaAtOpen.toFixed(3) : <span className="text-muted-foreground">—</span>}
+              {p.deltaAtOpen != null ? Number(p.deltaAtOpen).toFixed(3) : <span className="text-muted-foreground">—</span>}
             </td>
           </>
         ) : (
