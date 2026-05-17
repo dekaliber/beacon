@@ -1539,6 +1539,20 @@ export function TaxEstimatorPage() {
                       <div className="flex items-center gap-1.5">
                         <Activity className="h-3.5 w-3.5 shrink-0 text-blue-400" />
                         Net Investment Income Tax
+                        <span className="group relative">
+                          <span className="flex h-3.5 w-3.5 cursor-default items-center justify-center rounded-full border border-muted-foreground/40 text-[9px] font-bold leading-none text-muted-foreground">
+                            ?
+                          </span>
+                          <span className="pointer-events-none invisible absolute bottom-full left-1/2 mb-2 w-64 -translate-x-1/2 rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100">
+                            <span className="block"><span className="font-medium text-foreground">MAGI:</span> {formatCurrency(calc.magi)}</span>
+                            <span className="mt-1.5 block">
+                              {calc.magi > NIIT_THRESHOLD[filingStatus]
+                                ? <><span className="font-medium text-foreground">{formatCurrency(calc.magi - NIIT_THRESHOLD[filingStatus])}</span> above the {formatCurrency(NIIT_THRESHOLD[filingStatus])} threshold</>
+                                : <><span className="font-medium text-foreground">{formatCurrency(NIIT_THRESHOLD[filingStatus] - calc.magi)}</span> below the {formatCurrency(NIIT_THRESHOLD[filingStatus])} threshold</>}
+                            </span>
+                            <span className="mt-1.5 block">{formatCurrency(calc.niitBase)} of net investment income subject to 3.8% NIIT</span>
+                          </span>
+                        </span>
                       </div>
                       <div className="ml-[1.375rem] text-xs text-muted-foreground">{formatCurrency(calc.niitBase)} subject to NIIT</div>
                     </td>
