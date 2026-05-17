@@ -137,7 +137,7 @@ export function TagsPage() {
                             >
                               <div
                                 className="h-6 w-6 flex-shrink-0 rounded-md"
-                                style={{ backgroundColor: tag.color ?? "hsl(var(--muted-foreground))" }}
+                                style={{ backgroundColor: tag.color ?? "var(--color-gray-400)" }}
                               />
                               <span className="truncate font-medium">{tag.name}</span>
                             </button>

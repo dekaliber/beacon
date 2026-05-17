@@ -285,7 +285,7 @@ function TagPicker({
               <span
                 key={t.id}
                 className="rounded-full px-2 py-0.5 text-xs font-medium"
-                style={t.color ? { backgroundColor: t.color, color: "#fff" } : { backgroundColor: "hsl(var(--primary))", color: "#fff" }}
+                style={t.color ? { backgroundColor: t.color, color: "#fff" } : { backgroundColor: "var(--color-gray-400)", color: "#fff" }}
               >
                 {t.name}
               </span>
@@ -923,7 +923,7 @@ function ExpenseRow({
               <span
                 key={tag.id}
                 className="inline-flex h-3.5 w-3.5 items-center justify-center rounded font-bold leading-none text-white"
-                style={{ backgroundColor: tag.color ?? "hsl(var(--primary))", fontSize: "8px" }}
+                style={{ backgroundColor: tag.color ?? "var(--color-gray-400)", fontSize: "8px" }}
               >
                 {tag.name.charAt(0).toUpperCase()}
               </span>
@@ -1272,7 +1272,7 @@ function MobileFilterSheet({
                   <div className="flex flex-wrap gap-2">
                     {tags.map((t) => {
                       const sel = staged.tagIds.includes(t.id);
-                      const color = t.color ?? "hsl(var(--primary))";
+                      const color = t.color ?? "var(--color-gray-400)";
                       return (
                         <button
                           key={t.id}

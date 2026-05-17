@@ -693,7 +693,7 @@ function TagTypeahead({
               <span
                 key={t.id}
                 className="rounded-full px-2 py-0.5 text-xs font-medium"
-                style={t.color ? { backgroundColor: t.color, color: "#fff" } : { backgroundColor: "hsl(var(--primary))", color: "#fff" }}
+                style={t.color ? { backgroundColor: t.color, color: "#fff" } : { backgroundColor: "var(--color-gray-400)", color: "#fff" }}
               >
                 {t.name}
               </span>
@@ -1192,7 +1192,7 @@ function EditableAmountCell({ value, onSave, isOffset }: { value: string; onSave
   const isNegative = isOffset || numericValue < 0;
 
   const startEdit = () => {
-    setEditValue(absValue.toFixed(2));
+    setEditValue(numericValue.toFixed(2));
     setEditing(true);
   };
 
@@ -1200,13 +1200,13 @@ function EditableAmountCell({ value, onSave, isOffset }: { value: string; onSave
     setEditing(false);
     const parsed = parseFloat(editValue);
     if (isNaN(parsed) || parsed === 0) return;
-    const saveValue = isNegative ? (-parsed).toFixed(2) : parsed.toFixed(2);
+    const saveValue = parsed.toFixed(2);
     if (parseFloat(saveValue).toFixed(2) !== parseFloat(value).toFixed(2)) onSave(saveValue);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    if (val === "" || /^\d*\.?\d{0,2}$/.test(val)) {
+    if (val === "" || val === "-" || /^-?\d*\.?\d{0,2}$/.test(val)) {
       setEditValue(val);
     }
   };
@@ -2707,7 +2707,7 @@ function ExpenseRowWithOffsets({
           {expense.tags.length > 0 && (
             <div className="mt-0.5 flex flex-wrap gap-1">
               {expense.tags.map(({ tag }) => (
-                <span key={tag.id} className="whitespace-nowrap rounded-full px-1.5 py-0.5 text-xs font-medium" style={{ backgroundColor: tag.color ? `${tag.color}25` : "hsl(var(--muted))", color: tag.color ?? "inherit" }}>
+                <span key={tag.id} className="whitespace-nowrap rounded-full px-1.5 py-0.5 text-xs font-medium" style={{ backgroundColor: tag.color ? `${tag.color}25` : "var(--color-gray-400)", color: tag.color ?? "#fff" }}>
                   {tag.name}
                 </span>
               ))}

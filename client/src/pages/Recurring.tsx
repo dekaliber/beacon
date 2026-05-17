@@ -159,12 +159,15 @@ function UpcomingStrip({ expenses }: { expenses: UpcomingExpenseItem[] }) {
     return d;
   });
 
-  // Group by local calendar date
+  // Group by local calendar date, sorted highest amount to lowest within each day
   const byDate = new Map<string, UpcomingExpenseItem[]>();
   for (const e of expenses) {
     const key = toLocalDateKey(e.date);
     if (!byDate.has(key)) byDate.set(key, []);
     byDate.get(key)!.push(e);
+  }
+  for (const items of byDate.values()) {
+    items.sort((a, b) => Math.abs(parseFloat(b.amount)) - Math.abs(parseFloat(a.amount)));
   }
 
   return (
