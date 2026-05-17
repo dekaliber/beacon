@@ -887,6 +887,11 @@ export const getOptionQuote = (params: {
 export const getUnderlyingQuote = (symbol: string) =>
   api.get<{ price: number; priceDate: string }>(`/options/stock-quote/${encodeURIComponent(symbol)}`);
 
+export const getStockPriceAtOpen = (symbol: string, openedAt: string) =>
+  api.get<{ price: number; timeLabel: string }>(
+    `/options/stock-price-at-open?symbol=${encodeURIComponent(symbol)}&openedAt=${encodeURIComponent(openedAt)}`
+  );
+
 // ── Pending Buys ──────────────────────────────────────────────────────────────
 
 export const getPendingBuys = (accountId: string) =>

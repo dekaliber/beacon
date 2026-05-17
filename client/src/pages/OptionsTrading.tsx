@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useApi } from "@/hooks/useApi";
 import {
   getOptionsSettings,
@@ -17,6 +17,7 @@ import {
   importOptionsPositions,
   getOptionQuote,
   getUnderlyingQuote,
+  getStockPriceAtOpen,
   searchTickers,
   getTickerPrice,
   getAccounts,
@@ -366,6 +367,8 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [priceAtOpenStatus, setPriceAtOpenStatus] = useState<"idle" | "fetching" | "success" | "error">("idle");
+  const [priceAtOpenLabel, setPriceAtOpenLabel] = useState("");
 
   const isCoveredCall = optionType === "CALL";
 
@@ -396,6 +399,20 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
       const result = await getUnderlyingQuote(symbol);
       setStockPriceAtOpen(result.price.toFixed(2));
     } catch { /* ignore — user can fill manually */ }
+  }, []);
+
+  // Only fires for new positions or drafts being opened (not already-open positions)
+  const fetchStockPriceAtOpen = useCallback(async (symbol: string, openedAtVal: string) => {
+    if (!symbol || !openedAtVal) return;
+    setPriceAtOpenStatus("fetching");
+    try {
+      const result = await getStockPriceAtOpen(symbol, openedAtVal);
+      setStockPriceAtOpen(result.price.toFixed(2));
+      setPriceAtOpenLabel(result.timeLabel);
+      setPriceAtOpenStatus("success");
+    } catch {
+      setPriceAtOpenStatus("error");
+    }
   }, []);
 
   // Auto-fetch option quote when ticker + type + strike + expiration are all set
@@ -710,7 +727,12 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
                 required={!isDraft}
                 disabled={isDraft}
                 value={isDraft ? "" : openedAt}
-                onChange={(e) => setOpenedAt(e.target.value)}
+                onChange={(e) => { setOpenedAt(e.target.value); setPriceAtOpenStatus("idle"); }}
+                onBlur={() => {
+                  if ((!editing || editing.isDraft) && !isDraft) {
+                    fetchStockPriceAtOpen(selectedTicker, openedAt);
+                  }
+                }}
                 className={cn(
                   "w-full rounded-md border border-border px-3 py-2 text-sm",
                   isDraft
@@ -725,10 +747,14 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
                   type="checkbox"
                   checked={isDraft}
                   onChange={(e) => {
-                    setIsDraft(e.target.checked);
-                    if (!e.target.checked && editing?.isDraft) {
-                      setOpenedAt(getDefaultOpenedAt());
+                    const nowDraft = e.target.checked;
+                    setIsDraft(nowDraft);
+                    if (!nowDraft && editing?.isDraft) {
+                      const defaultTime = getDefaultOpenedAt();
+                      setOpenedAt(defaultTime);
+                      fetchStockPriceAtOpen(selectedTicker, defaultTime);
                     }
+                    if (nowDraft) setPriceAtOpenStatus("idle");
                   }}
                   className="h-3.5 w-3.5 rounded border-border accent-primary"
                 />
@@ -774,7 +800,18 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
 
         {/* Stock Price at Open */}
         <div>
-          <label className="block text-xs font-medium mb-1">Stock Price at Open <span className="text-muted-foreground font-normal">(optional)</span></label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-medium">Stock Price at Open <span className="text-muted-foreground font-normal">(optional)</span></label>
+            {priceAtOpenStatus === "fetching" && (
+              <span className="text-xs text-muted-foreground">Getting open price...</span>
+            )}
+            {priceAtOpenStatus === "success" && (
+              <span className="text-xs text-muted-foreground">Price as of {priceAtOpenLabel}</span>
+            )}
+            {priceAtOpenStatus === "error" && (
+              <span className="text-xs text-destructive">Price fetch failed</span>
+            )}
+          </div>
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
@@ -2207,7 +2244,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
       </tr>
     ) : null;
 
-    return <>{primaryRow}{chainRow}</>;
+    return <React.Fragment key={p.id}>{primaryRow}{chainRow}</React.Fragment>;
   };
 
   return (

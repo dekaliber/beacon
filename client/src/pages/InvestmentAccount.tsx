@@ -2001,15 +2001,15 @@ function EmptyPortfolio({
 }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-5">
-      <div className="relative w-48 h-32">
-        <svg viewBox="0 0 192 128" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-          <ellipse cx="96" cy="64" rx="80" ry="60" fill="#f1f5f9" />
-          <line x1="32" y1="64" x2="160" y2="64" stroke="#cbd5e1" strokeWidth="1" />
-          <circle cx="32" cy="64" r="4" fill="#94a3b8" />
-          <circle cx="80" cy="64" r="4" fill="#94a3b8" />
-          <circle cx="112" cy="64" r="4" fill="#94a3b8" />
-          <circle cx="160" cy="64" r="4" fill="#94a3b8" />
-          <path d="M32 64 Q48 40 80 50 Q96 55 112 64 Q136 74 160 48" stroke="#93c5fd" strokeWidth="2" strokeDasharray="6 4" fill="none" />
+      <div className="relative w-60 h-40">
+        <svg viewBox="0 0 211 141" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+          <ellipse cx="106" cy="71" rx="88" ry="66" fill="#f1f5f9" />
+          <line x1="39" y1="79" x2="173" y2="79" stroke="#cbd5e1" strokeWidth="1" />
+          <path d="M39 79 C56 43 72 43 89 79 C97 108 114 108 122 79 C139 17 155 17 173 79" stroke="#93c5fd" strokeWidth="1" strokeDasharray="4 3" fill="none" />
+          <circle cx="39" cy="79" r="4" fill="#94a3b8" />
+          <circle cx="89" cy="79" r="4" fill="#94a3b8" />
+          <circle cx="122" cy="79" r="4" fill="#94a3b8" />
+          <circle cx="173" cy="79" r="4" fill="#94a3b8" />
         </svg>
       </div>
       <div className="text-center">

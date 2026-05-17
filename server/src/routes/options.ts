@@ -530,6 +530,88 @@ optionsRoutes.get("/stock-quote/:symbol", async (req, res) => {
   }
 });
 
+// ── Stock Price at Open (Yahoo Finance 1m) ────────────────────────────────────
+
+// Converts a datetime-local string treated as America/New_York to a UTC unix timestamp.
+// Handles DST by verifying the assumed offset with Intl.
+function etToUtcUnix(etDateStr: string): number {
+  const [datePart, timePart] = etDateStr.split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hour, minute] = timePart.split(":").map(Number);
+
+  // Try EDT (UTC-4) first, then verify with Intl
+  const candidate = new Date(Date.UTC(year, month - 1, day, hour + 4, minute));
+  const etHour = parseInt(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "2-digit",
+      hour12: false,
+    }).format(candidate),
+    10
+  );
+
+  if (etHour === hour) return Math.floor(candidate.getTime() / 1000);
+
+  // Must be EST (UTC-5)
+  return Math.floor(new Date(Date.UTC(year, month - 1, day, hour + 5, minute)).getTime() / 1000);
+}
+
+optionsRoutes.get("/stock-price-at-open", async (req, res) => {
+  const { symbol, openedAt } = req.query;
+  if (!symbol || !openedAt) {
+    return res.status(400).json({ error: "Missing symbol or openedAt" });
+  }
+
+  try {
+    const unixTs = etToUtcUnix(openedAt as string);
+    const period1 = unixTs - 60;
+    const period2 = unixTs + 180;
+
+    const url =
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol as string)}` +
+      `?interval=1m&period1=${period1}&period2=${period2}`;
+
+    const yahooRes = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
+    });
+    if (!yahooRes.ok) {
+      return res.status(502).json({ error: "Yahoo Finance unavailable" });
+    }
+
+    const data = await yahooRes.json() as any;
+    const result = data?.chart?.result?.[0];
+    if (!result) return res.status(404).json({ error: "No data returned" });
+
+    const timestamps: number[] = result.timestamp ?? [];
+    const opens: (number | null)[] = result.indicators?.quote?.[0]?.open ?? [];
+
+    // Prefer the candle at or just after the requested time
+    let bestIdx = timestamps.findIndex((ts, i) => ts >= unixTs && opens[i] != null);
+    if (bestIdx === -1) {
+      // Fall back to the last non-null candle in the window
+      for (let i = timestamps.length - 1; i >= 0; i--) {
+        if (opens[i] != null) { bestIdx = i; break; }
+      }
+    }
+    if (bestIdx === -1) return res.status(404).json({ error: "No price data found" });
+
+    const price = opens[bestIdx]!;
+    const candleDate = new Date(timestamps[bestIdx] * 1000);
+    const timeLabel =
+      new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      }).format(candleDate) + " ET";
+
+    res.json({ price, timeLabel });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    res.status(500).json({ error: message });
+  }
+});
+
 // ── Option Quote (Tradier) ─────────────────────────────────────────────────────
 
 optionsRoutes.get("/option-quote", async (req, res) => {
