@@ -275,9 +275,11 @@ function computePerformanceMetrics(positions: OptionsPosition[]): PerformanceMet
     }
   }
 
-  // "Flat" pool: standalone positions + legs of still-open chains (leg-by-leg)
-  const flatPositions = positions.filter((p) => !p.groupId || openChainIds.has(p.groupId));
-  const closedFlat = flatPositions.filter((p) => p.status !== "OPEN");
+  // "Flat" pool: only truly standalone (ungrouped) closed positions.
+  // Closed legs of partially-open chains are excluded — they'll be rolled up
+  // into the chain once the final leg closes. Fully-closed chain legs are
+  // already captured in closedChainLegs above.
+  const closedFlat = positions.filter((p) => p.status !== "OPEN" && !p.groupId);
 
   // ── Trade & contract counts ───────────────────────────────────────────────────
   // Closed-only: consistent with every other column in the Performance Details table.
@@ -2016,10 +2018,13 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
     return Number(a.premiumPerShare) - Number(b.premiumPerShare);
   });
 
-  // Group positions by their groupId (order preserved from sort above)
-  const grouped = new Map<string | null, OptionsPosition[]>();
+  // Group positions by their groupId (order preserved from sort above).
+  // Standalone positions use their own id as key so they stay interleaved with
+  // grouped positions rather than all collapsing into a single null bucket that
+  // would render before any named-group entries regardless of sort order.
+  const grouped = new Map<string, OptionsPosition[]>();
   for (const p of sorted) {
-    const key = p.groupId ?? null;
+    const key = p.groupId ?? p.id;
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key)!.push(p);
   }
@@ -2494,10 +2499,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
 
           {/* ── Open positions ── */}
           {Array.from(grouped.entries()).map(([gid, grpPositions]) => {
-            if (gid === null) {
-              return grpPositions.map((p) => renderRow(p));
-            }
-            // Single open position in a group: render inline (no collapsible header)
+            // Single position (standalone or sole open leg of a chain): render inline
             if (grpPositions.length === 1) {
               return renderRow(grpPositions[0]);
             }
