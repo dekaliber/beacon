@@ -40,7 +40,7 @@ import { Modal } from "@/components/Modal";
 import { Plus, ChevronDown, ChevronUp, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw } from "lucide-react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { isWithinOptionsTradingWindow } from "@/lib/priceUtils";
+import { optionsLastFetchWasPostClose } from "@/lib/priceUtils";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import {
   ResponsiveContainer,
@@ -1854,6 +1854,9 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
   );
 }
 
+const LS_LAST_FETCHED_KEY = "options_last_fetched_at";
+const LS_LIVE_PRICES_KEY  = "options_live_prices";
+
 // ── Open Positions Table ───────────────────────────────────────────────────────
 
 interface OpenPositionsTableProps {
@@ -1881,24 +1884,38 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
   const [confirmDelete, setConfirmDelete] = useState<OptionsPosition | null>(null);
   const [openColGroups, setOpenColGroups] = useState<Set<ColGroupKey>>(new Set(["live"]));
   // Live data: auto-fetched stock prices; editing buffer for the inline prem field
-  const [livePrices, setLivePrices] = useState<Map<string, number>>(new Map());
+  const [livePrices, setLivePrices] = useState<Map<string, number>>(() => {
+    try {
+      const stored = localStorage.getItem(LS_LIVE_PRICES_KEY);
+      if (stored) return new Map(Object.entries(JSON.parse(stored) as Record<string, number>));
+    } catch {}
+    return new Map();
+  });
   const [editingPremId, setEditingPremId] = useState<string | null>(null);
   const [editingPremValue, setEditingPremValue] = useState("");
   const [fetchingQuotes, setFetchingQuotes] = useState<Set<string>>(new Set());
   const [quoteErrors, setQuoteErrors] = useState<Map<string, string>>(new Map());
 
+  const updateLivePrice = (ticker: string, price: number) => {
+    setLivePrices((prev) => {
+      const next = new Map(prev).set(ticker, price);
+      try { localStorage.setItem(LS_LIVE_PRICES_KEY, JSON.stringify(Object.fromEntries(next))); } catch {}
+      return next;
+    });
+  };
+
   const fetchAllStockPrices = () => {
     const uniqueTickers = [...new Set([...positions, ...draftPositions].map((p) => p.ticker.symbol))];
     for (const ticker of uniqueTickers) {
       getUnderlyingQuote(ticker)
-        .then((r) => setLivePrices((prev) => new Map(prev).set(ticker, r.price)))
+        .then((r) => updateLivePrice(ticker, r.price))
         .catch(() => {});
     }
   };
 
   const tickerKey = [...positions, ...draftPositions].map((p) => p.ticker.symbol).join(",");
   useEffect(() => {
-    if (!isWithinOptionsTradingWindow()) return;
+    if (lastFetchedAt != null && optionsLastFetchWasPostClose(lastFetchedAt) && livePrices.size > 0) return;
     fetchAllStockPrices();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tickerKey]);
@@ -1942,7 +1959,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
   const LS_KEY = "options_last_fetched_at";
   const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(() => {
     try {
-      const stored = localStorage.getItem(LS_KEY);
+      const stored = localStorage.getItem(LS_LAST_FETCHED_KEY);
       return stored ? new Date(stored) : null;
     } catch {
       return null;
@@ -1950,7 +1967,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
   });
   const recordFetch = (date: Date) => {
     setLastFetchedAt(date);
-    try { localStorage.setItem(LS_KEY, date.toISOString()); } catch {}
+    try { localStorage.setItem(LS_LAST_FETCHED_KEY, date.toISOString()); } catch {}
   };
   const fetchAllQuotes = async () => {
     setRefreshingAll(true);
@@ -1964,12 +1981,14 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
     setRefreshingAll(false);
   };
 
-  // Auto-fetch quotes once when positions first load, but only during trading hours.
-  // Manual refreshes (button / row icon) bypass this guard and always fire.
+  // Auto-fetch on load unless we already captured post-close prices today.
+  // If lastFetchedAt is null (no prior fetch) or was before today's 5 PM ET,
+  // always fetch — regardless of the current time — so the page always shows prices.
+  // Manual refreshes bypass this guard entirely.
   const positionIdsKey = [...positions, ...draftPositions].filter((p) => p.status === "OPEN").map((p) => p.id).join(",");
   useEffect(() => {
     if (!positionIdsKey) return;
-    if (!isWithinOptionsTradingWindow()) return;
+    if (lastFetchedAt != null && optionsLastFetchWasPostClose(lastFetchedAt) && livePrices.size > 0) return;
     fetchAllQuotes();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [positionIdsKey]);
@@ -2216,9 +2235,13 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
               </div>
             </td>
             <td className={tdClass}>
-              {pctOtmNow != null
-                ? <span className={cn((p.optionType === "CALL" ? pctOtmNow >= 0 : pctOtmNow <= 0) ? "text-green-600" : "text-red-600")}>{fmtPct(pctOtmNow)}</span>
-                : <span className="text-muted-foreground">—</span>}
+              {pctOtmNow != null ? (() => {
+                const isOtm = p.optionType === "CALL" ? pctOtmNow >= 0 : pctOtmNow <= 0;
+                const deteriorated = isOtm && c.pctOtmAtOpen != null && (
+                  p.optionType === "CALL" ? pctOtmNow < c.pctOtmAtOpen : pctOtmNow > c.pctOtmAtOpen
+                );
+                return <span className={cn(deteriorated ? "text-amber-500" : isOtm ? "text-green-600" : "text-red-600")}>{fmtPct(pctOtmNow)}</span>;
+              })() : <span className="text-muted-foreground">—</span>}
             </td>
             <td className={tdClass}>
               {curAnnRet != null

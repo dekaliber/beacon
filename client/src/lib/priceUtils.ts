@@ -53,6 +53,36 @@ function currentHourET(now: Date): number {
 }
 
 /**
+ * Returns true if the given timestamp was today (ET) at or after 5 PM ET.
+ *
+ * Used to decide whether to skip the options auto-refresh on page load: we
+ * only skip when post-close prices were already captured today. If the last
+ * fetch was before 5 PM (even if the current time is after 5 PM), or if it
+ * was on a prior day, we should still fetch fresh data.
+ */
+export function optionsLastFetchWasPostClose(lastFetchedAt: Date): boolean {
+  const now = new Date();
+  const fmt = (d: Date) =>
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "numeric",
+      hour12: false,
+    }).formatToParts(d);
+
+  const fetchParts = fmt(lastFetchedAt);
+  const nowParts = fmt(now);
+  const getDate = (parts: Intl.DateTimeFormatPart[]) =>
+    `${parts.find((p) => p.type === "year")!.value}-${parts.find((p) => p.type === "month")!.value}-${parts.find((p) => p.type === "day")!.value}`;
+  const getHour = (parts: Intl.DateTimeFormatPart[]) =>
+    parseInt(parts.find((p) => p.type === "hour")!.value, 10);
+
+  return getDate(fetchParts) === getDate(nowParts) && getHour(fetchParts) >= 17;
+}
+
+/**
  * Returns true if the current wall-clock time falls within the options trading
  * window: weekdays, 8 AM – 5 PM ET (regular market hours are 9:30 AM – 4 PM,
  * with ±1 h buffer for pre/after-market quotes Tradier may have available).
