@@ -47,8 +47,14 @@ if [[ -n "${LOCAL_CLERK_USER_ID:-}" ]]; then
       UPDATE budget_settings    SET "userId" = :'local' WHERE "userId" = :'prod';
       UPDATE investment_settings SET "userId" = :'local' WHERE "userId" = :'prod';
       UPDATE transfer_rules     SET "userId" = :'local' WHERE "userId" = :'prod';
+      UPDATE tax_assumptions    SET "userId" = :'local' WHERE "userId" = :'prod';
+      UPDATE pending_buys       SET "userId" = :'local' WHERE "userId" = :'prod';
       UPDATE asset_classes      SET "userId" = :'local' WHERE "userId" = :'prod';
       UPDATE asset_class_targets SET "userId" = :'local' WHERE "userId" = :'prod';
+      UPDATE options_settings   SET "userId" = :'local' WHERE "userId" = :'prod';
+      UPDATE options_tickers    SET "userId" = :'local' WHERE "userId" = :'prod';
+      UPDATE options_position_groups SET "userId" = :'local' WHERE "userId" = :'prod';
+      UPDATE options_positions  SET "userId" = :'local' WHERE "userId" = :'prod';
 SQL
     echo "userId replacement complete."
   fi

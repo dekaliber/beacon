@@ -1500,7 +1500,7 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
             {lockTimestamp ? (
               <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
                 {closedAt || "—"}
-                <span className="ml-2 text-xs">(locked — part of a roll chain)</span>
+                <span className="ml-2 text-xs">(locked — part of a roll)</span>
               </div>
             ) : (
               <input
@@ -2276,7 +2276,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
     const chainRow = hasChain ? (
       <tr key={`${p.id}-chain`} className={cn("group", "border-b border-border", isGrouped && "bg-muted/10", isExpired && "bg-amber-50/50")}>
         {/* Label — frozen */}
-        <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] group-hover:bg-[#FDFDFE]", stickyBg, isGrouped ? "pl-8 pr-2" : "pl-4 pr-2", "font-medium text-muted-foreground/60 uppercase tracking-wide text-[10px]")}>chain</td>
+        <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] group-hover:bg-[#FDFDFE]", stickyBg, isGrouped ? "pl-8 pr-2" : "pl-4 pr-2", "font-medium text-muted-foreground/60 uppercase tracking-wide text-[10px]")}>roll</td>
         <td style={{ left: 80 }}  className={cn(ctd, "sticky z-[2] group-hover:bg-[#FDFDFE]", stickyBg)} />
         <td style={{ left: 152 }} className={cn(ctd, "sticky z-[2] group-hover:bg-[#FDFDFE]", stickyBg)} />
         <td style={{ left: 232 }} className={cn(ctd, "sticky z-[2] group-hover:bg-[#FDFDFE] border-r border-border/40", stickyBg)} />
@@ -2589,6 +2589,34 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
   const [confirmDelete, setConfirmDelete] = useState<OptionsPosition | null>(null);
   const [openColGroups, setOpenColGroups] = useState<Set<ClosedColGroupKey>>(new Set(["pnl"]));
 
+  // Collapse weeks older than the previous week by default.
+  const [collapsedWeeks, setCollapsedWeeks] = useState<Set<string>>(() => {
+    const now = new Date();
+    const todayDow = now.getUTCDay();
+    const thisMonday = new Date(now);
+    thisMonday.setUTCDate(now.getUTCDate() - (todayDow === 0 ? 6 : todayDow - 1));
+    const prevWeekMonday = new Date(thisMonday);
+    prevWeekMonday.setUTCDate(thisMonday.getUTCDate() - 7);
+    const threshold = prevWeekMonday.toISOString().slice(0, 10);
+    const collapsed = new Set<string>();
+    for (const p of positions) {
+      const closeDateStr = p.closedAt ? p.closedAt.split("T")[0] : p.expirationDate.split("T")[0];
+      const d = new Date(closeDateStr + "T00:00:00Z");
+      const dow = d.getUTCDay();
+      const monday = new Date(d);
+      monday.setUTCDate(d.getUTCDate() - (dow === 0 ? 6 : dow - 1));
+      const key = monday.toISOString().slice(0, 10);
+      if (key < threshold) collapsed.add(key);
+    }
+    return collapsed;
+  });
+  const toggleWeek = (key: string) =>
+    setCollapsedWeeks((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+
   const isColOpen = (g: ClosedColGroupKey) => openColGroups.has(g);
   const toggleColGroup = (g: ClosedColGroupKey) =>
     setOpenColGroups((prev) => {
@@ -2784,12 +2812,16 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
               else weekGroups.push({ monday: key, label, positions: [p] });
             }
 
-            return weekGroups.flatMap(({ label, positions }) => {
+            return weekGroups.flatMap(({ monday, label, positions }) => {
+              const isCollapsed = collapsedWeeks.has(monday);
               const weekPnl = positions.reduce((sum, p) => sum + (calcPosition(p).pnl ?? 0), 0);
               return [
-              <tr key={`week-${label}`} className="bg-muted/40 border-y border-border">
+              <tr key={`week-${label}`} className="bg-muted/40 border-y border-border cursor-pointer hover:bg-muted/60 select-none" onClick={() => toggleWeek(monday)}>
                 <td colSpan={5} className="py-1.5 pl-4 sticky left-0 z-[2] bg-[#FCFDFE]">
-                  <span className="text-xs font-semibold text-foreground uppercase tracking-wide">{label}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-foreground uppercase tracking-wide">{label}</span>
+                    {isCollapsed ? <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" /> : <ChevronUp className="h-3 w-3 text-muted-foreground shrink-0" />}
+                  </div>
                 </td>
                 <td colSpan={15} className="py-1.5 pr-4 text-right">
                   <span className={cn("text-xs font-semibold tabular-nums", weekPnl >= 0 ? "text-green-600" : "text-red-600")}>
@@ -2797,7 +2829,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                   </span>
                 </td>
               </tr>,
-              ...positions.map((p) => {
+              ...(isCollapsed ? [] : positions.map((p) => {
             const c = calcPosition(p);
             const ctd = "px-2 pb-2 text-xs whitespace-nowrap text-muted-foreground";
             const cs = chainSummaryByFinalLegId.get(p.id);
@@ -2903,7 +2935,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
             const chainRow = cs ? (
               <tr key={`${p.id}-chain`} className="group border-b border-border">
                 {/* Label — frozen */}
-                <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE] pl-4 pr-2 font-medium text-muted-foreground/60 uppercase tracking-wide text-[10px]")}>chain</td>
+                <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE] pl-4 pr-2 font-medium text-muted-foreground/60 uppercase tracking-wide text-[10px]")}>roll</td>
                 <td style={{ left: 80 }}  className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")} />
                 <td style={{ left: 152 }} className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")} />
                 <td style={{ left: 232 }} className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")} />
@@ -2957,7 +2989,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
             ) : null;
 
             return <React.Fragment key={p.id}>{positionRow}{chainRow}</React.Fragment>;
-          })];
+          }))];
 
             });
           })()}
