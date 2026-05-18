@@ -539,7 +539,7 @@ function EditRuleModal({
 
   const handleSave = async () => {
     if (!rule) return;
-    const amountVal = parseFloat(form.amount);
+    const amountVal = parseFloat(form.amount.replace(/,/g, ""));
     if (isNaN(amountVal) || amountVal === 0) { setError("Amount must be a non-zero number."); return; }
     setSaving(true);
     setError(null);
@@ -1429,11 +1429,11 @@ export function MobileRecurring() {
         onClose={() => { setTransferModalOpen(false); setEditingTransferRule(null); }}
         onSave={async (data) => {
           if (editingTransferRule) {
-            await updateTransferRule(editingTransferRule.id, { ...data, amount: parseFloat(data.amount!) });
+            await updateTransferRule(editingTransferRule.id, { ...data, amount: parseFloat(data.amount!.replace(/,/g, "")) });
           } else {
             await createTransfer({
               description: data.description!,
-              amount: parseFloat(data.amount!),
+              amount: parseFloat(data.amount!.replace(/,/g, "")),
               date: data.startDate!,
               fromAccountId: data.fromAccountId!,
               toAccountId: data.toAccountId!,

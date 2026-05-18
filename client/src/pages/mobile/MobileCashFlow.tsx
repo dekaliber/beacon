@@ -291,7 +291,7 @@ function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved,
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const amt = parseFloat(amount);
+    const amt = parseFloat(amount.replace(/,/g, ""));
     if (!amt || amt <= 0) return;
     setSaving(true);
     try {
@@ -479,7 +479,7 @@ function CCPaymentSheet({
         accountId: event.relatedAccountId ?? "",
         periodStart: event.periodStart,
         periodEnd: event.periodEnd,
-        amount: parseFloat(value),
+        amount: parseFloat(value.replace(/,/g, "")),
       });
       onSaved();
       onClose();

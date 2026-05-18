@@ -1067,7 +1067,7 @@ export function Recurring() {
 
   const handleEditSave = async () => {
     if (!editTarget) return;
-    const amountVal = parseFloat(editForm.amount);
+    const amountVal = parseFloat(editForm.amount.replace(/,/g, ""));
     if (isNaN(amountVal) || amountVal === 0) {
       setEditError("Amount must be a non-zero number.");
       return;
@@ -1324,11 +1324,11 @@ export function Recurring() {
           onClose={() => { setTransferModalOpen(false); setEditingTransferRule(null); }}
           onSave={async (data) => {
             if (editingTransferRule) {
-              await updateTransferRule(editingTransferRule.id, { ...data, amount: parseFloat(data.amount!) });
+              await updateTransferRule(editingTransferRule.id, { ...data, amount: parseFloat(data.amount!.replace(/,/g, "")) });
             } else {
               await createTransfer({
                 description: data.description!,
-                amount: parseFloat(data.amount!),
+                amount: parseFloat(data.amount!.replace(/,/g, "")),
                 date: data.startDate!,
                 fromAccountId: data.fromAccountId!,
                 toAccountId: data.toAccountId!,

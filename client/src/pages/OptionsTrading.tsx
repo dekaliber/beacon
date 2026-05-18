@@ -40,6 +40,7 @@ import { Modal } from "@/components/Modal";
 import { Plus, ChevronDown, ChevronUp, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw } from "lucide-react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+import { isWithinOptionsTradingWindow } from "@/lib/priceUtils";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import {
   ResponsiveContainer,
@@ -235,36 +236,107 @@ interface PerformanceMetrics {
   avgActualDays: number | null;
   avgExpectedDays: number | null;
   totalPremium: number;
+  ccPremium: number;
+  cspPremium: number;
   weightedArr: number | null;
 }
 
 function computePerformanceMetrics(positions: OptionsPosition[]): PerformanceMetrics {
-  const closed = positions.filter((p) => p.status !== "OPEN");
+  // ── Separate into chains vs leg-by-leg accounting ────────────────────────────
+  // Fully-closed chains (every leg closed) → counted as one logical trade.
+  // Chains with any open leg → each leg counted individually (same as today);
+  // we don't roll up partial results until the chain is complete.
+  // Standalone positions (no groupId) → always counted individually.
 
-  const tradeCount = positions.length;
-  const contractCount = positions.reduce((s, p) => s + p.contracts, 0);
+  const chainMap = new Map<string, OptionsPosition[]>();
+  for (const p of positions) {
+    if (!p.groupId) continue;
+    const legs = chainMap.get(p.groupId) ?? [];
+    legs.push(p);
+    chainMap.set(p.groupId, legs);
+  }
 
-  const closedWithOutcome = closed.filter((p) => p.outcome != null);
-  const isWin = (p: OptionsPosition) => {
+  // groupIds that still have at least one open leg — account per-leg
+  const openChainIds = new Set<string>();
+  const closedChainLegs: OptionsPosition[][] = [];
+
+  for (const [groupId, legs] of chainMap) {
+    if (legs.every((p) => p.status !== "OPEN")) {
+      // Sort by sequence / openedAt so legs[0] is always the first leg
+      closedChainLegs.push(
+        [...legs].sort((a, b) =>
+          a.sequenceInGroup != null && b.sequenceInGroup != null
+            ? a.sequenceInGroup - b.sequenceInGroup
+            : new Date(a.openedAt).getTime() - new Date(b.openedAt).getTime()
+        )
+      );
+    } else {
+      openChainIds.add(groupId);
+    }
+  }
+
+  // "Flat" pool: standalone positions + legs of still-open chains (leg-by-leg)
+  const flatPositions = positions.filter((p) => !p.groupId || openChainIds.has(p.groupId));
+  const closedFlat = flatPositions.filter((p) => p.status !== "OPEN");
+
+  // ── Trade & contract counts ───────────────────────────────────────────────────
+  // Closed-only: consistent with every other column in the Performance Details table.
+  // Open positions are already shown in the positions table above.
+  const tradeCount = closedFlat.length + closedChainLegs.length;
+  const contractCount =
+    closedFlat.reduce((s, p) => s + p.contracts, 0) +
+    closedChainLegs.reduce((s, legs) => s + legs[0].contracts, 0);
+
+  // ── Win rate ─────────────────────────────────────────────────────────────────
+  const isLegWin = (p: OptionsPosition) => {
     if (p.outcome === "EXPIRED_WORTHLESS") return true;
     if (p.outcome === "ASSIGNED") return false;
     return (p.closePremiumPerShare ?? 0) < p.premiumPerShare;
   };
-  const winContracts = closedWithOutcome.filter(isWin).reduce((s, p) => s + p.contracts, 0);
-  const closedWithOutcomeContracts = closedWithOutcome.reduce((s, p) => s + p.contracts, 0);
-  const winRate = closedWithOutcomeContracts > 0 ? (winContracts / closedWithOutcomeContracts) * 100 : null;
 
-  const assignedContracts = closed.filter((p) => p.outcome === "ASSIGNED").reduce((s, p) => s + p.contracts, 0);
-  const closedContracts = closed.reduce((s, p) => s + p.contracts, 0);
+  let winContracts = 0, winDenomContracts = 0;
+
+  for (const p of closedFlat.filter((p) => p.outcome != null)) {
+    winDenomContracts += p.contracts;
+    if (isLegWin(p)) winContracts += p.contracts;
+  }
+  for (const legs of closedChainLegs) {
+    const finalLeg = legs[legs.length - 1];
+    const chainPnl = legs.reduce((s, p) => s + (calcPosition(p).pnl ?? 0), 0);
+    winDenomContracts += legs[0].contracts;
+    if (chainPnl > 0 && finalLeg.outcome !== "ASSIGNED") winContracts += legs[0].contracts;
+  }
+
+  const winRate = winDenomContracts > 0 ? (winContracts / winDenomContracts) * 100 : null;
+
+  // ── Assignment rate ───────────────────────────────────────────────────────────
+  // For chains: assigned if the final leg was assigned.
+  let assignedContracts = 0, closedContracts = 0;
+
+  for (const p of closedFlat) {
+    closedContracts += p.contracts;
+    if (p.outcome === "ASSIGNED") assignedContracts += p.contracts;
+  }
+  for (const legs of closedChainLegs) {
+    const finalLeg = legs[legs.length - 1];
+    closedContracts += legs[0].contracts;
+    if (finalLeg.outcome === "ASSIGNED") assignedContracts += legs[0].contracts;
+  }
+
   const assignmentRate = closedContracts > 0 ? (assignedContracts / closedContracts) * 100 : null;
 
+  // ── Premium / days / ARR ──────────────────────────────────────────────────────
   let sumActual = 0, sumExpected = 0, daysN = 0;
-  let totalPremium = 0;
+  let totalPremium = 0, ccPremium = 0, cspPremium = 0;
   let arrNumer = 0, arrDenom = 0;
 
-  for (const p of closed) {
+  // Flat (standalone + open-chain legs)
+  for (const p of closedFlat) {
     const c = calcPosition(p);
-    totalPremium += c.pnl ?? 0;
+    const pnl = c.pnl ?? 0;
+    totalPremium += pnl;
+    if (p.optionType === "CALL") ccPremium += pnl;
+    else if (p.optionType === "PUT") cspPremium += pnl;
     if (c.daysInTrade != null) {
       sumActual += c.daysInTrade * p.contracts;
       sumExpected += c.durationDays * p.contracts;
@@ -276,15 +348,59 @@ function computePerformanceMetrics(positions: OptionsPosition[]): PerformanceMet
     }
   }
 
+  // Helper: resolve the effective close timestamp for a closed leg
+  const getCloseMs = (p: OptionsPosition): number => {
+    if (p.closedAt) return new Date(p.closedAt).getTime();
+    const [ey, em, ed] = p.expirationDate.split("T")[0].split("-").map(Number);
+    return Date.UTC(ey, em - 1, ed, 20, 0, 0);
+  };
+
+  // Fully-closed chains
+  for (const legs of closedChainLegs) {
+    const firstLeg = legs[0];
+    const finalLeg = legs[legs.length - 1];
+    const chainPnl = legs.reduce((s, p) => s + (calcPosition(p).pnl ?? 0), 0);
+
+    totalPremium += chainPnl;
+    if (firstLeg.optionType === "CALL") ccPremium += chainPnl;
+    else if (firstLeg.optionType === "PUT") cspPremium += chainPnl;
+
+    // Capital at risk: max across legs (handles rolling up to a higher strike)
+    const chainCapitalAtRisk = Math.max(...legs.map((p) => calcPosition(p).capitalAtRisk));
+
+    // Actual duration: first open → last close
+    const firstOpenMs = new Date(firstLeg.openedAt).getTime();
+    const lastCloseMs = Math.max(...legs.map(getCloseMs));
+    const chainDaysInTrade = (lastCloseMs - firstOpenMs) / 86_400_000;
+
+    // Expected duration: first open → final leg's expiry
+    const [ey, em, ed] = finalLeg.expirationDate.split("T")[0].split("-").map(Number);
+    const finalExpiryMs = Date.UTC(ey, em - 1, ed, 20, 0, 0);
+    const chainExpectedDays = (finalExpiryMs - firstOpenMs) / 86_400_000;
+
+    const w = firstLeg.contracts;
+    sumActual += chainDaysInTrade * w;
+    sumExpected += chainExpectedDays * w;
+    daysN += w;
+
+    if (chainCapitalAtRisk > 0 && chainDaysInTrade > 0) {
+      const chainArr = (chainPnl / chainCapitalAtRisk) * (365 / chainDaysInTrade) * 100;
+      arrNumer += chainArr * chainCapitalAtRisk;
+      arrDenom += chainCapitalAtRisk;
+    }
+  }
+
   return {
     tradeCount,
     contractCount,
-    closedCount: closed.length,
+    closedCount: closedFlat.length + closedChainLegs.length,
     winRate,
     assignmentRate,
     avgActualDays: daysN > 0 ? sumActual / daysN : null,
     avgExpectedDays: daysN > 0 ? sumExpected / daysN : null,
     totalPremium,
+    ccPremium,
+    cspPremium,
     weightedArr: arrDenom > 0 ? arrNumer / arrDenom : null,
   };
 }
@@ -424,7 +540,7 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
     // Don't auto-fill premium for existing open positions — the transaction already occurred
     if (editing) return;
     if (quoteDebounce.current) clearTimeout(quoteDebounce.current);
-    const strikeNum = parseFloat(strikePrice);
+    const strikeNum = parseFloat(strikePrice.replace(/,/g, ""));
     if (!selectedTicker || !strikePrice || isNaN(strikeNum) || strikeNum <= 0 || !expirationDate) {
       return;
     }
@@ -530,14 +646,14 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
         groupId: groupId || null,
         optionType,
         side: "SELL",
-        strikePrice: parseFloat(strikePrice),
+        strikePrice: parseFloat(strikePrice.replace(/,/g, "")),
         expirationDate,
         openedAt: etToUtc(openedAt),
         contracts: parseInt(contracts, 10),
-        premiumPerShare: parseFloat(premiumPerShare),
-        feesOpen: feesOpen ? parseFloat(feesOpen) : null,
-        shareCostBasis: isCoveredCall && shareCostBasis ? parseFloat(shareCostBasis) : null,
-        stockPriceAtOpen: stockPriceAtOpen ? parseFloat(stockPriceAtOpen) : null,
+        premiumPerShare: parseFloat(premiumPerShare.replace(/,/g, "")),
+        feesOpen: feesOpen ? parseFloat(feesOpen.replace(/,/g, "")) : null,
+        shareCostBasis: isCoveredCall && shareCostBasis ? parseFloat(shareCostBasis.replace(/,/g, "")) : null,
+        stockPriceAtOpen: stockPriceAtOpen ? parseFloat(stockPriceAtOpen.replace(/,/g, "")) : null,
         deltaAtOpen: deltaAtOpen ?? null,
         deltaAtOpenCapturedAt: deltaAtOpenCapturedAt ?? null,
         notes: notes || null,
@@ -965,13 +1081,13 @@ function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
       if (isRolled) {
         await rollOptionsPosition(position.id, {
           closedAt: closedAt ? etToUtc(closedAt) : null,
-          closePremiumPerShare: closePremiumPerShare ? parseFloat(closePremiumPerShare) : null,
-          feesClose: feesClose ? parseFloat(feesClose) : null,
-          newPremiumPerShare: parseFloat(newPremiumPerShare),
-          newStrikePrice: parseFloat(newStrikePrice),
+          closePremiumPerShare: closePremiumPerShare ? parseFloat(closePremiumPerShare.replace(/,/g, "")) : null,
+          feesClose: feesClose ? parseFloat(feesClose.replace(/,/g, "")) : null,
+          newPremiumPerShare: parseFloat(newPremiumPerShare.replace(/,/g, "")),
+          newStrikePrice: parseFloat(newStrikePrice.replace(/,/g, "")),
           newExpirationDate,
-          newStockPriceAtOpen: newStockPriceAtOpen ? parseFloat(newStockPriceAtOpen) : null,
-          newFeesOpen: newFeesOpen ? parseFloat(newFeesOpen) : null,
+          newStockPriceAtOpen: newStockPriceAtOpen ? parseFloat(newStockPriceAtOpen.replace(/,/g, "")) : null,
+          newFeesOpen: newFeesOpen ? parseFloat(newFeesOpen.replace(/,/g, "")) : null,
         });
       } else {
         const statusMap: Record<OptionOutcome, Exclude<import("@/api").OptionStatus, "OPEN">> = {
@@ -984,10 +1100,10 @@ function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
           status: statusMap[outcome],
           outcome,
           closedAt: isExpired ? null : closedAt ? etToUtc(closedAt) : null,
-          closePremiumPerShare: isExpired || isAssigned ? null : closePremiumPerShare ? parseFloat(closePremiumPerShare) : null,
-          feesClose: feesClose ? parseFloat(feesClose) : null,
+          closePremiumPerShare: isExpired || isAssigned ? null : closePremiumPerShare ? parseFloat(closePremiumPerShare.replace(/,/g, "")) : null,
+          feesClose: feesClose ? parseFloat(feesClose.replace(/,/g, "")) : null,
           contractsAssigned: isAssigned && contractsAssigned ? parseInt(contractsAssigned, 10) : null,
-          stockPriceAtClose: isAssigned && stockPriceAtClose ? parseFloat(stockPriceAtClose) : null,
+          stockPriceAtClose: isAssigned && stockPriceAtClose ? parseFloat(stockPriceAtClose.replace(/,/g, "")) : null,
           investmentAccountId: isAssigned ? (investmentAccountId || null) : undefined,
           bankingAccountId: bankingAccountId || null,
         };
@@ -1324,10 +1440,10 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
         outcome,
         status: statusMap[outcome],
         closedAt: isExpired ? null : lockTimestamp ? undefined : closedAt ? etToUtc(closedAt) : null,
-        closePremiumPerShare: isExpired || isAssigned ? null : closePremiumPerShare ? parseFloat(closePremiumPerShare) : null,
-        feesClose: feesClose ? parseFloat(feesClose) : null,
+        closePremiumPerShare: isExpired || isAssigned ? null : closePremiumPerShare ? parseFloat(closePremiumPerShare.replace(/,/g, "")) : null,
+        feesClose: feesClose ? parseFloat(feesClose.replace(/,/g, "")) : null,
         contractsAssigned: isAssigned && contractsAssigned ? parseInt(contractsAssigned, 10) : null,
-        stockPriceAtClose: isAssigned && stockPriceAtClose ? parseFloat(stockPriceAtClose) : null,
+        stockPriceAtClose: isAssigned && stockPriceAtClose ? parseFloat(stockPriceAtClose.replace(/,/g, "")) : null,
         investmentAccountId: isAssigned ? (investmentAccountId || null) : undefined,
       });
       onSaved();
@@ -1544,7 +1660,7 @@ function SettingsModal({ current, onClose, onSaved }: SettingsModalProps) {
     setError("");
     try {
       await updateOptionsSettings({
-        startingBasis: parseFloat(startingBasis),
+        startingBasis: parseFloat(startingBasis.replace(/,/g, "")),
         targetReturn: parseFloat(targetReturn) / 100,
         startingWeek: startingWeek || null,
       });
@@ -1644,9 +1760,9 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
         isDraft: false,
         openedAt: etToUtc(confirmedAt),
         contracts: parseInt(contracts, 10),
-        premiumPerShare: parseFloat(premiumPerShare),
-        feesOpen: feesOpen ? parseFloat(feesOpen) : null,
-        stockPriceAtOpen: stockPriceAtOpen ? parseFloat(stockPriceAtOpen) : null,
+        premiumPerShare: parseFloat(premiumPerShare.replace(/,/g, "")),
+        feesOpen: feesOpen ? parseFloat(feesOpen.replace(/,/g, "")) : null,
+        stockPriceAtOpen: stockPriceAtOpen ? parseFloat(stockPriceAtOpen.replace(/,/g, "")) : null,
       });
       onSaved();
     } catch {
@@ -1780,6 +1896,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
 
   const tickerKey = [...positions, ...draftPositions].map((p) => p.ticker.symbol).join(",");
   useEffect(() => {
+    if (!isWithinOptionsTradingWindow()) return;
     fetchAllStockPrices();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tickerKey]);
@@ -1820,7 +1937,19 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
   };
 
   const [refreshingAll, setRefreshingAll] = useState(false);
-  const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null);
+  const LS_KEY = "options_last_fetched_at";
+  const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(() => {
+    try {
+      const stored = localStorage.getItem(LS_KEY);
+      return stored ? new Date(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+  const recordFetch = (date: Date) => {
+    setLastFetchedAt(date);
+    try { localStorage.setItem(LS_KEY, date.toISOString()); } catch {}
+  };
   const fetchAllQuotes = async () => {
     setRefreshingAll(true);
     fetchAllStockPrices();
@@ -1829,14 +1958,16 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
       await fetchQuoteForPosition(open[i]);
       if (i < open.length - 1) await new Promise((r) => setTimeout(r, 150));
     }
-    setLastFetchedAt(new Date());
+    recordFetch(new Date());
     setRefreshingAll(false);
   };
 
-  // Auto-fetch quotes once when positions first load
+  // Auto-fetch quotes once when positions first load, but only during trading hours.
+  // Manual refreshes (button / row icon) bypass this guard and always fire.
   const positionIdsKey = [...positions, ...draftPositions].filter((p) => p.status === "OPEN").map((p) => p.id).join(",");
   useEffect(() => {
     if (!positionIdsKey) return;
+    if (!isWithinOptionsTradingWindow()) return;
     fetchAllQuotes();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [positionIdsKey]);
@@ -1913,7 +2044,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
     // Live section
     const isEditingThisPrem = editingPremId === p.id;
     const curPrem = isEditingThisPrem
-      ? (editingPremValue !== "" ? parseFloat(editingPremValue) : null)
+      ? (editingPremValue !== "" ? parseFloat(editingPremValue.replace(/,/g, "")) : null)
       : p.currentPremiumPerShare ?? null;
     const stockNow = livePrices.get(p.ticker.symbol) ?? null;
     const livePnl = curPrem != null
@@ -2045,7 +2176,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
                     value={editingPremValue}
                     onChange={(e) => setEditingPremValue(e.target.value)}
                     onBlur={async () => {
-                      const val = editingPremValue !== "" ? parseFloat(editingPremValue) : null;
+                      const val = editingPremValue !== "" ? parseFloat(editingPremValue.replace(/,/g, "")) : null;
                       await updateOptionsPosition(p.id, { currentPremiumPerShare: val });
                       setEditingPremId(null);
                       onPositionUpdated();
@@ -2441,6 +2572,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
 
 interface ClosedPositionsTableProps {
   positions: OptionsPosition[];
+  openChainGroupIds: Set<string>;
   onEdit: (p: OptionsPosition) => void;
   onDelete: (p: OptionsPosition) => void;
 }
@@ -2451,7 +2583,7 @@ const CLOSED_COL_GROUPS = [
 ] as const;
 type ClosedColGroupKey = (typeof CLOSED_COL_GROUPS)[number]["key"];
 
-function ClosedPositionsTable({ positions, onEdit, onDelete }: ClosedPositionsTableProps) {
+function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }: ClosedPositionsTableProps) {
   const [confirmDelete, setConfirmDelete] = useState<OptionsPosition | null>(null);
   const [openColGroups, setOpenColGroups] = useState<Set<ClosedColGroupKey>>(new Set(["pnl"]));
 
@@ -2488,8 +2620,72 @@ function ClosedPositionsTable({ positions, onEdit, onDelete }: ClosedPositionsTa
     ASSIGNED: "Assigned",
   };
 
+  // ── Pre-compute fully-closed chain summaries ─────────────────────────────────
+  // Each groupId whose every leg is closed becomes one summary row, rendered at
+  // the bottom of the week in which the final leg closed.
+  const getCloseMs = (p: OptionsPosition): number => {
+    if (p.closedAt) return new Date(p.closedAt).getTime();
+    const [ey, em, ed] = p.expirationDate.split("T")[0].split("-").map(Number);
+    return Date.UTC(ey, em - 1, ed, 20, 0, 0);
+  };
+
+  // Build chain summaries for fully-closed chains only (all legs closed).
+  // Keyed by the ID of the final leg so we know where to render the row inline.
+  interface ChainSummary {
+    legs: OptionsPosition[];
+    chainPnl: number;
+    chainCapitalAtRisk: number;
+    totalFees: number;
+    firstOpenMs: number;
+    lastCloseMs: number;
+    chainDaysInTrade: number;
+    chainAnnReturn: number | null;
+  }
+
+  const chainLegsMap = new Map<string, OptionsPosition[]>();
+  for (const p of sorted) {
+    if (!p.groupId) continue;
+    const arr = chainLegsMap.get(p.groupId) ?? [];
+    arr.push(p);
+    chainLegsMap.set(p.groupId, arr);
+  }
+
+  // Map from final-leg position ID → chain summary
+  const chainSummaryByFinalLegId = new Map<string, ChainSummary>();
+  for (const [groupId, legs] of chainLegsMap) {
+    if (openChainGroupIds.has(groupId)) continue; // skip chains that still have open legs
+    const sortedLegs = [...legs].sort((a, b) =>
+      a.sequenceInGroup != null && b.sequenceInGroup != null
+        ? a.sequenceInGroup - b.sequenceInGroup
+        : new Date(a.openedAt).getTime() - new Date(b.openedAt).getTime()
+    );
+    const firstLeg = sortedLegs[0];
+    const finalLeg = sortedLegs[sortedLegs.length - 1];
+    const chainPnl = sortedLegs.reduce((s, p) => s + (calcPosition(p).pnl ?? 0), 0);
+    const chainCapitalAtRisk = Math.max(...sortedLegs.map((p) => calcPosition(p).capitalAtRisk));
+    const totalFees = sortedLegs.reduce((s, p) => s + calcPosition(p).totalFees, 0);
+    const firstOpenMs = new Date(firstLeg.openedAt).getTime();
+    const lastCloseMs = Math.max(...sortedLegs.map(getCloseMs));
+    const chainDaysInTrade = (lastCloseMs - firstOpenMs) / 86_400_000;
+    const chainAnnReturn =
+      chainCapitalAtRisk > 0 && chainDaysInTrade > 0
+        ? (chainPnl / chainCapitalAtRisk) * (365 / chainDaysInTrade) * 100
+        : null;
+    chainSummaryByFinalLegId.set(finalLeg.id, {
+      legs: sortedLegs,
+      chainPnl,
+      chainCapitalAtRisk,
+      totalFees,
+      firstOpenMs,
+      lastCloseMs,
+      chainDaysInTrade,
+      chainAnnReturn,
+    });
+  }
+
   const thClass = "px-2 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap";
   const tdClass = "px-2 py-2 text-sm whitespace-nowrap";
+  const tdClassChained = "px-2 pt-2 pb-1 text-sm whitespace-nowrap";
 
   return (
     <>
@@ -2601,16 +2797,20 @@ function ClosedPositionsTable({ positions, onEdit, onDelete }: ClosedPositionsTa
               </tr>,
               ...positions.map((p) => {
             const c = calcPosition(p);
-            return (
-              <tr key={p.id} className="group border-b border-border hover:bg-muted/30">
+            const ctd = "px-2 pb-2 text-xs whitespace-nowrap text-muted-foreground";
+            const cs = chainSummaryByFinalLegId.get(p.id);
+            const td = cs ? tdClassChained : tdClass;
+
+            const positionRow = (
+              <tr key={p.id} className={cn("group hover:bg-muted/30", cs ? "" : "border-b border-border")}>
                 {/* Position + Contracts — frozen */}
-                <td style={{ left: 0 }}   className={cn(tdClass, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE] pl-4 pr-2")}>
+                <td style={{ left: 0 }}   className={cn(td, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE] pl-4 pr-2")}>
                   <div className="flex items-center gap-1.5">
                     <span className="font-medium">{p.ticker.symbol}</span>
                     {p.groupId && <Link className="h-3 w-3 text-muted-foreground shrink-0" />}
                   </div>
                 </td>
-                <td style={{ left: 80 }}  className={cn(tdClass, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")}>
+                <td style={{ left: 80 }}  className={cn(td, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")}>
                   <span className={cn(
                     "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
                     p.optionType === "CALL" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"
@@ -2618,30 +2818,30 @@ function ClosedPositionsTable({ positions, onEdit, onDelete }: ClosedPositionsTa
                     {p.optionType === "CALL" ? "CC" : "CSP"}
                   </span>
                 </td>
-                <td style={{ left: 152 }} className={cn(tdClass, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")}>${fmtUSD(p.strikePrice)}</td>
-                <td style={{ left: 232 }} className={cn(tdClass, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")}>{fmtDate(p.expirationDate)}</td>
-                <td style={{ left: 328 }} className={cn(tdClass, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE] border-r border-border/40")}>{p.contracts}</td>
+                <td style={{ left: 152 }} className={cn(td, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")}>${fmtUSD(p.strikePrice)}</td>
+                <td style={{ left: 232 }} className={cn(td, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")}>{fmtDate(p.expirationDate)}</td>
+                <td style={{ left: 328 }} className={cn(td, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE] border-r border-border/40")}>{p.contracts}</td>
                 {/* Dates group */}
                 {isColOpen("dates") ? (
                   <>
-                    <td className={cn(tdClass, "border-l border-border/50")} title={fmtDateTimeFull(p.openedAt)}>{fmtDateTimeShort(p.openedAt)}</td>
-                    <td className={tdClass} title={p.closedAt ? fmtDateTimeFull(p.closedAt) : undefined}>{p.closedAt ? fmtDateTimeShort(p.closedAt) : fmtDate(p.expirationDate)}</td>
-                    <td className={tdClass}>{c.daysInTrade != null ? `${Math.round(c.daysInTrade)}d` : "—"}</td>
+                    <td className={cn(td, "border-l border-border/50")} title={fmtDateTimeFull(p.openedAt)}>{fmtDateTimeShort(p.openedAt)}</td>
+                    <td className={td} title={p.closedAt ? fmtDateTimeFull(p.closedAt) : undefined}>{p.closedAt ? fmtDateTimeShort(p.closedAt) : fmtDate(p.expirationDate)}</td>
+                    <td className={td}>{c.daysInTrade != null ? `${Math.round(c.daysInTrade)}d` : "—"}</td>
                   </>
                 ) : (
-                  <td className={cn(tdClass, "border-l border-border/50")}>
+                  <td className={cn(td, "border-l border-border/50")}>
                     {c.daysInTrade != null ? `${Math.round(c.daysInTrade)}d` : "—"}
                   </td>
                 )}
                 {/* P&L group */}
                 {isColOpen("pnl") ? (
                   <>
-                    <td className={cn(tdClass, "border-l border-border/50")}>${fmtUSD(p.premiumPerShare)}</td>
-                    <td className={tdClass}>
+                    <td className={cn(td, "border-l border-border/50")}>${fmtUSD(p.premiumPerShare)}</td>
+                    <td className={td}>
                       {p.outcome === "EXPIRED_WORTHLESS" || p.outcome === "ASSIGNED" ? "—" : fmt(p.closePremiumPerShare, 2, "$")}
                     </td>
-                    <td className={tdClass}>${fmtUSD(c.totalFees)}</td>
-                    <td className={tdClass}>
+                    <td className={td}>${fmtUSD(c.totalFees)}</td>
+                    <td className={td}>
                       {c.pnl != null ? (
                         <span className={cn("font-medium", c.pnl >= 0 ? "text-green-600" : "text-red-600")}>
                           {c.pnl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(c.pnl))}
@@ -2650,7 +2850,7 @@ function ClosedPositionsTable({ positions, onEdit, onDelete }: ClosedPositionsTa
                     </td>
                   </>
                 ) : (
-                  <td className={cn(tdClass, "border-l border-border/50")}>
+                  <td className={cn(td, "border-l border-border/50")}>
                     {c.pnl != null ? (
                       <span className={cn("font-medium", c.pnl >= 0 ? "text-green-600" : "text-red-600")}>
                         {c.pnl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(c.pnl))}
@@ -2659,14 +2859,14 @@ function ClosedPositionsTable({ positions, onEdit, onDelete }: ClosedPositionsTa
                   </td>
                 )}
                 {/* Always-visible trailing columns */}
-                <td className={tdClass}>
+                <td className={td}>
                   {c.closedAnnReturn != null ? (
                     <span className={cn(c.closedAnnReturn >= 0 ? "text-green-600" : "text-red-600")}>
                       {fmtPct(c.closedAnnReturn)}
                     </span>
                   ) : "—"}
                 </td>
-                <td className={tdClass}>
+                <td className={td}>
                   <span className={cn(
                     "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
                     p.outcome === "EXPIRED_WORTHLESS" ? "bg-green-100 text-green-700" :
@@ -2677,7 +2877,7 @@ function ClosedPositionsTable({ positions, onEdit, onDelete }: ClosedPositionsTa
                     {p.outcome ? outcomeLabel[p.outcome] : "—"}
                   </span>
                 </td>
-                <td className={tdClass}>
+                <td className={td}>
                   <div className="flex items-center gap-0.5">
                     <button
                       onClick={() => onEdit(p)}
@@ -2697,7 +2897,66 @@ function ClosedPositionsTable({ positions, onEdit, onDelete }: ClosedPositionsTa
                 </td>
               </tr>
             );
+
+            const chainRow = cs ? (
+              <tr key={`${p.id}-chain`} className="group border-b border-border">
+                {/* Label — frozen */}
+                <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE] pl-4 pr-2 font-medium text-muted-foreground/60 uppercase tracking-wide text-[10px]")}>chain</td>
+                <td style={{ left: 80 }}  className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")} />
+                <td style={{ left: 152 }} className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")} />
+                <td style={{ left: 232 }} className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")} />
+                <td style={{ left: 328 }} className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE] border-r border-border/40")} />
+                {/* Dates group */}
+                {isColOpen("dates") ? (
+                  <>
+                    <td className={cn(ctd, "border-l border-border/50")}>
+                      {fmtDateTimeShort(cs.legs[0].openedAt)}
+                    </td>
+                    <td className={ctd}>
+                      {new Date(cs.lastCloseMs).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" })}
+                    </td>
+                    <td className={ctd}>{Math.round(cs.chainDaysInTrade)}d</td>
+                  </>
+                ) : (
+                  <td className={cn(ctd, "border-l border-border/50")}>{Math.round(cs.chainDaysInTrade)}d</td>
+                )}
+                {/* P&L group */}
+                {isColOpen("pnl") ? (
+                  <>
+                    <td className={cn(ctd, "border-l border-border/50")} />
+                    <td className={ctd} />
+                    <td className={ctd}>${fmtUSD(cs.totalFees)}</td>
+                    <td className={ctd}>
+                      <span className={cn("font-medium", cs.chainPnl >= 0 ? "text-green-600" : "text-red-600")}>
+                        {cs.chainPnl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(cs.chainPnl))}
+                      </span>
+                    </td>
+                  </>
+                ) : (
+                  <td className={cn(ctd, "border-l border-border/50")}>
+                    <span className={cn("font-medium", cs.chainPnl >= 0 ? "text-green-600" : "text-red-600")}>
+                      {cs.chainPnl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(cs.chainPnl))}
+                    </span>
+                  </td>
+                )}
+                {/* Ann. Return */}
+                <td className={ctd}>
+                  {cs.chainAnnReturn != null ? (
+                    <span className={cn("font-medium", cs.chainAnnReturn >= 0 ? "text-green-600" : "text-red-600")}>
+                      {fmtPct(cs.chainAnnReturn)}
+                    </span>
+                  ) : "—"}
+                </td>
+                {/* Outcome — empty; P&L + Ann. Return already convey the result */}
+                <td className={ctd} />
+                {/* Actions — empty */}
+                <td className={ctd} />
+              </tr>
+            ) : null;
+
+            return <React.Fragment key={p.id}>{positionRow}{chainRow}</React.Fragment>;
           })];
+
             });
           })()}
         </tbody>
@@ -3070,6 +3329,20 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
           ) : "—"}
         </td>
         <td className={tdCls}>
+          {m.ccPremium !== 0 ? (
+            <span className={m.ccPremium >= 0 ? "text-green-600" : "text-red-600"}>
+              {m.ccPremium >= 0 ? "" : "−"}${fmtUSD(Math.abs(m.ccPremium))}
+            </span>
+          ) : <span className="text-muted-foreground">—</span>}
+        </td>
+        <td className={tdCls}>
+          {m.cspPremium !== 0 ? (
+            <span className={m.cspPremium >= 0 ? "text-green-600" : "text-red-600"}>
+              {m.cspPremium >= 0 ? "" : "−"}${fmtUSD(Math.abs(m.cspPremium))}
+            </span>
+          ) : <span className="text-muted-foreground">—</span>}
+        </td>
+        <td className={tdCls}>
           {m.closedCount > 0 ? (
             <span className={m.totalPremium >= 0 ? "text-green-600" : "text-red-600"}>
               {m.totalPremium >= 0 ? "" : "−"}${fmtUSD(Math.abs(m.totalPremium))}
@@ -3100,6 +3373,8 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
               <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Win Rate</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Assign. Rate</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">Avg Days (actual / exp.)</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">CC Premium</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">CSP Premium</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">Total Premium</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">Wtd. Ann. Return</th>
             </tr>
@@ -3229,7 +3504,7 @@ function SummaryCards({
           <div className="w-px bg-border self-stretch shrink-0" />
           <div className="flex-1 min-w-0 pl-3">
             <p className="text-xl font-semibold text-muted-foreground truncate">
-              {pendingThisWeek > 0 ? `$${fmtUSD(pendingThisWeek)}` : "—"}
+              {pendingThisWeek > 0 ? `$${fmtUSD(pendingThisWeek)}` : "$0"}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">pending</p>
           </div>
@@ -3407,6 +3682,7 @@ export function OptionsTrading() {
           ) : (
             <ClosedPositionsTable
               positions={closedPositions}
+              openChainGroupIds={new Set(openPositions.filter((p) => p.groupId).map((p) => p.groupId as string))}
               onEdit={(p) => setEditCloseModal(p)}
               onDelete={handleDelete}
             />

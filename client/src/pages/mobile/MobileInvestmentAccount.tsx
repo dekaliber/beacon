@@ -69,8 +69,8 @@ function computeLotGains(
   acquiredDate: string | null,
   currentPrice: number | null,
 ) {
-  const qty = parseFloat(quantity);
-  const cps = parseFloat(costPerShare);
+  const qty = parseFloat(quantity.replace(/,/g, ""));
+  const cps = parseFloat(costPerShare.replace(/,/g, ""));
   const totalCost = qty * cps;
   if (currentPrice == null) return { totalCost, marketValue: null, totalGain: null };
   const marketValue = qty * currentPrice;
@@ -428,8 +428,8 @@ function LotEditScreen({
   );
 
   const handleSave = async () => {
-    const qtyNum = parseFloat(qty);
-    const cpsNum = parseFloat(cps);
+    const qtyNum = parseFloat(qty.replace(/,/g, ""));
+    const cpsNum = parseFloat(cps.replace(/,/g, ""));
     if (isNaN(qtyNum) || isNaN(cpsNum) || qtyNum <= 0 || cpsNum < 0) {
       setError("Enter a valid quantity and cost per share.");
       return;
@@ -1179,8 +1179,8 @@ function AddInvestmentFullscreen({
         managed,
       });
       for (const lot of lots) {
-        const qty = parseFloat(lot.quantity);
-        const cps = parseFloat(lot.costPerShare);
+        const qty = parseFloat(lot.quantity.replace(/,/g, ""));
+        const cps = parseFloat(lot.costPerShare.replace(/,/g, ""));
         if (isNaN(qty) || isNaN(cps)) continue;
         await createLot({
           holdingId: holding.id,
@@ -1371,8 +1371,8 @@ function AddManualFullscreen({
     }
   }, [open, editing]);
 
-  const parsedMV = parseFloat(marketValue);
-  const parsedCost = totalCost !== "" ? parseFloat(totalCost) : null;
+  const parsedMV = parseFloat(marketValue.replace(/,/g, ""));
+  const parsedCost = totalCost !== "" ? parseFloat(totalCost.replace(/,/g, "")) : null;
   const totalGain = parsedCost != null && !isNaN(parsedMV) ? parsedMV - parsedCost : null;
 
   const handleSave = async () => {

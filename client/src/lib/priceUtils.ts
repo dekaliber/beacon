@@ -52,6 +52,31 @@ function currentHourET(now: Date): number {
   );
 }
 
+/**
+ * Returns true if the current wall-clock time falls within the options trading
+ * window: weekdays, 8 AM – 5 PM ET (regular market hours are 9:30 AM – 4 PM,
+ * with ±1 h buffer for pre/after-market quotes Tradier may have available).
+ *
+ * Used to gate automatic page-load quote refreshes on the Options page so we
+ * don't burn Tradier API calls on nights, weekends, or holidays when prices
+ * won't change. Manual refreshes are NOT gated by this function.
+ */
+export function isWithinOptionsTradingWindow(): boolean {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    weekday: "short",
+    hour: "numeric",
+    hour12: false,
+  }).formatToParts(now);
+
+  const weekday = parts.find((p) => p.type === "weekday")!.value; // "Mon"–"Sun"
+  const hour = parseInt(parts.find((p) => p.type === "hour")!.value, 10);
+
+  const isWeekday = !["Sat", "Sun"].includes(weekday);
+  return isWeekday && hour >= 8 && hour < 17;
+}
+
 // Returns true if any holding has a stale price and a refresh should be triggered.
 //
 // For stock/fund holdings: prices are considered stale once it is past 8PM Eastern
