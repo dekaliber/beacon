@@ -312,6 +312,21 @@ expenseRoutes.get("/vendor-category", async (req, res) => {
   res.json({ categoryId: groups[0]?.categoryId ?? null });
 });
 
+// Get the most recently used accountId for a given vendor
+expenseRoutes.get("/vendor-account", async (req, res) => {
+  const userId = getUserId(req);
+  const vendor = req.query.vendor as string;
+  if (!vendor) return res.json({ accountId: null });
+
+  const today = (req.query.today as string) || new Date().toISOString().slice(0, 10);
+  const expense = await prisma.expense.findFirst({
+    where: { account: { userId }, vendor: { equals: vendor, mode: "insensitive" }, date: { lte: new Date(today) } },
+    orderBy: { date: "desc" },
+    select: { accountId: true },
+  });
+  res.json({ accountId: expense?.accountId ?? null });
+});
+
 // Count uncategorized expenses (exclude offsets)
 expenseRoutes.get("/uncategorized-count", async (req, res) => {
   const userId = getUserId(req);

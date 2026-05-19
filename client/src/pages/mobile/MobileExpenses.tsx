@@ -3,7 +3,7 @@ import { Plus, X, ChevronDown, ChevronRight, AlertCircle, Check, CornerDownRight
 import { PageHeadingMenu } from "@/components/PageHeadingMenu";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import { useApi } from "@/hooks/useApi";
-import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, deleteExpense, getExpenseVendors, getTags, createTag, createRecurrenceRule, getVendorCategory } from "@/api";
+import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, deleteExpense, getExpenseVendors, getTags, createTag, createRecurrenceRule, getVendorCategory, getVendorAccount } from "@/api";
 import { formatCurrency, formatDate, localToday, cn } from "@/lib/utils";
 import type { Account, Category, Expense, Tag } from "@/types";
 
@@ -369,6 +369,7 @@ function MobileExpenseModal({
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [autofillCategoryId, setAutofillCategoryId] = useState<string | undefined>(undefined);
+  const [selectedAccountId, setSelectedAccountId] = useState<string>(expense?.accountId ?? "");
   const [error, setError] = useState<string | null>(null);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(() => expense?.tags.map((t) => t.tagId) ?? []);
   const [isReimbursementExpected, setIsReimbursementExpected] = useState(expense?.isReimbursementExpected ?? false);
@@ -384,8 +385,11 @@ function MobileExpenseModal({
   const isEditing = expense != null;
 
   useEffect(() => {
-    if (open) setAutofillCategoryId(undefined);
-  }, [open]);
+    if (open) {
+      setAutofillCategoryId(undefined);
+      setSelectedAccountId(expense?.accountId ?? "");
+    }
+  }, [open, expense?.accountId]);
 
   // Lock body scroll while open — prevents iOS Safari from scrolling the page
   // underneath when the address bar retracts.
@@ -410,8 +414,12 @@ function MobileExpenseModal({
   const handleVendorSelect = async (vendor: string) => {
     if (!isEditing && vendor) {
       try {
-        const result = await getVendorCategory(vendor, localToday());
-        if (result.categoryId) setAutofillCategoryId(result.categoryId);
+        const [catResult, acctResult] = await Promise.all([
+          getVendorCategory(vendor, localToday()),
+          getVendorAccount(vendor, localToday()),
+        ]);
+        if (catResult.categoryId) setAutofillCategoryId(catResult.categoryId);
+        if (acctResult.accountId) setSelectedAccountId(acctResult.accountId);
       } catch { /* ignore */ }
     }
   };
@@ -547,7 +555,8 @@ function MobileExpenseModal({
               <select
                 name="accountId"
                 required
-                defaultValue={expense?.accountId ?? ""}
+                value={selectedAccountId}
+                onChange={(e) => setSelectedAccountId(e.target.value)}
                 className="appearance-none w-full rounded-md border border-border py-2.5 pl-3 pr-8 text-sm text-foreground focus:border-primary focus:outline-none"
               >
                 <option value="" disabled>Select account…</option>

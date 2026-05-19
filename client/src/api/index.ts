@@ -78,6 +78,8 @@ export const deleteExpense = (id: string, deleteFuture?: boolean) =>
 export const getExpenseVendors = () => api.get<string[]>("/expenses/vendors");
 export const getVendorCategory = (vendor: string, today: string) =>
   api.get<{ categoryId: string | null }>(`/expenses/vendor-category?vendor=${encodeURIComponent(vendor)}&today=${today}`);
+export const getVendorAccount = (vendor: string, today: string) =>
+  api.get<{ accountId: string | null }>(`/expenses/vendor-account?vendor=${encodeURIComponent(vendor)}&today=${today}`);
 export const getUncategorizedCount = () => api.get<{ count: number }>("/expenses/uncategorized-count");
 export const importExpenses = (expenses: Record<string, unknown>[]) =>
   api.post<{ imported: number; errors: Array<{ row: number; message: string }> }>("/expenses/import", { expenses });

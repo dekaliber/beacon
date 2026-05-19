@@ -23,7 +23,7 @@ import {
   getExpenses, getAccounts, getFlatCategories, getTags,
   createExpense, updateExpense, deleteExpense, importExpenses,
   createRecurrenceRule, createTransactionGroup, updateTransactionGroup,
-  getExpenseVendors, getVendorCategory, getUncategorizedCount,
+  getExpenseVendors, getVendorCategory, getVendorAccount, getUncategorizedCount,
   updateExpenseParent, createTag,
 } from "@/api";
 import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/utils";
@@ -3170,6 +3170,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showOptional, setShowOptional] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
+  const [selectedAccountId, setSelectedAccountId] = useState<string>("");
   const [showRecurringConfirm, setShowRecurringConfirm] = useState(false);
   const [pendingSaveData, setPendingSaveData] = useState<Record<string, unknown> | null>(null);
   const [amountIsNegative, setAmountIsNegative] = useState(false);
@@ -3191,6 +3192,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
         setShowEndDate(false);
         setConfirmDelete(false);
         setSelectedCategoryId(offsetParent.categoryId ?? "");
+        setSelectedAccountId("");
         setShowOptional(false);
       } else {
         setSelectedTagIds(expense?.tags.map((t) => t.tagId) ?? []);
@@ -3201,6 +3203,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
         setShowEndDate(false);
         setConfirmDelete(false);
         setSelectedCategoryId(expense?.categoryId ?? "");
+        setSelectedAccountId(expense?.accountId ?? "");
         // Auto-expand optional if any optional fields have data
         setShowOptional(!!(expense?.notes || expense?.isReimbursementExpected || expense?.recurrenceRuleId || expense?.ignoreInBudget));
         setShowRecurringConfirm(false);
@@ -3213,10 +3216,12 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
   const handleVendorSelect = async (vendor: string) => {
     if (!expense && vendor) {
       try {
-        const result = await getVendorCategory(vendor, localToday());
-        if (result.categoryId) {
-          setSelectedCategoryId(result.categoryId);
-        }
+        const [catResult, acctResult] = await Promise.all([
+          getVendorCategory(vendor, localToday()),
+          getVendorAccount(vendor, localToday()),
+        ]);
+        if (catResult.categoryId) setSelectedCategoryId(catResult.categoryId);
+        if (acctResult.accountId) setSelectedAccountId(acctResult.accountId);
       } catch { /* ignore */ }
     }
   };
@@ -3364,7 +3369,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
             <AccountTypeahead
               name="accountId"
               required
-              defaultValue={isOffsetMode ? "" : expense?.accountId ?? ""}
+              defaultValue={isOffsetMode ? "" : selectedAccountId}
               accounts={accounts}
               triggerRef={accountTriggerRef}
               onTabFromSearch={() => categoryTriggerRef.current?.focus()}
