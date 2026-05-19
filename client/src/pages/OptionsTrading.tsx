@@ -3462,6 +3462,99 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
   );
 }
 
+// ── Capital Distribution Bar ───────────────────────────────────────────────────
+
+const TICKER_COLORS = [
+  "#e05c5c", "#5b8dd9", "#7ab83f", "#9372cc",
+  "#d97a45", "#3aafc4", "#cc5c94", "#2fa878",
+  "#c99b3a", "#3a9fd4",
+];
+
+function CapitalDistributionBar({
+  openPositions,
+  settings,
+  tickerColorMap,
+}: {
+  openPositions: OptionsPosition[];
+  settings: OptionsSettings | null;
+  tickerColorMap: Map<string, string>;
+}) {
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; ticker: string; capital: number; pct: number } | null>(null);
+
+  const tickerCapital = new Map<string, number>();
+  for (const p of openPositions) {
+    const sym = p.ticker.symbol;
+    tickerCapital.set(sym, (tickerCapital.get(sym) ?? 0) + calcPosition(p).capitalAtRisk);
+  }
+
+  const totalDeployed = Array.from(tickerCapital.values()).reduce((s, v) => s + v, 0);
+  const basis = settings?.startingBasis ?? 0;
+  const total = Math.max(basis, totalDeployed);
+
+  if (total === 0) return null;
+
+  const tickers = Array.from(tickerColorMap.keys())
+    .filter((sym) => tickerCapital.has(sym))
+    .map((sym) => [sym, tickerCapital.get(sym)!] as [string, number]);
+
+  const undeployed = Math.max(0, total - totalDeployed);
+
+  return (
+    <div className="relative flex h-2 w-full overflow-hidden rounded-md">
+        {tickers.map(([sym, capital]) => {
+          const pct = (capital / total) * 100;
+          const color = tickerColorMap.get(sym)!;
+          return (
+            <div
+              key={sym}
+              style={{ width: `${pct}%`, backgroundColor: color }}
+              className="h-full transition-all cursor-default"
+              onMouseEnter={(e) => setTooltip({ x: e.clientX, y: e.clientY, ticker: sym, capital, pct })}
+              onMouseMove={(e) => setTooltip((t) => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
+              onMouseLeave={() => setTooltip(null)}
+            />
+          );
+        })}
+        {undeployed > 0 && (
+          <div
+            style={{ flex: 1, position: "relative", backgroundColor: "var(--color-muted)" }}
+            className="h-full cursor-default"
+            onMouseEnter={(e) => setTooltip({ x: e.clientX, y: e.clientY, ticker: "Undeployed", capital: undeployed, pct: (undeployed / total) * 100 })}
+            onMouseMove={(e) => setTooltip((t) => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
+            onMouseLeave={() => setTooltip(null)}
+          >
+            <svg width="100%" height="100%" style={{ position: "absolute", inset: 0 }}>
+              <defs>
+                <pattern id="undeployed-stripe" x="0" y="0" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                  <rect width="2" height="4" fill="rgba(100,116,139,0.35)" />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#undeployed-stripe)" />
+            </svg>
+          </div>
+        )}
+        {tooltip && (
+          <div
+            className="fixed z-[60] pointer-events-none bg-white border border-border rounded-lg shadow-lg px-3 py-2 text-xs min-w-[160px]"
+            style={{ left: tooltip.x + 14, top: tooltip.y - 8, transform: "translateY(-100%)" }}
+          >
+            <p className="font-semibold mb-1.5">{tooltip.ticker}</p>
+            <div className="space-y-1">
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Capital</span>
+                <span className="font-medium tabular-nums">${tooltip.capital.toLocaleString("en-US", { maximumFractionDigits: 0 })}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Share</span>
+                <span className="font-medium tabular-nums">{tooltip.pct.toFixed(1)}%</span>
+              </div>
+            </div>
+          </div>
+        )}
+    </div>
+  );
+}
+
 // ── Summary Cards ──────────────────────────────────────────────────────────────
 
 function SummaryCards({
@@ -3631,10 +3724,14 @@ export function OptionsTrading() {
   for (const p of openPositions) {
     openTickerMap.set(p.ticker.symbol, (openTickerMap.get(p.ticker.symbol) ?? 0) + p.contracts);
   }
+
+  const tickerColorMap = new Map(
+    Array.from(openTickerMap.keys())
+      .map((sym, i) => [sym, TICKER_COLORS[i % TICKER_COLORS.length]] as [string, string])
+  );
+
   const tradingWeekLabel = getTradingWeekLabel();
-  const tickerSuffix = Array.from(openTickerMap.entries())
-    .map(([sym, ct]) => `${sym} x${ct}`)
-    .join(" · ");
+  const tickerEntries = Array.from(openTickerMap.entries());
 
   const refetchAll = useCallback(() => {
     refetchPositions();
@@ -3658,32 +3755,51 @@ export function OptionsTrading() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Options Trading</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            <span>{tradingWeekLabel}</span>
-            {tickerSuffix && <span className="ml-6">{tickerSuffix}</span>}
-          </p>
+      {/* Header + Capital Distribution Bar */}
+      <div className="space-y-3">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-2xl font-bold">Options Trading</h2>
+            <p className="text-sm text-muted-foreground mt-0.5 flex items-center flex-wrap gap-x-6">
+              <span>{tradingWeekLabel}</span>
+              {tickerEntries.length > 0 && (
+                <span className="flex items-center gap-x-4">
+                  {tickerEntries.map(([sym, ct]) => (
+                    <span key={sym} className="flex items-center gap-1.5">
+                      <span
+                        className="inline-block w-2 h-2 rounded-sm flex-shrink-0"
+                        style={{ backgroundColor: tickerColorMap.get(sym) }}
+                      />
+                      {sym} x{ct}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setSettingsModal(true)}
+              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            >
+              <Settings className="h-4 w-4" />
+              Settings
+            </button>
+            <Button variant="secondary" className="border border-border" onClick={() => setImportModalOpen(true)}>
+              <Upload className="h-4 w-4" /> Import
+            </Button>
+            <Button onClick={() => setPositionModal("new")}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              Open Position
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setSettingsModal(true)}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          >
-            <Settings className="h-4 w-4" />
-            Settings
-          </button>
-          <Button variant="secondary" className="border border-border" onClick={() => setImportModalOpen(true)}>
-            <Upload className="h-4 w-4" /> Import
-          </Button>
-          <Button onClick={() => setPositionModal("new")}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            Open Position
-          </Button>
-        </div>
+        <CapitalDistributionBar
+          openPositions={openPositions}
+          settings={settings ?? null}
+          tickerColorMap={tickerColorMap}
+        />
       </div>
 
       {/* Summary Cards */}
