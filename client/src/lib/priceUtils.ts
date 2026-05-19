@@ -53,33 +53,56 @@ function currentHourET(now: Date): number {
 }
 
 /**
- * Returns true if the given timestamp was today (ET) at or after 5 PM ET.
+ * Returns true if cached options prices from `lastFetchedAt` are still fresh —
+ * i.e. no new trading session has opened since they were captured.
  *
- * Used to decide whether to skip the options auto-refresh on page load: we
- * only skip when post-close prices were already captured today. If the last
- * fetch was before 5 PM (even if the current time is after 5 PM), or if it
- * was on a prior day, we should still fetch fresh data.
+ * Rules:
+ *  1. The last fetch must have been at or after 5 PM ET on a weekday (post-close).
+ *     If it was pre-close or on a weekend, prices are always considered stale.
+ *  2. If we are currently on a weekend, markets are closed → still fresh.
+ *  3. If we are on the same ET calendar day as the fetch → still fresh.
+ *  4. If we are on a later weekday but still before 8 AM ET → still fresh
+ *     (pre-market; no new session has started yet).
+ *  5. Otherwise (weekday, 8 AM ET or later, different day) → stale; re-fetch.
+ *
+ * This correctly handles overnight (e.g. fetch Mon 5 PM, check Tue 12 AM),
+ * weekends (fetch Fri 5 PM, check Sat/Sun/Mon pre-8 AM), and pre-market
+ * mornings without running unnecessary Tradier API calls.
  */
-export function optionsLastFetchWasPostClose(lastFetchedAt: Date): boolean {
+export function optionsPricesAreFresh(lastFetchedAt: Date): boolean {
   const now = new Date();
-  const fmt = (d: Date) =>
-    new Intl.DateTimeFormat("en-US", {
+
+  const etInfo = (d: Date) => {
+    const parts = new Intl.DateTimeFormat("en-US", {
       timeZone: "America/New_York",
+      weekday: "short",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
       hour: "numeric",
       hour12: false,
     }).formatToParts(d);
+    return {
+      weekday: parts.find((p) => p.type === "weekday")!.value,
+      date: `${parts.find((p) => p.type === "year")!.value}-${parts.find((p) => p.type === "month")!.value}-${parts.find((p) => p.type === "day")!.value}`,
+      hour: parseInt(parts.find((p) => p.type === "hour")!.value, 10),
+    };
+  };
 
-  const fetchParts = fmt(lastFetchedAt);
-  const nowParts = fmt(now);
-  const getDate = (parts: Intl.DateTimeFormatPart[]) =>
-    `${parts.find((p) => p.type === "year")!.value}-${parts.find((p) => p.type === "month")!.value}-${parts.find((p) => p.type === "day")!.value}`;
-  const getHour = (parts: Intl.DateTimeFormatPart[]) =>
-    parseInt(parts.find((p) => p.type === "hour")!.value, 10);
+  const fetch = etInfo(lastFetchedAt);
+  const cur   = etInfo(now);
 
-  return getDate(fetchParts) === getDate(nowParts) && getHour(fetchParts) >= 17;
+  // Rule 1: fetch must have been post-close on a weekday
+  if (["Sat", "Sun"].includes(fetch.weekday) || fetch.hour < 17) return false;
+
+  // Rule 2: currently a weekend → markets closed, prices still valid
+  if (["Sat", "Sun"].includes(cur.weekday)) return true;
+
+  // Rule 3: same ET calendar day → still in the same post-close window
+  if (fetch.date === cur.date) return true;
+
+  // Rule 4: later weekday but pre-market (before 8 AM ET) → no new session yet
+  return cur.hour < 8;
 }
 
 /**

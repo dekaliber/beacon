@@ -40,7 +40,7 @@ import { Modal } from "@/components/Modal";
 import { Plus, ChevronDown, ChevronUp, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw } from "lucide-react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { optionsLastFetchWasPostClose } from "@/lib/priceUtils";
+import { optionsPricesAreFresh } from "@/lib/priceUtils";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import {
   ResponsiveContainer,
@@ -1915,7 +1915,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
 
   const tickerKey = [...positions, ...draftPositions].map((p) => p.ticker.symbol).join(",");
   useEffect(() => {
-    if (lastFetchedAt != null && optionsLastFetchWasPostClose(lastFetchedAt) && livePrices.size > 0) return;
+    if (lastFetchedAt != null && optionsPricesAreFresh(lastFetchedAt) && livePrices.size > 0) return;
     fetchAllStockPrices();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tickerKey]);
@@ -1988,7 +1988,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
   const positionIdsKey = [...positions, ...draftPositions].filter((p) => p.status === "OPEN").map((p) => p.id).join(",");
   useEffect(() => {
     if (!positionIdsKey) return;
-    if (lastFetchedAt != null && optionsLastFetchWasPostClose(lastFetchedAt) && livePrices.size > 0) return;
+    if (lastFetchedAt != null && optionsPricesAreFresh(lastFetchedAt) && livePrices.size > 0) return;
     fetchAllQuotes();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [positionIdsKey]);
