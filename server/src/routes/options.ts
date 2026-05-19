@@ -530,31 +530,7 @@ optionsRoutes.get("/stock-quote/:symbol", async (req, res) => {
   }
 });
 
-// ── Stock Price at Open (Yahoo Finance 1m) ────────────────────────────────────
-
-// Converts a datetime-local string treated as America/New_York to a UTC unix timestamp.
-// Handles DST by verifying the assumed offset with Intl.
-function etToUtcUnix(etDateStr: string): number {
-  const [datePart, timePart] = etDateStr.split("T");
-  const [year, month, day] = datePart.split("-").map(Number);
-  const [hour, minute] = timePart.split(":").map(Number);
-
-  // Try EDT (UTC-4) first, then verify with Intl
-  const candidate = new Date(Date.UTC(year, month - 1, day, hour + 4, minute));
-  const etHour = parseInt(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/New_York",
-      hour: "2-digit",
-      hour12: false,
-    }).format(candidate),
-    10
-  );
-
-  if (etHour === hour) return Math.floor(candidate.getTime() / 1000);
-
-  // Must be EST (UTC-5)
-  return Math.floor(new Date(Date.UTC(year, month - 1, day, hour + 5, minute)).getTime() / 1000);
-}
+// ── Stock Price at Open (Tradier timesales) ───────────────────────────────────
 
 optionsRoutes.get("/stock-price-at-open", async (req, res) => {
   const { symbol, openedAt } = req.query;
@@ -563,40 +539,43 @@ optionsRoutes.get("/stock-price-at-open", async (req, res) => {
   }
 
   try {
-    const unixTs = etToUtcUnix(openedAt as string);
-    const period1 = unixTs - 60;
-    const period2 = unixTs + 180;
+    // openedAt is "YYYY-MM-DDTHH:mm" in ET — Tradier timesales accepts ET strings natively
+    const [datePart, timePart] = (openedAt as string).split("T");
+    const [h, m] = timePart.split(":").map(Number);
+    const startStr = `${datePart} ${timePart}:00`;
+
+    // End = start + 3 minutes (handles hour rollover)
+    const endTotalMin = h * 60 + m + 3;
+    const endH = Math.floor(endTotalMin / 60) % 24;
+    const endM = endTotalMin % 60;
+    const endDatePart = endTotalMin >= 24 * 60
+      ? new Date(new Date(datePart).getTime() + 86_400_000).toISOString().slice(0, 10)
+      : datePart;
+    const endStr = `${endDatePart} ${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}:00`;
 
     const url =
-      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol as string)}` +
-      `?interval=1m&period1=${period1}&period2=${period2}`;
+      `${TRADIER_BASE}/markets/timesales` +
+      `?symbol=${encodeURIComponent(symbol as string)}` +
+      `&interval=1min` +
+      `&start=${encodeURIComponent(startStr)}` +
+      `&end=${encodeURIComponent(endStr)}` +
+      `&session_filter=open`;
 
-    const yahooRes = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
-    });
-    if (!yahooRes.ok) {
-      return res.status(502).json({ error: "Yahoo Finance unavailable" });
+    const tradierRes = await fetch(url, { headers: tradierHeaders() });
+    if (!tradierRes.ok) {
+      return res.status(502).json({ error: `Tradier returned ${tradierRes.status}` });
     }
 
-    const data = await yahooRes.json() as any;
-    const result = data?.chart?.result?.[0];
-    if (!result) return res.status(404).json({ error: "No data returned" });
+    const data = await tradierRes.json() as any;
+    // Tradier returns a single object (not array) when there's only one candle
+    const raw = data?.series?.data;
+    if (!raw) return res.status(404).json({ error: "No price data found" });
+    const candles: any[] = Array.isArray(raw) ? raw : [raw];
+    if (candles.length === 0) return res.status(404).json({ error: "No price data found" });
 
-    const timestamps: number[] = result.timestamp ?? [];
-    const opens: (number | null)[] = result.indicators?.quote?.[0]?.open ?? [];
-
-    // Prefer the candle at or just after the requested time
-    let bestIdx = timestamps.findIndex((ts, i) => ts >= unixTs && opens[i] != null);
-    if (bestIdx === -1) {
-      // Fall back to the last non-null candle in the window
-      for (let i = timestamps.length - 1; i >= 0; i--) {
-        if (opens[i] != null) { bestIdx = i; break; }
-      }
-    }
-    if (bestIdx === -1) return res.status(404).json({ error: "No price data found" });
-
-    const price = opens[bestIdx]!;
-    const candleDate = new Date(timestamps[bestIdx] * 1000);
+    const candle = candles[0];
+    const price: number = candle.open;
+    const candleDate = new Date(candle.timestamp * 1000);
     const timeLabel =
       new Intl.DateTimeFormat("en-US", {
         timeZone: "America/New_York",
