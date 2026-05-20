@@ -800,6 +800,26 @@ export const getOptionsSettings = () =>
 export const updateOptionsSettings = (data: Partial<OptionsSettings>) =>
   api.put<OptionsSettings>("/options/settings", data);
 
+// Capital Changes
+export interface OptionsCapitalChange {
+  id: string;
+  userId: string;
+  effectiveDate: string; // YYYY-MM-DD
+  delta: number; // positive = deposit, negative = withdrawal
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const getOptionsCapitalChanges = () =>
+  api.get<OptionsCapitalChange[]>("/options/capital-changes");
+
+export const createOptionsCapitalChange = (data: { effectiveDate: string; delta: number; note?: string | null }) =>
+  api.post<OptionsCapitalChange>("/options/capital-changes", data);
+
+export const deleteOptionsCapitalChange = (id: string) =>
+  api.delete(`/options/capital-changes/${id}`);
+
 // Tickers
 export const getOptionsTickers = () =>
   api.get<OptionsTicker[]>("/options/tickers");

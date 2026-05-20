@@ -42,6 +42,43 @@ optionsRoutes.put("/settings", async (req, res) => {
   res.json(settings);
 });
 
+// ── Capital Changes ────────────────────────────────────────────────────────────
+
+const capitalChangeSchema = z.object({
+  effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  delta: z.coerce.number().refine((v) => v !== 0, { message: "Delta cannot be zero" }),
+  note: z.string().nullable().optional(),
+});
+
+optionsRoutes.get("/capital-changes", async (req, res) => {
+  const userId = getUserId(req);
+  const changes = await prisma.optionsCapitalChange.findMany({
+    where: { userId },
+    orderBy: { effectiveDate: "asc" },
+  });
+  res.json(changes);
+});
+
+optionsRoutes.post("/capital-changes", async (req, res) => {
+  const userId = getUserId(req);
+  const parsed = capitalChangeSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const change = await prisma.optionsCapitalChange.create({
+    data: { userId, ...parsed.data },
+  });
+  res.status(201).json(change);
+});
+
+optionsRoutes.delete("/capital-changes/:id", async (req, res) => {
+  const userId = getUserId(req);
+  const result = await prisma.optionsCapitalChange.deleteMany({
+    where: { id: req.params.id, userId },
+  });
+  if (result.count === 0) return res.status(404).json({ error: "Not found" });
+  res.status(204).send();
+});
+
 // ── Tickers ────────────────────────────────────────────────────────────────────
 
 const tickerSchema = z.object({

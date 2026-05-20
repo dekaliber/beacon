@@ -7,7 +7,7 @@ export const DEMO_MODE_KEY = "beacon_demo_mode";
 export function getOrCreateDemoScale(): number {
   const stored = localStorage.getItem(DEMO_SCALE_KEY);
   if (stored) return parseFloat(stored);
-  const factor = 0.35 + Math.random() * 0.30;
+  const factor = 0.25 + Math.random() * 0.10;
   localStorage.setItem(DEMO_SCALE_KEY, String(factor));
   return factor;
 }

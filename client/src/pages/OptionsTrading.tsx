@@ -6,6 +6,9 @@ import {
   getOptionsTickers,
   getOptionsGroups,
   updateOptionsSettings,
+  getOptionsCapitalChanges,
+  createOptionsCapitalChange,
+  deleteOptionsCapitalChange,
   createOptionsTicker,
   createOptionsPosition,
   updateOptionsPosition,
@@ -28,6 +31,7 @@ import {
   type OptionsTicker,
   type OptionsPositionGroup,
   type OptionsSettings,
+  type OptionsCapitalChange,
   type OptionsPositionInput,
   type OptionsCloseInput,
   type OptionOutcome,
@@ -1612,8 +1616,10 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
 
 interface SettingsModalProps {
   current: OptionsSettings | null;
+  capitalChanges: OptionsCapitalChange[];
   onClose: () => void;
   onSaved: () => void;
+  onCapitalChangeMutated: () => void;
 }
 
 /** Returns Monday ISO strings for every week of the current year through today. */
@@ -1645,7 +1651,7 @@ function getYearWeeks(): { monIso: string; label: string }[] {
   return weeks;
 }
 
-function SettingsModal({ current, onClose, onSaved }: SettingsModalProps) {
+function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalChangeMutated }: SettingsModalProps) {
   const [startingBasis, setStartingBasis] = useState(current?.startingBasis?.toString() ?? "");
   const [targetReturn, setTargetReturn] = useState(
     current ? (current.targetReturn * 100).toFixed(1) : ""
@@ -1653,6 +1659,52 @@ function SettingsModal({ current, onClose, onSaved }: SettingsModalProps) {
   const [startingWeek, setStartingWeek] = useState(current?.startingWeek ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const [showAdjustForm, setShowAdjustForm] = useState(false);
+  const [adjustDate, setAdjustDate] = useState(todayStr);
+  const [adjustDelta, setAdjustDelta] = useState("");
+  const [adjustNote, setAdjustNote] = useState("");
+  const [adjustSaving, setAdjustSaving] = useState(false);
+  const [adjustError, setAdjustError] = useState("");
+
+  const handleAddAdjustment = async () => {
+    const delta = parseFloat(adjustDelta.replace(/,/g, ""));
+    if (isNaN(delta) || delta === 0) { setAdjustError("Enter a non-zero amount."); return; }
+    setAdjustSaving(true);
+    setAdjustError("");
+    try {
+      await createOptionsCapitalChange({ effectiveDate: adjustDate, delta, note: adjustNote || null });
+      onCapitalChangeMutated();
+      setAdjustDelta("");
+      setAdjustNote("");
+      setAdjustDate(todayStr);
+      setShowAdjustForm(false);
+    } catch {
+      setAdjustError("Failed to save adjustment.");
+    } finally {
+      setAdjustSaving(false);
+    }
+  };
+
+  const handleDeleteAdjustment = async (id: string) => {
+    await deleteOptionsCapitalChange(id);
+    onCapitalChangeMutated();
+  };
+
+  const sortedChanges = useMemo(
+    () => [...capitalChanges].sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate)),
+    [capitalChanges]
+  );
+
+  const runningBasisRows = useMemo(() => {
+    const basis = parseFloat(startingBasis.replace(/,/g, "")) || 0;
+    let running = basis;
+    return sortedChanges.map((c) => {
+      running += Number(c.delta);
+      return { ...c, runningBasis: running };
+    });
+  }, [sortedChanges, startingBasis]);
 
   const yearWeeks = useMemo(() => getYearWeeks(), []);
 
@@ -1679,7 +1731,7 @@ function SettingsModal({ current, onClose, onSaved }: SettingsModalProps) {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-xs font-medium mb-1">Starting Basis</label>
-          <p className="text-xs text-muted-foreground mb-2">Total capital allocated to options trading — used as the denominator for aggregate return calculations.</p>
+          <p className="text-xs text-muted-foreground mb-2">Total capital allocated to options trading — used as the denominator for annualized return calculations.</p>
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
@@ -1688,6 +1740,97 @@ function SettingsModal({ current, onClose, onSaved }: SettingsModalProps) {
               className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium mb-1">Basis Adjustments</label>
+          <p className="text-xs text-muted-foreground mb-2">Record cash added to or removed from the trading account so the annualized return is calculated correctly going forward.</p>
+
+          {/* Capital change history */}
+          {runningBasisRows.length > 0 && (
+            <div className="mb-2 border border-border rounded-md overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-muted/40 text-muted-foreground">
+                    <th className="px-3 py-1.5 text-left font-medium">Date</th>
+                    <th className="px-3 py-1.5 text-right font-medium">Change</th>
+                    <th className="px-3 py-1.5 text-right font-medium">New Basis</th>
+                    <th className="px-3 py-1.5 text-left font-medium">Note</th>
+                    <th className="px-2 py-1.5" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {runningBasisRows.map((row) => (
+                    <tr key={row.id} className="border-t border-border">
+                      <td className="px-3 py-1.5 tabular-nums">{row.effectiveDate}</td>
+                      <td className={cn("px-3 py-1.5 text-right tabular-nums", Number(row.delta) >= 0 ? "text-green-600" : "text-red-600")}>
+                        {Number(row.delta) >= 0 ? "+" : ""}${Math.abs(Number(row.delta)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">
+                        ${row.runningBasis.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-3 py-1.5 text-muted-foreground">{row.note ?? ""}</td>
+                      <td className="px-2 py-1.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAdjustment(row.id)}
+                          className="text-muted-foreground hover:text-destructive transition-colors"
+                          aria-label="Remove"
+                        >×</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Adjust form or trigger link */}
+          {showAdjustForm ? (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-xs text-muted-foreground mb-1">Date</label>
+                  <input
+                    type="date"
+                    value={adjustDate} onChange={(e) => setAdjustDate(e.target.value)}
+                    className="w-full rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs text-muted-foreground mb-1">Amount (+ deposit / − withdrawal)</label>
+                  <input
+                    type="text" inputMode="decimal" placeholder="e.g. 5000 or -2000"
+                    value={adjustDelta} onChange={(e) => setAdjustDelta(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleAddAdjustment(); }}
+                    className="w-full rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Note (optional)</label>
+                <input
+                  type="text" placeholder="e.g. Additional funding"
+                  value={adjustNote} onChange={(e) => setAdjustNote(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddAdjustment(); }}
+                  className="w-full rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              {adjustError && <p className="text-xs text-destructive">{adjustError}</p>}
+              <div className="flex gap-2">
+                <Button type="button" size="sm" disabled={adjustSaving} onClick={handleAddAdjustment}>{adjustSaving ? "Saving…" : "Add"}</Button>
+                <Button type="button" variant="secondary" size="sm" onClick={() => { setShowAdjustForm(false); setAdjustError(""); }}>Cancel</Button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAdjustForm(true)}
+              className="text-xs text-primary hover:underline"
+            >
+              ± Adjust basis
+            </button>
+          )}
         </div>
         <div>
           <label className="block text-xs font-medium mb-1">Starting Week</label>
@@ -3578,10 +3721,12 @@ function SummaryCards({
   openPositions,
   closedPositions,
   settings,
+  capitalChanges,
 }: {
   openPositions: OptionsPosition[];
   closedPositions: OptionsPosition[];
   settings: OptionsSettings | null;
+  capitalChanges: OptionsCapitalChange[];
 }) {
   const totalCapitalAtRisk = openPositions.reduce((sum, p) => {
     return sum + calcPosition(p).capitalAtRisk;
@@ -3615,7 +3760,9 @@ function SummaryCards({
     return sum + calcPosition(p).totalPremiumNet;
   }, 0);
 
-  // Annualized rate: cumulative pnl / basis over time elapsed since the starting week
+  // Annualized rate: cumulative pnl / basis over time elapsed since the starting week.
+  // When capital changes exist, the period is split at each change date and each sub-period
+  // is weighted by its own basis so deposits/withdrawals don't distort past returns.
   const annReturnFirstDate = (() => {
     if (settings?.startingWeek) {
       return getWeekStart(new Date(settings.startingWeek + "T12:00:00")).getTime();
@@ -3625,9 +3772,49 @@ function SummaryCards({
   })();
   const annReturn = (() => {
     if (!settings?.startingBasis || cumulativePremium === 0 || annReturnFirstDate == null) return null;
-    const elapsedDays = (Date.now() - annReturnFirstDate) / 86_400_000;
-    if (elapsedDays < 1) return null;
-    return (cumulativePremium / settings.startingBasis) * (365 / elapsedDays) * 100;
+    const totalElapsedDays = (Date.now() - annReturnFirstDate) / 86_400_000;
+    if (totalElapsedDays < 1) return null;
+
+    // No capital changes — use original simple formula
+    const changesAfterStart = capitalChanges.filter(
+      (c) => new Date(c.effectiveDate + "T12:00:00").getTime() > annReturnFirstDate
+    );
+    if (changesAfterStart.length === 0) {
+      return (cumulativePremium / settings.startingBasis) * (365 / totalElapsedDays) * 100;
+    }
+
+    // Build sub-period boundaries sorted by date
+    const sorted = [...changesAfterStart].sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
+    const periods: { startMs: number; basis: number }[] = [
+      { startMs: annReturnFirstDate, basis: settings.startingBasis },
+    ];
+    for (const c of sorted) {
+      const changeMs = new Date(c.effectiveDate + "T12:00:00").getTime();
+      const prevBasis = periods[periods.length - 1].basis;
+      periods.push({ startMs: changeMs, basis: prevBasis + Number(c.delta) });
+    }
+
+    // Sum premium earned in each sub-period weighted by that period's basis
+    let totalWeightedReturn = 0;
+    for (let i = 0; i < periods.length; i++) {
+      const periodStart = periods[i].startMs;
+      const periodEnd = i + 1 < periods.length ? periods[i + 1].startMs : Date.now();
+      const periodBasis = periods[i].basis;
+      if (periodBasis <= 0) continue;
+
+      const periodPremium = closedPositions.reduce((sum, p) => {
+        const closeMs = p.closedAt
+          ? new Date(p.closedAt).getTime()
+          : new Date(p.expirationDate).getTime();
+        if (closeMs >= periodStart && closeMs < periodEnd) {
+          return sum + (calcPosition(p).pnl ?? 0);
+        }
+        return sum;
+      }, 0);
+      totalWeightedReturn += periodPremium / periodBasis;
+    }
+
+    return totalWeightedReturn * (365 / totalElapsedDays) * 100;
   })();
 
   return (
@@ -3719,6 +3906,7 @@ export function OptionsTrading() {
   const { data: allPositions, refetch: refetchPositions } = useApi(getOptionsPositions, []);
   const { data: tickers, refetch: refetchTickers } = useApi(getOptionsTickers, []);
   const { data: groups, refetch: refetchGroups } = useApi(getOptionsGroups, []);
+  const { data: capitalChanges, refetch: refetchCapitalChanges } = useApi(getOptionsCapitalChanges, []);
 
   const normalizedPositions = (allPositions ?? []).map(normalizePosition);
   const draftPositions = normalizedPositions.filter((p) => p.isDraft);
@@ -3824,6 +4012,7 @@ export function OptionsTrading() {
         openPositions={openPositions}
         closedPositions={closedPositions}
         settings={settings ?? null}
+        capitalChanges={capitalChanges ?? []}
       />
 
       {/* Performance Charts */}
@@ -3912,8 +4101,10 @@ export function OptionsTrading() {
       {settingsModal && (
         <SettingsModal
           current={settings ?? null}
+          capitalChanges={capitalChanges ?? []}
           onClose={() => setSettingsModal(false)}
           onSaved={() => { setSettingsModal(false); refetchSettings(); }}
+          onCapitalChangeMutated={refetchCapitalChanges}
         />
       )}
 

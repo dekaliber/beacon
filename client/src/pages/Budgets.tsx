@@ -116,7 +116,6 @@ function BudgetSettingsModal({
               placeholder="0.00"
               onChange={(e) => setPersonal(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-              placeholder="0"
               className={inputClass}
               autoFocus
             />
@@ -138,7 +137,6 @@ function BudgetSettingsModal({
               placeholder="0.00"
               onChange={(e) => setJoint(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
-              placeholder="0"
               className={inputClass}
             />
           </div>
