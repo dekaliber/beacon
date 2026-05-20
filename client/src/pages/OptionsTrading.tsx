@@ -2088,10 +2088,19 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
     const chainFirstMs = hasChain
       ? Math.min(chainFirstOpenedMap.get(p.groupId!) ?? Infinity, new Date(p.openedAt).getTime())
       : null;
-    const chainDaysInTrade = chainFirstMs != null ? (Date.now() - chainFirstMs) / 86_400_000 : null;
+    // Days from original open to now (for live ann. return)
+    const chainDaysFromOpenToNow = chainFirstMs != null ? (Date.now() - chainFirstMs) / 86_400_000 : null;
     const chainCurAnnRet =
-      chainLivePnl != null && c.capitalAtRisk > 0 && chainDaysInTrade != null && chainDaysInTrade > 0
-        ? (chainLivePnl / c.capitalAtRisk) * (365 / chainDaysInTrade) * 100
+      chainLivePnl != null && c.capitalAtRisk > 0 && chainDaysFromOpenToNow != null && chainDaysFromOpenToNow > 0
+        ? (chainLivePnl / c.capitalAtRisk) * (365 / chainDaysFromOpenToNow) * 100
+        : null;
+    // Days from original open to current leg's expiry (for duration display + ann. return at expiry)
+    const chainExpiryMs = new Date(p.openedAt).getTime() + c.durationDays * 86_400_000;
+    const chainTotalDaysToExpiry = chainFirstMs != null ? (chainExpiryMs - chainFirstMs) / 86_400_000 : null;
+    const chainDaysInTrade = chainTotalDaysToExpiry;
+    const chainAnnRetAtExpiry =
+      chainNet != null && c.capitalAtRisk > 0 && chainTotalDaysToExpiry != null && chainTotalDaysToExpiry > 0
+        ? (chainNet / c.capitalAtRisk) * (365 / chainTotalDaysToExpiry) * 100
         : null;
 
     const ctd = "px-2 pb-2 text-xs whitespace-nowrap text-muted-foreground";
@@ -2321,7 +2330,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
           </td>
         )}
 
-        {/* Return group — chain net total prem */}
+        {/* Return group — chain net total prem + ann. return at expiry */}
         {isColOpen("return") ? (
           <>
             <td className={cn(ctd, "border-l border-border/50")}>
@@ -2332,7 +2341,13 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
               )}
             </td>
             <td className={ctd} />
-            <td className={ctd} />
+            <td className={ctd}>
+              {chainAnnRetAtExpiry != null && (
+                <span className={cn(chainAnnRetAtExpiry >= 0 ? "text-green-600" : "text-red-600")}>
+                  {fmtPct(chainAnnRetAtExpiry)}
+                </span>
+              )}
+            </td>
           </>
         ) : (
           <td className={cn(ctd, "border-l border-border/50")}>
@@ -2344,10 +2359,12 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
           </td>
         )}
 
-        {/* Risk group — real breakeven */}
+        {/* Risk group — total duration + real breakeven */}
         {isColOpen("risk") ? (
           <>
-            <td className={cn(ctd, "border-l border-border/50")} />
+            <td className={cn(ctd, "border-l border-border/50")}>
+              {chainDaysInTrade != null && `${Math.round(chainDaysInTrade)}d`}
+            </td>
             <td className={ctd} />
             <td className={ctd}>
               {realBreakeven != null && (
