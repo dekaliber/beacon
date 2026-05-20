@@ -24,6 +24,7 @@ import { withdrawalRoutes } from "./routes/withdrawals.js";
 import { taxAssumptionsRoutes } from "./routes/taxAssumptions.js";
 import { optionsRoutes } from "./routes/options.js";
 import { pendingBuyRoutes } from "./routes/pendingBuys.js";
+import { jobRoutes } from "./routes/jobs.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -32,9 +33,10 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(clerkMiddleware());
 
-// All /api routes require authentication (except /api/health)
+// All /api routes require authentication (except /api/health and /api/jobs)
 app.use("/api", (req, res, next) => {
   if (req.path === "/health") return next();
+  if (req.path.startsWith("/jobs")) return next();
   const { userId } = getAuth(req);
   if (!userId) return res.status(401).json({ error: "Unauthorized" });
   return next();
@@ -62,6 +64,7 @@ app.use("/api/withdrawals", withdrawalRoutes);
 app.use("/api/tax-assumptions", taxAssumptionsRoutes);
 app.use("/api/options", optionsRoutes);
 app.use("/api/pending-buys", pendingBuyRoutes);
+app.use("/api/jobs", jobRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {

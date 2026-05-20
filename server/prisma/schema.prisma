@@ -137,6 +137,8 @@ model Account {
   defaultCashAccount   Account?   @relation("InvestmentCashLink", fields: [defaultCashAccountId], references: [id])
   investmentAccounts   Account[]  @relation("InvestmentCashLink")
 
+  netWorthSnapshots    NetWorthAccountSnapshot[]
+
   @@map("accounts")
 }
 
@@ -863,6 +865,19 @@ model OptionsSettings {
   @@map("options_settings")
 }
 
+// Capital deposits/withdrawals that adjust the basis used in annualized return calculations
+model OptionsCapitalChange {
+  id            String   @id @default(cuid())
+  userId        String
+  effectiveDate String   // YYYY-MM-DD (client local date)
+  delta         Decimal  @db.Decimal(12, 2) // positive = deposit, negative = withdrawal
+  note          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("options_capital_changes")
+}
+
 // Per-ticker metadata: opportunity cost tracking and first-trade anchor
 model OptionsTicker {
   id                        String    @id @default(cuid())
@@ -892,6 +907,39 @@ model OptionsPositionGroup {
   positions OptionsPosition[]
 
   @@map("options_position_groups")
+}
+
+// Daily net worth snapshot, taken once per day via scheduled job
+model NetWorthSnapshot {
+  id             String   @id @default(cuid())
+  userId         String
+  date           DateTime @db.Date
+  investments    Decimal  @db.Decimal(14, 2)
+  investmentCash Decimal  @db.Decimal(14, 2)
+  bankingCash    Decimal  @db.Decimal(14, 2)
+  creditCardDebt Decimal  @db.Decimal(14, 2)
+  total          Decimal  @db.Decimal(14, 2)
+  createdAt      DateTime @default(now())
+
+  accountSnapshots NetWorthAccountSnapshot[]
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@map("net_worth_snapshots")
+}
+
+// Per-account breakdown for each NetWorthSnapshot
+model NetWorthAccountSnapshot {
+  id          String           @id @default(cuid())
+  snapshotId  String
+  snapshot    NetWorthSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     Account          @relation(fields: [accountId], references: [id])
+  accountType String           // denormalized from Account.type for query convenience
+  value       Decimal          @db.Decimal(14, 2) // positive = asset, negative = liability
+
+  @@unique([snapshotId, accountId])
+  @@map("net_worth_account_snapshots")
 }
 
 // A single option leg (one contract series, one expiration)
