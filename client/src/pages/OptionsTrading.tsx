@@ -2007,6 +2007,7 @@ interface OpenPositionsTableProps {
   draftPositions: OptionsPosition[];
   chainPnlMap: Map<string, number>;
   chainFirstOpenedMap: Map<string, number>;
+  chainMaxCapitalAtRiskMap: Map<string, number>;
   onEdit: (p: OptionsPosition) => void;
   onClose: (p: OptionsPosition) => void;
   onConfirm: (p: OptionsPosition) => void;
@@ -2022,7 +2023,7 @@ const COL_GROUPS = [
 ] as const;
 type ColGroupKey = (typeof COL_GROUPS)[number]["key"];
 
-function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, onEdit, onClose, onConfirm, onDelete, onPositionUpdated }: OpenPositionsTableProps) {
+function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, chainMaxCapitalAtRiskMap, onEdit, onClose, onConfirm, onDelete, onPositionUpdated }: OpenPositionsTableProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState<OptionsPosition | null>(null);
   const [openColGroups, setOpenColGroups] = useState<Set<ColGroupKey>>(new Set(["live"]));
@@ -2228,22 +2229,25 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
 
     // Chain-level metrics
     const realBreakeven = hasChain ? c.breakeven - priorPnl / (p.contracts * 100) : null;
-    const chainFirstMs = hasChain
-      ? Math.min(chainFirstOpenedMap.get(p.groupId!) ?? Infinity, new Date(p.openedAt).getTime())
-      : null;
+    const chainFirstMs = hasChain ? chainFirstOpenedMap.get(p.groupId!) ?? null : null;
+    // Max capital at risk across all legs — matches the closed-tab denominator
+    // so live ARR doesn't jump when the final leg closes.
+    const chainCapitalAtRisk = hasChain
+      ? Math.max(chainMaxCapitalAtRiskMap.get(p.groupId!) ?? 0, c.capitalAtRisk)
+      : c.capitalAtRisk;
     // Days from original open to now (for live ann. return)
     const chainDaysFromOpenToNow = chainFirstMs != null ? (Date.now() - chainFirstMs) / 86_400_000 : null;
     const chainCurAnnRet =
-      chainLivePnl != null && c.capitalAtRisk > 0 && chainDaysFromOpenToNow != null && chainDaysFromOpenToNow > 0
-        ? (chainLivePnl / c.capitalAtRisk) * (365 / chainDaysFromOpenToNow) * 100
+      chainLivePnl != null && chainCapitalAtRisk > 0 && chainDaysFromOpenToNow != null && chainDaysFromOpenToNow > 0
+        ? (chainLivePnl / chainCapitalAtRisk) * (365 / chainDaysFromOpenToNow) * 100
         : null;
     // Days from original open to current leg's expiry (for duration display + ann. return at expiry)
     const chainExpiryMs = new Date(p.openedAt).getTime() + c.durationDays * 86_400_000;
     const chainTotalDaysToExpiry = chainFirstMs != null ? (chainExpiryMs - chainFirstMs) / 86_400_000 : null;
     const chainDaysInTrade = chainTotalDaysToExpiry;
     const chainAnnRetAtExpiry =
-      chainNet != null && c.capitalAtRisk > 0 && chainTotalDaysToExpiry != null && chainTotalDaysToExpiry > 0
-        ? (chainNet / c.capitalAtRisk) * (365 / chainTotalDaysToExpiry) * 100
+      chainNet != null && chainCapitalAtRisk > 0 && chainTotalDaysToExpiry != null && chainTotalDaysToExpiry > 0
+        ? (chainNet / chainCapitalAtRisk) * (365 / chainTotalDaysToExpiry) * 100
         : null;
 
     const ctd = "px-2 pb-2 text-xs whitespace-nowrap text-muted-foreground";
@@ -3913,16 +3917,26 @@ export function OptionsTrading() {
   const openPositions = normalizedPositions.filter((p) => p.status === "OPEN" && !p.isDraft);
   const closedPositions = normalizedPositions.filter((p) => p.status !== "OPEN");
 
-  // Sum P&L and track earliest open date of all closed legs per group — used for chain metrics on open rolled positions
+  // Chain metrics for open rolled positions:
+  //   - chainPnlMap: sum of closed legs' P&L (open leg's live P&L is added at render time)
+  //   - chainFirstOpenedMap: earliest openedAt across ALL legs (open + closed) in the chain
+  //   - chainMaxCapitalAtRiskMap: max capitalAtRisk across ALL legs — matches the
+  //     closed-tab denominator so live ARR doesn't jump when the final leg closes.
   const chainPnlMap = new Map<string, number>();
   const chainFirstOpenedMap = new Map<string, number>();
-  for (const p of closedPositions) {
+  const chainMaxCapitalAtRiskMap = new Map<string, number>();
+  for (const p of normalizedPositions) {
     if (!p.groupId) continue;
-    const pnl = calcPosition(p).pnl;
-    if (pnl != null) chainPnlMap.set(p.groupId, (chainPnlMap.get(p.groupId) ?? 0) + pnl);
+    if (p.status !== "OPEN") {
+      const pnl = calcPosition(p).pnl;
+      if (pnl != null) chainPnlMap.set(p.groupId, (chainPnlMap.get(p.groupId) ?? 0) + pnl);
+    }
     const ms = new Date(p.openedAt).getTime();
-    const prev = chainFirstOpenedMap.get(p.groupId);
-    if (prev == null || ms < prev) chainFirstOpenedMap.set(p.groupId, ms);
+    const prevMs = chainFirstOpenedMap.get(p.groupId);
+    if (prevMs == null || ms < prevMs) chainFirstOpenedMap.set(p.groupId, ms);
+    const car = calcPosition(p).capitalAtRisk;
+    const prevCar = chainMaxCapitalAtRiskMap.get(p.groupId);
+    if (prevCar == null || car > prevCar) chainMaxCapitalAtRiskMap.set(p.groupId, car);
   }
 
   const openTickerMap = new Map<string, number>();
@@ -4052,6 +4066,7 @@ export function OptionsTrading() {
               draftPositions={draftPositions}
               chainPnlMap={chainPnlMap}
               chainFirstOpenedMap={chainFirstOpenedMap}
+              chainMaxCapitalAtRiskMap={chainMaxCapitalAtRiskMap}
               onEdit={(p) => setPositionModal(p)}
               onClose={(p) => setCloseModal(p)}
               onConfirm={(p) => setConfirmDraftModal(p)}
