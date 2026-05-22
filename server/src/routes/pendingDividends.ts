@@ -208,8 +208,11 @@ async function runScan(): Promise<void> {
         // Find all holdings for this specific ticker across all active accounts.
         // Querying by ticker directly (rather than through instrument.holdings)
         // ensures we catch holdings regardless of which instrument they're linked to.
+        // Exclude crypto holdings (coinGeckoId set): Tiingo has no crypto dividends
+        // and crypto tickers collide with stock tickers (e.g. LTC = Litecoin vs the
+        // stock LTC), which would otherwise create bogus pending dividends.
         const holdings = await prisma.investmentHolding.findMany({
-          where: { ticker, account: { isActive: true, type: "INVESTMENT" } },
+          where: { ticker, coinGeckoId: null, account: { isActive: true, type: "INVESTMENT" } },
           select: { id: true, ticker: true, accountId: true, createdAt: true },
         });
 
