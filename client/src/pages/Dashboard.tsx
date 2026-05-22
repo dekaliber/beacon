@@ -275,21 +275,28 @@ export function Dashboard() {
               </div>
 
               {/* MoM comparison */}
-              {momDeltaPct !== null && (
-                <div className="mt-3 border-t border-border pt-3">
-                  <p className="text-xs text-muted-foreground">
-                    {isCurrentMonth
-                      ? `vs last month (day 1–${daysElapsed})`
-                      : "vs last month"}
-                  </p>
-                  <p className="mt-0.5 text-sm font-medium">
-                    {fmtWhole(prevMonthMtd)}{" "}
-                    <span className={momDelta! > 0 ? "text-destructive" : "text-success"}>
-                      {momDelta! > 0 ? "↑" : "↓"}{Math.abs(momDeltaPct)}%
-                    </span>
-                  </p>
-                </div>
-              )}
+              {momDeltaPct !== null && (() => {
+                const prevMonthNum = month === 1 ? 12 : month - 1;
+                const prevMonthYear = month === 1 ? year - 1 : year;
+                const prevMonthName = new Date(prevMonthYear, prevMonthNum - 1, 1).toLocaleDateString("en-US", { month: "short" });
+                return (
+                  <div className="mt-3 border-t border-border pt-3">
+                    <p className="text-xs text-muted-foreground">vs last month</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">{fmtWhole(prevMonthMtd)}</span>
+                      {" in "}{prevMonthName}{isCurrentMonth ? ` (day 1–${daysElapsed})` : ""}
+                    </p>
+                    <p className="mt-0.5 text-sm font-medium">
+                      <span className={momDelta! > 0 ? "text-destructive" : "text-success"}>
+                        {momDelta! > 0 ? "+" : "–"}{fmtWhole(Math.abs(momDelta!))}
+                      </span>{" "}
+                      <span className="text-xs text-muted-foreground">
+                        ({momDelta! > 0 ? "↑" : "↓"}{Math.abs(momDeltaPct)}%)
+                      </span>
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Right half: pie + legend */}
