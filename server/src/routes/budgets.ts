@@ -995,10 +995,20 @@ budgetRoutes.get("/:year/monthly-spending", async (req, res) => {
     if (!Number.isFinite(year)) return res.status(400).json({ error: "Invalid year" });
 
     const todayParam = typeof req.query.today === "string" ? req.query.today : undefined;
-    const effectiveToday = todayParam ? new Date(`${todayParam}T00:00:00`) : new Date();
+    const effectiveToday = todayParam ? new Date(`${todayParam}T00:00:00Z`) : new Date();
 
     const startOfYear = new Date(Date.UTC(year, 0, 1));
     const endOfYear   = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
+
+    // Cap at end-of-today so future-dated recurring instances in the current
+    // month are excluded — consistent with how the Dashboard MTD figure is computed.
+    const todayEndOfDay = new Date(Date.UTC(
+      effectiveToday.getUTCFullYear(),
+      effectiveToday.getUTCMonth(),
+      effectiveToday.getUTCDate(),
+      23, 59, 59, 999,
+    ));
+    const queryEnd = todayEndOfDay < endOfYear ? todayEndOfDay : endOfYear;
 
     const [accounts, ignoredCategories, settings, annualBudgets] = await Promise.all([
       prisma.account.findMany({
@@ -1040,7 +1050,7 @@ budgetRoutes.get("/:year/monthly-spending", async (req, res) => {
     const expenses = await prisma.expense.findMany({
       where: {
         accountId: { in: allIds },
-        date: { gte: startOfYear, lte: endOfYear },
+        date: { gte: startOfYear, lte: queryEnd },
         ...ignoredExpenseFilter(ignoredCategoryIds),
       },
       select: {
