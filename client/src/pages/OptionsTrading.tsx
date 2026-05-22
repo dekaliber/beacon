@@ -427,6 +427,7 @@ interface PositionModalProps {
   editing: OptionsPosition | null;
   onClose: () => void;
   onSaved: () => void;
+  onDelete: () => Promise<void>;
   onTickerCreated: () => void;
 }
 
@@ -453,7 +454,7 @@ type TickerDropdownItem =
   | { kind: "existing"; id: string; symbol: string }
   | { kind: "new"; result: TickerSearchResult };
 
-function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCreated }: PositionModalProps) {
+function PositionModal({ tickers, groups, editing, onClose, onSaved, onDelete, onTickerCreated }: PositionModalProps) {
   const [tickerQuery, setTickerQuery] = useState(editing?.ticker?.symbol ?? "");
   const [selectedExistingId, setSelectedExistingId] = useState<string | null>(editing?.tickerId ?? null);
   const [dropdownItems, setDropdownItems] = useState<TickerDropdownItem[]>([]);
@@ -497,6 +498,8 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [priceAtOpenStatus, setPriceAtOpenStatus] = useState<"idle" | "fetching" | "success" | "error">("idle");
   const [priceAtOpenLabel, setPriceAtOpenLabel] = useState("");
 
@@ -687,6 +690,19 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
       setError("Failed to save position.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteClick = async () => {
+    if (!editing) return;
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    setDeleting(true);
+    try {
+      await onDelete();
+    } catch {
+      setError("Failed to delete position.");
+      setDeleting(false);
+      setConfirmDelete(false);
     }
   };
 
@@ -992,11 +1008,26 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onTickerCre
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={saving}>
-            {saving ? "Saving…" : editing ? (editing.isDraft && !isDraft ? "Open Position" : "Save Changes") : isDraft ? "Save Draft" : "Open Position"}
-          </Button>
+        <div className="flex items-center justify-between pt-2">
+          <div>
+            {editing && (
+              <button
+                type="button"
+                onClick={handleDeleteClick}
+                disabled={deleting}
+                className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleting ? "Deleting…" : confirmDelete ? "Confirm Delete" : "Delete"}
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving…" : editing ? (editing.isDraft && !isDraft ? "Open Position" : "Save Changes") : isDraft ? "Save Draft" : "Open Position"}
+            </Button>
+          </div>
         </div>
       </form>
     </Modal>
@@ -1009,6 +1040,7 @@ interface CloseModalProps {
   position: OptionsPosition;
   onClose: () => void;
   onSaved: () => void;
+  defaultBankingAccountId?: string | null;
 }
 
 function addOneWeek(dateIso: string): string {
@@ -1019,7 +1051,7 @@ function addOneWeek(dateIso: string): string {
   return dt.toISOString().split("T")[0];
 }
 
-function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
+function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountId }: CloseModalProps) {
   const expirationDateStr = position.expirationDate.split("T")[0]; // YYYY-MM-DD
   const defaultAssignedClosedAt = expirationDateStr + "T16:00"; // 4pm ET market close
 
@@ -1030,7 +1062,7 @@ function ClosePositionModal({ position, onClose, onSaved }: CloseModalProps) {
   const [contractsAssigned, setContractsAssigned] = useState("");
   const [stockPriceAtClose, setStockPriceAtClose] = useState("");
   const [investmentAccountId, setInvestmentAccountId] = useState(position.investmentAccountId ?? "");
-  const [bankingAccountId, setBankingAccountId] = useState("");
+  const [bankingAccountId, setBankingAccountId] = useState(defaultBankingAccountId ?? "");
 
   const { data: investmentAccounts } = useApi(() => getInvestmentAccounts(), []);
   const { data: allAccounts } = useApi(() => getAccounts(), []);
@@ -1412,11 +1444,14 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
     position.stockPriceAtClose?.toString() ?? ""
   );
   const [investmentAccountId, setInvestmentAccountId] = useState(position.investmentAccountId ?? "");
+  const [bankingAccountId, setBankingAccountId] = useState("");
   const [assignedPriceFetching, setAssignedPriceFetching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const { data: investmentAccounts } = useApi(() => getInvestmentAccounts(), []);
+  const { data: allAccounts } = useApi(() => getAccounts(), []);
+  const bankingAccounts = (allAccounts ?? []).filter((a) => a.type === "CHECKING" || a.type === "SAVINGS");
 
   const isExpired = outcome === "EXPIRED_WORTHLESS";
   const isAssigned = outcome === "ASSIGNED";
@@ -1459,6 +1494,7 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
         contractsAssigned: isAssigned && contractsAssigned ? parseInt(contractsAssigned, 10) : null,
         stockPriceAtClose: isAssigned && stockPriceAtClose ? parseFloat(stockPriceAtClose.replace(/,/g, "")) : null,
         investmentAccountId: isAssigned ? (investmentAccountId || null) : undefined,
+        bankingAccountId: isRolled ? undefined : (bankingAccountId || null),
       });
       onSaved();
     } catch {
@@ -1588,6 +1624,24 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
           </>
         )}
 
+        {!isRolled && bankingAccounts.length > 0 && (
+          <div>
+            <label className="block text-xs font-medium mb-1">
+              Destination Account <span className="text-muted-foreground font-normal">(for income record)</span>
+            </label>
+            <select
+              value={bankingAccountId}
+              onChange={(e) => setBankingAccountId(e.target.value)}
+              className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
+            >
+              <option value="">None</option>
+              {bankingAccounts.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div>
           <label className="block text-xs font-medium mb-1">Fees at Close <span className="text-muted-foreground font-normal">(optional)</span></label>
           <div className="relative">
@@ -1665,8 +1719,12 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
     current ? (current.targetReturn * 100).toFixed(1) : ""
   );
   const [startingWeek, setStartingWeek] = useState(current?.startingWeek ?? "");
+  const [defaultCashAccountId, setDefaultCashAccountId] = useState(current?.defaultCashAccountId ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const { data: allAccounts } = useApi(() => getAccounts(), []);
+  const bankingAccounts = (allAccounts ?? []).filter((a) => a.type === "CHECKING" || a.type === "SAVINGS");
 
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
   const [showAdjustForm, setShowAdjustForm] = useState(false);
@@ -1725,6 +1783,7 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
         startingBasis: parseFloat(startingBasis.replace(/,/g, "")),
         targetReturn: parseFloat(targetReturn) / 100,
         startingWeek: startingWeek || null,
+        defaultCashAccountId: defaultCashAccountId || null,
       });
       onSaved();
     } catch {
@@ -1866,6 +1925,22 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
           </div>
         </div>
+        {bankingAccounts.length > 0 && (
+          <div>
+            <label className="block text-xs font-medium mb-1">Default Cash Account <span className="text-muted-foreground font-normal">(optional)</span></label>
+            <p className="text-xs text-muted-foreground mb-2">Pre-selected as the destination account for premium income when closing a position.</p>
+            <select
+              value={defaultCashAccountId}
+              onChange={(e) => setDefaultCashAccountId(e.target.value)}
+              className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
+            >
+              <option value="">None</option>
+              {bankingAccounts.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
@@ -2019,7 +2094,6 @@ interface OpenPositionsTableProps {
   onEdit: (p: OptionsPosition) => void;
   onClose: (p: OptionsPosition) => void;
   onConfirm: (p: OptionsPosition) => void;
-  onDelete: (p: OptionsPosition) => void;
   onPositionUpdated: () => void;
 }
 
@@ -2031,9 +2105,8 @@ const COL_GROUPS = [
 ] as const;
 type ColGroupKey = (typeof COL_GROUPS)[number]["key"];
 
-function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, chainMaxCapitalAtRiskMap, onEdit, onClose, onConfirm, onDelete, onPositionUpdated }: OpenPositionsTableProps) {
+function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, chainMaxCapitalAtRiskMap, onEdit, onClose, onConfirm, onPositionUpdated }: OpenPositionsTableProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [confirmDelete, setConfirmDelete] = useState<OptionsPosition | null>(null);
   const [openColGroups, setOpenColGroups] = useState<Set<ColGroupKey>>(new Set(["live"]));
   // Live data: auto-fetched stock prices; editing buffer for the inline prem field
   const [livePrices, setLivePrices] = useState<Map<string, number>>(() => {
@@ -2452,9 +2525,6 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
             <button onClick={() => onEdit(p)} className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors" title="Edit">
               <Pencil className="h-3.5 w-3.5" />
             </button>
-            <button onClick={() => setConfirmDelete(p)} className="p-1.5 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors" title="Delete">
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
           </div>
         </td>
       </tr>
@@ -2746,21 +2816,6 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
         Refresh all premiums
       </button>
     </div>
-    {confirmDelete && createPortal(
-      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
-        <div className="w-full max-w-sm rounded-lg bg-background text-foreground p-6 shadow-xl">
-          <h3 className="text-base font-semibold">Delete position?</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Delete {confirmDelete.ticker.symbol} ${confirmDelete.strikePrice} {confirmDelete.optionType}? This cannot be undone.
-          </p>
-          <div className="mt-4 flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setConfirmDelete(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => { onDelete(confirmDelete); setConfirmDelete(null); }}>Delete</Button>
-          </div>
-        </div>
-      </div>,
-      document.body
-    )}
     </>
   );
 }
@@ -4078,7 +4133,6 @@ export function OptionsTrading() {
               onEdit={(p) => setPositionModal(p)}
               onClose={(p) => setCloseModal(p)}
               onConfirm={(p) => setConfirmDraftModal(p)}
-              onDelete={handleDelete}
               onPositionUpdated={refetchPositions}
             />
           ) : (
@@ -4100,6 +4154,7 @@ export function OptionsTrading() {
           editing={positionModal === "new" ? null : positionModal}
           onClose={() => setPositionModal(null)}
           onSaved={() => { setPositionModal(null); refetchAll(); }}
+          onDelete={async () => { if (positionModal !== "new" && positionModal) { await handleDelete(positionModal); setPositionModal(null); } }}
           onTickerCreated={refetchTickers}
         />
       )}
@@ -4109,6 +4164,7 @@ export function OptionsTrading() {
           position={closeModal}
           onClose={() => setCloseModal(null)}
           onSaved={() => { setCloseModal(null); refetchPositions(); refetchGroups(); refetchNotifications(); }}
+          defaultBankingAccountId={settings?.defaultCashAccountId ?? null}
         />
       )}
 

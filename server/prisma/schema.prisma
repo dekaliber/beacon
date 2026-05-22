@@ -859,6 +859,8 @@ model OptionsSettings {
   startingBasis Decimal  @db.Decimal(12, 2)
   targetReturn  Decimal  @db.Decimal(5, 4) // e.g. 0.25 for 25%
   startingWeek  String?  // ISO date of Monday of the starting week, e.g. "2026-04-20"
+  // Optional default banking account for premium income records; pre-selected in the close modal
+  defaultCashAccountId String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

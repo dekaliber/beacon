@@ -683,6 +683,7 @@ export interface OptionsSettings {
   startingBasis: number;
   targetReturn: number;
   startingWeek: string | null; // ISO date of Monday of starting week, e.g. "2026-04-20"
+  defaultCashAccountId: string | null; // optional default banking account for premium income
   createdAt: string;
   updatedAt: string;
 }
@@ -865,6 +866,7 @@ export type OptionsCloseEditInput = {
   contractsAssigned?: number | null;
   stockPriceAtClose?: number | null;
   investmentAccountId?: string | null;
+  bankingAccountId?: string | null;
 };
 
 export const editClosedPosition = (id: string, data: OptionsCloseEditInput) =>

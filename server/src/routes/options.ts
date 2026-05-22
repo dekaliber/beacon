@@ -21,6 +21,7 @@ const settingsSchema = z.object({
   startingBasis: z.coerce.number().positive(),
   targetReturn: z.coerce.number().positive(),
   startingWeek: z.string().nullable().optional(),
+  defaultCashAccountId: z.string().nullable().optional(),
 });
 
 optionsRoutes.get("/settings", async (req, res) => {
@@ -428,17 +429,29 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
       // them from the Tax Estimator while preserving the income record for cash-flow tracking.
       const taxableAmount = updated.outcome === "ASSIGNED" ? 0 : netAmount;
 
-      await prisma.income.create({
-        data: {
-          amount: netAmount,
-          categoryId: category.id,
-          source,
-          date: incomeDate,
-          accountId: bankingAccountId,
-          taxClassification: "ORDINARY",
-          taxableAmount,
-        },
+      // Idempotency guard: Income has no FK back to the position, so re-saving a close
+      // (e.g. editing it later to set a destination account that was missed at close time)
+      // could create a duplicate. Skip creation if a matching income already exists —
+      // matched on the deterministic source string plus the net amount.
+      const existingIncome = await prisma.income.findFirst({
+        where: { categoryId: category.id, source },
       });
+      const alreadyRecorded =
+        existingIncome != null && Math.abs(Number(existingIncome.amount) - netAmount) < 0.005;
+
+      if (!alreadyRecorded) {
+        await prisma.income.create({
+          data: {
+            amount: netAmount,
+            categoryId: category.id,
+            source,
+            date: incomeDate,
+            accountId: bankingAccountId,
+            taxClassification: "ORDINARY",
+            taxableAmount,
+          },
+        });
+      }
     }
   }
 
