@@ -3814,7 +3814,10 @@ function SummaryCards({
   })();
 
   const premiumThisWeek = closedPositions
-    .filter((p) => p.closedAt && new Date(p.closedAt) >= lastMonday)
+    .filter((p) => {
+      const closeDate = p.closedAt ? new Date(p.closedAt) : new Date(p.expirationDate.split("T")[0]);
+      return closeDate >= lastMonday;
+    })
     .reduce((sum, p) => sum + (calcPosition(p).pnl ?? 0), 0);
 
   // Pending premium = max profit (totalPremiumNet) for open positions expiring this week
