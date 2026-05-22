@@ -77,6 +77,14 @@ const fmtUSD = (n: number) =>
 const fmtPct = (n: number | null | undefined, decimals = 1) =>
   n == null ? "—" : `${n >= 0 ? "+" : ""}${n.toFixed(decimals)}%`;
 
+// Like fmtPct, but abbreviates magnitudes beyond ±1000% as "K" (e.g. +1.5K%).
+// Live annualized returns get exaggerated over short durations, so less precision is fine.
+const fmtPctLive = (n: number | null | undefined) => {
+  if (n == null) return "—";
+  if (Math.abs(n) > 1000) return `${n >= 0 ? "+" : "-"}${(Math.abs(n) / 1000).toFixed(1)}K%`;
+  return fmtPct(n);
+};
+
 /** Convert a local ET datetime string (YYYY-MM-DDTHH:mm) to UTC ISO string */
 function etToUtc(localEtString: string): string {
   // The user's machine may not be in ET. We treat the input as an ET wall-clock
@@ -2401,7 +2409,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
             </td>
             <td className={tdClass}>
               {curAnnRet != null
-                ? <span className={cn(curAnnRet >= 0 ? "text-green-600" : "text-red-600")}>{fmtPct(curAnnRet)}</span>
+                ? <span className={cn(curAnnRet >= 0 ? "text-green-600" : "text-red-600")}>{fmtPctLive(curAnnRet)}</span>
                 : <span className="text-muted-foreground">—</span>}
             </td>
             <td className={tdClass}>
@@ -2533,7 +2541,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
             <td className={ctd}>
               {chainCurAnnRet != null && (
                 <span className={cn("font-medium", chainCurAnnRet >= 0 ? "text-green-600" : "text-red-600")}>
-                  {fmtPct(chainCurAnnRet)}
+                  {fmtPctLive(chainCurAnnRet)}
                 </span>
               )}
             </td>
