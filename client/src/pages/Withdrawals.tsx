@@ -32,6 +32,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { useDemo } from "@/context/DemoContext";
 import type { WithdrawalEvent, WithdrawalType, InvestmentSettings } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel, StatValue, DisplayStat } from "@/components/Typography";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -484,7 +485,7 @@ function WithdrawalRow({
   return (
     <tr className={`group ${isIncome ? "bg-muted/40" : "bg-white"}`}>
       {/* Date */}
-      <td className="py-2.5 pl-4 pr-2 text-sm tabular-nums whitespace-nowrap">
+      <td className="py-2.5 pl-4 pr-2 text-sm tabular-nums font-label whitespace-nowrap">
         <span className={isIncome ? "text-muted-foreground" : ""}>
           {formatDate(event.date)}
         </span>
@@ -518,7 +519,7 @@ function WithdrawalRow({
       </td>
 
       {/* Amount */}
-      <td className="py-2.5 px-2 text-right text-sm font-medium tabular-nums whitespace-nowrap">
+      <td className="py-2.5 px-2 text-right text-sm font-medium tabular-nums font-label whitespace-nowrap">
         <span className={
           isIncome
             ? "text-muted-foreground"
@@ -607,11 +608,11 @@ function MonthSection({
       >
         <span className="text-sm font-semibold flex-1">{label}</span>
         {rate !== null && (
-          <span className="text-xs text-muted-foreground tabular-nums mr-4">
+          <StatValue className="text-xs text-muted-foreground mr-4">
             {formatRate(rate)} annualized
-          </span>
+          </StatValue>
         )}
-        <span className="w-[110px] text-right text-sm font-semibold tabular-nums">{formatCurrency(total)}</span>
+        <StatValue className="w-[110px] text-right text-sm font-semibold">{formatCurrency(total)}</StatValue>
         <span className="w-[72px] flex items-center justify-center">
           <ChevronIcon className="h-3.5 w-3.5 text-muted-foreground" />
         </span>
@@ -802,22 +803,22 @@ export function WithdrawalsPage() {
       <Card className="p-4">
         <div className="flex items-start gap-9 flex-wrap">
           <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
+            <SectionLabel className="mb-0.5">
               YTD Total
-            </p>
-            <p className="text-2xl font-bold tabular-nums">{formatCurrency(ytdTotal)}</p>
+            </SectionLabel>
+            <DisplayStat as="p" className="text-2xl font-bold">{formatCurrency(ytdTotal)}</DisplayStat>
           </div>
           <div className="w-px self-stretch bg-border hidden sm:block" />
           <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
+            <SectionLabel className="mb-0.5">
               Annualized Rate (YTD)
-            </p>
+            </SectionLabel>
             <div className="flex items-baseline gap-2">
-              <p className="text-2xl font-bold tabular-nums">
+              <DisplayStat as="p" className="text-2xl font-bold">
                 {effectiveDenominator > 0 ? formatRate(ytdRate) : "—"}
-              </p>
+              </DisplayStat>
               {targetRate !== null && effectiveDenominator > 0 && ytdRate !== null && (
-                <span className={`text-sm font-medium tabular-nums ${
+                <span className={`text-sm font-medium tabular-nums font-label ${
                   ytdRate <= targetRate ? "text-green-600" : "text-red-500"
                 }`}>
                   {ytdRate <= targetRate
@@ -874,7 +875,7 @@ export function WithdrawalsPage() {
       ) : (
         <Card className="p-0 overflow-hidden divide-y divide-border">
           {/* Table header */}
-          <div className="hidden md:grid py-2 bg-muted/30 text-xs font-semibold text-muted-foreground uppercase tracking-wide"
+          <SectionLabel as="div" className="hidden md:grid py-2 bg-muted/30"
             style={{ gridTemplateColumns: "90px 130px 1fr 320px 110px 72px" }}>
             <span className="pl-4 pr-2">Date</span>
             <span className="px-2">Type</span>
@@ -882,7 +883,7 @@ export function WithdrawalsPage() {
             <span className="px-2">Account</span>
             <span className="px-2 text-right">Amount</span>
             <span />
-          </div>
+          </SectionLabel>
 
           {monthGroups.map(([month, monthEvents]) => {
             const currentMonth = new Date().toLocaleDateString("en-CA").slice(0, 7);

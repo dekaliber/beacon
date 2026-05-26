@@ -9,6 +9,7 @@ import { useApi } from "@/hooks/useApi";
 import { getCategories, getFlatCategories, createCategory, updateCategory, deleteCategory, getCategoryUsage } from "@/api";
 import type { Category } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel } from "@/components/Typography";
 
 export function Categories() {
   const [modalOpen, setModalOpen] = useState(false);
@@ -88,9 +89,9 @@ export function Categories() {
         {/* Expense Categories */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <SectionLabel as="h3" className="flex items-center gap-2 text-sm">
               <Tags className="h-4 w-4" /> Expense Categories
-            </h3>
+            </SectionLabel>
           </div>
           <CategoryList
             categories={expenseCategories}
@@ -105,9 +106,9 @@ export function Categories() {
         {/* Income Categories */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <SectionLabel as="h3" className="flex items-center gap-2 text-sm">
               <TrendingUp className="h-4 w-4" /> Income Categories
-            </h3>
+            </SectionLabel>
           </div>
           <CategoryList
             categories={incomeCategories}

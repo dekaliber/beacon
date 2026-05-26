@@ -6,6 +6,7 @@ import { useApi } from "@/hooks/useApi";
 import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, deleteExpense, getExpenseVendors, getTags, createTag, createRecurrenceRule, getVendorCategory, getVendorAccount } from "@/api";
 import { formatCurrency, formatDate, localToday, cn } from "@/lib/utils";
 import type { Account, Category, Expense, Tag } from "@/types";
+import { SectionLabel } from "@/components/Typography";
 
 const EXPENSE_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH"];
 
@@ -1152,7 +1153,7 @@ function MobileFilterSheet({
                 <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                   <div className="space-y-1.5">
                     {personalAccounts.length > 0 && (
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Personal</p>
+                      <SectionLabel>Personal</SectionLabel>
                     )}
                     {personalAccounts.map((a) => {
                       const sel = staged.accountIds.includes(a.id);
@@ -1175,7 +1176,7 @@ function MobileFilterSheet({
                   </div>
                   <div className="space-y-1.5">
                     {jointAccounts.length > 0 && (
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Joint</p>
+                      <SectionLabel>Joint</SectionLabel>
                     )}
                     {jointAccounts.map((a) => {
                       const sel = staged.accountIds.includes(a.id);
@@ -1661,9 +1662,9 @@ export function MobileExpenses() {
 
         {upcomingExpenses.length > 0 && (
           <section>
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <SectionLabel as="h2" className="mb-2 text-sm">
               Upcoming
-            </h2>
+            </SectionLabel>
             <div className="relative">
               <div className="divide-y divide-border">
                 {visibleUpcoming.map((expense) => (
@@ -1693,9 +1694,9 @@ export function MobileExpenses() {
         )}
 
         <section>
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <SectionLabel as="h2" className="mb-2 text-sm">
             All Expenses
-          </h2>
+          </SectionLabel>
           {allExpenses.length === 0 && !loadingExpenses ? (
             <p className="py-6 text-center text-sm text-muted-foreground">No expenses this month.</p>
           ) : (

@@ -28,6 +28,7 @@ import {
 } from "@/api";
 import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/utils";
 import type { Expense, Category, Account, Tag } from "@/types";
+import { SectionLabel, ColumnHeader } from "@/components/Typography";
 
 const EXPENSE_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH"];
 
@@ -2196,7 +2197,7 @@ export function Expenses() {
       {/* Upcoming expenses table */}
       {upcomingExpenses.length > 0 && (
         <Card>
-          <h3 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">Upcoming</h3>
+          <SectionLabel as="h3" className="mb-3 text-sm">Upcoming</SectionLabel>
           {(() => {
             const hasMore = upcomingExpenses.length > UPCOMING_PAGE_SIZE;
             return (
@@ -2221,14 +2222,14 @@ export function Expenses() {
                               className="h-4 w-4 rounded accent-primary"
                             />
                           </th>
-                          <th className="w-[70px] pb-3 pr-3 text-xs font-medium uppercase tracking-wide">Date</th>
-                          <th className="pb-3 pr-3 text-xs font-medium uppercase tracking-wide">Description</th>
+                          <ColumnHeader className="w-[70px] pb-3 pr-3">Date</ColumnHeader>
+                          <ColumnHeader className="pb-3 pr-3">Description</ColumnHeader>
                           <th className="w-[60px] pb-3"></th>
-                          <th className="w-[170px] pb-3 pr-3 text-xs font-medium uppercase tracking-wide">Vendor</th>
-                          <th className="w-[190px] pb-3 pr-3 text-xs font-medium uppercase tracking-wide">Category</th>
-                          <th className="w-[155px] pb-3 pr-3 text-xs font-medium uppercase tracking-wide">Account</th>
+                          <ColumnHeader className="w-[170px] pb-3 pr-3">Vendor</ColumnHeader>
+                          <ColumnHeader className="w-[190px] pb-3 pr-3">Category</ColumnHeader>
+                          <ColumnHeader className="w-[155px] pb-3 pr-3">Account</ColumnHeader>
                           <th className="w-[30px] pb-3"></th>
-                          <th className="w-[90px] pb-3 text-right text-xs font-medium uppercase tracking-wide">Amount</th>
+                          <ColumnHeader className="w-[90px] pb-3 text-right">Amount</ColumnHeader>
                           <th className="w-[60px] pb-3"></th>
                         </tr>
                       </thead>
@@ -2320,14 +2321,14 @@ export function Expenses() {
                         className="h-4 w-4 rounded accent-primary"
                       />
                     </th>
-                    <th className="w-[70px] cursor-pointer select-none pb-3 pr-3 text-xs font-medium uppercase tracking-wide" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></th>
-                    <th className="cursor-pointer select-none pb-3 pr-3 text-xs font-medium uppercase tracking-wide" onClick={() => toggleSort("description")}>Description <SortIcon field="description" /></th>
+                    <ColumnHeader className="w-[70px] cursor-pointer select-none pb-3 pr-3" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></ColumnHeader>
+                    <ColumnHeader className="cursor-pointer select-none pb-3 pr-3" onClick={() => toggleSort("description")}>Description <SortIcon field="description" /></ColumnHeader>
                     <th className="w-[60px] pb-3"></th>
-                    <th className="w-[170px] cursor-pointer select-none pb-3 pr-3 text-xs font-medium uppercase tracking-wide" onClick={() => toggleSort("vendor")}>Vendor <SortIcon field="vendor" /></th>
-                    <th className="w-[190px] cursor-pointer select-none pb-3 pr-3 text-xs font-medium uppercase tracking-wide" onClick={() => toggleSort("category")}>Category <SortIcon field="category" /></th>
-                    <th className="w-[155px] cursor-pointer select-none pb-3 pr-3 text-xs font-medium uppercase tracking-wide" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></th>
+                    <ColumnHeader className="w-[170px] cursor-pointer select-none pb-3 pr-3" onClick={() => toggleSort("vendor")}>Vendor <SortIcon field="vendor" /></ColumnHeader>
+                    <ColumnHeader className="w-[190px] cursor-pointer select-none pb-3 pr-3" onClick={() => toggleSort("category")}>Category <SortIcon field="category" /></ColumnHeader>
+                    <ColumnHeader className="w-[155px] cursor-pointer select-none pb-3 pr-3" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></ColumnHeader>
                     <th className="w-[30px] pb-3"></th>
-                    <th className="w-[90px] cursor-pointer select-none pb-3 text-right text-xs font-medium uppercase tracking-wide" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></th>
+                    <ColumnHeader className="w-[90px] cursor-pointer select-none pb-3 text-right" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></ColumnHeader>
                     <th className="w-[60px] pb-3"></th>
                   </tr>
                 </thead>
@@ -3051,14 +3052,14 @@ function ImportModal({
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-background">
                 <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">#</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Date</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Description</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Vendor</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Category</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Account</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide text-right">Amount</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Status</th>
+                  <ColumnHeader className="px-2 py-1.5">#</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5">Date</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5">Description</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5">Vendor</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5">Category</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5">Account</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5 text-right">Amount</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5">Status</ColumnHeader>
                 </tr>
               </thead>
               <tbody>

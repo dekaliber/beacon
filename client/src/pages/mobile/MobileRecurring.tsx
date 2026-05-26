@@ -22,6 +22,7 @@ import type {
   UpcomingExpenseItem, RecurringHistoryMonth,
 } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel, DisplayStat } from "@/components/Typography";
 
 // ── Frequency helpers ─────────────────────────────────────────────────────────
 
@@ -103,9 +104,9 @@ function UpcomingStrip({ expenses }: { expenses: UpcomingExpenseItem[] }) {
               className="flex min-w-[64px] flex-1 flex-col border-r border-border last:border-r-0"
             >
               <div className={`px-1 py-2 text-center ${isToday ? "text-red-500" : "text-muted-foreground"}`}>
-                <div className="text-[10px] font-medium uppercase tracking-wide">
+                <SectionLabel as="div" className="text-[10px]">
                   {isToday ? "Today" : DAY_NAMES[day.getDay()]}
-                </div>
+                </SectionLabel>
                 <div className={`text-base font-semibold leading-tight ${isToday ? "text-red-500" : "text-foreground"}`}>
                   {day.getDate()}
                 </div>
@@ -302,10 +303,10 @@ const AnnualCostPanel = memo(function AnnualCostPanel({
     <div>
       <div className="mb-3 flex items-baseline justify-between">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Annual cost</p>
-          <p className="mt-0.5 text-xl font-bold">{formatCurrency(totalCost)}</p>
+          <SectionLabel>Annual cost</SectionLabel>
+          <DisplayStat as="p" className="mt-0.5 text-xl font-bold">{formatCurrency(totalCost)}</DisplayStat>
         </div>
-        <p className="text-xs text-muted-foreground">{includedRules.length} active</p>
+        <p className="text-xs text-muted-foreground font-label">{includedRules.length} active</p>
       </div>
       <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart layout="vertical" data={data} margin={{ top: 0, right: 72, left: 0, bottom: 0 }}>
@@ -338,7 +339,7 @@ function YoYPanel({ history }: { history: RecurringHistoryMonth[] }) {
   const hasLastYear = history.some((m) => m.lastYear > 0);
   return (
     <div>
-      <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">Year over year</p>
+      <SectionLabel className="mb-3">Year over year</SectionLabel>
       <ResponsiveContainer width="100%" height={140}>
         <BarChart data={history} margin={{ top: 4, right: 4, left: -18, bottom: 0 }} barCategoryGap="30%">
           <XAxis dataKey="month" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
@@ -1210,7 +1211,7 @@ export function MobileRecurring() {
             {/* Upcoming strip */}
             {upcomingExpenses && upcomingExpenses.length > 0 && (
               <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Next 2 weeks</p>
+                <SectionLabel className="mb-2">Next 2 weeks</SectionLabel>
                 <div className="-mx-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   <UpcomingStrip expenses={upcomingExpenses} />
                 </div>
@@ -1223,7 +1224,7 @@ export function MobileRecurring() {
                 {ruleGroups.map(([groupName, groupRules]) => (
                   <div key={groupName ?? "__ungrouped__"}>
                     {groupName && (
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{groupName}</p>
+                      <SectionLabel className="mb-2">{groupName}</SectionLabel>
                     )}
                     <div className="divide-y divide-border rounded-xl border border-border overflow-hidden">
                       {groupRules.map((rule) => (

@@ -4,6 +4,7 @@ import { useApi } from "@/hooks/useApi";
 import { getCategories, getFlatCategories, createCategory, updateCategory, deleteCategory, getCategoryUsage } from "@/api";
 import type { Category } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel } from "@/components/Typography";
 
 const CATEGORY_COLORS = [
   "#C1121F", "#F94144", "#F3722C", "#F8961E", "#F9844A",
@@ -195,9 +196,9 @@ export function MobileCategories() {
         {/* Expense */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <SectionLabel as="h2" className="flex items-center gap-2">
               <Tags className="h-3.5 w-3.5" /> Expense
-            </h2>
+            </SectionLabel>
           </div>
           <CategorySection
             categories={expenseCategories}
@@ -211,9 +212,9 @@ export function MobileCategories() {
         {/* Income */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <SectionLabel as="h2" className="flex items-center gap-2">
               <TrendingUp className="h-3.5 w-3.5" /> Income
-            </h2>
+            </SectionLabel>
           </div>
           <CategorySection
             categories={incomeCategories}

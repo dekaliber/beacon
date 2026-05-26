@@ -30,6 +30,7 @@ import { useDemo } from "@/context/DemoContext";
 import { cn } from "@/lib/utils";
 import type { WithdrawalEvent, WithdrawalType, InvestmentSettings } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel, StatValue, DisplayStat } from "@/components/Typography";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -271,7 +272,7 @@ function MonthDetailSheet({
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
           <div>
             <p className="font-semibold">{label}</p>
-            <p className="text-xs text-muted-foreground tabular-nums">{formatCurrency(total)} total</p>
+            <StatValue as="p" className="text-xs text-muted-foreground">{formatCurrency(total)} total</StatValue>
           </div>
           <button onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
             <X className="h-5 w-5" />
@@ -292,7 +293,7 @@ function MonthDetailSheet({
                   <div className="flex items-center justify-between gap-2">
                     <TypeBadge type={event.type} />
                     <span className={cn(
-                      "text-sm font-semibold tabular-nums",
+                      "text-sm font-semibold tabular-nums font-label",
                       amount < 0 ? "text-green-600" : "text-foreground",
                     )}>
                       {amount < 0 ? "−" : ""}{formatCurrency(Math.abs(amount))}
@@ -304,9 +305,9 @@ function MonthDetailSheet({
                     <span className={cn("text-sm truncate", isIncome ? "text-muted-foreground" : "font-medium")}>
                       {event.description || "—"}
                     </span>
-                    <span className="text-xs text-muted-foreground tabular-nums flex-shrink-0">
+                    <StatValue className="text-xs text-muted-foreground flex-shrink-0">
                       {formatDate(event.date)}
-                    </span>
+                    </StatValue>
                   </div>
 
                   {/* Account */}
@@ -791,18 +792,18 @@ export function MobileWithdrawals() {
       <div className="rounded-xl border border-border p-4 space-y-3">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
+            <SectionLabel className="mb-0.5">
               YTD Total
-            </p>
-            <p className="text-2xl font-bold tabular-nums">{formatCurrency(ytdTotal)}</p>
+            </SectionLabel>
+            <DisplayStat as="p" className="text-2xl font-bold">{formatCurrency(ytdTotal)}</DisplayStat>
           </div>
           <div className="text-right">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
+            <SectionLabel className="mb-0.5">
               Annualized Rate
-            </p>
-            <p className="text-2xl font-bold tabular-nums">
+            </SectionLabel>
+            <DisplayStat as="p" className="text-2xl font-bold">
               {effectiveDenominator > 0 ? formatRate(ytdRate) : "—"}
-            </p>
+            </DisplayStat>
           </div>
         </div>
 
@@ -886,13 +887,13 @@ export function MobileWithdrawals() {
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">{monthLabel}</p>
                   {monthRate !== null && (
-                    <p className="text-xs text-muted-foreground tabular-nums">
+                    <StatValue as="p" className="text-xs text-muted-foreground">
                       {formatRate(monthRate)} annualized
-                    </p>
+                    </StatValue>
                   )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-                  <span className="text-sm font-semibold tabular-nums">{formatCurrency(monthTotal)}</span>
+                  <StatValue className="text-sm font-semibold">{formatCurrency(monthTotal)}</StatValue>
                   <ChevronRightIcon className="h-4 w-4 text-muted-foreground" />
                 </div>
               </button>

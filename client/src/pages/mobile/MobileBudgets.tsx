@@ -32,6 +32,7 @@ import { getBudgetOverview, setAnnualBudget, getDataRange, getCategoryOutliersYt
 import { formatCurrency, cn } from "@/lib/utils";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import type { BudgetPanel, MonthlyTotal, CategoryOutliersData, CategoryOutlier } from "@/types";
+import { SectionLabel, DisplayStat } from "@/components/Typography";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -394,9 +395,9 @@ function Metric({
 function BandLabel({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+      <SectionLabel as="span" className="whitespace-nowrap">
         {children}
-      </span>
+      </SectionLabel>
       <div className="flex-1 h-px bg-border" />
       {action}
     </div>
@@ -743,9 +744,9 @@ function BudgetPanelSection({
     <div className="flex items-start justify-between gap-4">
       <div>
         <div className="flex items-center gap-2">
-          <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          <SectionLabel className="text-sm">
             {title}
-          </p>
+          </SectionLabel>
           {subtitle && (
             <div className="relative">
               <button
@@ -765,10 +766,10 @@ function BudgetPanelSection({
           )}
         </div>
         <div className="mt-1">
-          <p className="text-xs text-muted-foreground mb-0.5">{budgetLabel}</p>
-          <p className="text-2xl font-bold">
+          <p className="text-xs text-muted-foreground mb-0.5 font-label">{budgetLabel}</p>
+          <DisplayStat as="p" className="text-2xl font-bold">
             {panel.effectiveAnnualBudget > 0 ? fmt(panel.effectiveAnnualBudget) : "—"}
-          </p>
+          </DisplayStat>
         </div>
       </div>
       {!isNoBudget && (
@@ -844,10 +845,10 @@ function SplitSection({ personal, joint }: { personal: BudgetPanel; joint: Budge
       <div className="flex-1 min-w-0 space-y-1.5">
         <div className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+          <SectionLabel as="span">{label}</SectionLabel>
         </div>
-        <p className="text-xl font-bold leading-tight">{fmt(ytd)}</p>
-        <div className="space-y-0.5 text-xs">
+        <DisplayStat as="p" className="text-xl font-bold leading-tight">{fmt(ytd)}</DisplayStat>
+        <div className="space-y-0.5 text-xs font-label">
           <p className={overTarget ? "text-destructive font-medium" : underTarget ? "text-success font-medium" : "text-muted-foreground"}>
             {Math.round(actualPct * 100)}% of actual spend
           </p>
@@ -1022,11 +1023,11 @@ function CategoryPacingTable({ outliers, year }: { outliers: CategoryOutliersDat
                     {item.categoryName}
                   </span>
                 </td>
-                <td className="py-1.5 px-2 text-right tabular-nums">{formatCurrency(item.currentAmount)}</td>
-                <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">
+                <td className="py-1.5 px-2 text-right tabular-nums font-label">{formatCurrency(item.currentAmount)}</td>
+                <td className="py-1.5 px-2 text-right tabular-nums font-label text-muted-foreground">
                   {item.previousAmount > 0 ? formatCurrency(item.previousAmount) : "—"}
                 </td>
-                <td className={`py-1.5 pl-2 text-right tabular-nums font-semibold ${changeColor}`}>
+                <td className={`py-1.5 pl-2 text-right tabular-nums font-label font-semibold ${changeColor}`}>
                   {pct !== null
                     ? `${over ? "+" : ""}${Math.round(pct * 100)}%`
                     : item.previousAmount === 0 ? "new" : "—"}

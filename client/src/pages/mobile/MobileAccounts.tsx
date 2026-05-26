@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useDemo } from "@/context/DemoContext";
 import type { Account, TaxAdvantageType } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel } from "@/components/Typography";
 
 const ACCOUNT_COLORS = [
   "#e2e2df", "#d2d2cf", "#e2cfc4", "#f7d9c4", "#faedcb",
@@ -50,18 +51,18 @@ function AccountRow({ account, allAccounts, onTap }: { account: Account; allAcco
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-sm font-medium leading-snug">{account.name}</span>
           {account.isManaged && (
-            <span className="rounded-full bg-blue-600 text-white text-[10px] font-semibold px-1.5 py-0.5 uppercase tracking-wide">
+            <SectionLabel as="span" className="rounded-full bg-blue-600 text-white text-[10px] px-1.5 py-0.5">
               Managed
-            </span>
+            </SectionLabel>
           )}
           {account.isTaxAdvantaged && (
-            <span className="rounded-full bg-emerald-600 text-white text-[10px] font-semibold px-1.5 py-0.5 uppercase tracking-wide">
+            <SectionLabel as="span" className="rounded-full bg-emerald-600 text-white text-[10px] px-1.5 py-0.5">
               {account.taxAdvantageType === "TRADITIONAL" ? "Traditional"
                 : account.taxAdvantageType === "ROTH" ? "Roth"
                 : account.taxAdvantageType === "HSA" ? "HSA"
                 : account.taxAdvantageType === "PLAN_529" ? "529"
                 : "Tax-Adv"}
-            </span>
+            </SectionLabel>
           )}
         </div>
         {account.type === "CREDIT_CARD" && (account.closingDay != null || account.dueDay != null) && (
@@ -139,10 +140,10 @@ export function MobileAccounts() {
     if (items.length === 0) return null;
     return (
       <div className="space-y-2">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <SectionLabel as="div" className="flex items-center gap-2">
           <Icon className="h-3.5 w-3.5" />
           <span>{label}</span>
-        </div>
+        </SectionLabel>
         <div className="space-y-2">
           {items.map((a) => (
             <AccountRow key={a.id} account={a} allAccounts={accounts} onTap={() => openEdit(a)} />
@@ -166,7 +167,7 @@ export function MobileAccounts() {
           <span className="inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
             {isJoint ? "J" : "P"}
           </span>
-          <span className="text-sm font-semibold uppercase tracking-wider">{ownership}</span>
+          <SectionLabel as="span" className="text-sm">{ownership}</SectionLabel>
         </div>
         <div className="space-y-5">
           {sections.map(({ key, el }) => <Fragment key={key}>{el}</Fragment>)}
@@ -577,7 +578,7 @@ function MobileAccountModal({
           {/* Credit card settings */}
           {accountType === "CREDIT_CARD" && (
             <div className="space-y-4 rounded-md border border-border p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Credit Card Settings</p>
+              <SectionLabel>Credit Card Settings</SectionLabel>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1.5 block text-sm font-medium">Closing Day</label>
@@ -627,7 +628,7 @@ function MobileAccountModal({
           {/* Dividend settings (investment only) */}
           {accountType === "INVESTMENT" && (
             <div className="space-y-3 rounded-md border border-border p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dividend Settings</p>
+              <SectionLabel>Dividend Settings</SectionLabel>
               <div>
                 <label className="mb-1.5 block text-sm font-medium">Default Election</label>
                 <div className="relative">

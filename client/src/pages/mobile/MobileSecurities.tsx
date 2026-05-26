@@ -15,6 +15,7 @@ import {
 import type { AssetClass, Instrument } from "@/types";
 import { cn } from "@/lib/utils";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel, StatValue } from "@/components/Typography";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -201,12 +202,12 @@ export function MobileSecurities() {
                 const abbrev = (w.assetClass.slug && SLUG_ABBREV[w.assetClass.slug]) || w.assetClass.name;
                 const pct = Math.round(parseFloat(w.weight));
                 return (
-                  <span
+                  <StatValue
                     key={w.assetClassId}
-                    className="rounded bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground font-medium whitespace-nowrap"
+                    className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground font-medium whitespace-nowrap"
                   >
                     {abbrev} {pct}%
-                  </span>
+                  </StatValue>
                 );
               })}
               {instrument.isCollectible && (
@@ -230,9 +231,9 @@ export function MobileSecurities() {
         className={cn("flex items-center gap-2 pl-[13px] pr-4 py-2 bg-muted/40 border-border", isFirst ? "border-b" : "border-y")}
         style={{ borderLeft: `3px solid ${ac?.color ?? "transparent"}` }}
       >
-        <span className="text-xs font-semibold uppercase tracking-wide text-foreground">
+        <SectionLabel as="span" className="text-foreground">
           {ac?.name ?? slug}
-        </span>
+        </SectionLabel>
       </div>
       <div className="divide-y divide-border">
         {insts.map((inst) => renderRow(inst))}
@@ -388,7 +389,7 @@ function EditOverlay({ instrument, allInstruments, assetClasses, onClose, onSave
         <div key={parent.id} className="flex items-center gap-2 py-2">
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
             <div className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: parent.color ?? "#e2e8f0" }} />
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide truncate">{parent.name}</span>
+            <SectionLabel as="span" className="truncate">{parent.name}</SectionLabel>
           </div>
           <WeightInput id={parent.id} value={weights[parent.id] ?? ""} onChange={(v) => setWeights((p) => ({ ...p, [parent.id]: v }))} />
         </div>
@@ -399,7 +400,7 @@ function EditOverlay({ instrument, allInstruments, assetClasses, onClose, onSave
       <div key={parent.id} className="py-2">
         <div className="flex items-center gap-1.5 mb-2">
           <div className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: parent.color ?? "#e2e8f0" }} />
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{parent.name}</span>
+          <SectionLabel as="span">{parent.name}</SectionLabel>
         </div>
         <div className="space-y-2 pl-3.5">
           {children.map((ac) => (

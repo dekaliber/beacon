@@ -24,6 +24,7 @@ import type {
   ManualInvestment, InvestmentActivity, GrowthPoint, PendingDividend,
 } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel, StatValue, DisplayStat } from "@/components/Typography";
 
 // ── Constants & types ─────────────────────────────────────────────────────────
 
@@ -112,12 +113,12 @@ function useBodyScrollLock(active: boolean) {
 // ── Shared presentational helpers ─────────────────────────────────────────────
 
 function GainText({ value, pct, size = "sm" }: { value: number | null; pct?: number | null; size?: "sm" | "base" }) {
-  if (value == null) return <span className="text-muted-foreground tabular-nums">—</span>;
+  if (value == null) return <StatValue className="text-muted-foreground">—</StatValue>;
   const positive = value >= 0;
   const Icon = positive ? TrendingUp : TrendingDown;
   const sizeClass = size === "base" ? "text-base font-semibold" : "text-sm font-medium";
   return (
-    <span className={`inline-flex items-center gap-1 tabular-nums ${positive ? "text-green-600" : "text-red-500"} ${sizeClass}`}>
+    <span className={`inline-flex items-center gap-1 tabular-nums font-label ${positive ? "text-green-600" : "text-red-500"} ${sizeClass}`}>
       <Icon className="h-3.5 w-3.5 shrink-0" />
       {formatCurrency(Math.abs(value))}
       {pct != null && <span className="text-xs opacity-70">({Math.abs(pct).toFixed(2)}%)</span>}
@@ -218,7 +219,7 @@ function MobileGrowthChart({ accountId }: { accountId: string }) {
           ))}
         </div>
         {periodGain != null && (
-          <span className={`text-sm font-semibold tabular-nums ${periodGain >= 0 ? "text-green-600" : "text-red-500"}`}>
+          <span className={`text-sm font-semibold tabular-nums font-label ${periodGain >= 0 ? "text-green-600" : "text-red-500"}`}>
             {periodGain >= 0 ? "+" : "−"}{formatCurrency(Math.abs(periodGain))}
             {periodGainPct != null && (
               <span className="text-xs ml-1 opacity-70">({Math.abs(periodGainPct).toFixed(2)}%)</span>
@@ -259,7 +260,7 @@ function MobileGrowthChart({ accountId }: { accountId: string }) {
                 return (
                   <div className="rounded-lg border border-border bg-background px-2.5 py-1.5 shadow-md text-xs">
                     <p className="text-muted-foreground mb-0.5">{formatDate(pt.date)}</p>
-                    <p className="font-semibold tabular-nums">{formatCurrency(pt.marketValue)}</p>
+                    <StatValue as="p" className="font-semibold">{formatCurrency(pt.marketValue)}</StatValue>
                   </div>
                 );
               }}
@@ -352,7 +353,7 @@ function CashEditSheet({
               onChange={(e) => setInput(e.target.value)}
               placeholder="0.00"
               autoFocus
-              className="w-full rounded-md border border-border pl-7 pr-3 py-3 text-sm tabular-nums focus:border-primary focus:outline-none"
+              className="w-full rounded-md border border-border pl-7 pr-3 py-3 text-sm tabular-nums font-label focus:border-primary focus:outline-none"
             />
           </div>
           <div className="flex gap-3">
@@ -508,12 +509,12 @@ function LotEditScreen({
           <div className="rounded-md bg-muted/50 px-4 py-3 space-y-1.5 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Total Cost</span>
-              <span className="tabular-nums font-medium">{formatCurrency(gains.totalCost)}</span>
+              <StatValue className="font-medium">{formatCurrency(gains.totalCost)}</StatValue>
             </div>
             {gains.marketValue != null && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Market Value</span>
-                <span className="tabular-nums font-medium">{formatCurrency(gains.marketValue)}</span>
+                <StatValue className="font-medium">{formatCurrency(gains.marketValue)}</StatValue>
               </div>
             )}
             {gains.totalGain != null && (
@@ -666,35 +667,35 @@ function HoldingDetailSheet({
               {/* Key stats */}
               <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                 <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Price</p>
-                  <p className="text-sm font-medium tabular-nums">
+                  <SectionLabel className="mb-0.5">Price</SectionLabel>
+                  <StatValue as="p" className="text-sm font-medium">
                     {holding.currentPrice != null ? formatCurrency(holding.currentPrice) : "—"}
-                  </p>
+                  </StatValue>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Shares</p>
-                  <p className="text-sm font-medium tabular-nums">
+                  <SectionLabel className="mb-0.5">Shares</SectionLabel>
+                  <StatValue as="p" className="text-sm font-medium">
                     {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}
-                  </p>
+                  </StatValue>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Market Value</p>
-                  <p className="text-sm font-medium tabular-nums">
+                  <SectionLabel className="mb-0.5">Market Value</SectionLabel>
+                  <StatValue as="p" className="text-sm font-medium">
                     {holding.marketValue != null ? formatCurrency(holding.marketValue) : "—"}
-                  </p>
+                  </StatValue>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Total Cost</p>
-                  <p className="text-sm font-medium tabular-nums">{formatCurrency(holding.totalCost)}</p>
+                  <SectionLabel className="mb-0.5">Total Cost</SectionLabel>
+                  <StatValue as="p" className="text-sm font-medium">{formatCurrency(holding.totalCost)}</StatValue>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Total Gain</p>
+                  <SectionLabel className="mb-0.5">Total Gain</SectionLabel>
                   <GainText value={holding.totalGain} pct={holding.totalGainPct} />
                 </div>
                 {avgCostPerShare != null && (
                   <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Avg Cost / Share</p>
-                    <p className="text-sm font-medium tabular-nums">{formatCurrency(avgCostPerShare)}</p>
+                    <SectionLabel className="mb-0.5">Avg Cost / Share</SectionLabel>
+                    <StatValue as="p" className="text-sm font-medium">{formatCurrency(avgCostPerShare)}</StatValue>
                   </div>
                 )}
               </div>
@@ -727,7 +728,7 @@ function HoldingDetailSheet({
               {/* Unmanaged: lot list */}
               {!holding.isManaged && (
                 <div className="space-y-0">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Lots</p>
+                  <SectionLabel className="mb-2">Lots</SectionLabel>
                   <div className="divide-y divide-border border-t border-border">
                     {holding.lots.map((lot) => {
                       const gains = computeLotGains(lot.quantity, lot.costPerShare, lot.acquiredDate, holding.currentPrice);
@@ -740,9 +741,9 @@ function HoldingDetailSheet({
                                 <p className="text-xs text-muted-foreground mb-0.5">{formatDate(lot.acquiredDate)}</p>
                               )}
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm tabular-nums">
+                                <StatValue className="text-sm">
                                   {parseFloat(lot.quantity).toLocaleString(undefined, { maximumFractionDigits: 8 })} sh
-                                </span>
+                                </StatValue>
                                 <span className="text-xs text-muted-foreground">
                                   @ {formatCurrency(parseFloat(lot.costPerShare))}/sh
                                 </span>
@@ -1005,7 +1006,7 @@ function Row({ label, value, muted, bold }: { label: string; value: string; mute
   return (
     <div className="flex items-center justify-between">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <span className={`text-sm tabular-nums ${muted ? "text-muted-foreground" : ""} ${bold ? "font-semibold" : ""}`}>
+      <span className={`text-sm tabular-nums font-label ${muted ? "text-muted-foreground" : ""} ${bold ? "font-semibold" : ""}`}>
         {value}
       </span>
     </div>
@@ -1227,9 +1228,9 @@ function AddInvestmentFullscreen({
                 <p className="text-xs text-muted-foreground truncate">{selected.name}</p>
               </div>
               {fetchedPrice != null && (
-                <span className="ml-auto text-sm tabular-nums text-muted-foreground shrink-0">
+                <StatValue className="ml-auto text-sm text-muted-foreground shrink-0">
                   {formatCurrency(fetchedPrice)}
-                </span>
+                </StatValue>
               )}
             </div>
 
@@ -1645,7 +1646,7 @@ export function MobileInvestmentAccount() {
         {/* Market value — only when there's something to total */}
         {hasHoldings && (
           <div>
-            <p className="text-2xl font-bold tabular-nums">{formatCurrency(totalMarketValue)}</p>
+            <DisplayStat as="p" className="text-2xl font-bold">{formatCurrency(totalMarketValue)}</DisplayStat>
           </div>
         )}
 
@@ -1660,16 +1661,16 @@ export function MobileInvestmentAccount() {
         {hasHoldings && (
           <div className="space-y-3">
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Total Gain</p>
+              <SectionLabel className="mb-0.5">Total Gain</SectionLabel>
               <GainText value={totalGain} pct={totalGainPct} size="sm" />
             </div>
             <div className="grid grid-cols-2 gap-x-4">
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Short-Term</p>
+                <SectionLabel className="mb-0.5">Short-Term</SectionLabel>
                 <GainText value={shortTermGain} size="sm" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Long-Term</p>
+                <SectionLabel className="mb-0.5">Long-Term</SectionLabel>
                 <GainText value={longTermGain} size="sm" />
               </div>
             </div>
@@ -1692,9 +1693,9 @@ export function MobileInvestmentAccount() {
             <span>Settlement Cash</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="font-medium tabular-nums">
+            <StatValue className="font-medium">
               {cashBalance != null ? formatCurrency(cashBalance) : "—"}
-            </span>
+            </StatValue>
             <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
           </div>
         </button>
@@ -1764,9 +1765,9 @@ export function MobileInvestmentAccount() {
                   </p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-sm font-semibold tabular-nums">
+                  <StatValue as="p" className="text-sm font-semibold">
                     {holding.marketValue != null ? formatCurrency(holding.marketValue) : "—"}
-                  </p>
+                  </StatValue>
                   <GainText value={holding.totalGain} />
                 </div>
                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -1786,7 +1787,7 @@ export function MobileInvestmentAccount() {
                   <p className="text-xs text-muted-foreground">Manual</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-sm font-semibold tabular-nums">{formatCurrency(m.marketValue)}</p>
+                  <StatValue as="p" className="text-sm font-semibold">{formatCurrency(m.marketValue)}</StatValue>
                   {m.totalCost != null && <GainText value={m.marketValue - m.totalCost} />}
                 </div>
                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -1829,9 +1830,9 @@ export function MobileInvestmentAccount() {
                   <span className="ml-1 inline-flex items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-semibold px-1.5 py-0.5">
                     {pendingDividends.length}
                   </span>
-                  <span className="ml-auto text-sm font-semibold text-violet-600 tabular-nums">
+                  <StatValue className="ml-auto text-sm font-semibold text-violet-600">
                     {formatCurrency(pendingDividends.reduce((s, pd) => s + parseFloat(pd.estimatedTotal), 0))}
-                  </span>
+                  </StatValue>
                 </div>
                 <div className="divide-y divide-border">
                   {pendingDividends.map((pd) => (
@@ -1957,7 +1958,7 @@ export function MobileInvestmentAccount() {
                       )}
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold tabular-nums">{formatCurrency(a.amount)}</p>
+                      <StatValue as="p" className="text-sm font-semibold">{formatCurrency(a.amount)}</StatValue>
                       {isSale && <GainText value={gain} />}
                     </div>
                     <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />

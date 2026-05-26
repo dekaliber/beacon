@@ -19,6 +19,7 @@ import {
 import { useClerk, useUser } from "@clerk/react";
 import { cn } from "@/lib/utils";
 import { useNotifications } from "@/context/NotificationContext";
+import { SectionLabel, Caption } from "@/components/Typography";
 
 // ── Keyboard shortcuts registry ───────────────────────────────────────────────
 
@@ -80,9 +81,7 @@ function KeyboardShortcutsButton() {
       {open && (
         <div className="absolute right-0 top-full mt-1 w-72 rounded-md border border-border bg-background shadow-md z-50">
           <div className="px-3 py-2 border-b border-border">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Keyboard Shortcuts
-            </p>
+            <SectionLabel>Keyboard Shortcuts</SectionLabel>
           </div>
           <div className="px-3 py-2 space-y-2">
             {shortcuts.map((s) => (
@@ -90,7 +89,7 @@ function KeyboardShortcutsButton() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm">{s.description}</p>
                   {s.conditional && (
-                    <p className="text-xs text-muted-foreground">{s.conditional}</p>
+                    <Caption>{s.conditional}</Caption>
                   )}
                 </div>
                 <kbd className="shrink-0 inline-flex items-center justify-center rounded border border-border bg-muted px-1.5 py-0.5 text-xs font-mono font-medium">
@@ -181,9 +180,7 @@ function NotificationBell() {
       {open && (
         <div className="absolute right-0 top-full mt-1 w-72 rounded-md border border-border bg-background shadow-md z-50">
           <div className="px-3 py-2 border-b border-border">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Notifications
-            </p>
+            <SectionLabel>Notifications</SectionLabel>
           </div>
 
           {totalCount === 0 ? (
@@ -204,9 +201,7 @@ function NotificationBell() {
                   >
                     <div>
                       <p className="font-medium">{a.accountName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {parts.join(" & ")} to review
-                      </p>
+                      <Caption>{parts.join(" & ")} to review</Caption>
                     </div>
                     <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-2" />
                   </button>
@@ -260,7 +255,7 @@ export function UserMenu() {
       {open && (
         <div className="absolute right-0 top-full mt-1 w-48 rounded-md border border-border bg-background shadow-md z-50">
           <div className="px-3 py-2 border-b border-border">
-            <p className="text-xs font-medium truncate">{user?.emailAddresses?.[0]?.emailAddress}</p>
+            <Caption className="font-medium truncate">{user?.emailAddresses?.[0]?.emailAddress}</Caption>
           </div>
           {configItems.map((item) => (
             <NavLink
@@ -313,7 +308,7 @@ export function Layout() {
                 to={item.to}
                 className={({ isActive }) =>
                   cn(
-                    "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap",
+                    "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-normal transition-colors whitespace-nowrap",
                     isActive
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"

@@ -16,6 +16,7 @@ import { useApi } from "@/hooks/useApi";
 import { getCashFlow, getInvestmentAccounts, updateAccount, createBalanceAdjustment, updateBalanceAdjustment, deleteBalanceAdjustment, upsertStatementOverride, getExpenses } from "@/api";
 import { formatCurrency, cn } from "@/lib/utils";
 import type { CashFlowProjection, CashFlowEvent, DailyBalance, InvestmentAccountSummary, Expense } from "@/types";
+import { SectionLabel, StatValue, DisplayStat } from "@/components/Typography";
 
 function fmtDate(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
@@ -49,7 +50,7 @@ function BalanceTooltip({ active, payload, label }: any) {
   return (
     <div className="rounded-lg border border-border bg-background shadow-md px-3 py-2 text-xs space-y-0.5">
       <p className="font-semibold text-foreground">{fmtDate(label as string)}</p>
-      <p className="text-muted-foreground">Balance: <span className="text-foreground font-medium tabular-nums">{formatCurrency(payload[0].value ?? 0)}</span></p>
+      <p className="text-muted-foreground">Balance: <StatValue className="text-foreground font-medium">{formatCurrency(payload[0].value ?? 0)}</StatValue></p>
     </div>
   );
 }
@@ -539,13 +540,13 @@ function CCPaymentSheet({
             <div className="flex items-center justify-between mb-1">
               <label className="text-sm font-medium">Payment Amount</label>
               {isConfirmed ? (
-                <span className="rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                <SectionLabel as="span" className="rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px]">
                   Confirmed
-                </span>
+                </SectionLabel>
               ) : (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                <SectionLabel as="span" className="rounded-full bg-muted px-2 py-0.5 text-[10px]">
                   Estimated
-                </span>
+                </SectionLabel>
               )}
             </div>
             <div className="relative">
@@ -566,12 +567,12 @@ function CCPaymentSheet({
           {/* Statement transactions */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              <SectionLabel>
                 Statement Transactions
                 {event?.relatedAccountName && (
                   <span className="font-normal normal-case ml-1">· {event.relatedAccountName}</span>
                 )}
-              </p>
+              </SectionLabel>
             </div>
 
             {loadingExpenses ? (
@@ -592,9 +593,9 @@ function CCPaymentSheet({
                       {fmtMD(exp.date.slice(0, 10))}
                     </span>
                     <span className="flex-1 truncate">{exp.vendor}</span>
-                    <span className="tabular-nums text-red-500 shrink-0">
+                    <StatValue className="text-red-500 shrink-0">
                       {formatCurrency(Math.abs(parseFloat(exp.amount)))}
-                    </span>
+                    </StatValue>
                   </div>
                 ))}
               </div>
@@ -653,9 +654,9 @@ function BankingTile({
           </p>
         </div>
         <div className="text-right flex-shrink-0 mr-2">
-          <p className="font-bold tabular-nums text-sm">
+          <StatValue as="p" className="font-bold text-sm">
             {formatCurrency(account.totalMarketValue)}
-          </p>
+          </StatValue>
         </div>
         <button
           onClick={onEdit}
@@ -741,7 +742,7 @@ function MobileEventsLedger({
                 <p className="truncate font-medium">{event.description}</p>
               </div>
               <span className={cn(
-                "shrink-0 tabular-nums font-medium",
+                "shrink-0 tabular-nums font-label font-medium",
                 event.amount > 0 ? "text-green-600" : "text-red-500",
               )}>
                 {event.amount > 0 ? "+" : ""}{formatCurrency(event.amount)}
@@ -756,23 +757,23 @@ function MobileEventsLedger({
                   <> · {event.type === "TRANSFER_IN" ? "from " : event.type === "TRANSFER_OUT" ? "to " : ""}{event.relatedAccountName}</>
                 )}
                 {event.confidence === "KNOWN" && event.type !== "CC_PAYMENT" && (
-                  <span className="ml-1.5 rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                  <SectionLabel as="span" className="ml-1.5 rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px]">
                     Confirmed
-                  </span>
+                  </SectionLabel>
                 )}
                 {event.type === "CC_PAYMENT" && !event.overrideId && (
-                  <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                  <SectionLabel as="span" className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">
                     Estimated
-                  </span>
+                  </SectionLabel>
                 )}
                 {event.overrideId && (
-                  <span className="ml-1.5 rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                  <SectionLabel as="span" className="ml-1.5 rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px]">
                     Confirmed
-                  </span>
+                  </SectionLabel>
                 )}
               </p>
               <span className={cn(
-                "shrink-0 text-sm tabular-nums font-semibold",
+                "shrink-0 text-sm tabular-nums font-label font-semibold",
                 event.runningBalance < 0 ? "text-red-600" : "text-muted-foreground",
               )}>
                 {formatCurrency(event.runningBalance)}
@@ -824,14 +825,14 @@ function ProjectionSection({
       <div className="space-y-2">
         <div className="flex items-center gap-6">
           <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Today</p>
-            <p className="text-xl font-bold tabular-nums">{formatCurrency(projection.startBalance)}</p>
+            <SectionLabel className="mb-0.5">Today</SectionLabel>
+            <DisplayStat as="p" className="text-xl font-bold">{formatCurrency(projection.startBalance)}</DisplayStat>
           </div>
           <div className="text-muted-foreground">→</div>
           <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">{fmtDate(windowEnd)}</p>
+            <SectionLabel className="mb-0.5">{fmtDate(windowEnd)}</SectionLabel>
             <p className={cn(
-              "text-xl font-bold tabular-nums",
+              "text-xl font-bold tabular-nums font-numeral",
               projection.endBalance < 0 ? "text-red-600" : "text-foreground"
             )}>
               {formatCurrency(projection.endBalance)}

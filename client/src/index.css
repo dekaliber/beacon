@@ -1,6 +1,10 @@
 @import "tailwindcss";
 
 @theme {
+  --font-body: "DM Sans", system-ui, -apple-system, sans-serif;
+  --font-numeral: "Hanken Grotesk", system-ui, sans-serif;
+  --font-label: "Geist Mono", "Courier New", monospace;
+
   --color-primary: #4F46E5;
   --color-primary-foreground: #FFFFFF;
   --color-secondary: #F1F5F9;
@@ -23,12 +27,17 @@
 body {
   @apply bg-background text-foreground;
   margin: 0;
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
 }
 
 .recharts-wrapper *:focus {
   outline: none;
 }
+
+svg.lucide {
+  stroke-width: 1.5;
+}
+
 
 /* Beacon loader — 5 equal circles (30×30px) orbiting clockwise.
    Layout (d=30, container 60×90):

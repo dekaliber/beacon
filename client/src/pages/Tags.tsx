@@ -10,6 +10,7 @@ import { getTags, createTag, updateTag, deleteTag, getExpenses, getTagOrphanedOf
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Expense, OrphanedOffset, Tag } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { ColumnHeader } from "@/components/Typography";
 
 const PRESET_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e",
@@ -141,7 +142,7 @@ export function TagsPage() {
                               />
                               <span className="truncate font-medium">{tag.name}</span>
                             </button>
-                            <div className="flex flex-shrink-0 items-center gap-3 text-xs tabular-nums text-muted-foreground">
+                            <div className="flex flex-shrink-0 items-center gap-3 text-xs tabular-nums font-label text-muted-foreground">
                               {(tag.personalTotal > 0 || tag.jointTotal > 0) && (
                                 <>
                                   {tag.personalTotal > 0 && (
@@ -194,10 +195,10 @@ export function TagsPage() {
                                   </colgroup>
                                   <thead>
                                     <tr className="border-b border-border/50">
-                                      <th className="pb-1.5 pt-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Date</th>
-                                      <th className="pb-1.5 pt-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Vendor</th>
-                                      <th className="pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"></th>
-                                      <th className="pb-1.5 pt-1 text-right text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Amount</th>
+                                      <ColumnHeader className="pb-1.5 pt-1 text-left">Date</ColumnHeader>
+                                      <ColumnHeader className="pb-1.5 pt-1 text-left">Vendor</ColumnHeader>
+                                      <ColumnHeader className="pb-1.5 pt-1"></ColumnHeader>
+                                      <ColumnHeader className="pb-1.5 pt-1 text-right">Amount</ColumnHeader>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -210,7 +211,7 @@ export function TagsPage() {
                                         return (
                                           <>
                                             <tr key={exp.id} className="border-b border-border/30">
-                                              <td className="py-1.5 pr-3 tabular-nums text-muted-foreground">
+                                              <td className="py-1.5 pr-3 tabular-nums font-label text-muted-foreground">
                                                 {formatDate(exp.date.slice(0, 10))}
                                               </td>
                                               <td className="py-1.5 pr-2">
@@ -224,7 +225,7 @@ export function TagsPage() {
                                                   {exp.account.isJoint ? "J" : "P"}
                                                 </span>
                                               </td>
-                                              <td className="py-1.5 text-right tabular-nums">
+                                              <td className="py-1.5 text-right tabular-nums font-label">
                                                 {formatCurrency(parseFloat(exp.amount))}
                                               </td>
                                             </tr>
@@ -245,7 +246,7 @@ export function TagsPage() {
                                                     {offset.account.isJoint ? "J" : "P"}
                                                   </span>
                                                 </td>
-                                                <td className="py-1 text-right tabular-nums">
+                                                <td className="py-1 text-right tabular-nums font-label">
                                                   {formatCurrency(parseFloat(offset.amount))}
                                                 </td>
                                               </tr>
@@ -256,7 +257,7 @@ export function TagsPage() {
                                         const offset = item.data;
                                         return (
                                           <tr key={offset.id} className="border-b border-border/30 last:border-0">
-                                            <td className="py-1 pr-3 tabular-nums text-muted-foreground">
+                                            <td className="py-1 pr-3 tabular-nums font-label text-muted-foreground">
                                               {formatDate(offset.date.slice(0, 10))}
                                             </td>
                                             <td className="py-1 pr-2">
@@ -277,7 +278,7 @@ export function TagsPage() {
                                                 {offset.account.isJoint ? "J" : "P"}
                                               </span>
                                             </td>
-                                            <td className="py-1 text-right tabular-nums text-amber-600">
+                                            <td className="py-1 text-right tabular-nums font-label text-amber-600">
                                               {formatCurrency(parseFloat(offset.amount))}
                                             </td>
                                           </tr>

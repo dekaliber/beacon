@@ -6,6 +6,7 @@ import { getTags, createTag, updateTag, deleteTag, getExpenses, getTagOrphanedOf
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Expense, OrphanedOffset, Tag } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel, StatValue } from "@/components/Typography";
 
 const PRESET_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e",
@@ -28,7 +29,7 @@ function ExpenseRow({ exp }: { exp: Expense }) {
         >
           {exp.account.isJoint ? "J" : "P"}
         </span>
-        <span className="shrink-0 tabular-nums text-sm">{formatCurrency(parseFloat(exp.amount))}</span>
+        <StatValue className="shrink-0 text-sm">{formatCurrency(parseFloat(exp.amount))}</StatValue>
       </div>
       {(exp.offsets ?? []).map((offset) => (
         <div key={offset.id} className="flex items-center gap-2 py-1.5 pl-14 pr-4 text-muted-foreground">
@@ -40,7 +41,7 @@ function ExpenseRow({ exp }: { exp: Expense }) {
           >
             {offset.account.isJoint ? "J" : "P"}
           </span>
-          <span className="shrink-0 tabular-nums text-xs">{formatCurrency(parseFloat(offset.amount))}</span>
+          <StatValue className="shrink-0 text-xs">{formatCurrency(parseFloat(offset.amount))}</StatValue>
         </div>
       ))}
     </>
@@ -64,7 +65,7 @@ function OrphanedRow({ offset }: { offset: OrphanedOffset }) {
       >
         {offset.account.isJoint ? "J" : "P"}
       </span>
-      <span className="shrink-0 tabular-nums text-sm">{formatCurrency(parseFloat(offset.amount))}</span>
+      <StatValue className="shrink-0 text-sm">{formatCurrency(parseFloat(offset.amount))}</StatValue>
     </div>
   );
 }
@@ -128,7 +129,7 @@ function TagRow({
         </button>
 
         {/* Totals */}
-        <div className="flex shrink-0 items-center gap-2 text-xs tabular-nums text-muted-foreground">
+        <div className="flex shrink-0 items-center gap-2 text-xs tabular-nums font-label text-muted-foreground">
           {tag.personalTotal > 0 && (
             <span className="flex items-center gap-1">
               <span className="inline-flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold text-white" style={{ backgroundColor: PERSONAL_COLOR }}>P</span>
@@ -264,9 +265,9 @@ export function MobileTags() {
             {tagGroups.map(([groupName, groupTags]) => (
               <div key={groupName ?? "__ungrouped__"} className="space-y-2">
                 {groupName && (
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <SectionLabel>
                     {groupName}
-                  </p>
+                  </SectionLabel>
                 )}
                 <div className="overflow-hidden rounded-xl border border-border divide-y divide-border">
                   {groupTags.map((tag) => (

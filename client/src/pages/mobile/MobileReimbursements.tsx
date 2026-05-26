@@ -5,6 +5,7 @@ import { getExpenses, updateExpense } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { StatValue } from "@/components/Typography";
 
 export function MobileReimbursements() {
   const { data: expenseData, refetch } = useApi(
@@ -52,9 +53,9 @@ export function MobileReimbursements() {
               <AlertCircle className="h-4 w-4" />
               {expenses.length} pending
             </span>
-            <span className="text-sm font-semibold tabular-nums text-amber-800">
+            <StatValue className="text-sm font-semibold text-amber-800">
               {formatCurrency(total)}
-            </span>
+            </StatValue>
           </div>
         )}
 
@@ -83,9 +84,9 @@ export function MobileReimbursements() {
                   )}
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
-                  <span className="text-sm font-semibold tabular-nums text-destructive">
+                  <StatValue className="text-sm font-semibold text-destructive">
                     -{formatCurrency(expense.amount)}
-                  </span>
+                  </StatValue>
                   <button
                     type="button"
                     onClick={() => openResolve(expense.id)}

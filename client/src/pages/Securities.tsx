@@ -18,6 +18,7 @@ import {
 import type { AssetClass, Instrument } from "@/types";
 import { cn } from "@/lib/utils";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel, StatValue, ColumnHeader } from "@/components/Typography";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -191,12 +192,12 @@ export function SecuritiesPage() {
               const abbrev = (w.assetClass.slug && SLUG_ABBREV[w.assetClass.slug]) || w.assetClass.name;
               const pct = Math.round(parseFloat(w.weight));
               return (
-                <span
+                <StatValue
                   key={w.assetClassId}
-                  className="rounded bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground font-medium whitespace-nowrap"
+                  className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground font-medium whitespace-nowrap"
                 >
                   {abbrev} {pct}%
-                </span>
+                </StatValue>
               );
             })}
             {instrument.isCollectible && (
@@ -264,10 +265,10 @@ export function SecuritiesPage() {
               </colgroup>
               <thead>
                 <tr className="border-b border-border">
-                  <th className="py-2 pl-4 pr-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Symbol</th>
-                  <th className="py-2 px-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Name</th>
-                  <th className="py-2 px-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Accounts</th>
-                  <th className="py-2 px-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Classification</th>
+                  <ColumnHeader className="py-2 pl-4 pr-2 text-left">Symbol</ColumnHeader>
+                  <ColumnHeader className="py-2 px-2 text-left">Name</ColumnHeader>
+                  <ColumnHeader className="py-2 px-2 text-left">Accounts</ColumnHeader>
+                  <ColumnHeader className="py-2 px-2 text-left">Classification</ColumnHeader>
                   <th className="py-2 pr-3" />
                 </tr>
               </thead>
@@ -280,9 +281,9 @@ export function SecuritiesPage() {
                         className="py-1.5 pl-3 pr-2"
                         style={{ borderLeft: `3px solid ${ac?.color ?? "transparent"}` }}
                       >
-                        <span className="text-xs font-semibold uppercase tracking-wide text-foreground">
+                        <SectionLabel as="span" className="text-foreground">
                           {ac?.name ?? slug}
-                        </span>
+                        </SectionLabel>
                       </td>
                     </tr>,
                     ...groupInsts.map((instrument) => renderRow(instrument)),
@@ -291,9 +292,9 @@ export function SecuritiesPage() {
                     ? [
                         <tr key="section-unclassified" className="bg-muted/40 border-b border-border">
                           <td colSpan={5} className="py-1.5 pl-3 pr-2" style={{ borderLeft: "3px solid transparent" }}>
-                            <span className="text-xs font-semibold uppercase tracking-wide text-foreground">
+                            <SectionLabel as="span" className="text-foreground">
                               Not Classified
-                            </span>
+                            </SectionLabel>
                           </td>
                         </tr>,
                         ...unclassified.map((instrument) => renderRow(instrument)),
@@ -437,7 +438,7 @@ function EditModal({ open, instrument, allInstruments, assetClasses, onClose, on
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 min-w-0">
               <div className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: parent.color ?? "#e2e8f0" }} />
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide truncate">{parent.name}</span>
+              <SectionLabel as="span" className="truncate">{parent.name}</SectionLabel>
             </div>
             <WeightInput id={parent.id} value={weights[parent.id] ?? ""} onChange={(v) => setWeights((p) => ({ ...p, [parent.id]: v }))} />
           </div>
@@ -449,7 +450,7 @@ function EditModal({ open, instrument, allInstruments, assetClasses, onClose, on
       <div key={parent.id} className="mb-4">
         <div className="flex items-center gap-1.5 mb-2">
           <div className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: parent.color ?? "#e2e8f0" }} />
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{parent.name}</span>
+          <SectionLabel as="span">{parent.name}</SectionLabel>
         </div>
         <div className="space-y-1.5">
           {children.map((ac) => (

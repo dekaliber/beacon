@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { useDemo } from "@/context/DemoContext";
 import type { Account, TaxAdvantageType } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel } from "@/components/Typography";
 
 const accountTypeLabels: Record<string, string> = {
   CHECKING: "Checking",
@@ -90,10 +91,10 @@ export function Accounts() {
     return (
       <div key={`${group.key}-${isJoint}`} className="space-y-2">
         <div className="flex items-center justify-between py-1">
-          <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          <SectionLabel as="div" className="flex items-center gap-2 text-sm">
             <Icon className="h-4 w-4" />
             <span>{group.label}</span>
-          </div>
+          </SectionLabel>
         </div>
         <div className="space-y-1.5">
           {groupAccounts.map((account) => (
@@ -105,18 +106,18 @@ export function Accounts() {
                 />
                 <span className="font-medium text-sm">{account.name}</span>
                 {account.isManaged && (
-                  <span className="rounded-full bg-blue-600 text-white text-[10px] font-semibold px-1.5 py-0.5 uppercase tracking-wide">
+                  <SectionLabel as="span" className="rounded-full bg-blue-600 text-white text-[10px] px-1.5 py-0.5">
                     Managed
-                  </span>
+                  </SectionLabel>
                 )}
                 {account.isTaxAdvantaged && (
-                  <span className="rounded-full bg-emerald-600 text-white text-[10px] font-semibold px-1.5 py-0.5 uppercase tracking-wide">
+                  <SectionLabel as="span" className="rounded-full bg-emerald-600 text-white text-[10px] px-1.5 py-0.5">
                     {account.taxAdvantageType === "TRADITIONAL" ? "Traditional"
                       : account.taxAdvantageType === "ROTH" ? "Roth"
                       : account.taxAdvantageType === "HSA" ? "HSA"
                       : account.taxAdvantageType === "PLAN_529" ? "529"
                       : "Tax-Advantaged"}
-                  </span>
+                  </SectionLabel>
                 )}
               </div>
               <div className="flex items-center gap-3">
@@ -179,7 +180,7 @@ export function Accounts() {
           <span className="inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
             {isJoint ? "J" : "P"}
           </span>
-          <span className="text-sm font-semibold uppercase tracking-wider">{ownership}</span>
+          <SectionLabel as="span" className="text-sm">{ownership}</SectionLabel>
         </div>
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           <div className="space-y-5">{assetGroups}</div>
@@ -557,7 +558,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
         {/* Credit card settings */}
         {accountType === "CREDIT_CARD" && (
           <div className="space-y-3 rounded-md border border-border p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Credit Card Settings</p>
+            <SectionLabel>Credit Card Settings</SectionLabel>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1">Closing Day</label>
@@ -607,7 +608,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
         {/* Investment dividend settings */}
         {accountType === "INVESTMENT" && (
           <div className="space-y-3 rounded-md border border-border p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dividend Settings</p>
+            <SectionLabel>Dividend Settings</SectionLabel>
             <div>
               <label className="block text-xs font-medium mb-1">Default Election</label>
               <div className="relative">

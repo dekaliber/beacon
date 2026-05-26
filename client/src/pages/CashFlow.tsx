@@ -49,6 +49,7 @@ import {
 import { formatCurrency, cn } from "@/lib/utils";
 import type { CashFlowProjection, CashFlowEvent, DailyBalance, InvestmentAccountSummary, Expense } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel, ColumnHeader, StatValue, DisplayStat } from "@/components/Typography";
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
 
@@ -90,7 +91,7 @@ function BalanceTooltip({ active, payload, label }: any) {
   return (
     <div className="rounded-lg border border-border bg-background shadow-md px-3 py-2 text-xs space-y-0.5">
       <p className="font-semibold text-foreground">{fmtDate(label as string)}</p>
-      <p className="text-muted-foreground">Balance: <span className="text-foreground font-medium tabular-nums">{formatCurrency(payload[0].value ?? 0)}</span></p>
+      <p className="text-muted-foreground">Balance: <StatValue className="text-foreground font-medium">{formatCurrency(payload[0].value ?? 0)}</StatValue></p>
     </div>
   );
 }
@@ -215,7 +216,7 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
     return (
       <>
         {/* Amount cell */}
-        <td className={cn("py-1.5 pr-2 text-right tabular-nums font-medium", amountClassName)}>
+        <td className={cn("py-1.5 pr-2 text-right tabular-nums font-label font-medium", amountClassName)}>
           {event.amount > 0 ? "+" : event.amount === 0 ? "-" : ""}
           {formatCurrency(event.amount)}
         </td>
@@ -261,7 +262,7 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
             inputMode="decimal"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            className="w-24 rounded border border-border bg-background px-1.5 py-0.5 text-xs tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-24 rounded border border-border bg-background px-1.5 py-0.5 text-xs tabular-nums font-label text-right focus:outline-none focus:ring-1 focus:ring-primary"
             autoFocus
             onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setOpen(false); }}
           />
@@ -370,7 +371,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved, variant = "warning"
           onChange={(e) => setAmount(e.target.value)}
           placeholder="0.00"
           autoFocus
-          className="w-28 rounded border border-border bg-background px-2 py-0.5 text-xs tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-primary"
+          className="w-28 rounded border border-border bg-background px-2 py-0.5 text-xs tabular-nums font-label text-right focus:outline-none focus:ring-1 focus:ring-primary"
           onKeyDown={(e) => {
             if (e.key === "Enter") handleSave();
             if (e.key === "Escape") setOpen(false);
@@ -451,7 +452,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
             <span className="font-medium">{event.description}</span>
           </div>
         </td>
-        <td className="py-1.5 pr-2 text-right tabular-nums font-medium text-green-600">
+        <td className="py-1.5 pr-2 text-right tabular-nums font-label font-medium text-green-600">
           +{formatCurrency(event.amount)}
         </td>
         <td className="py-1.5 pr-4">
@@ -474,7 +475,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
           </div>
         </td>
         <td className={cn(
-          "py-1.5 text-right tabular-nums font-semibold",
+          "py-1.5 text-right tabular-nums font-label font-semibold",
           event.runningBalance < 0 ? "text-red-600" : "text-foreground",
         )}>
           {formatCurrency(event.runningBalance)}
@@ -512,7 +513,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
             inputMode="decimal"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-24 rounded border border-border bg-background px-1.5 py-0.5 text-xs tabular-nums text-right focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-24 rounded border border-border bg-background px-1.5 py-0.5 text-xs tabular-nums font-label text-right focus:outline-none focus:ring-1 focus:ring-primary"
             onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setEditing(false); }}
           />
         </span>
@@ -536,7 +537,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
         </div>
       </td>
       <td className={cn(
-        "py-1.5 text-right tabular-nums font-semibold",
+        "py-1.5 text-right tabular-nums font-label font-semibold",
         event.runningBalance < 0 ? "text-red-600" : "text-foreground",
       )}>
         {formatCurrency(event.runningBalance)}
@@ -621,14 +622,14 @@ function StatementDetailPanel({ event, rowMidY, onClose }: StatementDetailPanelP
 
       <Card className="p-3 overflow-hidden">
         <div className="flex items-center justify-between mb-2.5">
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          <SectionLabel as="div">
             {event.relatedAccountName}
             {event.statementPeriodStart && event.periodStart && (
               <span className="font-normal normal-case ml-1">
                 · {fmtShort(event.statementPeriodStart)} – {fmtShort(event.periodStart)}
               </span>
             )}
-          </div>
+          </SectionLabel>
           <button
             onClick={onClose}
             className="rounded p-0.5 hover:bg-accent text-muted-foreground"
@@ -645,9 +646,9 @@ function StatementDetailPanel({ event, rowMidY, onClose }: StatementDetailPanelP
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border">
-                <th className="pb-1.5 pr-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Date</th>
-                <th className="pb-1.5 pr-2 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Vendor</th>
-                <th className="pb-1.5 text-right text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Amount</th>
+                <ColumnHeader className="pb-1.5 pr-3 text-left whitespace-nowrap">Date</ColumnHeader>
+                <ColumnHeader className="pb-1.5 pr-2 text-left">Vendor</ColumnHeader>
+                <ColumnHeader className="pb-1.5 text-right">Amount</ColumnHeader>
               </tr>
             </thead>
             <tbody>
@@ -657,7 +658,7 @@ function StatementDetailPanel({ event, rowMidY, onClose }: StatementDetailPanelP
                     {fmtShort(exp.date.slice(0, 10))}
                   </td>
                   <td className="py-1.5 pr-2 max-w-[90px] truncate">{exp.vendor}</td>
-                  <td className="py-1.5 text-right tabular-nums text-red-500">
+                  <td className="py-1.5 text-right tabular-nums font-label text-red-500">
                     {formatCurrency(Math.abs(parseFloat(exp.amount)))}
                   </td>
                 </tr>
@@ -701,11 +702,11 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border">
-            <th className="py-2 pr-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide w-24">Date</th>
-            <th className="py-2 pr-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Description</th>
-            <th className="py-2 pr-2 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide w-24">Amount</th>
+            <ColumnHeader className="py-2 pr-4 text-left w-24">Date</ColumnHeader>
+            <ColumnHeader className="py-2 pr-4 text-left">Description</ColumnHeader>
+            <ColumnHeader className="py-2 pr-2 text-right w-24">Amount</ColumnHeader>
             <th className="py-2 pr-4 w-14" />
-            <th className="py-2 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide w-24">Balance</th>
+            <ColumnHeader className="py-2 text-right w-24">Balance</ColumnHeader>
           </tr>
         </thead>
         <tbody>
@@ -736,19 +737,19 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                         </span>
                       )}
                       {event.confidence === "KNOWN" && event.type !== "CC_PAYMENT" && (
-                        <span className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                        <SectionLabel as="span" className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px]">
                           Confirmed
-                        </span>
+                        </SectionLabel>
                       )}
                       {event.type === "CC_PAYMENT" && !event.overrideId && (
-                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                        <SectionLabel as="span" className="rounded-full bg-muted px-1.5 py-0.5 text-[10px]">
                           Estimated
-                        </span>
+                        </SectionLabel>
                       )}
                       {event.overrideId && (
-                        <span className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                        <SectionLabel as="span" className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px]">
                           Confirmed
-                        </span>
+                        </SectionLabel>
                       )}
                     </div>
                   </td>
@@ -764,7 +765,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                   ) : (
                     <>
                       <td className={cn(
-                        "py-1.5 pr-2 text-right tabular-nums font-medium",
+                        "py-1.5 pr-2 text-right tabular-nums font-label font-medium",
                         event.amount > 0 ? "text-green-600" : "text-red-500",
                       )}>
                         {event.amount > 0 ? "+" : event.amount === 0 ? "-" : ""}
@@ -798,7 +799,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                     </>
                   )}
                   <td className={cn(
-                    "py-1.5 text-right tabular-nums font-semibold",
+                    "py-1.5 text-right tabular-nums font-label font-semibold",
                     event.runningBalance < 0 ? "text-red-600" : "text-foreground",
                   )}>
                     {formatCurrency(event.runningBalance)}
@@ -844,16 +845,16 @@ function AccountPanel({ projection, windowEnd, onRefetch, selectedCCPaymentId, o
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-6">
           <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Today</p>
-            <p className="text-xl font-bold tabular-nums">{formatCurrency(projection.startBalance)}</p>
+            <SectionLabel className="mb-0.5">Today</SectionLabel>
+            <DisplayStat as="p" className="text-xl font-bold">{formatCurrency(projection.startBalance)}</DisplayStat>
           </div>
           <div className="text-muted-foreground">→</div>
           <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">
+            <SectionLabel className="mb-0.5">
               {fmtDate(windowEnd)}
-            </p>
+            </SectionLabel>
             <p className={cn(
-              "text-xl font-bold tabular-nums",
+              "text-xl font-bold tabular-nums font-numeral",
               projection.endBalance < 0 ? "text-red-600" : "text-foreground"
             )}>
               {formatCurrency(projection.endBalance)}
@@ -1143,9 +1144,9 @@ export function CashFlow() {
             </p>
           </div>
           <div className="text-right flex-shrink-0 mr-2">
-            <p className="font-bold tabular-nums text-sm">
+            <StatValue as="p" className="font-bold text-sm">
               {formatCurrency(account.totalMarketValue)}
-            </p>
+            </StatValue>
           </div>
           <button
             onClick={() => setEditingBalance(account)}
@@ -1219,17 +1220,17 @@ export function CashFlow() {
           <div className="border-b border-border">
             <div className="flex items-center gap-0 overflow-x-auto">
               {personal.length > 0 && joint.length > 0 && (
-                <span className="mr-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                <SectionLabel as="span" className="mr-2 text-[10px] px-1">
                   Personal
-                </span>
+                </SectionLabel>
               )}
               {personal.map((p) => <TabButton key={p.accountId} p={p} />)}
               {joint.length > 0 && (
                 <>
                   <span className="mx-3 text-border">|</span>
-                  <span className="mr-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                  <SectionLabel as="span" className="mr-2 text-[10px] px-1">
                     Joint
-                  </span>
+                  </SectionLabel>
                   {joint.map((p) => <TabButton key={p.accountId} p={p} />)}
                 </>
               )}
@@ -1255,9 +1256,9 @@ export function CashFlow() {
           <div className="min-w-0 basis-1/3 w-full space-y-2">
             <div className="flex items-center gap-2 py-1">
               <Landmark className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              <SectionLabel as="span" className="text-sm">
                 Banking (Cash)
-              </span>
+              </SectionLabel>
             </div>
             <div className="space-y-1.5">
               {bankingAccounts.map(renderBankingTile)}

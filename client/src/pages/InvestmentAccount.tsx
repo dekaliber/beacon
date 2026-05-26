@@ -89,6 +89,7 @@ import { useDemo } from "@/context/DemoContext";
 import { scaleGrowthPoints, scaleManuals, scaleHolding } from "@/lib/demo";
 import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity, GrowthPoint, GrowthEvent, PendingDividend, TaxClassification, Category, ConfirmedDividendInfo, PendingBuy } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel, StatValue, DisplayStat } from "@/components/Typography";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -133,12 +134,12 @@ function GainCell({
   size?: "sm" | "base";
   tooltip?: React.ReactNode;
 }) {
-  if (value == null) return <span className="text-muted-foreground tabular-nums">—</span>;
+  if (value == null) return <StatValue className="text-muted-foreground">—</StatValue>;
   const pos = value >= 0;
   const Icon = pos ? TrendingUp : TrendingDown;
   const cell = (
     <span
-      className={`inline-flex font-medium tabular-nums ${
+      className={`inline-flex font-medium tabular-nums font-label ${
         pos ? "text-green-600" : "text-red-500"
       } text-${size} ${size === "base" && pct != null ? "flex-col items-start" : "flex-row items-center gap-1"}`}
     >
@@ -824,7 +825,7 @@ function LotRow({
               inputMode="decimal"
               value={cps}
               onChange={(e) => setCps(e.target.value)}
-              className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
+              className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums font-label"
             />
           </div>
         </td>
@@ -835,11 +836,11 @@ function LotRow({
             inputMode="decimal"
             value={qty}
             onChange={(e) => setQty(e.target.value)}
-            className="w-full rounded border border-border px-2 py-1 text-xs tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full rounded border border-border px-2 py-1 text-xs tabular-nums font-label focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </td>
         {/* Col 5: computed total cost */}
-        <td className="py-2 px-2 tabular-nums text-muted-foreground">{formatCurrency(editTotalCost)}</td>
+        <td className="py-2 px-2 tabular-nums font-label text-muted-foreground">{formatCurrency(editTotalCost)}</td>
         {/* Cols 6–8: save/cancel */}
         <td colSpan={3} className="py-2 px-2">
           <div className="flex items-center gap-2">
@@ -861,15 +862,15 @@ function LotRow({
         <td colSpan={2} className="py-2 pl-4 pr-2">
           {lot.acquiredDate ? formatDate(lot.acquiredDate) : <span className="italic text-muted-foreground/60">Managed</span>}
         </td>
-        <td className="py-2 px-2 tabular-nums">{formatCurrency(lot.costPerShare)}</td>
-        <td className="py-2 px-2 tabular-nums">
+        <td className="py-2 px-2 tabular-nums font-label">{formatCurrency(lot.costPerShare)}</td>
+        <td className="py-2 px-2 tabular-nums font-label">
           {parseFloat(lot.quantity).toLocaleString(undefined, { maximumFractionDigits: 8 })}
         </td>
-        <td className="py-2 px-2 tabular-nums">{formatCurrency(gains.totalCost)}</td>
-        <td className="py-2 px-2 tabular-nums">
+        <td className="py-2 px-2 tabular-nums font-label">{formatCurrency(gains.totalCost)}</td>
+        <td className="py-2 px-2 tabular-nums font-label">
           {gains.marketValue != null ? formatCurrency(gains.marketValue) : "—"}
         </td>
-        <td className="py-2 pl-2 pr-2 tabular-nums">
+        <td className="py-2 pl-2 pr-2 tabular-nums font-label">
           <GainCell value={gains.totalGain} pct={gains.totalGainPct} />
         </td>
         <td className="py-2 pr-3">
@@ -1008,7 +1009,7 @@ function AddLotRow({
             placeholder="0.00"
             autoFocus
             onChange={(e) => setQty(e.target.value)}
-            className="w-full rounded border border-border px-2 py-1 text-xs tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full rounded border border-border px-2 py-1 text-xs tabular-nums font-label focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
         <div className="flex-1 min-w-0">
@@ -1021,7 +1022,7 @@ function AddLotRow({
               value={cps}
               placeholder="0.00"
               onChange={(e) => setCps(e.target.value)}
-              className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
+              className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums font-label"
             />
           </div>
         </div>
@@ -1067,7 +1068,7 @@ function AddLotRow({
             value={cps}
             placeholder="0.00"
             onChange={(e) => setCps(e.target.value)}
-            className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
+            className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums font-label"
           />
         </div>
       </td>
@@ -1078,7 +1079,7 @@ function AddLotRow({
           value={qty}
           placeholder="0.00"
           onChange={(e) => setQty(e.target.value)}
-          className="w-full rounded border border-border px-2 py-1 text-xs tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+          className="w-full rounded border border-border px-2 py-1 text-xs tabular-nums font-label focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </td>
       <td colSpan={4} className="py-2 px-2">
@@ -1171,14 +1172,14 @@ function HoldingRow({
             <span className="text-sm text-muted-foreground truncate">{holding.name}</span>
           </div>
         </td>
-        <td className="py-3 px-2 text-sm tabular-nums">
+        <td className="py-3 px-2 text-sm tabular-nums font-label">
           {holding.currentPrice != null ? formatCurrency(holding.currentPrice) : <span className="text-muted-foreground">—</span>}
         </td>
-        <td className="py-3 px-2 text-sm tabular-nums">
+        <td className="py-3 px-2 text-sm tabular-nums font-label">
           {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}
         </td>
-        <td className="py-3 px-2 text-sm tabular-nums">{formatCurrency(holding.totalCost)}</td>
-        <td className="py-3 px-2 text-sm tabular-nums font-medium">
+        <td className="py-3 px-2 text-sm tabular-nums font-label">{formatCurrency(holding.totalCost)}</td>
+        <td className="py-3 px-2 text-sm tabular-nums font-label font-medium">
           {holding.marketValue != null ? formatCurrency(holding.marketValue) : <span className="text-muted-foreground">—</span>}
         </td>
         <td className="py-3 pl-2 pr-2 text-sm relative z-10">
@@ -1235,19 +1236,19 @@ function HoldingRow({
               <td colSpan={8} className="py-3 pl-4 pr-4">
                 <div className="flex flex-wrap items-start gap-6 text-sm">
                   <div>
-                    <p className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Total Shares</p>
-                    <p className="font-medium tabular-nums">
+                    <SectionLabel className="text-[11px] mb-0.5">Total Shares</SectionLabel>
+                    <StatValue as="p" className="font-medium">
                       {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}
-                    </p>
+                    </StatValue>
                   </div>
                   <div>
-                    <p className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Avg Cost / Share</p>
-                    <p className="font-medium tabular-nums">
+                    <SectionLabel className="text-[11px] mb-0.5">Avg Cost / Share</SectionLabel>
+                    <StatValue as="p" className="font-medium">
                       {holding.totalQuantity > 0 ? formatCurrency(holding.totalCost / holding.totalQuantity) : "—"}
-                    </p>
+                    </StatValue>
                   </div>
                   <div>
-                    <p className="text-[11px] text-muted-foreground uppercase tracking-wide mb-0.5">Group</p>
+                    <SectionLabel className="text-[11px] mb-0.5">Group</SectionLabel>
                     <p className="font-medium">
                       {holding.group ?? <span className="italic text-muted-foreground text-xs">None set</span>}
                     </p>
@@ -1283,7 +1284,7 @@ function HoldingRow({
           ) : (
             <>
               {/* Lot sub-header: "Purchase Date" spans Symbol+Name so it never wraps */}
-              <tr className="bg-muted/20 text-[11px] text-muted-foreground uppercase tracking-wide">
+              <tr className="bg-muted/20 text-[11px] text-muted-foreground uppercase tracking-[1px] font-label">
                 <th colSpan={2} className="py-1.5 pl-4 pr-2 text-left font-medium whitespace-nowrap">
                   Purchase Date
                 </th>
@@ -1336,7 +1337,7 @@ function HoldingRow({
               <tr className="border-b border-border bg-muted/5">
                 <td colSpan={8} className="py-2 pl-4 pr-4">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span className="uppercase tracking-wide font-medium">Group</span>
+                    <SectionLabel as="span">Group</SectionLabel>
                     <span className="text-border">·</span>
                     {editingGroup ? (
                       <div className="flex items-center gap-1.5">
@@ -1665,10 +1666,10 @@ function ImportInvestmentsModal({
                       <td className="px-2 py-1.5 text-muted-foreground">{i + 1}</td>
                       <td className="px-2 py-1.5 font-semibold">{row.symbol || "—"}</td>
                       <td className="px-2 py-1.5">{row.purchaseDate}</td>
-                      <td className="px-2 py-1.5 text-right tabular-nums">
+                      <td className="px-2 py-1.5 text-right tabular-nums font-label">
                         {row.price > 0 ? formatCurrency(row.price) : "—"}
                       </td>
-                      <td className="px-2 py-1.5 text-right tabular-nums">
+                      <td className="px-2 py-1.5 text-right tabular-nums font-label">
                         {row.quantity > 0
                           ? row.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })
                           : "—"}
@@ -1925,13 +1926,13 @@ function ManualHoldingRow({
         {/* Quantity — blank */}
         <td className="py-3 px-2 text-sm text-muted-foreground">—</td>
         {/* Total Cost */}
-        <td className="py-3 px-2 text-sm tabular-nums">
+        <td className="py-3 px-2 text-sm tabular-nums font-label">
           {entry.totalCost != null
             ? formatCurrency(entry.totalCost)
             : <span className="text-muted-foreground">—</span>}
         </td>
         {/* Market Value */}
-        <td className="py-3 px-2 text-sm tabular-nums">{formatCurrency(entry.marketValue)}</td>
+        <td className="py-3 px-2 text-sm tabular-nums font-label">{formatCurrency(entry.marketValue)}</td>
         {/* Total Gain */}
         <td className="py-3 pl-2 pr-2 text-sm"><GainCell value={gain} /></td>
         {/* Actions: edit + delete (replaces the expand chevron used by regular rows) */}
@@ -2075,14 +2076,14 @@ function StickyHoldingRow({
                     <td className="py-3 px-2 overflow-hidden">
                       <span className="text-sm text-muted-foreground truncate block">{holding.name}</span>
                     </td>
-                    <td className="py-3 px-2 text-sm tabular-nums">
+                    <td className="py-3 px-2 text-sm tabular-nums font-label">
                       {holding.currentPrice != null ? formatCurrency(holding.currentPrice) : <span className="text-muted-foreground">—</span>}
                     </td>
-                    <td className="py-3 px-2 text-sm tabular-nums">
+                    <td className="py-3 px-2 text-sm tabular-nums font-label">
                       {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}
                     </td>
-                    <td className="py-3 px-2 text-sm tabular-nums">{formatCurrency(holding.totalCost)}</td>
-                    <td className="py-3 px-2 text-sm tabular-nums font-medium">
+                    <td className="py-3 px-2 text-sm tabular-nums font-label">{formatCurrency(holding.totalCost)}</td>
+                    <td className="py-3 px-2 text-sm tabular-nums font-label font-medium">
                       {holding.marketValue != null ? formatCurrency(holding.marketValue) : <span className="text-muted-foreground">—</span>}
                     </td>
                     <td className="py-3 pl-2 pr-2 text-sm">
@@ -2378,7 +2379,7 @@ function SellModal({
                     value={shares}
                     placeholder="0.000000"
                     onChange={(e) => setShares(e.target.value)}
-                    className="w-full rounded border border-border px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full rounded border border-border px-3 py-2 text-sm tabular-nums font-label focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
                 {mode === "sell" && (
@@ -2392,7 +2393,7 @@ function SellModal({
                         value={price}
                         placeholder="0.00"
                         onChange={(e) => setPrice(e.target.value)}
-                        className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums font-label focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </div>
                   </div>
@@ -2425,7 +2426,7 @@ function SellModal({
                 <div className="max-h-52 overflow-y-auto rounded border border-border">
                   <table className="w-full text-xs">
                     <thead className="sticky top-0 bg-gray-100 z-10">
-                      <tr className="text-muted-foreground uppercase tracking-wide">
+                      <tr className="text-muted-foreground uppercase tracking-[1px] font-label">
                         <th className="py-2 px-3 text-left font-medium">Acquired</th>
                         <th className="py-2 px-3 text-right font-medium">Available</th>
                         <th className="py-2 px-3 text-right font-medium">Cost/Share</th>
@@ -2437,13 +2438,13 @@ function SellModal({
                         const available = parseFloat(lot.quantity);
                         return (
                           <tr key={lot.id} className="border-t border-border hover:bg-muted/20">
-                            <td className="py-2 px-3 tabular-nums">
+                            <td className="py-2 px-3 tabular-nums font-label">
                               {lot.acquiredDate ? formatDate(lot.acquiredDate) : "—"}
                             </td>
-                            <td className="py-2 px-3 text-right tabular-nums">
+                            <td className="py-2 px-3 text-right tabular-nums font-label">
                               {available.toLocaleString(undefined, { maximumFractionDigits: 8 })}
                             </td>
-                            <td className="py-2 px-3 text-right tabular-nums">
+                            <td className="py-2 px-3 text-right tabular-nums font-label">
                               {formatCurrency(parseFloat(lot.costPerShare))}
                             </td>
                             <td className="py-2 px-3">
@@ -2454,7 +2455,7 @@ function SellModal({
                                   value={lotInputs[lot.id] ?? ""}
                                   placeholder="0"
                                   onChange={(e) => setLotInputs((prev) => ({ ...prev, [lot.id]: e.target.value }))}
-                                  className="w-14 rounded border border-border px-2 py-1 text-left tabular-nums focus:outline-none focus:ring-1 focus:ring-primary text-xs"
+                                  className="w-14 rounded border border-border px-2 py-1 text-left tabular-nums font-label focus:outline-none focus:ring-1 focus:ring-primary text-xs"
                                 />
                                 <button
                                   type="button"
@@ -2482,7 +2483,7 @@ function SellModal({
                     readOnly
                     value={lotTotalShares > 0 ? lotTotalShares.toLocaleString(undefined, { maximumFractionDigits: 8 }) : ""}
                     placeholder="0"
-                    className="w-full rounded border border-border px-3 py-2 text-sm tabular-nums bg-muted text-muted-foreground cursor-default"
+                    className="w-full rounded border border-border px-3 py-2 text-sm tabular-nums font-label bg-muted text-muted-foreground cursor-default"
                   />
                 </div>
                 {mode === "sell" && (
@@ -2496,7 +2497,7 @@ function SellModal({
                         value={price}
                         placeholder="0.00"
                         onChange={(e) => setPrice(e.target.value)}
-                        className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums font-label focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </div>
                   </div>
@@ -2526,7 +2527,7 @@ function SellModal({
                     value={fees}
                     placeholder="0.00"
                     onChange={(e) => setFees(e.target.value)}
-                    className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums font-label focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
               </div>
@@ -2568,7 +2569,7 @@ function SellModal({
           <div className="overflow-x-auto rounded border border-border">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-muted/40 text-muted-foreground uppercase tracking-wide">
+                <tr className="bg-muted/40 text-muted-foreground uppercase tracking-[1px] font-label">
                   <th className="py-2 px-3 text-left font-medium">Lot Date</th>
                   <th className="py-2 px-3 text-right font-medium">Shares</th>
                   <th className="py-2 px-3 text-right font-medium">Cost/Share</th>
@@ -2581,11 +2582,11 @@ function SellModal({
               <tbody>
                 {preview!.lotBreakdown.map((lot, i) => (
                   <tr key={i} className="border-t border-border">
-                    <td className="py-2 px-3 tabular-nums">{formatDate(lot.acquiredDate)}</td>
-                    <td className="py-2 px-3 text-right tabular-nums">
+                    <td className="py-2 px-3 tabular-nums font-label">{formatDate(lot.acquiredDate)}</td>
+                    <td className="py-2 px-3 text-right tabular-nums font-label">
                       {lot.shares.toLocaleString(undefined, { maximumFractionDigits: 8 })}
                     </td>
-                    <td className="py-2 px-3 text-right tabular-nums">{formatCurrency(lot.costPerShare)}</td>
+                    <td className="py-2 px-3 text-right tabular-nums font-label">{formatCurrency(lot.costPerShare)}</td>
                     <td className="py-2 px-3">
                       <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
                         lot.termType === "LONG"
@@ -2595,9 +2596,9 @@ function SellModal({
                         {lot.termType === "LONG" ? "Long-term" : "Short-term"}
                       </span>
                     </td>
-                    <td className="py-2 px-3 text-right tabular-nums">{formatCurrency(lot.proceeds)}</td>
-                    <td className="py-2 px-3 text-right tabular-nums">{formatCurrency(lot.costBasis)}</td>
-                    <td className={`py-2 px-3 text-right tabular-nums font-medium ${gainColor(lot.gain)}`}>
+                    <td className="py-2 px-3 text-right tabular-nums font-label">{formatCurrency(lot.proceeds)}</td>
+                    <td className="py-2 px-3 text-right tabular-nums font-label">{formatCurrency(lot.costBasis)}</td>
+                    <td className={`py-2 px-3 text-right tabular-nums font-label font-medium ${gainColor(lot.gain)}`}>
                       {lot.gain >= 0 ? "+" : ""}{formatCurrency(lot.gain)}
                     </td>
                   </tr>
@@ -2610,20 +2611,20 @@ function SellModal({
           <div className="rounded border border-border bg-muted/20 p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Gross Proceeds</span>
-              <span className="tabular-nums font-medium">{formatCurrency(preview!.grossProceeds)}</span>
+              <StatValue className="font-medium">{formatCurrency(preview!.grossProceeds)}</StatValue>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Fees</span>
-              <span className="tabular-nums font-medium">{preview!.fees > 0 ? `(${formatCurrency(preview!.fees)})` : "—"}</span>
+              <StatValue className="font-medium">{preview!.fees > 0 ? `(${formatCurrency(preview!.fees)})` : "—"}</StatValue>
             </div>
             <div className="flex justify-between border-t border-border pt-2 col-span-2">
               <span className="font-medium">Net Proceeds</span>
-              <span className="tabular-nums font-bold">{formatCurrency(preview!.netProceeds)}</span>
+              <StatValue className="font-bold">{formatCurrency(preview!.netProceeds)}</StatValue>
             </div>
             {preview!.stShares > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Short-Term Gain</span>
-                <span className={`tabular-nums font-medium ${gainColor(preview!.stGain)}`}>
+                <span className={`tabular-nums font-label font-medium ${gainColor(preview!.stGain)}`}>
                   {preview!.stGain >= 0 ? "+" : ""}{formatCurrency(preview!.stGain)}
                 </span>
               </div>
@@ -2631,14 +2632,14 @@ function SellModal({
             {preview!.ltShares > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Long-Term Gain</span>
-                <span className={`tabular-nums font-medium ${gainColor(preview!.ltGain)}`}>
+                <span className={`tabular-nums font-label font-medium ${gainColor(preview!.ltGain)}`}>
                   {preview!.ltGain >= 0 ? "+" : ""}{formatCurrency(preview!.ltGain)}
                 </span>
               </div>
             )}
             <div className={`flex justify-between border-t border-border pt-2 ${preview!.stShares > 0 && preview!.ltShares > 0 ? "col-span-2" : ""}`}>
               <span className="font-medium">Total Taxable Gain</span>
-              <span className={`tabular-nums font-bold ${gainColor(preview!.totalGain)}`}>
+              <span className={`tabular-nums font-label font-bold ${gainColor(preview!.totalGain)}`}>
                 {preview!.totalGain >= 0 ? "+" : ""}{formatCurrency(preview!.totalGain)}
               </span>
             </div>
@@ -2669,17 +2670,17 @@ function SellModal({
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Ticker</span>
-              <span className="font-medium tabular-nums">{holding.ticker}</span>
+              <StatValue className="font-medium">{holding.ticker}</StatValue>
             </div>
             <div className="flex justify-between border-t border-border pt-2 mt-1">
               <span className="text-muted-foreground">Total Shares</span>
-              <span className="font-medium tabular-nums">
+              <StatValue className="font-medium">
                 {(selectionMode === "method" ? parseFloat(shares) : lotTotalShares).toLocaleString(undefined, { maximumFractionDigits: 8 })}
-              </span>
+              </StatValue>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Total Cost Basis</span>
-              <span className="font-medium tabular-nums">{formatCurrency(transferTotalCostBasis)}</span>
+              <StatValue className="font-medium">{formatCurrency(transferTotalCostBasis)}</StatValue>
             </div>
           </div>
 
@@ -2687,7 +2688,7 @@ function SellModal({
             <div className="overflow-x-auto rounded border border-border">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-muted/40 text-muted-foreground uppercase tracking-wide">
+                  <tr className="bg-muted/40 text-muted-foreground uppercase tracking-[1px] font-label">
                     <th className="py-2 px-3 text-left font-medium">Lot Date</th>
                     <th className="py-2 px-3 text-right font-medium">Shares</th>
                     <th className="py-2 px-3 text-right font-medium">Cost/Share</th>
@@ -2697,12 +2698,12 @@ function SellModal({
                 <tbody>
                   {transferLotBreakdown.map((lot, i) => (
                     <tr key={i} className="border-t border-border">
-                      <td className="py-2 px-3 tabular-nums">{lot.acquiredDate ? formatDate(lot.acquiredDate) : "—"}</td>
-                      <td className="py-2 px-3 text-right tabular-nums">
+                      <td className="py-2 px-3 tabular-nums font-label">{lot.acquiredDate ? formatDate(lot.acquiredDate) : "—"}</td>
+                      <td className="py-2 px-3 text-right tabular-nums font-label">
                         {lot.shares.toLocaleString(undefined, { maximumFractionDigits: 8 })}
                       </td>
-                      <td className="py-2 px-3 text-right tabular-nums">{formatCurrency(lot.costPerShare)}</td>
-                      <td className="py-2 px-3 text-right tabular-nums">{formatCurrency(lot.shares * lot.costPerShare)}</td>
+                      <td className="py-2 px-3 text-right tabular-nums font-label">{formatCurrency(lot.costPerShare)}</td>
+                      <td className="py-2 px-3 text-right tabular-nums font-label">{formatCurrency(lot.shares * lot.costPerShare)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2834,15 +2835,15 @@ function EditSaleActivityModal({
         <div className="rounded-md border border-border bg-muted/20 px-4 py-3 mb-4 grid grid-cols-3 gap-2 text-xs">
           <div>
             <p className="text-muted-foreground mb-0.5">Gross</p>
-            <p className="font-medium tabular-nums">{formatCurrency(grossProceeds)}</p>
+            <StatValue as="p" className="font-medium">{formatCurrency(grossProceeds)}</StatValue>
           </div>
           <div>
             <p className="text-muted-foreground mb-0.5">Net</p>
-            <p className="font-medium tabular-nums">{formatCurrency(netProceeds)}</p>
+            <StatValue as="p" className="font-medium">{formatCurrency(netProceeds)}</StatValue>
           </div>
           <div>
             <p className="text-muted-foreground mb-0.5">Gain / Loss</p>
-            <p className={`font-medium tabular-nums ${gain >= 0 ? "text-green-600" : "text-red-500"}`}>
+            <p className={`font-medium tabular-nums font-label ${gain >= 0 ? "text-green-600" : "text-red-500"}`}>
               {gain >= 0 ? "+" : ""}{formatCurrency(gain)}
             </p>
           </div>
@@ -3808,7 +3809,7 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
               {/* Holding filter — only shown when multiple tickers are present */}
               {uniqueTickers.length > 1 && (
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide shrink-0 pr-1">Symbol</span>
+                  <SectionLabel as="span" className="text-[11px] shrink-0 pr-1">Symbol</SectionLabel>
                   {uniqueTickers.map((ticker) => {
                     const active = selectedTickers.has(ticker);
                     return (
@@ -3830,7 +3831,7 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
 
               {/* Type filter */}
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide shrink-0 pr-1">Type</span>
+                <SectionLabel as="span" className="text-[11px] shrink-0 pr-1">Type</SectionLabel>
                 {(["PURCHASE", "SALE", "DIVIDEND", "TRANSFER"] as const).filter(t => presentTypes.has(t)).map((type) => {
                   const active = selectedTypes.has(type);
                   const colorClass = type === "PURCHASE"
@@ -3858,7 +3859,7 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
           <div className="overflow-x-auto">
             <table className="w-full text-sm" style={{ tableLayout: "fixed", minWidth: "900px" }}>
               <thead>
-                <tr className="text-[11px] text-muted-foreground uppercase tracking-wide bg-muted/30 border-b border-border">
+                <tr className="text-[11px] text-muted-foreground uppercase tracking-[1px] font-label bg-muted/30 border-b border-border">
                   <th style={{ width: "110px" }} className="py-2 pl-4 pr-2 text-left font-medium">Date</th>
                   <th style={{ width: "90px" }} className="py-2 px-2 text-left font-medium">Type</th>
                   <th style={{ width: "80px" }} className="py-2 px-2 text-left font-medium">Symbol</th>
@@ -3899,33 +3900,33 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
 
                   return (
                     <tr key={a.id} className="border-b border-border hover:bg-muted/20 group">
-                      <td className="py-3 pl-4 pr-2 tabular-nums">{formatDate(a.date)}</td>
+                      <td className="py-3 pl-4 pr-2 tabular-nums font-label">{formatDate(a.date)}</td>
                       <td className="py-3 px-2">
                         <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${badgeClass}`}>
                           {badgeLabel}
                         </span>
                       </td>
                       <td className="py-3 px-2 font-mono font-bold text-xs">{a.ticker}</td>
-                      <td className="py-3 px-2 text-right tabular-nums">
+                      <td className="py-3 px-2 text-right tabular-nums font-label">
                         {a.shares != null
                           ? a.shares.toLocaleString(undefined, { maximumFractionDigits: 8 })
                           : "—"}
                       </td>
-                      <td className="py-3 px-2 text-right tabular-nums">
+                      <td className="py-3 px-2 text-right tabular-nums font-label">
                         {a.pricePerShare != null ? formatCurrency(a.pricePerShare) : "—"}
                       </td>
                       {/* Gross / total cost */}
-                      <td className="py-3 px-2 text-right tabular-nums">{formatCurrency(a.amount)}</td>
+                      <td className="py-3 px-2 text-right tabular-nums font-label">{formatCurrency(a.amount)}</td>
                       {/* Fees — not applicable for purchases */}
-                      <td className="py-3 px-2 text-right tabular-nums text-muted-foreground">
+                      <td className="py-3 px-2 text-right tabular-nums font-label text-muted-foreground">
                         {!isPurchase && fees > 0 ? `(${formatCurrency(fees)})` : "—"}
                       </td>
                       {/* Net proceeds — show for sales; show cost for purchases */}
-                      <td className="py-3 px-2 text-right tabular-nums font-medium">
+                      <td className="py-3 px-2 text-right tabular-nums font-label font-medium">
                         {isPurchase ? formatCurrency(a.amount) : formatCurrency(net)}
                       </td>
                       {/* Gain / loss — only for sales */}
-                      <td className={`py-3 px-2 text-right tabular-nums font-medium ${
+                      <td className={`py-3 px-2 text-right tabular-nums font-label font-medium ${
                         isSale
                           ? isGainPositive
                             ? "text-green-600"
@@ -4101,7 +4102,7 @@ function RealizedGainSnapshotPanel({
           <div className="space-y-3">
             <table className="w-full max-w-sm text-sm">
               <thead>
-                <tr className="text-[11px] text-muted-foreground uppercase tracking-wide">
+                <tr className="text-[11px] text-muted-foreground uppercase tracking-[1px] font-label">
                   <th className="text-left font-medium pb-1.5 pr-8" />
                   <th className="text-right font-medium pb-1.5 pr-6">Long-Term</th>
                   <th className="text-right font-medium pb-1.5">Short-Term</th>
@@ -4110,28 +4111,28 @@ function RealizedGainSnapshotPanel({
               <tbody className="divide-y divide-border">
                 <tr>
                   <td className="py-1.5 pr-8 text-muted-foreground">Gains</td>
-                  <td className="py-1.5 pr-6 text-right tabular-nums text-green-600 font-medium">
+                  <td className="py-1.5 pr-6 text-right tabular-nums font-label text-green-600 font-medium">
                     {snapshot.longTermGain != null ? formatCurrency(snapshot.longTermGain) : "—"}
                   </td>
-                  <td className="py-1.5 text-right tabular-nums text-green-600 font-medium">
+                  <td className="py-1.5 text-right tabular-nums font-label text-green-600 font-medium">
                     {snapshot.shortTermGain != null ? formatCurrency(snapshot.shortTermGain) : "—"}
                   </td>
                 </tr>
                 <tr>
                   <td className="py-1.5 pr-8 text-muted-foreground">Losses</td>
-                  <td className="py-1.5 pr-6 text-right tabular-nums text-red-500 font-medium">
+                  <td className="py-1.5 pr-6 text-right tabular-nums font-label text-red-500 font-medium">
                     {snapshot.longTermLoss != null ? formatCurrency(snapshot.longTermLoss) : "—"}
                   </td>
-                  <td className="py-1.5 text-right tabular-nums text-red-500 font-medium">
+                  <td className="py-1.5 text-right tabular-nums font-label text-red-500 font-medium">
                     {snapshot.shortTermLoss != null ? formatCurrency(snapshot.shortTermLoss) : "—"}
                   </td>
                 </tr>
                 <tr className="font-semibold">
                   <td className="py-1.5 pr-8">Net</td>
-                  <td className={`py-1.5 pr-6 text-right tabular-nums ${netLT >= 0 ? "text-green-600" : "text-red-500"}`}>
+                  <td className={`py-1.5 pr-6 text-right tabular-nums font-label ${netLT >= 0 ? "text-green-600" : "text-red-500"}`}>
                     {netLT >= 0 ? "+" : "−"}{formatCurrency(Math.abs(netLT))}
                   </td>
-                  <td className={`py-1.5 text-right tabular-nums ${netST >= 0 ? "text-green-600" : "text-red-500"}`}>
+                  <td className={`py-1.5 text-right tabular-nums font-label ${netST >= 0 ? "text-green-600" : "text-red-500"}`}>
                     {netST >= 0 ? "+" : "−"}{formatCurrency(Math.abs(netST))}
                   </td>
                 </tr>
@@ -4555,9 +4556,9 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
                 return (
                   <div key={ticker} className="flex items-baseline justify-between gap-2">
                     <span className="font-mono text-[11px] text-foreground">{ticker}</span>
-                    <span className="tabular-nums text-muted-foreground">
+                    <StatValue className="text-muted-foreground">
                       {shares.toLocaleString(undefined, { maximumFractionDigits: 8 })} sh
-                    </span>
+                    </StatValue>
                   </div>
                 );
               })}
@@ -4737,17 +4738,17 @@ function GrowthChartTooltip({ active, payload, label }: any) {
       <p className="font-semibold text-foreground mb-1">{formatAxisDate(label)}</p>
       <div className="flex justify-between gap-4">
         <span className="text-muted-foreground">Market value</span>
-        <span className="font-medium tabular-nums">{formatCurrency(d.marketValue)}</span>
+        <StatValue className="font-medium">{formatCurrency(d.marketValue)}</StatValue>
       </div>
       {hasCostBasis && (
         <>
           <div className="flex justify-between gap-4">
             <span className="text-muted-foreground">Cost basis</span>
-            <span className="font-medium tabular-nums">{formatCurrency(d.costBasis!)}</span>
+            <StatValue className="font-medium">{formatCurrency(d.costBasis!)}</StatValue>
           </div>
           <div className="flex justify-between gap-4 pt-1 border-t border-border">
             <span className="text-muted-foreground">Unrealized gain</span>
-            <span className={`font-medium tabular-nums ${pos ? "text-green-600" : "text-red-500"}`}>
+            <span className={`font-medium tabular-nums font-label ${pos ? "text-green-600" : "text-red-500"}`}>
               {pos ? "+" : ""}{formatCurrency(d.unrealizedGain!)} ({pos ? "+" : ""}{d.unrealizedGainPct!.toFixed(2)}%)
             </span>
           </div>
@@ -4776,7 +4777,7 @@ function GrowthChartTooltip({ active, payload, label }: any) {
                   <span className="text-muted-foreground">
                     {isSell ? "Sold" : "Bought"} {sharesStr} {ev.ticker}
                   </span>
-                  <span className={`font-medium tabular-nums ${isSell ? "text-amber-600" : "text-green-600"}`}>
+                  <span className={`font-medium tabular-nums font-label ${isSell ? "text-amber-600" : "text-green-600"}`}>
                     {isSell ? "-" : "+"}{formatCurrency(ev.netAmount)}
                   </span>
                 </div>
@@ -4848,7 +4849,7 @@ function GrowthChart({ accountId, isManaged, onImportClick, onDayGain }: { accou
         ))}
       </div>
       {periodGain != null && (
-        <div className={`text-right text-sm font-semibold tabular-nums ${periodGain >= 0 ? "text-green-600" : "text-red-500"}`}>
+        <div className={`text-right text-sm font-semibold tabular-nums font-label ${periodGain >= 0 ? "text-green-600" : "text-red-500"}`}>
           <div>{periodGain >= 0 ? "+" : "−"}{formatCurrency(Math.abs(periodGain))}
             {periodGainPct != null && (
               <span className="text-xs ml-1 opacity-70">({Math.abs(periodGainPct).toFixed(2)}%)</span>
@@ -5249,7 +5250,7 @@ export function InvestmentAccount() {
         <>
           {/* Prominent market value — only when there's something to total */}
           {(holdings.length > 0 || manuals.length > 0 || cashBalance != null) && (
-            <p className="text-3xl font-bold tabular-nums">{formatCurrency(totalMarketValue)}</p>
+            <DisplayStat as="p" className="text-3xl font-bold">{formatCurrency(totalMarketValue)}</DisplayStat>
           )}
 
           {/* Chart + summary row */}
@@ -5268,27 +5269,27 @@ export function InvestmentAccount() {
                 <>
                   <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                     <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                      <SectionLabel className="mb-1">
                         1 Day {dayGain == null ? "Gain/Loss" : dayGain >= 0 ? "Gain" : "Loss"}
-                      </p>
+                      </SectionLabel>
                       <GainCell value={dayGain} size="base" />
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                      <SectionLabel className="mb-1">
                         Total {totalGain == null ? "Gain/Loss" : totalGain >= 0 ? "Gain" : "Loss"}
-                      </p>
+                      </SectionLabel>
                       <GainCell value={totalGain} pct={totalGainPct} size="base" />
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                      <SectionLabel className="mb-1">
                         Short-Term {shortTermGain == null ? "Gain/Loss" : shortTermGain >= 0 ? "Gain" : "Loss"}
-                      </p>
+                      </SectionLabel>
                       <GainCell value={shortTermGain} size="base" />
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
+                      <SectionLabel className="mb-1">
                         Long-Term {longTermGain == null ? "Gain/Loss" : longTermGain >= 0 ? "Gain" : "Loss"}
-                      </p>
+                      </SectionLabel>
                       <GainCell value={longTermGain} size="base" />
                     </div>
                   </div>
@@ -5305,9 +5306,9 @@ export function InvestmentAccount() {
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-1.5">
                     <Banknote className="h-3.5 w-3.5 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                    <SectionLabel>
                       Settlement Cash
-                    </p>
+                    </SectionLabel>
                   </div>
                   {!editingCash && (
                     <button
@@ -5333,7 +5334,7 @@ export function InvestmentAccount() {
                         onChange={(e) => setCashInput(e.target.value)}
                         autoFocus
                         placeholder="0.00"
-                        className="w-full rounded border border-border pl-5 pr-2 py-1 text-sm tabular-nums focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="w-full rounded border border-border pl-5 pr-2 py-1 text-sm tabular-nums font-label focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </div>
                     <button
@@ -5355,7 +5356,7 @@ export function InvestmentAccount() {
                   </form>
                 ) : cashBalance != null ? (
                   <div>
-                    <p className="text-base font-semibold tabular-nums">{formatCurrency(cashBalance)}</p>
+                    <DisplayStat as="p" className="text-base font-semibold">{formatCurrency(cashBalance)}</DisplayStat>
                     {account.cashBalanceUpdatedAt && (
                       <p className="text-[11px] text-muted-foreground mt-0.5">
                         Updated {new Date(account.cashBalanceUpdatedAt).toLocaleDateString("en-US", {
@@ -5406,9 +5407,9 @@ export function InvestmentAccount() {
       {/* Banking: cash balance only */}
       {isBanking && (
         <Card className="p-6">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Current Balance</p>
-          <p className="text-3xl font-bold">{formatCurrency(account.balance)}</p>
-          <p className="text-xs text-muted-foreground mt-2">
+          <SectionLabel className="mb-1">Current Balance</SectionLabel>
+          <DisplayStat as="p" className="text-3xl font-bold">{formatCurrency(account.balance)}</DisplayStat>
+          <p className="text-xs text-muted-foreground mt-2 font-label">
             Cash position — balance managed in{" "}
             <button className="text-primary underline" onClick={() => navigate("/accounts")}>
               Accounts
@@ -5513,7 +5514,7 @@ export function InvestmentAccount() {
               <div className="overflow-x-auto">
                 <table className="w-full" style={{ tableLayout: "fixed", minWidth: "1080px" }}>
                   <thead>
-                    <tr className="text-[11px] text-muted-foreground uppercase tracking-wide bg-muted/30 border-b border-border">
+                    <tr className="text-[11px] text-muted-foreground uppercase tracking-[1px] font-label bg-muted/30 border-b border-border">
                       <th
                         style={{ width: "80px" }}
                         className="py-2 pl-4 pr-2 text-left font-medium"
@@ -5552,11 +5553,11 @@ export function InvestmentAccount() {
                           return [
                             <tr key={`group-${group}`} className="bg-muted/40 border-y border-border">
                               <td colSpan={5} className="py-1.5 pl-4 pr-2">
-                                <span className="text-xs font-semibold text-foreground uppercase tracking-wide">
+                                <SectionLabel as="span" className="text-foreground">
                                   {group || "Other"}
-                                </span>
+                                </SectionLabel>
                               </td>
-                              <td className="py-1.5 px-2 text-xs font-semibold tabular-nums">
+                              <td className="py-1.5 px-2 text-xs font-semibold tabular-nums font-label">
                                 {formatCurrency(groupMV)}
                               </td>
                               <td className="py-1.5 pl-2 pr-2">

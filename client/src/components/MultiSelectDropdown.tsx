@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import { Check, ChevronDown } from "lucide-react";
+import { SectionLabel } from "@/components/Typography";
 
 export interface MultiSelectOption {
   id: string;
@@ -151,9 +152,7 @@ export function MultiSelectDropdown({
                 if (groupOptions.length === 0) return null;
                 return (
                   <div key={group.key}>
-                    <p className="px-3 pt-2 pb-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {group.label}
-                    </p>
+                    <SectionLabel className="px-3 pt-2 pb-0.5">{group.label}</SectionLabel>
                     {groupOptions.map(renderOption)}
                   </div>
                 );

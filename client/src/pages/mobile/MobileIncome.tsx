@@ -5,6 +5,7 @@ import { useApi } from "@/hooks/useApi";
 import { getIncome, getAccounts, getFlatCategories, createIncome, updateIncome, deleteIncome } from "@/api";
 import { formatCurrency, formatDate, localToday, cn } from "@/lib/utils";
 import type { Account, Category, Income } from "@/types";
+import { SectionLabel } from "@/components/Typography";
 
 const INCOME_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "INVESTMENT"];
 
@@ -702,7 +703,7 @@ function MobileIncomeFilterSheet({
                 <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                   <div className="space-y-1.5">
                     {personalAccounts.length > 0 && (
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Personal</p>
+                      <SectionLabel>Personal</SectionLabel>
                     )}
                     {personalAccounts.map((a) => {
                       const sel = staged.accountIds.includes(a.id);
@@ -723,7 +724,7 @@ function MobileIncomeFilterSheet({
                   </div>
                   <div className="space-y-1.5">
                     {jointAccounts.length > 0 && (
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Joint</p>
+                      <SectionLabel>Joint</SectionLabel>
                     )}
                     {jointAccounts.map((a) => {
                       const sel = staged.accountIds.includes(a.id);
@@ -1121,9 +1122,9 @@ export function MobileIncome() {
 
         {upcomingIncomes.length > 0 && (
           <section>
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <SectionLabel as="h2" className="mb-2 text-sm">
               Upcoming
-            </h2>
+            </SectionLabel>
             <div className="relative">
               <div className="divide-y divide-border">
                 {visibleUpcoming.map((income) => (
@@ -1146,9 +1147,9 @@ export function MobileIncome() {
         )}
 
         <section>
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <SectionLabel as="h2" className="mb-2 text-sm">
             All Income
-          </h2>
+          </SectionLabel>
           {allIncomes.length === 0 && !loadingIncome ? (
             <p className="py-6 text-center text-sm text-muted-foreground">No income this period.</p>
           ) : (

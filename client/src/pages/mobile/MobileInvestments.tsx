@@ -21,6 +21,7 @@ import type {
   WithdrawalSummary, InvestmentSettings,
 } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel, StatValue, DisplayStat } from "@/components/Typography";
 
 type AllocationFilter = "all" | "taxable" | "tax-advantaged";
 type RebalanceTab = "manual" | "auto";
@@ -86,7 +87,7 @@ function SummaryRow({
   return (
     <div className={`flex items-center justify-between gap-3 ${muted ? "text-muted-foreground" : ""}`}>
       <span className="text-sm">{label}</span>
-      <div className="flex items-center gap-2 tabular-nums">
+      <div className="flex items-center gap-2 tabular-nums font-label">
         <span className="text-sm font-medium">{formatCurrency(value)}</span>
         <span className="text-xs text-muted-foreground w-8 text-right">{pct.toFixed(0)}%</span>
       </div>
@@ -96,12 +97,12 @@ function SummaryRow({
 
 function DeviationBadge({ delta }: { delta: number }) {
   if (Math.abs(delta) < 0.05) {
-    return <span className="text-xs text-muted-foreground tabular-nums">on target</span>;
+    return <StatValue className="text-xs text-muted-foreground">on target</StatValue>;
   }
   const isClose = Math.abs(delta) < 0.5;
   const over = delta > 0;
   return (
-    <span className={`text-xs font-medium tabular-nums ${isClose ? "text-green-600" : over ? "text-amber-600" : "text-blue-600"}`}>
+    <span className={`text-xs font-medium tabular-nums font-label ${isClose ? "text-green-600" : over ? "text-amber-600" : "text-blue-600"}`}>
       {over ? "+" : ""}{delta.toFixed(1)}%
     </span>
   );
@@ -281,7 +282,7 @@ function WithdrawalSheet({
                       style={{ height: heightPct > 0 ? `${heightPct}%` : m.isFuture ? "3px" : "2px" }}
                     />
                   </div>
-                  <span className={`text-[9px] leading-none tabular-nums text-center w-full ${
+                  <span className={`text-[9px] leading-none tabular-nums font-label text-center w-full ${
                     isSelected ? "text-foreground font-semibold" : m.isFuture ? "text-muted-foreground/40" : "text-muted-foreground"
                   }`}>
                     {m.label}
@@ -297,12 +298,12 @@ function WithdrawalSheet({
               <p className="text-sm font-semibold">{selectedData.label} {currentYear}</p>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Withdrawn</span>
-                <span className="font-medium tabular-nums">{formatCurrency(selectedData.total)}</span>
+                <StatValue className="font-medium">{formatCurrency(selectedData.total)}</StatValue>
               </div>
               {!selectedData.isFuture && selectedRate !== null && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Ann. rate</span>
-                  <span className="font-medium tabular-nums">{(selectedRate * 100).toFixed(2)}%</span>
+                  <StatValue className="font-medium">{(selectedRate * 100).toFixed(2)}%</StatValue>
                 </div>
               )}
             </div>
@@ -471,7 +472,7 @@ function RebalanceModal({
             <>
               {/* Overview bars */}
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Projected Allocation</p>
+                <SectionLabel>Projected Allocation</SectionLabel>
                 <div className="flex items-center gap-2">
                   <span className="w-11 shrink-0 text-right text-xs text-muted-foreground">After</span>
                   <StackedBar segments={manualProjectedSegments} />
@@ -506,18 +507,18 @@ function RebalanceModal({
                           value={manualAdj[item.id] ?? ""}
                           onChange={(e) => setManualAdj((prev) => ({ ...prev, [item.id]: e.target.value }))}
                           placeholder="0"
-                          className="w-full h-full rounded-md border border-border bg-background pl-6 pr-3 py-2 text-sm text-right tabular-nums focus:outline-none focus:border-primary"
+                          className="w-full h-full rounded-md border border-border bg-background pl-6 pr-3 py-2 text-sm text-right tabular-nums font-label focus:outline-none focus:border-primary"
                         />
                       </div>
                       {/* col 1, row 2 */}
                       <div className="flex items-center gap-1.5 pl-[18px] mt-1 text-xs">
-                        <span className="tabular-nums text-muted-foreground">{item.actualPct.toFixed(1)}%</span>
+                        <StatValue className="text-muted-foreground">{item.actualPct.toFixed(1)}%</StatValue>
                         <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-                        <span className={`tabular-nums font-medium ${
+                        <span className={`tabular-nums font-label font-medium ${
                           delta == null ? "text-muted-foreground" : Math.abs(delta) < 0.5 ? "text-green-600" : delta > 0 ? "text-amber-600" : "text-blue-600"
                         }`}>{newPct.toFixed(1)}%</span>
                         {delta != null && (
-                          <span className={`tabular-nums ${
+                          <span className={`tabular-nums font-label ${
                             Math.abs(delta) < 0.5 ? "text-green-600" : delta > 0 ? "text-amber-600" : "text-blue-600"
                           }`}>
                             ({delta >= 0 ? "+" : ""}{delta.toFixed(1)}%)
@@ -536,7 +537,7 @@ function RebalanceModal({
               {/* Controls */}
               <div className="space-y-4">
                 <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Mode</p>
+                  <SectionLabel>Mode</SectionLabel>
                   <div className="flex gap-1 rounded-lg bg-secondary p-1 w-fit">
                     {(["buy-only", "buy-sell"] as const).map((m) => (
                       <button
@@ -554,8 +555,8 @@ function RebalanceModal({
 
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tolerance</p>
-                    <span className="text-sm tabular-nums font-semibold text-primary">±{tolerancePct.toFixed(1)}%</span>
+                    <SectionLabel>Tolerance</SectionLabel>
+                    <StatValue className="text-sm font-semibold text-primary">±{tolerancePct.toFixed(1)}%</StatValue>
                   </div>
                   <input
                     type="range" min={0} max={5} step={0.1}
@@ -576,7 +577,7 @@ function RebalanceModal({
 
               {/* Overview bars */}
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Projected Allocation</p>
+                <SectionLabel>Projected Allocation</SectionLabel>
                 <div className="flex items-center gap-2">
                   <span className="w-11 shrink-0 text-right text-xs text-muted-foreground">After</span>
                   <StackedBar segments={autoProjectedSegments} />
@@ -606,18 +607,18 @@ function RebalanceModal({
                       <div className="flex items-center gap-2">
                         <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: color }} />
                         <span className="text-sm font-medium flex-1 truncate">{item.name}</span>
-                        <span className={`text-sm font-semibold tabular-nums ${
+                        <span className={`text-sm font-semibold tabular-nums font-label ${
                           isBuy ? "text-blue-600" : isSell ? "text-amber-600" : "text-muted-foreground"
                         }`}>
                           {isBuy ? `+${formatCurrency(adj)}` : isSell ? `−${formatCurrency(Math.abs(adj))}` : "—"}
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5 pl-[18px] mt-1 text-xs">
-                        <span className="tabular-nums text-muted-foreground">{item.actualPct.toFixed(1)}%</span>
+                        <StatValue className="text-muted-foreground">{item.actualPct.toFixed(1)}%</StatValue>
                         <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-                        <span className={`tabular-nums font-medium ${deltaColor}`}>{newPct.toFixed(1)}%</span>
+                        <span className={`tabular-nums font-label font-medium ${deltaColor}`}>{newPct.toFixed(1)}%</span>
                         {delta != null && (
-                          <span className={`tabular-nums ${deltaColor}`}>
+                          <span className={`tabular-nums font-label ${deltaColor}`}>
                             ({delta >= 0 ? "+" : ""}{delta.toFixed(1)}%)
                           </span>
                         )}
@@ -636,7 +637,7 @@ function RebalanceModal({
         {tab === "manual" && (
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Net cash deployed</span>
-            <span className={`text-sm font-semibold tabular-nums ${
+            <span className={`text-sm font-semibold tabular-nums font-label ${
               manualDelta > 0 ? "text-green-600" : manualDelta < 0 ? "text-red-500" : "text-muted-foreground"
             }`}>
               {manualDelta >= 0 ? "+" : "−"}{formatCurrency(Math.abs(manualDelta))}
@@ -648,24 +649,24 @@ function RebalanceModal({
             {rebalanceMode === "buy-only" ? (
               <>
                 <span className="text-sm text-muted-foreground">Total cash to deploy</span>
-                <span className="text-sm font-semibold tabular-nums text-blue-600">
+                <StatValue className="text-sm font-semibold text-blue-600">
                   {autoNetCash > 1 ? `+${formatCurrency(autoNetCash)}` : formatCurrency(0)}
-                </span>
+                </StatValue>
               </>
             ) : autoNetCash > 1 ? (
               <>
                 <span className="text-sm text-muted-foreground">Net cash to deploy</span>
-                <span className="text-sm font-semibold tabular-nums text-blue-600">+{formatCurrency(autoNetCash)}</span>
+                <StatValue className="text-sm font-semibold text-blue-600">+{formatCurrency(autoNetCash)}</StatValue>
               </>
             ) : autoNetCash < -1 ? (
               <>
                 <span className="text-sm text-muted-foreground">Net cash proceeds</span>
-                <span className="text-sm font-semibold tabular-nums text-amber-600">−{formatCurrency(Math.abs(autoNetCash))}</span>
+                <StatValue className="text-sm font-semibold text-amber-600">−{formatCurrency(Math.abs(autoNetCash))}</StatValue>
               </>
             ) : (
               <>
                 <span className="text-sm text-muted-foreground">Net cash</span>
-                <span className="text-sm font-semibold tabular-nums text-muted-foreground">{formatCurrency(0)}</span>
+                <StatValue className="text-sm font-semibold text-muted-foreground">{formatCurrency(0)}</StatValue>
               </>
             )}
           </div>
@@ -797,7 +798,7 @@ export function MobileInvestments() {
         </p>
       </div>
       <div className="text-right flex-shrink-0">
-        <p className="font-bold tabular-nums text-sm">{formatCurrency(account.totalMarketValue)}</p>
+        <StatValue as="p" className="font-bold text-sm">{formatCurrency(account.totalMarketValue)}</StatValue>
         {account.totalDayGain != null && account.totalDayGain !== 0 && (
           <GainBadge value={account.totalDayGain} pct={account.totalDayGainPct} label="1d" className="text-xs" />
         )}
@@ -840,8 +841,8 @@ export function MobileInvestments() {
             {/* Portfolio Summary */}
             <div className="rounded-xl border border-border p-4 space-y-4">
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total Portfolio</p>
-                <p className="text-2xl font-bold tabular-nums mt-0.5">{formatCurrency(totalPortfolioValue)}</p>
+                <SectionLabel>Total Portfolio</SectionLabel>
+                <DisplayStat as="p" className="text-2xl font-bold mt-0.5">{formatCurrency(totalPortfolioValue)}</DisplayStat>
                 {totalDayGain !== 0 && (
                   <GainBadge value={totalDayGain} pct={totalDayGainPct} label="1-day" className="mt-1" />
                 )}
@@ -857,9 +858,9 @@ export function MobileInvestments() {
               </div>
 
               <div className="border-t border-border pt-3 space-y-1.5">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                <SectionLabel className="mb-2">
                   Asset Composition
-                </p>
+                </SectionLabel>
                 <SummaryRow label="Invested" value={investedValue} total={totalPortfolioValue} />
                 <SummaryRow label="Cash" value={totalCashValue} total={totalPortfolioValue} />
                 {untrackedValue > 1 && (
@@ -884,9 +885,9 @@ export function MobileInvestments() {
               <div className="rounded-xl border border-border px-4 divide-y divide-border">
                 <div className="flex items-center gap-2 py-3">
                   <LineChart className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                  <SectionLabel as="span" className="text-sm">
                     Investment Accounts
-                  </span>
+                  </SectionLabel>
                 </div>
                 {investmentAccounts.map(renderAccountCard)}
               </div>
@@ -896,24 +897,24 @@ export function MobileInvestments() {
             <div className="rounded-xl border border-border p-4">
               <div className="flex items-center gap-2 mb-3">
                 <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                <SectionLabel as="span" className="text-sm">
                   Withdrawal Rate
-                </span>
+                </SectionLabel>
               </div>
 
               <div className="grid grid-cols-2 gap-4 mb-3">
                 <div>
-                  <p className="text-2xl font-bold tabular-nums">{rateStr}</p>
+                  <DisplayStat as="p" className="text-2xl font-bold">{rateStr}</DisplayStat>
                   <p className="text-xs text-muted-foreground mt-0.5">annualized (YTD)</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold tabular-nums">{formatCurrency(ytdTotal)}</p>
+                  <DisplayStat as="p" className="text-2xl font-bold">{formatCurrency(ytdTotal)}</DisplayStat>
                   <p className="text-xs text-muted-foreground mt-0.5">withdrawn YTD</p>
                 </div>
               </div>
 
               {targetRate !== null && ytdRate !== null && effectiveDenominator > 0 && (
-                <p className={`text-xs font-medium tabular-nums mb-1.5 ${ytdRate <= targetRate ? "text-green-600" : "text-red-500"}`}>
+                <p className={`text-xs font-medium tabular-nums font-label mb-1.5 ${ytdRate <= targetRate ? "text-green-600" : "text-red-500"}`}>
                   {ytdRate <= targetRate
                     ? `▼ ${((targetRate - ytdRate) * 100).toFixed(2)}% under target`
                     : `▲ ${((ytdRate - targetRate) * 100).toFixed(2)}% over target`}
@@ -943,9 +944,9 @@ export function MobileInvestments() {
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <Target className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                    <SectionLabel as="span" className="text-sm">
                       Asset Allocation
-                    </span>
+                    </SectionLabel>
                   </div>
                   <button
                     onClick={() => setShowRebalance(true)}
@@ -1026,7 +1027,7 @@ export function MobileInvestments() {
                             <div className="flex items-center gap-2">
                               <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: color }} />
                               <span className="text-sm font-medium flex-1 truncate">{item.name}</span>
-                              <span className="text-sm font-medium tabular-nums">{item.actualPct.toFixed(1)}%</span>
+                              <StatValue className="text-sm font-medium">{item.actualPct.toFixed(1)}%</StatValue>
                               {delta != null && <DeviationBadge delta={delta} />}
                             </div>
                             <div className="flex items-center justify-between pl-[18px] mt-0.5">
@@ -1034,7 +1035,7 @@ export function MobileInvestments() {
                                 {item.targetPct != null ? `target ${item.targetPct.toFixed(1)}%` : "no target"}
                               </span>
                               {deltaDollars != null && Math.abs(deltaDollars) >= 1 && (
-                                <span className={`text-xs tabular-nums ${
+                                <span className={`text-xs tabular-nums font-label ${
                                   deltaDollars > 0 ? "text-amber-600" : "text-blue-600"
                                 }`}>
                                   {deltaDollars >= 0 ? "+" : "−"}{formatCurrency(Math.abs(deltaDollars))}
