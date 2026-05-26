@@ -84,8 +84,8 @@ export function CategoryOutliersChart({ data, compact = false, header }: Categor
     <div className="w-full">
       {header ?? (
         <>
-          <p className="text-sm font-medium text-card-foreground">Largest Changes by Category</p>
-          <p className="mb-2 text-xs text-muted-foreground">
+          <h3 className="text-lg font-semibold text-card-foreground">Largest Changes by Category</h3>
+          <p className="mt-0.5 mb-2 text-xs text-muted-foreground">
             vs {previousMonthLabel} · {comparisonNote}
           </p>
         </>
@@ -159,7 +159,7 @@ export function CategoryOutliersChart({ data, compact = false, header }: Categor
                     {/* Category label */}
                     <text
                       x={LABEL_W - 6} y={y + 4}
-                      textAnchor="end" fontSize={11} fill={colorMuted}
+                      textAnchor="end" fontSize={12} fill={colorMuted}
                     >
                       {label}
                     </text>
@@ -195,13 +195,13 @@ export function CategoryOutliersChart({ data, compact = false, header }: Categor
                     )}
 
                     {/* Amount columns */}
-                    <text x={curColX}   y={y + 4} textAnchor="end" fontSize={11} fill={colorMuted}>
+                    <text x={curColX}   y={y + 4} textAnchor="end" fontSize={12} fill={colorMuted} style={{ fontFamily: "var(--font-label)" }}>
                       {fmtAmt(o.currentAmount)}
                     </text>
-                    <text x={prevColX}  y={y + 4} textAnchor="end" fontSize={11} fill={colorMuted}>
+                    <text x={prevColX}  y={y + 4} textAnchor="end" fontSize={12} fill={colorMuted} style={{ fontFamily: "var(--font-label)" }}>
                       {fmtAmt(o.previousAmount)}
                     </text>
-                    <text x={deltaColX} y={y + 4} textAnchor="end" fontSize={11} fontWeight={600} fill={lineColor}>
+                    <text x={deltaColX} y={y + 4} textAnchor="end" fontSize={12} fontWeight={600} fill={lineColor} style={{ fontFamily: "var(--font-label)" }}>
                       {fmtDelta(o.delta)}
                     </text>
 
@@ -228,13 +228,13 @@ export function CategoryOutliersChart({ data, compact = false, header }: Categor
                 fill={colorCard} stroke={colorMuted} strokeWidth={1.5}
               />
             </svg>
-            <span className="text-xs text-muted-foreground">{previousMonthLabel}</span>
+            <span className="text-xs text-muted-foreground font-label">{previousMonthLabel}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <svg width={11} height={11}>
               <circle cx={5.5} cy={5.5} r={DOT_R} fill={colorMuted} />
             </svg>
-            <span className="text-xs text-muted-foreground">{currentMonthLabel}</span>
+            <span className="text-xs text-muted-foreground font-label">{currentMonthLabel}</span>
           </div>
         </div>
       </div>

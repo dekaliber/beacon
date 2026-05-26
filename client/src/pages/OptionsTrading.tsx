@@ -44,6 +44,7 @@ import { Modal } from "@/components/Modal";
 import { Plus, ChevronDown, ChevronUp, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw } from "lucide-react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+import { SectionLabel, ColumnHeader, StatValue } from "@/components/Typography";
 import { optionsPricesAreFresh } from "@/lib/priceUtils";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import {
@@ -1829,11 +1830,11 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
                 <tbody>
                   {runningBasisRows.map((row) => (
                     <tr key={row.id} className="border-t border-border">
-                      <td className="px-3 py-1.5 tabular-nums">{row.effectiveDate}</td>
-                      <td className={cn("px-3 py-1.5 text-right tabular-nums", Number(row.delta) >= 0 ? "text-green-600" : "text-red-600")}>
+                      <td className="px-3 py-1.5 tabular-nums font-label">{row.effectiveDate}</td>
+                      <td className={cn("px-3 py-1.5 text-right tabular-nums font-label", Number(row.delta) >= 0 ? "text-green-600" : "text-red-600")}>
                         {Number(row.delta) >= 0 ? "+" : ""}${Math.abs(Number(row.delta)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">
+                      <td className="px-3 py-1.5 text-right tabular-nums font-label">
                         ${row.runningBasis.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-3 py-1.5 text-muted-foreground">{row.note ?? ""}</td>
@@ -2533,7 +2534,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
     const chainRow = hasChain ? (
       <tr key={`${p.id}-chain`} className={cn("group", "border-b border-border", isGrouped && "bg-muted/10", isExpired && "bg-amber-50/50")}>
         {/* Label — frozen */}
-        <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] group-hover:bg-[#FDFDFE]", stickyBg, isGrouped ? "pl-8 pr-2" : "pl-4 pr-2", "font-medium text-muted-foreground/60 uppercase tracking-wide text-[10px]")}>roll</td>
+        <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] group-hover:bg-[#FDFDFE]", stickyBg, isGrouped ? "pl-8 pr-2" : "pl-4 pr-2", "font-medium text-muted-foreground/60 uppercase tracking-[1px] font-label text-[10px]")}>roll</td>
         <td style={{ left: 80 }}  className={cn(ctd, "sticky z-[2] group-hover:bg-[#FDFDFE]", stickyBg)} />
         <td style={{ left: 152 }} className={cn(ctd, "sticky z-[2] group-hover:bg-[#FDFDFE]", stickyBg)} />
         <td style={{ left: 232 }} className={cn(ctd, "sticky z-[2] group-hover:bg-[#FDFDFE] border-r border-border/40", stickyBg)} />
@@ -2743,7 +2744,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
           {sortedDrafts.length > 0 && (
             <tr className="bg-muted/40 border-y border-border">
               <td colSpan={4} className="py-1.5 pl-4 sticky left-0 z-[2] bg-[#FCFDFE]">
-                <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Draft Positions</span>
+                <SectionLabel as="span" className="text-foreground">Draft Positions</SectionLabel>
               </td>
               <td colSpan={totalCols - 4} className="py-1.5 pr-4 text-right">
                 <span className="text-xs text-muted-foreground font-normal">Not included in totals · click <PlayCircle className="inline h-3 w-3 mb-0.5" /> to confirm &amp; open</span>
@@ -2756,7 +2757,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
           {sortedDrafts.length > 0 && sorted.length > 0 && (
             <tr className="bg-muted/40 border-y border-border">
               <td colSpan={4} className="py-1.5 pl-4 sticky left-0 z-[2] bg-[#FCFDFE]">
-                <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Open Positions</span>
+                <SectionLabel as="span" className="text-foreground">Open Positions</SectionLabel>
               </td>
               <td colSpan={totalCols - 4} />
             </tr>
@@ -3069,14 +3070,14 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
               <tr key={`week-${label}`} className="bg-muted/40 border-y border-border cursor-pointer hover:bg-muted/60 select-none" onClick={() => toggleWeek(monday)}>
                 <td colSpan={5} className="py-1.5 pl-4 sticky left-0 z-[2] bg-[#FCFDFE]">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-semibold text-foreground uppercase tracking-wide">{label}</span>
+                    <SectionLabel as="span" className="text-foreground">{label}</SectionLabel>
                     {isCollapsed ? <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" /> : <ChevronUp className="h-3 w-3 text-muted-foreground shrink-0" />}
                   </div>
                 </td>
                 <td colSpan={15} className="py-1.5 pr-4 text-right">
-                  <span className={cn("text-xs font-semibold tabular-nums", weekPnl >= 0 ? "text-green-600" : "text-red-600")}>
+                  <StatValue className={cn("text-xs font-semibold", weekPnl >= 0 ? "text-green-600" : "text-red-600")}>
                     {weekPnl >= 0 ? "+" : "−"}${Math.abs(weekPnl).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
+                  </StatValue>
                 </td>
               </tr>,
               ...(isCollapsed ? [] : positions.map((p) => {
@@ -3185,7 +3186,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
             const chainRow = cs ? (
               <tr key={`${p.id}-chain`} className="group border-b border-border">
                 {/* Label — frozen */}
-                <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE] pl-4 pr-2 font-medium text-muted-foreground/60 uppercase tracking-wide text-[10px]")}>roll</td>
+                <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE] pl-4 pr-2 font-medium text-muted-foreground/60 uppercase tracking-[1px] font-label text-[10px]")}>roll</td>
                 <td style={{ left: 80 }}  className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")} />
                 <td style={{ left: 152 }} className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")} />
                 <td style={{ left: 232 }} className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")} />
@@ -3377,9 +3378,9 @@ function PerformanceCharts({
   return (
     <div className="grid grid-cols-2 gap-4">
       {/* Weekly Premium Bar Chart */}
-      <Card className="p-4">
+      <Card className="p-6">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Weekly Premium Collected</p>
+          <SectionLabel>Weekly Premium Collected</SectionLabel>
           {targetWeekly != null && (
             <div className="flex items-center gap-1.5">
               <svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--color-muted-foreground)" strokeWidth="1.5" strokeDasharray="4 3" strokeOpacity="0.7" /></svg>
@@ -3487,9 +3488,9 @@ function PerformanceCharts({
       </Card>
 
       {/* Cumulative Performance Chart */}
-      <Card className="p-4">
+      <Card className="p-6">
         <div className="flex items-center justify-between mb-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cumulative Performance vs Target</p>
+          <SectionLabel>Cumulative Performance vs Target</SectionLabel>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
               <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="var(--color-primary)" strokeWidth="2" /></svg>
@@ -3596,7 +3597,7 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
   const fmtRate = (r: number | null) => (r != null ? `${r.toFixed(1)}%` : "—");
 
   function MetricCells({ m }: { m: PerformanceMetrics }) {
-    const tdCls = "px-4 py-2 text-right tabular-nums";
+    const tdCls = "px-4 py-2 text-right tabular-nums font-label";
     return (
       <>
         <td className={tdCls}>{m.tradeCount}</td>
@@ -3643,24 +3644,24 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
   }
 
   return (
-    <Card className="p-4">
+    <Card className="p-6">
       <div className="pb-3 border-b border-border">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Performance Details</p>
+        <SectionLabel>Performance Details</SectionLabel>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-border">
-              <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Ticker</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Trades</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Contracts</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Win Rate</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Assign. Rate</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">Avg Days (actual / exp.)</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">CC Premium</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">CSP Premium</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">Total Premium</th>
-              <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">Wtd. Ann. Return</th>
+              <ColumnHeader className="px-4 py-2 text-left">Ticker</ColumnHeader>
+              <ColumnHeader className="px-4 py-2 text-right">Trades</ColumnHeader>
+              <ColumnHeader className="px-4 py-2 text-right">Contracts</ColumnHeader>
+              <ColumnHeader className="px-4 py-2 text-right">Win Rate</ColumnHeader>
+              <ColumnHeader className="px-4 py-2 text-right">Assign. Rate</ColumnHeader>
+              <ColumnHeader className="px-4 py-2 text-right whitespace-nowrap">Avg Days (actual / exp.)</ColumnHeader>
+              <ColumnHeader className="px-4 py-2 text-right whitespace-nowrap">CC Premium</ColumnHeader>
+              <ColumnHeader className="px-4 py-2 text-right whitespace-nowrap">CSP Premium</ColumnHeader>
+              <ColumnHeader className="px-4 py-2 text-right whitespace-nowrap">Total Premium</ColumnHeader>
+              <ColumnHeader className="px-4 py-2 text-right whitespace-nowrap">Wtd. Ann. Return</ColumnHeader>
             </tr>
           </thead>
           <tbody>
@@ -3769,11 +3770,11 @@ function CapitalDistributionBar({
             <div className="space-y-1">
               <div className="flex justify-between gap-4">
                 <span className="text-muted-foreground">Capital</span>
-                <span className="font-medium tabular-nums">${tooltip.capital.toLocaleString("en-US", { maximumFractionDigits: 0 })}</span>
+                <StatValue className="font-medium">${tooltip.capital.toLocaleString("en-US", { maximumFractionDigits: 0 })}</StatValue>
               </div>
               <div className="flex justify-between gap-4">
                 <span className="text-muted-foreground">Share</span>
-                <span className="font-medium tabular-nums">{tooltip.pct.toFixed(1)}%</span>
+                <StatValue className="font-medium">{tooltip.pct.toFixed(1)}%</StatValue>
               </div>
             </div>
           </div>
@@ -3890,8 +3891,8 @@ function SummaryCards({
   return (
     <div className="grid grid-cols-4 gap-4">
       {/* Capital at Risk */}
-      <Card className="p-4">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Capital at Risk</p>
+      <Card className="p-6">
+        <SectionLabel>Capital at Risk</SectionLabel>
         <div className="flex items-end mt-1">
           <div className="flex-1 min-w-0">
             <p className="text-xl font-semibold truncate">
@@ -3916,8 +3917,8 @@ function SummaryCards({
       </Card>
 
       {/* Premium This Week — split realized / pending */}
-      <Card className="p-4">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Premium This Week</p>
+      <Card className="p-6">
+        <SectionLabel>Premium This Week</SectionLabel>
         <div className="flex items-end mt-1">
           <div className="flex-1 min-w-0">
             <p className={cn("text-xl font-semibold truncate", premiumThisWeek >= 0 ? "text-green-600" : "text-red-600")}>
@@ -3936,8 +3937,8 @@ function SummaryCards({
       </Card>
 
       {/* Cumulative Premium */}
-      <Card className="p-4">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cumulative Premium</p>
+      <Card className="p-6">
+        <SectionLabel>Cumulative Premium</SectionLabel>
         <p className={cn("text-xl font-semibold mt-1 truncate", cumulativePremium >= 0 ? "text-green-600" : "text-red-600")}>
           {`$${fmtUSD(cumulativePremium)}`}
         </p>
@@ -3947,8 +3948,8 @@ function SummaryCards({
       </Card>
 
       {/* Ann. Rate of Return */}
-      <Card className="p-4">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Ann. Rate of Return</p>
+      <Card className="p-6">
+        <SectionLabel>Ann. Rate of Return</SectionLabel>
         <p className={cn("text-xl font-semibold mt-1 truncate", annReturn != null ? (annReturn >= (settings?.targetReturn ?? 0) * 100 ? "text-green-600" : "text-amber-600") : undefined)}>
           {annReturn != null ? fmtPct(annReturn) : "—"}
         </p>
@@ -4510,19 +4511,19 @@ function ImportOptionsModal({ open, onClose, onComplete }: {
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-background">
                 <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">#</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Ticker</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Type</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide text-right">Strike</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Expiration</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Opened</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide text-right">Premium</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide text-right">Qty</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide text-right">Cost Basis</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide text-right">Stock Price</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide text-right">Fees</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Notes</th>
-                  <th className="px-2 py-1.5 font-medium uppercase tracking-wide">Status</th>
+                  <ColumnHeader className="px-2 py-1.5">#</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5">Ticker</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5">Type</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5 text-right">Strike</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5">Expiration</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5">Opened</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5 text-right">Premium</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5 text-right">Qty</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5 text-right">Cost Basis</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5 text-right">Stock Price</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5 text-right">Fees</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5">Notes</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5">Status</ColumnHeader>
                 </tr>
               </thead>
               <tbody>

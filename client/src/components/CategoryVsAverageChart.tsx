@@ -68,8 +68,8 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
 
   return (
     <div className="w-full">
-      <p className="text-sm font-medium text-card-foreground">Spending vs. Category Averages</p>
-      <p className="mb-2 text-xs text-muted-foreground">
+      <h3 className="text-lg font-semibold text-card-foreground">Spending vs. Category Averages</h3>
+      <p className="mt-0.5 mb-2 text-xs text-muted-foreground">
         Current month spend compared to {yearLabel} averages
       </p>
 
@@ -130,7 +130,7 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
                     {/* Category label */}
                     <text
                       x={LABEL_W - 6} y={yCenter + 4}
-                      textAnchor="end" fontSize={11} fill={colorMuted}
+                      textAnchor="end" fontSize={12} fill={colorMuted}
                     >
                       {label}
                     </text>
@@ -173,7 +173,8 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
                     {/* Delta badge */}
                     <text
                       x={width - 2} y={yCenter + 4}
-                      textAnchor="end" fontSize={11} fontWeight={600} fill={barColor}
+                      textAnchor="end" fontSize={12} fontWeight={600} fill={barColor}
+                      style={{ fontFamily: "var(--font-label)" }}
                     >
                       {deltaStr}
                     </text>
@@ -217,10 +218,10 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
               <p className="mb-1.5 text-xs font-semibold text-card-foreground">{c.categoryName}</p>
               <div className="grid gap-x-3 gap-y-1 text-xs" style={{ gridTemplateColumns: "max-content 1fr" }}>
                 <span className="text-muted-foreground">Category Avg</span>
-                <span className="whitespace-nowrap font-medium text-foreground">{fmtAmt(c.avgAmount)}</span>
+                <span className="whitespace-nowrap font-medium text-foreground font-label tabular-nums">{fmtAmt(c.avgAmount)}</span>
                 <span className="text-muted-foreground">Current Month</span>
                 <span className="font-semibold" style={{ color: barColor }}>
-                  <span className="whitespace-nowrap">{fmtAmt(c.currentAmount)}{pctStr}</span>
+                  <span className="whitespace-nowrap font-label tabular-nums">{fmtAmt(c.currentAmount)}{pctStr}</span>
                   {pendingAmtTip > 0 && (
                     <span className="block font-normal italic text-muted-foreground">({fmtAmt(pendingAmtTip)} pending)</span>
                   )}
@@ -236,7 +237,7 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
             <svg width={20} height={12}>
               <rect x={0} y={2} width={20} height={8} rx={2} fill="var(--color-muted-foreground)" fillOpacity={0.75} />
             </svg>
-            <span className="text-xs text-muted-foreground">This month</span>
+            <span className="text-xs text-muted-foreground font-label">This month</span>
           </div>
           <div className="flex items-center gap-1.5">
             <svg width={20} height={12}>
@@ -248,13 +249,13 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
               <rect x={0} y={2} width={20} height={8} rx={2} fill="var(--color-muted-foreground)" fillOpacity={0.35} />
               <rect x={0} y={2} width={20} height={8} rx={2} fill="url(#legend-stripe)" />
             </svg>
-            <span className="text-xs text-muted-foreground">Pending</span>
+            <span className="text-xs text-muted-foreground font-label">Pending</span>
           </div>
           <div className="flex items-center gap-1.5">
             <svg width={12} height={12}>
               <line x1={6} y1={0} x2={6} y2={12} stroke="var(--color-muted-foreground)" strokeWidth={2} />
             </svg>
-            <span className="text-xs text-muted-foreground">12-mo avg</span>
+            <span className="text-xs text-muted-foreground font-label">12-mo avg</span>
           </div>
         </div>
       </div>

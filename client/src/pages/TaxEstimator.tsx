@@ -9,6 +9,7 @@ import { getIncome, getAllGainSnapshots, getTaxAssumptions, updateTaxAssumptions
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Income, RealizedGainSnapshotWithAccount } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel, StatValue, DisplayStat } from "@/components/Typography";
 
 // ── 2026 Federal Tax Data ──────────────────────────────────────────────────────
 
@@ -803,7 +804,7 @@ export function TaxEstimatorPage() {
           />
         </div>
         <div className="mt-4 border-t border-border pt-4">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">California</p>
+          <SectionLabel className="mb-3">California</SectionLabel>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <NumberInput
               label="CA Income Tax Withheld"
@@ -866,7 +867,7 @@ export function TaxEstimatorPage() {
                         <td className="py-2.5 font-medium">{q.label}</td>
                         <td className="py-2.5 text-muted-foreground">{q.period}</td>
                         <td className={`py-2.5 ${isPast ? "text-muted-foreground line-through" : ""}`}>{q.dueLabel}</td>
-                        <td className="py-2.5 text-right tabular-nums">{formatCurrency(suggested[i])}</td>
+                        <td className="py-2.5 text-right tabular-nums font-label">{formatCurrency(suggested[i])}</td>
                         <td className="py-2.5 text-right">
                           <div className="relative inline-flex items-center">
                             <span className="pointer-events-none absolute left-2 text-xs text-muted-foreground">$</span>
@@ -883,7 +884,7 @@ export function TaxEstimatorPage() {
                             />
                           </div>
                         </td>
-                        <td className={`py-2.5 text-right tabular-nums font-medium ${balance < -0.005 ? "text-emerald-600" : balance > 0.005 && isPast ? "text-amber-600" : ""}`}>
+                        <td className={`py-2.5 text-right tabular-nums font-label font-medium ${balance < -0.005 ? "text-emerald-600" : balance > 0.005 && isPast ? "text-amber-600" : ""}`}>
                           {balance < -0.005
                             ? <span className="inline-flex items-center justify-end gap-1" title="Quarter satisfied — overpayment reduces final balance"><Check className="h-3 w-3" />{formatCurrency(0)}</span>
                             : formatCurrency(Math.max(0, balance))}
@@ -897,9 +898,9 @@ export function TaxEstimatorPage() {
                     <td className="pt-2.5" colSpan={3}>
                       Est. balance due{withheldNum > 0 && <span className="font-normal text-muted-foreground"> (after {formatCurrency(withheldNum)} in withholding)</span>}
                     </td>
-                    <td className="pt-2.5 text-right tabular-nums">{formatCurrency(netEstimated)}</td>
-                    <td className="pt-2.5 text-right tabular-nums">{formatCurrency(totalQPaid)}</td>
-                    <td className="pt-2.5 text-right tabular-nums">{formatCurrency(Math.max(0, netEstimated - totalQPaid))}</td>
+                    <td className="pt-2.5 text-right tabular-nums font-label">{formatCurrency(netEstimated)}</td>
+                    <td className="pt-2.5 text-right tabular-nums font-label">{formatCurrency(totalQPaid)}</td>
+                    <td className="pt-2.5 text-right tabular-nums font-label">{formatCurrency(Math.max(0, netEstimated - totalQPaid))}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -909,16 +910,16 @@ export function TaxEstimatorPage() {
                 {withheldNum > 0 && (
                   <div className="flex justify-between text-muted-foreground">
                     <span>Tax Withheld (W-2 / other)</span>
-                    <span className="tabular-nums">{formatCurrency(withheldNum)}</span>
+                    <StatValue>{formatCurrency(withheldNum)}</StatValue>
                   </div>
                 )}
                 <div className="flex justify-between text-muted-foreground">
                   <span>Estimated Payments Made</span>
-                  <span className="tabular-nums">{formatCurrency(totalQPaid)}</span>
+                  <StatValue>{formatCurrency(totalQPaid)}</StatValue>
                 </div>
                 <div className="flex justify-between font-semibold border-t border-border pt-1.5 mt-1.5">
                   <span>{netOwed >= 0 ? "Remaining Tax Owed" : "Estimated Refund"}</span>
-                  <span className="tabular-nums">{formatCurrency(Math.abs(netOwed))}</span>
+                  <StatValue>{formatCurrency(Math.abs(netOwed))}</StatValue>
                 </div>
               </div>
 
@@ -994,7 +995,7 @@ export function TaxEstimatorPage() {
                         <td className={`py-2.5 ${!q.noDue && isPast ? "text-muted-foreground line-through" : ""}`}>
                           {q.noDue ? <span className="italic">No payment due</span> : q.dueLabel}
                         </td>
-                        <td className="py-2.5 text-right tabular-nums">
+                        <td className="py-2.5 text-right tabular-nums font-label">
                           {q.noDue ? <span className="text-muted-foreground">—</span> : formatCurrency(suggested)}
                         </td>
                         <td className="py-2.5 text-right">
@@ -1017,7 +1018,7 @@ export function TaxEstimatorPage() {
                             </div>
                           )}
                         </td>
-                        <td className={`py-2.5 text-right tabular-nums font-medium ${!q.noDue && balance < -0.005 ? "text-emerald-600" : !q.noDue && balance > 0.005 && isPast ? "text-amber-600" : ""}`}>
+                        <td className={`py-2.5 text-right tabular-nums font-label font-medium ${!q.noDue && balance < -0.005 ? "text-emerald-600" : !q.noDue && balance > 0.005 && isPast ? "text-amber-600" : ""}`}>
                           {q.noDue ? (
                             <span className="text-muted-foreground">—</span>
                           ) : balance < -0.005 ? (
@@ -1037,9 +1038,9 @@ export function TaxEstimatorPage() {
                     <td className="pt-2.5" colSpan={3}>
                       Est. balance due{caWithheldNum > 0 && <span className="font-normal text-muted-foreground"> (after {formatCurrency(caWithheldNum)} in withholding)</span>}
                     </td>
-                    <td className="pt-2.5 text-right tabular-nums">{formatCurrency(caNetEstimated)}</td>
-                    <td className="pt-2.5 text-right tabular-nums">{formatCurrency(totalCAQPaid)}</td>
-                    <td className="pt-2.5 text-right tabular-nums">{formatCurrency(Math.max(0, caNetEstimated - totalCAQPaid))}</td>
+                    <td className="pt-2.5 text-right tabular-nums font-label">{formatCurrency(caNetEstimated)}</td>
+                    <td className="pt-2.5 text-right tabular-nums font-label">{formatCurrency(totalCAQPaid)}</td>
+                    <td className="pt-2.5 text-right tabular-nums font-label">{formatCurrency(Math.max(0, caNetEstimated - totalCAQPaid))}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -1049,16 +1050,16 @@ export function TaxEstimatorPage() {
                 {caWithheldNum > 0 && (
                   <div className="flex justify-between text-muted-foreground">
                     <span>CA Tax Withheld</span>
-                    <span className="tabular-nums">{formatCurrency(caWithheldNum)}</span>
+                    <StatValue>{formatCurrency(caWithheldNum)}</StatValue>
                   </div>
                 )}
                 <div className="flex justify-between text-muted-foreground">
                   <span>Estimated Payments Made</span>
-                  <span className="tabular-nums">{formatCurrency(totalCAQPaid)}</span>
+                  <StatValue>{formatCurrency(totalCAQPaid)}</StatValue>
                 </div>
                 <div className="flex justify-between font-semibold border-t border-border pt-1.5 mt-1.5">
                   <span>{caNetOwed >= 0 ? "Remaining Tax Owed" : "Estimated Refund"}</span>
-                  <span className="tabular-nums">{formatCurrency(Math.abs(caNetOwed))}</span>
+                  <StatValue>{formatCurrency(Math.abs(caNetOwed))}</StatValue>
                 </div>
               </div>
 
@@ -1090,21 +1091,21 @@ export function TaxEstimatorPage() {
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-lg border border-border px-4 py-3">
           <p className="text-xs text-muted-foreground">Total Income (MAGI)</p>
-          <p className="mt-1 text-xl font-bold tabular-nums">{formatCurrency(calc.magi)}</p>
+          <DisplayStat as="p" className="mt-1 text-xl font-bold">{formatCurrency(calc.magi)}</DisplayStat>
         </div>
         <div className="rounded-lg border border-border px-4 py-3">
           <p className="text-xs text-muted-foreground flex items-center gap-1.5">
             Estimated Federal Tax
             {useTmt && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-100 text-violet-700">TMT</span>}
           </p>
-          <p className="mt-1 text-xl font-bold tabular-nums">{formatCurrency(effectiveFederalTax)}</p>
+          <DisplayStat as="p" className="mt-1 text-xl font-bold">{formatCurrency(effectiveFederalTax)}</DisplayStat>
           {(withheldNum > 0 || totalQPaid > 0) && (() => {
             const netOwed = effectiveFederalTax - withheldNum - totalQPaid;
             const suffix = withheldNum > 0 && totalQPaid > 0
               ? "after withholding & payments"
               : totalQPaid > 0 ? "after est. payments" : "after withholding";
             return (
-              <p className={`mt-1 text-xs font-medium tabular-nums ${netOwed >= 0 ? "text-amber-600" : "text-emerald-600"}`}>
+              <p className={`mt-1 text-xs font-medium tabular-nums font-label ${netOwed >= 0 ? "text-amber-600" : "text-emerald-600"}`}>
                 {netOwed >= 0
                   ? `${formatCurrency(netOwed)} owed ${suffix}`
                   : `${formatCurrency(Math.abs(netOwed))} refund ${suffix}`}
@@ -1117,14 +1118,14 @@ export function TaxEstimatorPage() {
             Estimated State Tax <span className="text-muted-foreground/60">(CA)</span>
             {useCaTmt && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-100 text-violet-700">TMT</span>}
           </p>
-          <p className="mt-1 text-xl font-bold tabular-nums">{formatCurrency(effectiveCaTax)}</p>
+          <DisplayStat as="p" className="mt-1 text-xl font-bold">{formatCurrency(effectiveCaTax)}</DisplayStat>
           {(caWithheldNum > 0 || totalCAQPaid > 0) && (() => {
             const netOwed = effectiveCaTax - caWithheldNum - totalCAQPaid;
             const suffix = caWithheldNum > 0 && totalCAQPaid > 0
               ? "after withholding & payments"
               : totalCAQPaid > 0 ? "after est. payments" : "after withholding";
             return (
-              <p className={`mt-1 text-xs font-medium tabular-nums ${netOwed >= 0 ? "text-amber-600" : "text-emerald-600"}`}>
+              <p className={`mt-1 text-xs font-medium tabular-nums font-label ${netOwed >= 0 ? "text-amber-600" : "text-emerald-600"}`}>
                 {netOwed >= 0
                   ? `${formatCurrency(netOwed)} owed ${suffix}`
                   : `${formatCurrency(Math.abs(netOwed))} refund ${suffix}`}
@@ -1148,19 +1149,19 @@ export function TaxEstimatorPage() {
             {(otherOrdinaryNum !== 0 || calc.ordinaryFromApp !== 0 || calc.rawSTCG !== 0 || calc.rawCollectibleLTCG !== 0) && (
               <div className="flex gap-1">
                 <div className="flex shrink-0 items-center justify-center w-5">
-                  <span
-                    className="text-[10px] font-semibold uppercase tracking-widest text-amber-500 select-none"
+                  <SectionLabel as="span"
+                    className="text-[10px] text-amber-500 select-none"
                     style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
                   >
                     Ordinary
-                  </span>
+                  </SectionLabel>
                 </div>
                 <div className="flex-1 border-l-2 border-amber-300 pl-3">
                   {calc.ordinaryFromApp !== 0 && (
                     <div className="flex items-baseline gap-1.5 py-1.5">
                       <span className="shrink-0">Ordinary Income</span>
                       <span className="flex-1 h-0.5 mb-0.5" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize: "5px 100%", backgroundRepeat: "repeat-x" }} />
-                      <span className="shrink-0 tabular-nums">{formatCurrency(calc.ordinaryFromApp)}</span>
+                      <StatValue className="shrink-0">{formatCurrency(calc.ordinaryFromApp)}</StatValue>
                     </div>
                   )}
                   {calc.rawSTCG !== 0 && (
@@ -1170,7 +1171,7 @@ export function TaxEstimatorPage() {
                         {calc.rawSTCG < 0 && <span className="ml-1 text-xs text-muted-foreground">(loss)</span>}
                       </span>
                       <span className="flex-1 h-0.5 mb-0.5" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize: "5px 100%", backgroundRepeat: "repeat-x" }} />
-                      <span className={`shrink-0 tabular-nums ${calc.rawSTCG < 0 ? "text-destructive" : ""}`}>
+                      <span className={`shrink-0 tabular-nums font-label ${calc.rawSTCG < 0 ? "text-destructive" : ""}`}>
                         {calc.rawSTCG < 0 ? "-" : ""}{formatCurrency(Math.abs(calc.rawSTCG))}
                       </span>
                     </div>
@@ -1183,7 +1184,7 @@ export function TaxEstimatorPage() {
                         {calc.rawCollectibleLTCG < 0 && <span className="ml-1 text-xs text-muted-foreground">(loss)</span>}
                       </span>
                       <span className="flex-1 h-0.5 mb-0.5" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize: "5px 100%", backgroundRepeat: "repeat-x" }} />
-                      <span className={`shrink-0 tabular-nums ${calc.rawCollectibleLTCG < 0 ? "text-destructive" : ""}`}>
+                      <span className={`shrink-0 tabular-nums font-label ${calc.rawCollectibleLTCG < 0 ? "text-destructive" : ""}`}>
                         {calc.rawCollectibleLTCG < 0 ? "-" : ""}{formatCurrency(Math.abs(calc.rawCollectibleLTCG))}
                       </span>
                     </div>
@@ -1201,7 +1202,7 @@ export function TaxEstimatorPage() {
                         </button>
                       </span>
                       <span className="flex-1 h-0.5 mb-0.5" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize: "5px 100%", backgroundRepeat: "repeat-x" }} />
-                      <span className="shrink-0 tabular-nums">{formatCurrency(otherOrdinaryNum)}</span>
+                      <StatValue className="shrink-0">{formatCurrency(otherOrdinaryNum)}</StatValue>
                     </div>
                   )}
                 </div>
@@ -1212,19 +1213,19 @@ export function TaxEstimatorPage() {
             {(calc.qualDivFromApp !== 0 || calc.rawLTCG !== 0 || otherLTCGNum !== 0) && (
               <div className="flex gap-1">
                 <div className="flex shrink-0 items-center justify-center w-5">
-                  <span
-                    className="text-[10px] font-semibold uppercase tracking-widest text-emerald-600 select-none"
+                  <SectionLabel as="span"
+                    className="text-[10px] text-emerald-600 select-none"
                     style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
                   >
                     LT
-                  </span>
+                  </SectionLabel>
                 </div>
                 <div className="flex-1 border-l-2 border-emerald-300 pl-3">
                   {calc.qualDivFromApp !== 0 && (
                     <div className="flex items-baseline gap-1.5 py-1.5">
                       <span className="shrink-0">Qualified Dividends</span>
                       <span className="flex-1 h-0.5 mb-0.5" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize: "5px 100%", backgroundRepeat: "repeat-x" }} />
-                      <span className="shrink-0 tabular-nums">{formatCurrency(calc.qualDivFromApp)}</span>
+                      <StatValue className="shrink-0">{formatCurrency(calc.qualDivFromApp)}</StatValue>
                     </div>
                   )}
                   {calc.rawLTCG !== 0 && (
@@ -1234,7 +1235,7 @@ export function TaxEstimatorPage() {
                         {calc.rawLTCG < 0 && <span className="ml-1 text-xs text-muted-foreground">(loss)</span>}
                       </span>
                       <span className="flex-1 h-0.5 mb-0.5" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize: "5px 100%", backgroundRepeat: "repeat-x" }} />
-                      <span className={`shrink-0 tabular-nums ${calc.rawLTCG < 0 ? "text-destructive" : ""}`}>
+                      <span className={`shrink-0 tabular-nums font-label ${calc.rawLTCG < 0 ? "text-destructive" : ""}`}>
                         {calc.rawLTCG < 0 ? "-" : ""}{formatCurrency(Math.abs(calc.rawLTCG))}
                       </span>
                     </div>
@@ -1252,7 +1253,7 @@ export function TaxEstimatorPage() {
                         </button>
                       </span>
                       <span className="flex-1 h-0.5 mb-0.5" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize: "5px 100%", backgroundRepeat: "repeat-x" }} />
-                      <span className={`shrink-0 tabular-nums ${otherLTCGNum < 0 ? "text-destructive" : ""}`}>
+                      <span className={`shrink-0 tabular-nums font-label ${otherLTCGNum < 0 ? "text-destructive" : ""}`}>
                         {otherLTCGNum < 0 ? "-" : ""}{formatCurrency(Math.abs(otherLTCGNum))}
                       </span>
                     </div>
@@ -1265,26 +1266,26 @@ export function TaxEstimatorPage() {
             {(calc.exemptFromApp !== 0 || calc.rocFromApp !== 0) && (
               <div className="flex gap-1">
                 <div className="flex shrink-0 items-center justify-center w-5">
-                  <span
-                    className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 select-none"
+                  <SectionLabel as="span"
+                    className="text-[10px] text-slate-400 select-none"
                     style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
                   >
                     $0
-                  </span>
+                  </SectionLabel>
                 </div>
                 <div className="flex-1 border-l-2 border-slate-200 pl-3 text-muted-foreground">
                   {calc.exemptFromApp !== 0 && (
                     <div className="flex items-baseline gap-1.5 py-1.5">
                       <span className="shrink-0">Tax-Exempt Income</span>
                       <span className="flex-1 h-0.5 mb-0.5" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize: "5px 100%", backgroundRepeat: "repeat-x" }} />
-                      <span className="shrink-0 tabular-nums">{formatCurrency(calc.exemptFromApp)}</span>
+                      <StatValue className="shrink-0">{formatCurrency(calc.exemptFromApp)}</StatValue>
                     </div>
                   )}
                   {calc.rocFromApp !== 0 && (
                     <div className="flex items-baseline gap-1.5 py-1.5">
                       <span className="shrink-0">Return of Capital</span>
                       <span className="flex-1 h-0.5 mb-0.5" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize: "5px 100%", backgroundRepeat: "repeat-x" }} />
-                      <span className="shrink-0 tabular-nums">{formatCurrency(calc.rocFromApp)}</span>
+                      <StatValue className="shrink-0">{formatCurrency(calc.rocFromApp)}</StatValue>
                     </div>
                   )}
                 </div>
@@ -1773,7 +1774,7 @@ export function TaxEstimatorPage() {
                 >
                   <span className="flex-1 font-semibold">{section.categoryName}</span>
                   {(anyOrdinaryInSections || (anyCollectibleInSections && !showCollectibleSeparately)) && (
-                    <span className="w-[220px] shrink-0 text-right text-sm text-muted-foreground tabular-nums">
+                    <span className="w-[220px] shrink-0 text-right text-sm text-muted-foreground tabular-nums font-label">
                       {(() => {
                         const amt = sectionOrdinaryAmt + (!showCollectibleSeparately ? sectionCollectibleAmt : 0);
                         return amt > 0 ? <>{formatCurrency(amt)} <span className="text-xs">@ {fmtPct(calc.marginalOrdRate)} ordinary</span></> : null;
@@ -1781,14 +1782,14 @@ export function TaxEstimatorPage() {
                     </span>
                   )}
                   {showCollectibleSeparately && (
-                    <span className="w-[240px] shrink-0 text-right text-sm text-muted-foreground tabular-nums">
+                    <span className="w-[240px] shrink-0 text-right text-sm text-muted-foreground tabular-nums font-label">
                       {sectionCollectibleAmt > 0 && (
                         <>{formatCurrency(sectionCollectibleAmt)} <span className="text-xs">@ {fmtPct(calc.collectibleRate)} collectible</span></>
                       )}
                     </span>
                   )}
                   {anyPreferentialInSections && (
-                    <span className="w-[240px] shrink-0 text-right text-sm text-muted-foreground tabular-nums">
+                    <span className="w-[280px] shrink-0 text-right text-sm text-muted-foreground tabular-nums font-label">
                       {sectionPreferentialAmt > 0 && (
                         <>{formatCurrency(sectionPreferentialAmt)} <span className="text-xs">@ {fmtPct(calc.marginalPrefRate)} LT capital gains</span></>
                       )}
@@ -1803,9 +1804,9 @@ export function TaxEstimatorPage() {
                       <div key={group.label} className="px-4 py-3">
                         {/* Group subheader */}
                         <div className="mb-2 flex items-center gap-2">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          <SectionLabel as="span">
                             {group.label}
-                          </span>
+                          </SectionLabel>
                         </div>
 
                         {/* Transactions table */}
@@ -1981,7 +1982,7 @@ export function TaxEstimatorPage() {
                 >
                   <span className="flex-1 font-semibold">Managed Accounts</span>
                   {(anyOrdinaryInSections || (anyCollectibleInSections && !showCollectibleSeparately)) && (
-                    <span className="w-[220px] shrink-0 text-right text-sm text-muted-foreground tabular-nums">
+                    <span className="w-[220px] shrink-0 text-right text-sm text-muted-foreground tabular-nums font-label">
                       {snapshotNetST !== 0 && (
                         <span className={snapshotNetST < 0 ? "text-destructive" : ""}>
                           {snapshotNetST < 0 ? "-" : ""}{formatCurrency(Math.abs(snapshotNetST))}{" "}
@@ -1994,7 +1995,7 @@ export function TaxEstimatorPage() {
                     <span className="w-[240px] shrink-0" />
                   )}
                   {anyPreferentialInSections && (
-                    <span className="w-[240px] shrink-0 text-right text-sm text-muted-foreground tabular-nums">
+                    <span className="w-[280px] shrink-0 text-right text-sm text-muted-foreground tabular-nums font-label">
                       {snapshotNetLT !== 0 && (
                         <span className={snapshotNetLT < 0 ? "text-destructive" : ""}>
                           {snapshotNetLT < 0 ? "-" : ""}{formatCurrency(Math.abs(snapshotNetLT))}{" "}
@@ -2036,10 +2037,10 @@ export function TaxEstimatorPage() {
                                     {snap.account.name}
                                   </span>
                                 </td>
-                                <td className={`py-1.5 text-right tabular-nums ${netST < 0 ? "text-destructive" : netST === 0 ? "text-muted-foreground" : ""}`}>
+                                <td className={`py-1.5 text-right tabular-nums font-label ${netST < 0 ? "text-destructive" : netST === 0 ? "text-muted-foreground" : ""}`}>
                                   {netST === 0 ? "—" : (netST < 0 ? "-" : "") + formatCurrency(Math.abs(netST))}
                                 </td>
-                                <td className={`py-1.5 text-right tabular-nums ${netLT < 0 ? "text-destructive" : netLT === 0 ? "text-muted-foreground" : ""}`}>
+                                <td className={`py-1.5 text-right tabular-nums font-label ${netLT < 0 ? "text-destructive" : netLT === 0 ? "text-muted-foreground" : ""}`}>
                                   {netLT === 0 ? "—" : (netLT < 0 ? "-" : "") + formatCurrency(Math.abs(netLT))}
                                 </td>
                               </tr>
@@ -2063,8 +2064,8 @@ export function TaxEstimatorPage() {
                               {snap.account.name}
                             </div>
                             <div className="text-right text-sm">
-                              {netST !== 0 && <p className={`tabular-nums ${netST < 0 ? "text-destructive" : ""}`}>ST: {netST < 0 ? "-" : ""}{formatCurrency(Math.abs(netST))}</p>}
-                              {netLT !== 0 && <p className={`tabular-nums ${netLT < 0 ? "text-destructive" : ""}`}>LT: {netLT < 0 ? "-" : ""}{formatCurrency(Math.abs(netLT))}</p>}
+                              {netST !== 0 && <p className={`tabular-nums font-label ${netST < 0 ? "text-destructive" : ""}`}>ST: {netST < 0 ? "-" : ""}{formatCurrency(Math.abs(netST))}</p>}
+                              {netLT !== 0 && <p className={`tabular-nums font-label ${netLT < 0 ? "text-destructive" : ""}`}>LT: {netLT < 0 ? "-" : ""}{formatCurrency(Math.abs(netLT))}</p>}
                               {netST === 0 && netLT === 0 && <p className="text-muted-foreground">—</p>}
                             </div>
                           </div>

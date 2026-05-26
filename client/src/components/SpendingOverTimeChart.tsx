@@ -72,21 +72,21 @@ export function SpendingOverTimeChart({ year, month }: { year: number; month: nu
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
-        <div className="mt-0.5 flex items-center gap-1 text-sm">
+        <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
           {drillCategory ? (
             <button onClick={handleDrillOut} className="text-primary hover:underline">
               All categories
             </button>
           ) : (
-            <span className="text-muted-foreground">All categories</span>
+            <span>All categories</span>
           )}
           {drillCategory && (
             <>
-              <ChevronRight className="h-3 w-3 text-muted-foreground" />
-              <span className="text-muted-foreground">{drillCategory.name}</span>
+              <ChevronRight className="h-3 w-3" />
+              <span>{drillCategory.name}</span>
             </>
           )}
-        </div>
+        </p>
       </CardHeader>
       <div className="flex" onMouseLeave={() => setHoveredCategory(null)}>
         <div className="flex flex-col justify-start gap-3 pr-3 py-2 w-44 shrink-0">
@@ -123,7 +123,7 @@ export function SpendingOverTimeChart({ year, month }: { year: number; month: nu
                 tick={(props: any) => {
                   if (props.index === 0) return <g />;
                   return (
-                    <text x={props.x} y={props.y} dy={4} textAnchor="end" fontSize={12} fill="var(--color-muted-foreground)">
+                    <text x={props.x} y={props.y} dy={4} textAnchor="end" fontSize={12} fill="var(--color-muted-foreground)" style={{ fontFamily: "var(--font-label)" }}>
                       {yTickFormatter(props.payload.value)}
                     </text>
                   );
@@ -159,6 +159,7 @@ export function SpendingOverTimeChart({ year, month }: { year: number; month: nu
                                   fontSize={10}
                                   fill={s.color}
                                   fontWeight="600"
+                                  style={{ fontFamily: "var(--font-label)" }}
                                 >
                                   {fmtCompact(value)}
                                 </text>

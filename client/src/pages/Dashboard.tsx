@@ -5,7 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList,
   PieChart, Pie, LineChart, Line,
 } from "recharts";
-import { Receipt, ChevronLeft, ChevronRight, TrendingUp, Landmark, CreditCard, Wallet } from "lucide-react";
+import { ChevronLeft, ChevronRight, TrendingUp, Landmark, CreditCard, Wallet } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
@@ -20,6 +20,7 @@ import { usePriceRefresh } from "@/hooks/usePriceRefresh";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import { useDemo } from "@/context/DemoContext";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel, StatValue, DisplayStat, Caption } from "@/components/Typography";
 import type { Category } from "@/types";
 
 type ChartView = "total" | "personal" | "joint";
@@ -183,9 +184,9 @@ export function Dashboard() {
           <div className="grid grid-cols-6 gap-x-6 gap-y-3 items-center">
             {/* Headline — spans 2 cols */}
             <div className="col-span-6 sm:col-span-2 sm:border-r sm:border-border sm:pr-6">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Net Worth</p>
-              <p className="text-3xl font-bold tabular-nums">{formatCurrency(scaledNetWorth.total)}</p>
-              <p className="text-xs text-muted-foreground mt-1">
+              <SectionLabel>Net Worth</SectionLabel>
+              <DisplayStat as="p" className="text-3xl font-bold">{formatCurrency(scaledNetWorth.total)}</DisplayStat>
+              <Caption className="mt-1">
                 {refreshPhase === "running"
                   ? refreshTotal > 0
                     ? `Fetching latest prices… ${refreshCount} of ${refreshTotal} securities`
@@ -193,43 +194,43 @@ export function Dashboard() {
                   : nextUpdateAt
                     ? `Next update: ${formatNextUpdateTime(nextUpdateAt)}`
                     : null}
-              </p>
+              </Caption>
             </div>
 
             {/* Investments */}
             <div className="col-span-3 sm:col-span-1">
               <div className="flex items-center gap-1.5 mb-0.5">
                 <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Investments</p>
+                <SectionLabel>Investments</SectionLabel>
               </div>
-              <p className="text-base font-semibold tabular-nums">{formatCurrency(scaledNetWorth.investments)}</p>
+              <DisplayStat as="p" className="text-base font-semibold">{formatCurrency(scaledNetWorth.investments)}</DisplayStat>
             </div>
 
             {/* Investment Cash */}
             <div className="col-span-3 sm:col-span-1">
               <div className="flex items-center gap-1.5 mb-0.5">
                 <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Inv. Cash</p>
+                <SectionLabel>Inv. Cash</SectionLabel>
               </div>
-              <p className="text-base font-semibold tabular-nums">{formatCurrency(scaledNetWorth.investmentCash)}</p>
+              <DisplayStat as="p" className="text-base font-semibold">{formatCurrency(scaledNetWorth.investmentCash)}</DisplayStat>
             </div>
 
             {/* Banking Cash */}
             <div className="col-span-3 sm:col-span-1">
               <div className="flex items-center gap-1.5 mb-0.5">
                 <Landmark className="h-3.5 w-3.5 text-muted-foreground" />
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Banking Cash</p>
+                <SectionLabel>Banking Cash</SectionLabel>
               </div>
-              <p className="text-base font-semibold tabular-nums">{formatCurrency(scaledNetWorth.bankingCash)}</p>
+              <DisplayStat as="p" className="text-base font-semibold">{formatCurrency(scaledNetWorth.bankingCash)}</DisplayStat>
             </div>
 
             {/* Credit Cards */}
             <div className="col-span-3 sm:col-span-1">
               <div className="flex items-center gap-1.5 mb-0.5">
                 <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Credit Cards</p>
+                <SectionLabel>Credit Cards</SectionLabel>
               </div>
-              <p className="text-base font-semibold tabular-nums text-destructive">−{formatCurrency(scaledNetWorth.creditCardDebt)}</p>
+              <DisplayStat as="p" className="text-base font-semibold text-destructive">−{formatCurrency(scaledNetWorth.creditCardDebt)}</DisplayStat>
             </div>
           </div>
         </Card>
@@ -237,7 +238,7 @@ export function Dashboard() {
 
       {/* Month selector */}
       <div className="flex items-start justify-between">
-        <h2 className="text-2xl font-bold">Dashboard</h2>
+        <h2 className="text-2xl font-bold">Monthly Summary</h2>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={prevMonth} disabled={atMin}>
             <ChevronLeft className="h-4 w-4" />
@@ -257,21 +258,16 @@ export function Dashboard() {
           <div className="flex gap-4">
             {/* Left half */}
             <div className="flex min-w-0 flex-1 flex-col">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 rounded-lg bg-primary/10 p-2 shrink-0">
-                  <Receipt className="h-5 w-5 text-primary" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm text-muted-foreground">MTD Spend</p>
-                  <p className="text-2xl font-bold">{fmtWhole(totalSpent)}</p>
-                  {budgetAmount !== null ? (
-                    <p className="mt-0.5 text-xs text-muted-foreground">of {fmtWhole(budgetAmount)} budget</p>
-                  ) : (
-                    <button onClick={() => navigate("/budgets")} className="mt-0.5 text-xs text-primary hover:underline">
-                      Set a budget
-                    </button>
-                  )}
-                </div>
+              <div>
+                <SectionLabel>MTD Spend</SectionLabel>
+                <DisplayStat as="p" className="text-2xl font-bold">{fmtWhole(totalSpent)}</DisplayStat>
+                {budgetAmount !== null ? (
+                  <Caption className="mt-0.5">of {fmtWhole(budgetAmount)} budget</Caption>
+                ) : (
+                  <button onClick={() => navigate("/budgets")} className="mt-0.5 text-xs text-primary hover:underline">
+                    Set a budget
+                  </button>
+                )}
               </div>
 
               {/* MoM comparison */}
@@ -281,18 +277,18 @@ export function Dashboard() {
                 const prevMonthName = new Date(prevMonthYear, prevMonthNum - 1, 1).toLocaleDateString("en-US", { month: "short" });
                 return (
                   <div className="mt-3 border-t border-border pt-3">
-                    <p className="text-xs text-muted-foreground">vs last month</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground">{fmtWhole(prevMonthMtd)}</span>
-                      {" in "}{prevMonthName}{isCurrentMonth ? ` (day 1–${daysElapsed})` : ""}
-                    </p>
-                    <p className="mt-0.5 text-sm font-medium">
-                      <span className={momDelta! > 0 ? "text-destructive" : "text-success"}>
+                    <Caption>vs last month</Caption>
+                    <Caption className="mt-0.5">
+                      <StatValue className="font-medium text-foreground">{fmtWhole(prevMonthMtd)}</StatValue>
+                      {" in "}{prevMonthName}{isCurrentMonth ? ` 1–${daysElapsed}` : ""}
+                    </Caption>
+                    <p className="mt-0.5 text-xs font-medium">
+                      <StatValue className={momDelta! > 0 ? "text-destructive" : "text-success"}>
                         {momDelta! > 0 ? "+" : "–"}{fmtWhole(Math.abs(momDelta!))}
-                      </span>{" "}
-                      <span className="text-xs text-muted-foreground">
+                      </StatValue>{" "}
+                      <Caption as="span">
                         ({momDelta! > 0 ? "↑" : "↓"}{Math.abs(momDeltaPct)}%)
-                      </span>
+                      </Caption>
                     </p>
                   </div>
                 );
@@ -320,14 +316,14 @@ export function Dashboard() {
                     <Cell fill={JOINT_COLOR} />
                   </Pie>
                 </PieChart>
-                <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                <div className="mt-2 space-y-1 text-xs text-muted-foreground font-label">
                   <div className="flex items-center gap-1.5">
                     <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: PERSONAL_COLOR }} />
-                    <span>Personal <span className="font-medium text-foreground">{fmtWhole(personalSpent)}</span></span>
+                    <span>Personal <StatValue className="font-medium text-foreground">{fmtWhole(personalSpent)}</StatValue></span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: JOINT_COLOR }} />
-                    <span>Joint <span className="font-medium text-foreground">{fmtWhole(jointSpent)}</span></span>
+                    <span>Joint <StatValue className="font-medium text-foreground">{fmtWhole(jointSpent)}</StatValue></span>
                   </div>
                 </div>
               </div>
@@ -349,19 +345,19 @@ export function Dashboard() {
               )}
             </svg>
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-muted-foreground">Budget Used</p>
+              <SectionLabel>Budget Used</SectionLabel>
               {budgetPct !== null ? (
-                <p className={`text-2xl font-bold ${isOverBudget ? "text-destructive" : ""}`}>{budgetPct}%</p>
+                <DisplayStat as="p" className={`text-2xl font-bold ${isOverBudget ? "text-destructive" : ""}`}>{budgetPct}%</DisplayStat>
               ) : (
                 <p className="text-sm text-muted-foreground">No budget set</p>
               )}
               {budgetRemaining !== null && (
-                <p className={`mt-0.5 text-xs ${budgetRemaining < 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                  <span className={`font-medium ${budgetRemaining < 0 ? "text-destructive" : "text-foreground"}`}>
+                <Caption className={`mt-0.5 ${budgetRemaining < 0 ? "text-destructive" : ""}`}>
+                  <StatValue className={`font-medium ${budgetRemaining < 0 ? "text-destructive" : "text-foreground"}`}>
                     {fmtWhole(Math.abs(budgetRemaining))}
-                  </span>
+                  </StatValue>
                   {" "}{budgetRemaining < 0 ? "over budget" : "remaining"}
-                </p>
+                </Caption>
               )}
             </div>
           </div>
@@ -374,13 +370,13 @@ export function Dashboard() {
                 const over = personalSpent > personalBudget;
                 return (
                   <div>
-                    <div className="mb-1 flex items-center justify-between text-xs">
+                    <div className="mb-1 flex items-center justify-between text-xs font-label">
                       <span className="flex items-center gap-1.5 text-muted-foreground">
                         <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: PERSONAL_COLOR }} />
                         Personal
                       </span>
                       <span className="text-muted-foreground">
-                        <span className={`font-medium ${over ? "text-destructive" : "text-foreground"}`}>{fmtWhole(personalSpent)}</span>
+                        <StatValue className={`font-medium ${over ? "text-destructive" : "text-foreground"}`}>{fmtWhole(personalSpent)}</StatValue>
                         {" / "}{fmtWhole(personalBudget)}
                         {personalRemaining !== null && (
                           <span className={over ? " text-destructive" : ""}>{" "}({over ? "+" : "−"}{fmtWhole(Math.abs(personalRemaining!))})</span>
@@ -398,13 +394,13 @@ export function Dashboard() {
                 const over = jointSpent > jointBudget;
                 return (
                   <div>
-                    <div className="mb-1 flex items-center justify-between text-xs">
+                    <div className="mb-1 flex items-center justify-between text-xs font-label">
                       <span className="flex items-center gap-1.5 text-muted-foreground">
                         <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: JOINT_COLOR }} />
                         Joint
                       </span>
                       <span className="text-muted-foreground">
-                        <span className={`font-medium ${over ? "text-destructive" : "text-foreground"}`}>{fmtWhole(jointSpent)}</span>
+                        <StatValue className={`font-medium ${over ? "text-destructive" : "text-foreground"}`}>{fmtWhole(jointSpent)}</StatValue>
                         {" / "}{fmtWhole(jointBudget)}
                         {jointRemaining !== null && (
                           <span className={over ? " text-destructive" : ""}>{" "}({over ? "+" : "−"}{fmtWhole(Math.abs(jointRemaining!))})</span>
@@ -425,7 +421,7 @@ export function Dashboard() {
         <Card>
           <div className="mb-2 flex items-start justify-between gap-2">
             <div>
-              <p className="text-sm text-muted-foreground">Monthly Pace</p>
+              <SectionLabel>Monthly Pace</SectionLabel>
             </div>
             <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-muted p-0.5 text-xs font-medium">
               {(["total", "personal", "joint"] as const).map((v) => (
@@ -450,13 +446,13 @@ export function Dashboard() {
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                   <XAxis
                     dataKey="day"
-                    tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
+                    tick={{ fontSize: 10, fill: "var(--color-muted-foreground)", style: { fontFamily: "var(--font-label)" } }}
                     tickLine={false}
                     interval={4}
                   />
                   <YAxis
                     tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-                    tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
+                    tick={{ fontSize: 10, fill: "var(--color-muted-foreground)", style: { fontFamily: "var(--font-label)" } }}
                     tickLine={false}
                     axisLine={false}
                     width={34}
@@ -502,7 +498,7 @@ export function Dashboard() {
                   )}
                 </LineChart>
               </ResponsiveContainer>
-              <div className="mt-1.5 flex flex-wrap justify-center gap-3 text-xs text-muted-foreground">
+              <div className="mt-1.5 flex flex-wrap justify-center gap-3 text-xs text-muted-foreground font-label">
                 <span className="flex items-center gap-1">
                   <svg width="20" height="8">
                     <line x1="0" y1="4" x2="10" y2="4" stroke="var(--color-primary)" strokeWidth="2" />
@@ -567,8 +563,8 @@ export function Dashboard() {
             header={
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div>
-                  <p className="text-sm font-medium text-card-foreground">Largest Changes by Category</p>
-                  <p className="text-xs text-muted-foreground">
+                  <h3 className="text-lg font-semibold text-card-foreground">Largest Changes by Category</h3>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
                     Top 10 subcategory changes vs {dashboardOutliers.previousMonthLabel} · {dashboardOutliers.comparisonNote}
                   </p>
                 </div>

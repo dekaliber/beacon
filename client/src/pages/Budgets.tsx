@@ -33,6 +33,7 @@ import { formatCurrency } from "@/lib/utils";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import type { BudgetPanel, CategoryOutliersData, CategoryOutlier, MonthlyTotal } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel, DisplayStat } from "@/components/Typography";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -378,9 +379,9 @@ function Metric({
 function BandLabel({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+      <SectionLabel as="span" className="whitespace-nowrap">
         {children}
-      </span>
+      </SectionLabel>
       <div className="flex-1 h-px bg-border" />
       {action}
     </div>
@@ -724,19 +725,17 @@ function BudgetPanelCard({
   const header = (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            {title}
-          </p>
+        <div>
+          <h3 className="text-lg font-semibold text-card-foreground">{title}</h3>
           {subtitle && (
-            <span className="text-xs text-muted-foreground">· {subtitle}</span>
+            <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
           )}
         </div>
         <div className="mt-1">
-          <p className="text-xs text-muted-foreground mb-0.5">{budgetLabel}</p>
-          <p className="text-2xl font-bold">
+          <p className="text-xs text-muted-foreground mb-0.5 font-label">{budgetLabel}</p>
+          <DisplayStat as="p" className="text-2xl font-bold">
             {panel.effectiveAnnualBudget > 0 ? fmt(panel.effectiveAnnualBudget) : "—"}
-          </p>
+          </DisplayStat>
         </div>
       </div>
       {!isNoBudget && (
@@ -845,13 +844,13 @@ function CategoryPacingCard({ outliers, year }: CategoryPacingCardProps) {
             />
           )}
         </div>
-        <div className="w-20 shrink-0 text-right tabular-nums text-xs text-muted-foreground">
+        <div className="w-20 shrink-0 text-right tabular-nums font-label text-xs text-muted-foreground">
           {formatCurrency(item.currentAmount)}
         </div>
-        <div className="w-20 shrink-0 text-right tabular-nums text-xs text-muted-foreground">
+        <div className="w-20 shrink-0 text-right tabular-nums font-label text-xs text-muted-foreground">
           {item.previousAmount > 0 ? formatCurrency(item.previousAmount) : "—"}
         </div>
-        <div className={`w-12 shrink-0 text-right tabular-nums text-xs font-medium ${over ? "text-destructive" : item.currentAmount > 0 ? "text-success" : "text-muted-foreground"}`}>
+        <div className={`w-12 shrink-0 text-right tabular-nums font-label text-xs font-medium ${over ? "text-destructive" : item.currentAmount > 0 ? "text-success" : "text-muted-foreground"}`}>
           {pct !== null
             ? `${over ? "+" : ""}${Math.round(pct * 100)}%`
             : item.previousAmount === 0 ? "new" : "—"
@@ -1019,10 +1018,10 @@ function SplitCard({ personal, joint }: SplitCardProps) {
       <div className="flex-1 min-w-0 space-y-1.5">
         <div className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+          <SectionLabel as="span">{label}</SectionLabel>
         </div>
-        <p className="text-xl font-bold leading-tight">{fmt(ytd)}</p>
-        <div className="space-y-0.5 text-xs">
+        <DisplayStat as="p" className="text-xl font-bold leading-tight">{fmt(ytd)}</DisplayStat>
+        <div className="space-y-0.5 text-xs font-label">
           <p className={overTarget ? "text-destructive font-medium" : underTarget ? "text-success font-medium" : "text-muted-foreground"}>
             {Math.round(actualPct * 100)}% of actual spend
           </p>
@@ -1305,10 +1304,9 @@ export function Budgets() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <BudgetPanelCard
               title="Total"
-              subtitle={`Personal + ${Math.round(data.settings.jointSplitRatio * 100)}% of Joint`}
               panel={data.total}
               pctElapsed={data.pctElapsed}
-              budgetLabel="Annual Budget (derived)"
+              budgetLabel={`Annual Budget (Personal + ${Math.round(data.settings.jointSplitRatio * 100)}% of Joint)`}
               monthlyTotals={data.monthlyTotals}
               {...sharedPanelProps}
             />
@@ -1348,9 +1346,9 @@ export function Budgets() {
               />
               <BudgetPanelCard
                 title="Joint"
-                subtitle={`your ${Math.round(data.settings.jointSplitRatio * 100)}% share`}
                 panel={data.joint}
                 pctElapsed={data.pctElapsed}
+                budgetLabel={`Annual Budget (your ${Math.round(data.settings.jointSplitRatio * 100)}% share)`}
                 monthlyTotals={data.monthlyTotals.map((m) => ({ ...m, personalSpent: 0 }))}
                 {...sharedPanelProps}
               />

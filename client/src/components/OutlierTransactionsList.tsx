@@ -1,5 +1,6 @@
 import type { OutlierCategoryGroup } from "@/types";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
+import { StatValue, Caption } from "@/components/Typography";
 
 function fmtAmount(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
@@ -20,10 +21,8 @@ export function OutlierTransactionsList({ categories }: OutlierTransactionsListP
 
   return (
     <div className="w-full">
-      <p className="text-sm font-medium text-card-foreground">Spending Outliers</p>
-      <p className="mb-3 text-xs text-muted-foreground">
-        Largest transactions driving above average category spend
-      </p>
+      <h3 className="text-lg font-semibold text-card-foreground">Spending Outliers</h3>
+      <p className="mt-0.5 mb-3 text-xs text-muted-foreground">Largest transactions driving above average category spend</p>
       <div className="space-y-4">
         {categories.map((cat) => {
           const excessPct = Math.round((cat.excess / cat.historicalAvgMonthly) * 100);
@@ -38,10 +37,10 @@ export function OutlierTransactionsList({ categories }: OutlierTransactionsListP
                   />
                   {cat.categoryName}
                 </span>
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">{fmtAmount(cat.currentMonthTotal)}</span>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-label">
+                  <StatValue className="font-medium text-foreground">{fmtAmount(cat.currentMonthTotal)}</StatValue>
                   <span>vs {fmtAmount(cat.historicalAvgMonthly)} avg</span>
-                  <span className="font-medium text-destructive">+{excessPct}%</span>
+                  <StatValue className="font-medium text-destructive">+{excessPct}%</StatValue>
                 </span>
               </div>
 
@@ -69,8 +68,8 @@ export function OutlierTransactionsList({ categories }: OutlierTransactionsListP
                     {t.isPending && (
                       <span className="shrink-0 text-[10px] italic text-muted-foreground">pending</span>
                     )}
-                    <span className="shrink-0 text-xs text-muted-foreground">{fmtDate(t.date)}</span>
-                    <span className="shrink-0 text-xs font-semibold">{fmtAmount(t.amount)}</span>
+                    <Caption as="span" className="shrink-0">{fmtDate(t.date)}</Caption>
+                    <StatValue className="shrink-0 text-xs font-semibold">{fmtAmount(t.amount)}</StatValue>
                   </div>
                 ))}
               </div>

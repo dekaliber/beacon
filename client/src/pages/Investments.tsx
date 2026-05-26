@@ -13,6 +13,7 @@ import { useDemo } from "@/context/DemoContext";
 import { scaleInvestmentAccounts, scaleAllocationSummary } from "@/lib/demo";
 import type { InvestmentAccountSummary, AllocationSummary, AllocationItem, WithdrawalSummary, InvestmentSettings } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel, StatValue, DisplayStat, FieldLabel } from "@/components/Typography";
 
 // ── Allocation card ──────────────────────────────────────────────────────────
 
@@ -67,7 +68,7 @@ function StackedBar({ segments }: { segments: BarSegment[] }) {
           <div className="space-y-1">
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">Target</span>
-              <span className="font-medium tabular-nums">
+              <span className="font-medium tabular-nums font-label">
                 {tooltip.segment.targetPct != null
                   ? `${tooltip.segment.targetPct.toFixed(1)}%`
                   : "—"}
@@ -80,7 +81,7 @@ function StackedBar({ segments }: { segments: BarSegment[] }) {
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">Actual</span>
-              <span className="font-medium tabular-nums">
+              <span className="font-medium tabular-nums font-label">
                 {tooltip.segment.actualPct.toFixed(1)}%
                 <span className="text-muted-foreground ml-1.5">
                   {formatCurrency(tooltip.segment.actualValue)}
@@ -141,7 +142,7 @@ function DeviationBar({ actualPct, targetPct, scale, color, name, targetValue, a
           <div className="space-y-1">
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">Target</span>
-              <span className="font-medium tabular-nums">
+              <span className="font-medium tabular-nums font-label">
                 {targetPct != null ? `${targetPct.toFixed(1)}%` : "—"}
                 {targetValue != null && (
                   <span className="text-muted-foreground ml-1.5">{formatCurrency(targetValue)}</span>
@@ -150,7 +151,7 @@ function DeviationBar({ actualPct, targetPct, scale, color, name, targetValue, a
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">Actual</span>
-              <span className="font-medium tabular-nums">
+              <span className="font-medium tabular-nums font-label">
                 {actualPct.toFixed(1)}%
                 <span className="text-muted-foreground ml-1.5">{formatCurrency(actualValue)}</span>
               </span>
@@ -164,11 +165,11 @@ function DeviationBar({ actualPct, targetPct, scale, color, name, targetValue, a
 
 function DeviationBadge({ delta }: { delta: number }) {
   if (Math.abs(delta) < 0.05) {
-    return <span className="text-right text-xs text-muted-foreground tabular-nums">on target</span>;
+    return <StatValue className="text-right text-xs text-muted-foreground">on target</StatValue>;
   }
   const over = delta > 0;
   return (
-    <span className={`text-right text-xs font-medium tabular-nums ${over ? "text-amber-600" : "text-blue-600"}`}>
+    <span className={`text-right text-xs font-medium tabular-nums font-label ${over ? "text-amber-600" : "text-blue-600"}`}>
       {over ? "+" : ""}{delta.toFixed(1)}%
     </span>
   );
@@ -388,9 +389,9 @@ function RebalanceModal({
         <div>
           {/* Overview bars */}
           <div className="mb-5 space-y-1.5">
-            <p className="mb-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            <SectionLabel className="mb-3">
               Projected Allocation
-            </p>
+            </SectionLabel>
             <div className="flex items-center gap-2">
               <span className="w-12 shrink-0 text-right text-xs text-muted-foreground">After</span>
               <StackedBar segments={manualProjectedSegments} />
@@ -443,18 +444,18 @@ function RebalanceModal({
                       value={manualAdj[item.id] ?? ""}
                       onChange={(e) => setManualAdj((prev) => ({ ...prev, [item.id]: e.target.value }))}
                       placeholder="0"
-                      className="w-full rounded border border-border bg-background pl-5 pr-2 py-1 text-xs text-right tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full rounded border border-border bg-background pl-5 pr-2 py-1 text-xs text-right tabular-nums font-label focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </div>
-                  <span className="text-right text-xs tabular-nums text-muted-foreground">
+                  <StatValue className="text-right text-xs text-muted-foreground">
                     {item.actualPct.toFixed(1)}%
-                  </span>
-                  <span className={`text-right text-xs tabular-nums font-medium ${
+                  </StatValue>
+                  <span className={`text-right text-xs tabular-nums font-label font-medium ${
                     delta == null ? "" : Math.abs(delta) < 0.5 ? "text-green-600" : delta > 0 ? "text-amber-600" : "text-blue-600"
                   }`}>
                     {newPct.toFixed(1)}%
                   </span>
-                  <span className={`text-right text-xs tabular-nums ${
+                  <span className={`text-right text-xs tabular-nums font-label ${
                     delta == null ? "text-muted-foreground"
                       : Math.abs(delta) < 0.5 ? "text-green-600"
                       : delta > 0 ? "text-amber-600"
@@ -470,7 +471,7 @@ function RebalanceModal({
           {/* Footer */}
           <div className="flex items-center justify-between border-t border-border pt-3">
             <span className="text-sm text-muted-foreground">Net cash deployed</span>
-            <span className={`text-sm font-semibold tabular-nums ${
+            <span className={`text-sm font-semibold tabular-nums font-label ${
               manualDelta > 0 ? "text-green-600" : manualDelta < 0 ? "text-red-500" : "text-muted-foreground"
             }`}>
               {manualDelta >= 0 ? "+" : "−"}{formatCurrency(Math.abs(manualDelta))}
@@ -486,7 +487,7 @@ function RebalanceModal({
           <div className="grid grid-cols-3 gap-5">
             {/* Mode toggle */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wide">Mode</label>
+              <FieldLabel className="block">Mode</FieldLabel>
               <div className="flex gap-1 rounded-lg bg-secondary p-1 w-fit">
                 {(["buy-only", "buy-sell"] as const).map((m) => (
                   <button
@@ -507,10 +508,10 @@ function RebalanceModal({
             {/* Tolerance slider */}
             <div className="col-span-2 space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tolerance</label>
-                <span className="text-sm tabular-nums font-semibold text-primary">
+                <FieldLabel>Tolerance</FieldLabel>
+                <StatValue className="text-sm font-semibold text-primary">
                   ±{tolerancePct.toFixed(1)}%
-                </span>
+                </StatValue>
               </div>
               <input
                 type="range"
@@ -536,9 +537,9 @@ function RebalanceModal({
 
           {/* Overview bars */}
           <div className="mb-5 mt-5 space-y-1.5">
-            <p className="mb-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            <SectionLabel className="mb-3">
               Projected Allocation
-            </p>
+            </SectionLabel>
             <div className="flex items-center gap-2">
               <span className="w-12 shrink-0 text-right text-xs text-muted-foreground">After</span>
               <StackedBar segments={autoProjectedSegments} />
@@ -589,18 +590,18 @@ function RebalanceModal({
                     targetValue={item.targetPct != null ? (item.targetPct / 100) * classifiedValue : null}
                     actualValue={newValue}
                   />
-                  <span className={`text-right text-xs tabular-nums font-medium ${
+                  <span className={`text-right text-xs tabular-nums font-label font-medium ${
                     isBuy ? "text-blue-600" : isSell ? "text-amber-600" : "text-muted-foreground"
                   }`}>
                     {isBuy ? `+${formatCurrency(adj)}` : isSell ? `−${formatCurrency(Math.abs(adj))}` : "—"}
                   </span>
-                  <span className="text-right text-xs tabular-nums text-muted-foreground">
+                  <StatValue className="text-right text-xs text-muted-foreground">
                     {item.actualPct.toFixed(1)}%
-                  </span>
-                  <span className={`text-right text-xs tabular-nums font-medium ${deltaColor}`}>
+                  </StatValue>
+                  <span className={`text-right text-xs tabular-nums font-label font-medium ${deltaColor}`}>
                     {newPct.toFixed(1)}%
                   </span>
-                  <span className={`text-right text-xs tabular-nums ${deltaColor}`}>
+                  <span className={`text-right text-xs tabular-nums font-label ${deltaColor}`}>
                     {delta != null ? `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}%` : "—"}
                   </span>
                 </div>
@@ -613,30 +614,30 @@ function RebalanceModal({
             {rebalanceMode === "buy-only" ? (
               <>
                 <span className="text-sm text-muted-foreground">Total cash to deploy</span>
-                <span className="text-sm font-semibold tabular-nums text-blue-600">
+                <StatValue className="text-sm font-semibold text-blue-600">
                   {autoNetCash > 1 ? `+${formatCurrency(autoNetCash)}` : formatCurrency(0)}
-                </span>
+                </StatValue>
               </>
             ) : autoNetCash > 1 ? (
               <>
                 <span className="text-sm text-muted-foreground">Net cash to deploy</span>
-                <span className="text-sm font-semibold tabular-nums text-blue-600">
+                <StatValue className="text-sm font-semibold text-blue-600">
                   +{formatCurrency(autoNetCash)}
-                </span>
+                </StatValue>
               </>
             ) : autoNetCash < -1 ? (
               <>
                 <span className="text-sm text-muted-foreground">Net cash proceeds</span>
-                <span className="text-sm font-semibold tabular-nums text-amber-600">
+                <StatValue className="text-sm font-semibold text-amber-600">
                   −{formatCurrency(Math.abs(autoNetCash))}
-                </span>
+                </StatValue>
               </>
             ) : (
               <>
                 <span className="text-sm text-muted-foreground">Net cash</span>
-                <span className="text-sm font-semibold tabular-nums text-muted-foreground">
+                <StatValue className="text-sm font-semibold text-muted-foreground">
                   {formatCurrency(0)}
-                </span>
+                </StatValue>
               </>
             )}
           </div>
@@ -689,9 +690,9 @@ function AllocationCard({
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Target className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            <SectionLabel as="span" className="text-sm">
               Asset Allocation
-            </span>
+            </SectionLabel>
           </div>
           <div className="flex items-center gap-2">
             {filterButtons}
@@ -738,9 +739,9 @@ function AllocationCard({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Target className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          <SectionLabel as="span" className="text-sm">
             Asset Allocation
-          </span>
+          </SectionLabel>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -797,17 +798,17 @@ function AllocationCard({
                 actualValue={item.actualValue}
               />
               {/* Target % */}
-              <span className="text-right text-xs text-muted-foreground tabular-nums">
+              <StatValue className="text-right text-xs text-muted-foreground">
                 {item.targetPct != null ? `${item.targetPct.toFixed(1)}%` : "—"}
-              </span>
+              </StatValue>
               {/* Actual % */}
-              <span className="text-right text-xs tabular-nums font-medium">
+              <StatValue className="text-right text-xs font-medium">
                 {item.actualPct.toFixed(1)}%
-              </span>
+              </StatValue>
               {/* Delta % */}
               {delta != null ? <DeviationBadge delta={delta} /> : <span className="text-right" />}
               {/* Delta $ */}
-              <span className={`text-right text-xs tabular-nums ${
+              <span className={`text-right text-xs tabular-nums font-label ${
                 deltaDollars == null ? "" :
                 Math.abs(deltaDollars) < 1 ? "text-muted-foreground" :
                 deltaDollars > 0 ? "text-amber-600" : "text-blue-600"
@@ -860,7 +861,7 @@ function SummaryRow({
   return (
     <div className={`flex items-center justify-between gap-3 ${muted ? "text-muted-foreground" : ""}`}>
       <span className="text-sm">{label}</span>
-      <div className="flex items-center gap-2 tabular-nums">
+      <div className="flex items-center gap-2 tabular-nums font-label">
         <span className="text-sm font-medium">{formatCurrency(value)}</span>
         <span className="text-xs text-muted-foreground w-8 text-right">{pct.toFixed(0)}%</span>
       </div>
@@ -951,32 +952,32 @@ function WithdrawalRateCard({
   const targetLinePct = targetMonthlyAmount != null ? Math.min(targetMonthlyAmount / chartMax, 1) : null;
 
   return (
-    <Card className="p-5">
+    <Card className="p-6">
       <div className="grid grid-cols-1 gap-5 md:grid-cols-[1fr_1px_2fr]">
 
         {/* Left: numbers */}
         <div className="flex flex-col gap-4 md:pr-5">
           <div className="flex items-center gap-2">
             <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            <SectionLabel as="span" className="text-sm">
               Withdrawal Rate
-            </span>
+            </SectionLabel>
           </div>
 
           <div className="grid grid-cols-2 gap-x-4">
             <div>
-              <p className="text-3xl font-bold tabular-nums">{rateStr}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">annualized (YTD)</p>
+              <DisplayStat as="p" className="text-3xl font-bold">{rateStr}</DisplayStat>
+              <p className="text-xs text-muted-foreground mt-0.5 font-label">annualized (YTD)</p>
             </div>
             <div>
-              <p className="text-3xl font-bold tabular-nums">{formatCurrency(ytdTotal)}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">withdrawn YTD</p>
+              <DisplayStat as="p" className="text-3xl font-bold">{formatCurrency(ytdTotal)}</DisplayStat>
+              <p className="text-xs text-muted-foreground mt-0.5 font-label">withdrawn YTD</p>
             </div>
           </div>
 
           <div className="mt-auto space-y-1.5">
             {targetRate !== null && ytdRate !== null && effectiveDenominator > 0 && (
-              <p className={`text-xs font-medium tabular-nums ${
+              <p className={`text-xs font-medium tabular-nums font-label ${
                 ytdRate <= targetRate ? "text-green-600" : "text-red-500"
               }`}>
                 {ytdRate <= targetRate
@@ -984,7 +985,7 @@ function WithdrawalRateCard({
                   : `▲ ${((ytdRate - targetRate) * 100).toFixed(2)}% over target`}
               </p>
             )}
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground font-label">
               {settings?.withdrawalRateDenominator
                 ? `vs. ${formatCurrency(settings.withdrawalRateDenominator)} (fixed)`
                 : `vs. ${formatCurrency(portfolioValue)} portfolio`}
@@ -1004,9 +1005,9 @@ function WithdrawalRateCard({
 
         {/* Right: bar chart */}
         <div className="flex flex-col md:pl-5">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+          <SectionLabel className="mb-3">
             Monthly Withdrawals
-          </p>
+          </SectionLabel>
 
           {/* Bars */}
           <div className="relative flex items-end gap-0" style={{ height: "125px" }}>
@@ -1058,7 +1059,7 @@ function WithdrawalRateCard({
                   </div>
                   {/* Month label */}
                   <span
-                    className={`text-[9px] leading-none tabular-nums text-center w-full ${
+                    className={`text-[9px] leading-none tabular-nums font-label text-center w-full ${
                       m.isFuture ? "text-muted-foreground/40" : "text-muted-foreground"
                     }`}
                   >
@@ -1085,14 +1086,14 @@ function WithdrawalRateCard({
           <div className="space-y-1">
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">Withdrawn</span>
-              <span className="font-medium tabular-nums">{formatCurrency(barTooltip.total)}</span>
+              <StatValue className="font-medium">{formatCurrency(barTooltip.total)}</StatValue>
             </div>
             {barTooltip.rate !== null && (
               <div className="flex justify-between gap-4">
                 <span className="text-muted-foreground">Ann. rate</span>
-                <span className="font-medium tabular-nums">
+                <StatValue className="font-medium">
                   {`${(barTooltip.rate * 100).toFixed(2)}%`}
-                </span>
+                </StatValue>
               </div>
             )}
           </div>
@@ -1229,9 +1230,9 @@ if (!displayAccounts) return <BeaconLoader />;
           </div>
 
           <div className="text-right flex-shrink-0 mr-2">
-            <p className="font-bold tabular-nums text-sm">
+            <StatValue as="p" className="font-bold text-sm">
               {formatCurrency(account.totalMarketValue)}
-            </p>
+            </StatValue>
             {account.totalDayGain != null && account.totalDayGain !== 0 && (
               <GainBadge value={account.totalDayGain} pct={account.totalDayGainPct} label="1-day" />
             )}
@@ -1258,7 +1259,7 @@ if (!displayAccounts) return <BeaconLoader />;
 
       {/* Portfolio summary */}
       {displayAccounts.length > 0 && (
-        <Card className="p-5">
+        <Card className="p-6">
           {/*
             Outer grid: Total Portfolio | divider | [Asset Composition + connector + Tax Buckets]
             The two right sections share one outer cell so we can place a dotted connector
@@ -1267,10 +1268,10 @@ if (!displayAccounts) return <BeaconLoader />;
           <div className="grid grid-cols-1 gap-5 md:grid-cols-[1fr_1px_2fr]">
             {/* Total Portfolio */}
             <div className="flex flex-col gap-0.5 md:pr-5">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              <SectionLabel>
                 Total Portfolio
-              </p>
-              <p className="text-3xl font-bold tabular-nums">{formatCurrency(totalPortfolioValue)}</p>
+              </SectionLabel>
+              <DisplayStat as="p" className="text-3xl font-bold">{formatCurrency(totalPortfolioValue)}</DisplayStat>
               {totalDayGain !== 0 && (
                 <GainBadge value={totalDayGain} pct={totalDayGainPct} label="1-day" className="mt-0.5" />
               )}
@@ -1297,9 +1298,9 @@ if (!displayAccounts) return <BeaconLoader />;
             <div className="grid grid-cols-1 gap-5 md:grid-cols-[1fr_2rem_1fr] md:gap-4 md:pl-5">
               {/* Asset Composition */}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">
+                <SectionLabel className="mb-2.5">
                   Asset Composition
-                </p>
+                </SectionLabel>
                 <div className="space-y-1.5">
                   <SummaryRow label="Invested" value={investedValue} total={totalPortfolioValue} />
                   <SummaryRow label="Cash" value={totalCashValue} total={totalPortfolioValue} />
@@ -1317,9 +1318,9 @@ if (!displayAccounts) return <BeaconLoader />;
               {/* Tax Buckets */}
               <div>
                 <div className="flex items-baseline gap-1.5 mb-2.5">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  <SectionLabel>
                     Tax Buckets
-                  </p>
+                  </SectionLabel>
                   <p className="text-xs text-muted-foreground/60 italic">of Invested</p>
                 </div>
                 <div className="space-y-1.5">
@@ -1367,9 +1368,9 @@ if (!displayAccounts) return <BeaconLoader />;
             <div className="space-y-2">
               <div className="flex items-center gap-2 py-1">
                 <LineChart className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                <SectionLabel as="span" className="text-sm">
                   Investment Accounts
-                </span>
+                </SectionLabel>
               </div>
               <div className="space-y-1.5">
                 {investmentAccounts.map(renderAccountRow)}

@@ -38,6 +38,7 @@ import type { UpcomingExpenseItem, RecurringHistoryMonth } from "@/types";
 import { formatCurrency, formatDate, toDateInputValue } from "@/lib/utils";
 import type { RecurrenceRule, Account, Category, TransferRule } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { SectionLabel, DisplayStat, ColumnHeader } from "@/components/Typography";
 
 // ── Frequency helpers ─────────────────────────────────────────────────────────
 
@@ -190,9 +191,9 @@ function UpcomingStrip({ expenses }: { expenses: UpcomingExpenseItem[] }) {
             >
               {/* Day header */}
               <div className={`px-1 py-2 text-center ${isToday ? "text-red-500" : "text-muted-foreground"}`}>
-                <div className="text-[11px] font-medium uppercase tracking-wide">
+                <SectionLabel as="div" className="text-[11px]">
                   {isToday ? "Today" : DAY_NAMES[day.getDay()]}
-                </div>
+                </SectionLabel>
                 <div className={`text-lg font-semibold leading-tight ${isToday ? "text-red-500" : "text-foreground"}`}>
                   {day.getDate()}
                 </div>
@@ -433,9 +434,9 @@ const AnnualCostPanel = memo(function AnnualCostPanel({
 
   return (
     <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Annual cost</p>
-      <p className="mt-0.5 text-2xl font-bold">{formatCurrency(totalCost)}</p>
-      <p className="mb-3 text-xs text-muted-foreground">{includedRules.length} active recurring transactions</p>
+      <SectionLabel>Annual cost</SectionLabel>
+      <DisplayStat as="p" className="mt-0.5 text-2xl font-bold">{formatCurrency(totalCost)}</DisplayStat>
+      <p className="mb-3 text-xs text-muted-foreground font-label">{includedRules.length} active recurring transactions</p>
       <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart layout="vertical" data={data} margin={{ top: 0, right: 88, left: 0, bottom: 0 }}>
           <XAxis type="number" hide domain={[0, "dataMax"]} />
@@ -474,9 +475,9 @@ function YoYPanel({ history }: { history: RecurringHistoryMonth[] }) {
   const hasLastYear = history.some((m) => m.lastYear > 0);
   return (
     <div>
-      <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <SectionLabel className="mb-3">
         Year over year
-      </p>
+      </SectionLabel>
       <ResponsiveContainer width="100%" height={160}>
         <BarChart data={history} margin={{ top: 4, right: 4, left: -18, bottom: 0 }} barCategoryGap="30%">
           <XAxis dataKey="month" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
@@ -554,7 +555,6 @@ function RuleTable({
   highlightRowRef?: (el: HTMLTableRowElement | null) => void;
 }) {
   const hasActions = !!(onEdit || onArchive || onDelete);
-  const colHdr = "pb-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground";
 
   return (
     <table className="w-full table-fixed text-sm">
@@ -570,14 +570,12 @@ function RuleTable({
       </colgroup>
       <thead>
         <tr className="border-b border-border">
-          <th className={colHdr}>{/* Description — self-explanatory, no heading needed */}</th>
-          <th className={showNextColumn ? colHdr : "pb-2"}>
-            {showNextColumn ? "Next" : null}
-          </th>
-          <th className={colHdr}>Started</th>
-          <th className={colHdr}>{showNextColumn ? "Ends" : "Ended"}</th>
-          <th className={colHdr}>Account</th>
-          <th className={`${colHdr} pr-3 text-right`}>Amount</th>
+          <ColumnHeader className="pb-2 text-left">{/* Description — self-explanatory, no heading needed */}</ColumnHeader>
+          <ColumnHeader className="pb-2 text-left">{showNextColumn ? "Next" : null}</ColumnHeader>
+          <ColumnHeader className="pb-2 text-left">Started</ColumnHeader>
+          <ColumnHeader className="pb-2 text-left">{showNextColumn ? "Ends" : "Ended"}</ColumnHeader>
+          <ColumnHeader className="pb-2 text-left">Account</ColumnHeader>
+          <ColumnHeader className="pb-2 pr-3 text-right">Amount</ColumnHeader>
           {/* Actions — always rendered for column alignment */}<th className="pb-2" />
         </tr>
       </thead>
@@ -1124,9 +1122,9 @@ export function Recurring() {
       {/* ── Upcoming 14-day strip ── */}
       {upcomingExpenses && upcomingExpenses.length > 0 && (
         <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <SectionLabel className="mb-2">
             Next 2 weeks
-          </p>
+          </SectionLabel>
           <UpcomingStrip expenses={upcomingExpenses} />
         </div>
       )}
@@ -1244,14 +1242,14 @@ export function Recurring() {
                   <col className="w-[72px]" />{/* Actions */}
                 </colgroup>
                 <thead>
-                  <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
-                    <th className="py-2 text-left font-medium">Description</th>
-                    <th className="py-2 text-left font-medium">Frequency</th>
-                    <th className="py-2 text-left font-medium">Next</th>
-                    <th className="py-2 text-left font-medium">Started</th>
-                    <th className="py-2 text-left font-medium">From → To</th>
-                    <th className="py-2 pr-3 text-right font-medium">Amount</th>
-                    <th className="py-2" />
+                  <tr className="border-b border-border">
+                    <ColumnHeader className="pb-2 text-left">Description</ColumnHeader>
+                    <ColumnHeader className="pb-2 text-left">Frequency</ColumnHeader>
+                    <ColumnHeader className="pb-2 text-left">Next</ColumnHeader>
+                    <ColumnHeader className="pb-2 text-left">Started</ColumnHeader>
+                    <ColumnHeader className="pb-2 text-left">From → To</ColumnHeader>
+                    <ColumnHeader className="pb-2 pr-3 text-right">Amount</ColumnHeader>
+                    <th className="pb-2" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -1274,7 +1272,7 @@ export function Recurring() {
                           <span className="truncate">{rule.toAccount.name}</span>
                         </span>
                       </td>
-                      <td className="py-3 pr-3 text-right tabular-nums font-medium">
+                      <td className="py-3 pr-3 text-right tabular-nums font-label font-medium">
                         {formatCurrency(parseFloat(rule.amount))}
                       </td>
                       <td className="py-3">
