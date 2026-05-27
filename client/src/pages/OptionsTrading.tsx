@@ -26,6 +26,7 @@ import {
   getAccounts,
   getInvestmentAccounts,
   getOptionAssignedBatches,
+  runOptionsScreener,
   type AssignmentBatch,
   type OptionsPosition,
   type OptionsTicker,
@@ -35,13 +36,15 @@ import {
   type OptionsPositionInput,
   type OptionsCloseInput,
   type OptionOutcome,
+  type ScreenerResult,
+  type ScreenerParams,
 } from "@/api";
 import type { TickerSearchResult } from "@/types";
 import { useNotifications } from "@/context/NotificationContext";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
-import { Plus, ChevronDown, ChevronUp, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw } from "lucide-react";
+import { Plus, ChevronDown, ChevronUp, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, Filter, BookmarkPlus, BookmarkCheck } from "lucide-react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { SectionLabel, ColumnHeader, StatValue } from "@/components/Typography";
@@ -3961,6 +3964,427 @@ function SummaryCards({
   );
 }
 
+// ── Option Screener ────────────────────────────────────────────────────────────
+
+const DEFAULT_PARAMS: ScreenerParams = {
+  tickers: [],
+  optionType: "PUT",
+  minDTE: 0,
+  maxDTE: 7,
+  minDelta: 0.10,
+  maxDelta: 0.30,
+  minOI: 0,
+  minMark: 0,
+};
+
+function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: OptionsTicker[]; onDraftCreated: () => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [params, setParams] = useState<ScreenerParams>(DEFAULT_PARAMS);
+  const [tickerInput, setTickerInput] = useState("");
+  const [results, setResults] = useState<ScreenerResult[] | null>(null);
+  const [highlightedRows, setHighlightedRows] = useState<Set<number>>(new Set());
+  const [contractsMap, setContractsMap] = useState<Map<number, number>>(new Map());
+  const [addingRow, setAddingRow] = useState<number | null>(null);
+  const [addedRows, setAddedRows] = useState<Set<number>>(new Set());
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const setParam = <K extends keyof ScreenerParams>(k: K, v: ScreenerParams[K]) =>
+    setParams((p) => ({ ...p, [k]: v }));
+
+  const addTicker = (sym: string) => {
+    const upper = sym.trim().toUpperCase();
+    if (!upper || params.tickers.includes(upper)) return;
+    setParam("tickers", [...params.tickers, upper]);
+    setTickerInput("");
+  };
+
+  const removeTicker = (sym: string) =>
+    setParam("tickers", params.tickers.filter((t) => t !== sym));
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addTicker(tickerInput);
+    }
+  };
+
+  const handleRun = async () => {
+    if (params.tickers.length === 0) return;
+    setLoading(true);
+    setError(null);
+    setResults(null);
+    try {
+      const data = await runOptionsScreener(params);
+      setResults(data);
+      setHighlightedRows(new Set());
+      setContractsMap(new Map());
+      setAddedRows(new Set());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Screener failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddDraft = async (r: ScreenerResult, rowIdx: number) => {
+    const contracts = contractsMap.get(rowIdx) ?? 1;
+    setAddingRow(rowIdx);
+    try {
+      let ticker = trackedTickers.find((t) => t.symbol === r.ticker);
+      if (!ticker) {
+        ticker = await createOptionsTicker({ symbol: r.ticker });
+      }
+      await createOptionsPosition({
+        tickerId: ticker.id,
+        optionType: r.optionType,
+        strikePrice: r.strike,
+        expirationDate: r.expiration,
+        openedAt: new Date().toISOString(),
+        contracts,
+        premiumPerShare: r.last ?? 0,
+        stockPriceAtOpen: r.underlyingPrice ?? undefined,
+        deltaAtOpen: r.delta ?? undefined,
+        deltaAtOpenCapturedAt: new Date().toISOString(),
+        isDraft: true,
+      });
+      setAddedRows((prev) => new Set(prev).add(rowIdx));
+      onDraftCreated();
+    } catch {
+      // leave button in normal state; user can retry
+    } finally {
+      setAddingRow(null);
+    }
+  };
+
+  const trackedSymbols = trackedTickers.map((t) => t.symbol);
+
+  return (
+    <Card>
+      {/* Header */}
+      <button
+        type="button"
+        className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-accent/50 transition-colors rounded-t-lg"
+        onClick={() => setIsOpen((o) => !o)}
+      >
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <SectionLabel as="span">Option Screener</SectionLabel>
+          {results != null && !loading && (
+            <span className="ml-2 inline-flex items-center justify-center rounded-full bg-primary/10 text-primary text-xs px-1.5 py-0.5 font-medium">
+              {results.length} result{results.length !== 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+        {isOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+      </button>
+
+      {isOpen && (
+        <div className="border-t border-border">
+          {/* Filter controls */}
+          <div className="px-4 py-4 space-y-4">
+            {/* Tickers */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium">Tickers</label>
+                {params.tickers.length > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    Screening {params.tickers.length} ticker{params.tickers.length !== 1 ? "s" : ""} — one API call per expiration date.
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5 items-center min-h-[38px] rounded-md border border-border bg-background px-3 py-2 focus-within:ring-1 focus-within:ring-primary/40">
+                {params.tickers.map((sym) => (
+                  <span key={sym} className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">
+                    {sym}
+                    <button type="button" onClick={() => removeTicker(sym)} className="hover:text-destructive transition-colors">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  value={tickerInput}
+                  onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
+                  onKeyDown={handleKeyDown}
+                  onBlur={() => tickerInput && addTicker(tickerInput)}
+                  placeholder={params.tickers.length === 0 ? "Type ticker + Enter…" : ""}
+                  className="flex-1 min-w-[100px] bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                />
+              </div>
+              {/* Quick-add tracked tickers */}
+              {trackedSymbols.filter((s) => !params.tickers.includes(s)).length > 0 && (
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {trackedSymbols.filter((s) => !params.tickers.includes(s)).map((sym) => (
+                    <button
+                      key={sym}
+                      type="button"
+                      onClick={() => addTicker(sym)}
+                      className="rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                    >
+                      + {sym}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Row: option type + DTE + delta + OI + min mark */}
+            <div className="flex flex-wrap items-end gap-6">
+              {/* Option Type */}
+              <div>
+                <label className="block text-xs font-medium mb-1">Type</label>
+                <div className="flex gap-1">
+                  {(["PUT", "CALL", "BOTH"] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setParam("optionType", t)}
+                      className={cn(
+                        "rounded px-3 py-2 text-sm font-medium border transition-colors",
+                        params.optionType === t
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "border-border text-muted-foreground hover:border-primary hover:text-primary"
+                      )}
+                    >
+                      {t === "BOTH" ? "Both" : t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* DTE */}
+              <div>
+                <label className="block text-xs font-medium mb-1">DTE Range</label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    value={params.minDTE}
+                    min={0}
+                    onChange={(e) => setParam("minDTE", Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-16 rounded-md border border-border bg-background px-3 py-2 text-sm text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                  <span className="text-muted-foreground text-xs shrink-0">–</span>
+                  <input
+                    type="number"
+                    value={params.maxDTE}
+                    min={0}
+                    onChange={(e) => setParam("maxDTE", Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-16 rounded-md border border-border bg-background px-3 py-2 text-sm text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                </div>
+              </div>
+
+              {/* Delta */}
+              <div>
+                <label className="block text-xs font-medium mb-1">Delta Range</label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    value={params.minDelta}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    onChange={(e) => setParam("minDelta", Math.min(1, Math.max(0, parseFloat(e.target.value) || 0)))}
+                    className="w-16 rounded-md border border-border bg-background px-3 py-2 text-sm text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                  <span className="text-muted-foreground text-xs shrink-0">–</span>
+                  <input
+                    type="number"
+                    value={params.maxDelta}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    onChange={(e) => setParam("maxDelta", Math.min(1, Math.max(0, parseFloat(e.target.value) || 0)))}
+                    className="w-16 rounded-md border border-border bg-background px-3 py-2 text-sm text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                </div>
+              </div>
+
+              {/* Min OI */}
+              <div>
+                <label className="block text-xs font-medium mb-1">Min OI</label>
+                <input
+                  type="number"
+                  value={params.minOI}
+                  min={0}
+                  onChange={(e) => setParam("minOI", Math.max(0, parseInt(e.target.value) || 0))}
+                  className="w-24 rounded-md border border-border bg-background px-3 py-2 text-sm [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
+              </div>
+
+              {/* Min Last */}
+              <div>
+                <label className="block text-xs font-medium mb-1">Min Last ($)</label>
+                <input
+                  type="number"
+                  value={params.minMark}
+                  min={0}
+                  step={0.01}
+                  onChange={(e) => setParam("minMark", Math.max(0, parseFloat(e.target.value) || 0))}
+                  className="w-24 rounded-md border border-border bg-background px-3 py-2 text-sm [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
+              </div>
+
+              {/* Run button — pushed to the right end of the filter row */}
+              <div className="flex items-end ml-auto">
+                <Button
+                  onClick={handleRun}
+                  disabled={loading || params.tickers.length === 0}
+                >
+                  <Search className="h-4 w-4 mr-1.5" />
+                  {loading ? "Scanning…" : "Run Screener"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Results */}
+          {error && (
+            <div className="mx-4 mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+
+          {results != null && !loading && (
+            results.length === 0 ? (
+              <div className="px-4 pb-4 text-sm text-muted-foreground">
+                No options matched your filters.
+              </div>
+            ) : (
+              <div className="overflow-x-auto border-t border-border mt-2">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="pl-4 pr-2 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Ticker</th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Type</th>
+                      <th className="px-2 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Expiration</th>
+                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">DTE</th>
+                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">Strike</th>
+                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">Underlying</th>
+                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">% to Strike</th>
+                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">Delta</th>
+                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">IV</th>
+                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">Last</th>
+                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">Bid / Ask</th>
+                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">Ann. Return</th>
+                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">OI</th>
+                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">Volume</th>
+                      <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground whitespace-nowrap">Contracts</th>
+                      <th className="px-2 py-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {results.map((r, i) => {
+                      const pctToStrike = r.underlyingPrice != null
+                        ? ((r.strike - r.underlyingPrice) / r.underlyingPrice) * 100
+                        : null;
+                      const annReturnDenominator = r.optionType === "CALL"
+                        ? r.underlyingPrice
+                        : r.strike;
+                      const annReturn = r.last != null && r.last > 0 && r.dte > 0 && annReturnDenominator != null && annReturnDenominator > 0
+                        ? (r.last / annReturnDenominator) * (365 / r.dte) * 100
+                        : null;
+                      const isHighlighted = highlightedRows.has(i);
+                      const toggleHighlight = () =>
+                        setHighlightedRows((prev) => {
+                          const next = new Set(prev);
+                          next.has(i) ? next.delete(i) : next.add(i);
+                          return next;
+                        });
+                      return (
+                        <tr
+                          key={i}
+                          onClick={toggleHighlight}
+                          className={cn(
+                            "border-b border-border/50 transition-colors whitespace-nowrap cursor-pointer",
+                            isHighlighted ? "bg-primary/10 hover:bg-primary/15" : "hover:bg-accent/30"
+                          )}
+                        >
+                          <td className="pl-4 pr-2 py-2 font-medium">{r.ticker}</td>
+                          <td className="px-2 py-2">
+                            <span className={cn(
+                              "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                              r.optionType === "PUT" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
+                            )}>
+                              {r.optionType}
+                            </span>
+                          </td>
+                          <td className="px-2 py-2 text-muted-foreground">{fmtDate(r.expiration)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums">{r.dte}d</td>
+                          <td className="px-2 py-2 text-right tabular-nums font-medium">${r.strike.toFixed(2)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                            {r.underlyingPrice != null ? `$${r.underlyingPrice.toFixed(2)}` : "—"}
+                          </td>
+                          <td className={cn("px-2 py-2 text-right tabular-nums", pctToStrike != null && pctToStrike < 0 ? "text-green-600" : pctToStrike != null && pctToStrike > 0 ? "text-red-600" : "")}>
+                            {pctToStrike != null ? `${pctToStrike >= 0 ? "+" : ""}${pctToStrike.toFixed(1)}%` : "—"}
+                          </td>
+                          <td className={cn("px-2 py-2 text-right tabular-nums", r.delta != null && Math.abs(r.delta) > 0.5 ? "text-amber-600" : "")}>
+                            {r.delta != null ? r.delta.toFixed(3) : "—"}
+                          </td>
+                          <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                            {r.iv != null ? `${(r.iv * 100).toFixed(1)}%` : "—"}
+                          </td>
+                          <td className="px-2 py-2 text-right tabular-nums font-medium">
+                            {r.last != null ? `$${r.last.toFixed(2)}` : "—"}
+                          </td>
+                          <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                            {r.bid != null ? `$${r.bid.toFixed(2)}` : "—"} / {r.ask != null ? `$${r.ask.toFixed(2)}` : "—"}
+                          </td>
+                          <td className={cn("px-2 py-2 text-right tabular-nums font-medium", annReturn != null ? "text-green-600" : "")}>
+                            {annReturn != null ? `${annReturn.toFixed(1)}%` : "—"}
+                          </td>
+                          <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                            {r.openInterest != null ? r.openInterest.toLocaleString() : "—"}
+                          </td>
+                          <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                            {r.volume != null ? r.volume.toLocaleString() : "—"}
+                          </td>
+                          <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="number"
+                              min={1}
+                              value={contractsMap.get(i) ?? 1}
+                              onChange={(e) => {
+                                const v = Math.max(1, parseInt(e.target.value) || 1);
+                                setContractsMap((prev) => new Map(prev).set(i, v));
+                              }}
+                              className="w-12 rounded border border-border bg-background px-1 py-0.5 text-sm text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                            />
+                          </td>
+                          <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              disabled={addingRow === i || addedRows.has(i)}
+                              onClick={() => handleAddDraft(r, i)}
+                              title={addedRows.has(i) ? "Added to drafts" : "Add to drafts"}
+                              className={cn(
+                                "p-1.5 rounded transition-colors disabled:cursor-not-allowed",
+                                addedRows.has(i)
+                                  ? "text-green-600 cursor-default"
+                                  : addingRow === i
+                                  ? "text-muted-foreground/40"
+                                  : "text-muted-foreground/40 hover:text-primary hover:bg-primary/10"
+                              )}
+                            >
+                              {addedRows.has(i)
+                                ? <BookmarkCheck className="h-4 w-4" />
+                                : <BookmarkPlus className="h-4 w-4" />}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export function OptionsTrading() {
@@ -4149,6 +4573,9 @@ export function OptionsTrading() {
           )}
         </div>
       </Card>
+
+      {/* Option Screener */}
+      <OptionScreener trackedTickers={tickers ?? []} onDraftCreated={refetchAll} />
 
       {/* Modals */}
       {(positionModal !== null) && (

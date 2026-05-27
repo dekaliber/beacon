@@ -943,3 +943,47 @@ export const getOptionAssignedBatches = (ticker: string, accountId: string) =>
   api.get<AssignmentBatch[]>(
     `/pending-buys/lots/by-assignment?ticker=${encodeURIComponent(ticker)}&accountId=${encodeURIComponent(accountId)}`
   );
+
+// ── Option Screener ───────────────────────────────────────────────────────────
+
+export interface ScreenerResult {
+  ticker: string;
+  expiration: string;
+  dte: number;
+  strike: number;
+  optionType: "CALL" | "PUT";
+  underlyingPrice: number | null;
+  delta: number | null;
+  iv: number | null;
+  bid: number | null;
+  ask: number | null;
+  last: number | null;
+  openInterest: number | null;
+  volume: number | null;
+  inTheMoney: boolean | null;
+}
+
+export interface ScreenerParams {
+  tickers: string[];
+  optionType: "CALL" | "PUT" | "BOTH";
+  minDTE: number;
+  maxDTE: number;
+  minDelta: number;
+  maxDelta: number;
+  minOI: number;
+  minMark: number;
+}
+
+export const runOptionsScreener = (params: ScreenerParams) => {
+  const qs = new URLSearchParams({
+    tickers: params.tickers.join(","),
+    optionType: params.optionType,
+    minDTE: String(params.minDTE),
+    maxDTE: String(params.maxDTE),
+    minDelta: String(params.minDelta),
+    maxDelta: String(params.maxDelta),
+    minOI: String(params.minOI),
+    minMark: String(params.minMark),
+  });
+  return api.get<ScreenerResult[]>(`/options/screener?${qs}`);
+};

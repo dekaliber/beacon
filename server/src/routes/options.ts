@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { getUserId } from "../middleware/auth.js";
+import { nextBusinessDay } from "../lib/businessDays.js";
 
 export const optionsRoutes = Router();
 
@@ -418,11 +419,13 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
       const optionType = updated.optionType === "CALL" ? "Call" : "Put";
       const source = `${updated.ticker.symbol} ${expStr} ${optionType} ${strikeStr} x${contracts}`;
 
-      // Use close date as transaction date; fall back to expiration for EXPIRED_WORTHLESS.
-      // Truncate to midnight UTC so the date filter on the income page (which uses date-only
-      // boundaries) doesn't exclude same-day records due to a time component past midnight.
+      // Settlement date = T+1 business day after close (OCC equity option settlement rule).
+      // Fall back to expiration date for EXPIRED_WORTHLESS (no explicit closedAt).
+      // Skip weekends and US Federal Reserve bank holidays so the settlement date always
+      // lands on a valid banking day.
       const rawDate = updated.closedAt ?? updated.expirationDate;
-      const incomeDate = new Date(Date.UTC(rawDate.getUTCFullYear(), rawDate.getUTCMonth(), rawDate.getUTCDate()));
+      const closeDay = new Date(Date.UTC(rawDate.getUTCFullYear(), rawDate.getUTCMonth(), rawDate.getUTCDate()));
+      const incomeDate = nextBusinessDay(closeDay);
 
       // Assigned premiums fold into cost basis (puts) or sale proceeds (calls),
       // so they are not independently taxable — zero out taxableAmount to exclude
@@ -697,6 +700,148 @@ optionsRoutes.get("/option-quote", async (req, res) => {
       delta,
       capturedAt: new Date().toISOString(),
     });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    res.status(500).json({ error: message });
+  }
+});
+
+// ── Option Screener (Tradier) ──────────────────────────────────────────────────
+
+optionsRoutes.get("/screener", async (req, res) => {
+  const {
+    tickers: tickersParam,
+    optionType = "BOTH",
+    minDTE = "0",
+    maxDTE = "60",
+    minDelta = "0",
+    maxDelta = "1",
+    minOI = "0",
+    minMark = "0",
+  } = req.query as Record<string, string>;
+
+  if (!tickersParam) {
+    return res.status(400).json({ error: "Missing required param: tickers" });
+  }
+
+  const symbols = tickersParam.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+  if (symbols.length === 0) return res.status(400).json({ error: "No tickers provided" });
+
+  const minDTEn = parseInt(minDTE, 10);
+  const maxDTEn = parseInt(maxDTE, 10);
+  const minDeltaN = parseFloat(minDelta);
+  const maxDeltaN = parseFloat(maxDelta);
+  const minOIn = parseInt(minOI, 10);
+  const minMarkN = parseFloat(minMark);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const results: Array<{
+    ticker: string;
+    expiration: string;
+    dte: number;
+    strike: number;
+    optionType: "CALL" | "PUT";
+    underlyingPrice: number | null;
+    delta: number | null;
+    iv: number | null;
+    bid: number | null;
+    ask: number | null;
+    last: number | null;
+    openInterest: number | null;
+    volume: number | null;
+    inTheMoney: boolean | null;
+  }> = [];
+
+  try {
+    const headers = tradierHeaders();
+
+    // Batch-fetch current underlying prices for all tickers upfront
+    const quoteUrl = `${TRADIER_BASE}/markets/quotes?symbols=${symbols.map(encodeURIComponent).join(",")}&greeks=false`;
+    const quoteRes = await fetch(quoteUrl, { headers });
+    const underlyingPriceMap = new Map<string, number | null>();
+    if (quoteRes.ok) {
+      const quoteData = await quoteRes.json() as any;
+      const rawQuotes = quoteData?.quotes?.quote ?? [];
+      const quotesArr = Array.isArray(rawQuotes) ? rawQuotes : [rawQuotes];
+      for (const q of quotesArr) {
+        underlyingPriceMap.set((q.symbol as string).toUpperCase(), q.last ?? q.close ?? null);
+      }
+    }
+
+    for (const symbol of symbols) {
+      // 1. Fetch available expirations
+      const expUrl = `${TRADIER_BASE}/markets/options/expirations?symbol=${encodeURIComponent(symbol)}&includeAllRoots=false`;
+      const expRes = await fetch(expUrl, { headers });
+      if (!expRes.ok) continue;
+      const expData = await expRes.json() as any;
+      const dates: string[] = expData?.expirations?.date ?? [];
+      if (dates.length === 0) continue;
+
+      // 2. Filter by DTE range
+      const eligibleDates = dates.filter((d) => {
+        const exp = new Date(d + "T00:00:00");
+        const dte = Math.round((exp.getTime() - today.getTime()) / 86400000);
+        return dte >= minDTEn && dte <= maxDTEn;
+      });
+
+      // 3. For each eligible expiration, fetch chains and filter
+      for (const expDate of eligibleDates) {
+        const exp = new Date(expDate + "T00:00:00");
+        const dte = Math.round((exp.getTime() - today.getTime()) / 86400000);
+
+        const chainUrl = `${TRADIER_BASE}/markets/options/chains?symbol=${encodeURIComponent(symbol)}&expiration=${expDate}&greeks=true`;
+        const chainRes = await fetch(chainUrl, { headers });
+        if (!chainRes.ok) continue;
+        const chainData = await chainRes.json() as any;
+        const chain: any[] = chainData?.options?.option ?? [];
+
+        for (const opt of chain) {
+          const side: "CALL" | "PUT" = (opt.option_type ?? "").toLowerCase() === "call" ? "CALL" : "PUT";
+          if (optionType !== "BOTH" && side !== optionType) continue;
+
+          const delta: number | null = opt.greeks?.delta ?? null;
+          const absDelta = delta != null ? Math.abs(delta) : null;
+          if (absDelta != null && (absDelta < minDeltaN || absDelta > maxDeltaN)) continue;
+
+          const oi: number | null = opt.open_interest ?? null;
+          if (oi != null && oi < minOIn) continue;
+
+          const bid: number | null = opt.bid ?? null;
+          const ask: number | null = opt.ask ?? null;
+          const last: number | null = opt.last ?? null;
+          if (last != null && last < minMarkN) continue;
+
+          results.push({
+            ticker: symbol,
+            expiration: expDate,
+            dte,
+            strike: opt.strike,
+            optionType: side,
+            underlyingPrice: underlyingPriceMap.get(symbol) ?? null,
+            delta,
+            iv: opt.greeks?.mid_iv ?? opt.greeks?.smv_vol ?? null,
+            bid,
+            ask,
+            last,
+            openInterest: oi,
+            volume: opt.volume ?? null,
+            inTheMoney: opt.in_the_money ?? null,
+          });
+        }
+      }
+    }
+
+    // Sort by ticker → expiration → strike
+    results.sort((a, b) => {
+      const t = a.ticker.localeCompare(b.ticker);
+      if (t !== 0) return t;
+      const e = a.expiration.localeCompare(b.expiration);
+      if (e !== 0) return e;
+      return a.strike - b.strike;
+    });
+
+    res.json(results);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
     res.status(500).json({ error: message });
