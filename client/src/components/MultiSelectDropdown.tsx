@@ -104,7 +104,7 @@ export function MultiSelectDropdown({
       key={opt.id}
       type="button"
       onClick={() => toggle(opt.id)}
-      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-muted/50"
+      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-13 hover:bg-muted/50"
     >
       <span
         className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border ${
@@ -158,7 +158,7 @@ export function MultiSelectDropdown({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search…"
-            className="w-full rounded border border-border px-2 py-1 text-sm focus:outline-none"
+            className="w-full rounded border border-border px-2 py-1 text-13 focus:outline-none"
             autoFocus
           />
         </div>
@@ -176,7 +176,7 @@ export function MultiSelectDropdown({
             );
           })
         ) : visibleOptions.length === 0 ? (
-          <p className="px-3 py-2 text-sm text-muted-foreground">No categories found</p>
+          <p className="px-3 py-2 text-13 text-muted-foreground">No categories found</p>
         ) : (
           visibleOptions.map(renderOption)
         )}

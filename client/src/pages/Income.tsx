@@ -1426,7 +1426,7 @@ export function IncomePage() {
                       <EditableCell value={income.date} type="date" onSave={(v) => handleInlineUpdate(income.id, "date", v)} />
                     </td>
                     <td className="py-2 pr-3">
-                      <EditableCell value={income.source ?? ""} onSave={(v) => handleInlineUpdate(income.id, "source", v)} />
+                      <EditableCell value={income.source ?? ""} onSave={(v) => handleInlineUpdate(income.id, "source", v)} className="tp-row-label" />
                     </td>
                     <td className="w-[130px] py-2 pr-3">
                       <EditableCategoryCell
@@ -1535,7 +1535,7 @@ export function IncomePage() {
                       </td>
                       <td className={`py-2 pr-3 ${!income.isCashReceived ? "text-muted-foreground" : ""}`}>
                         <div className="flex items-center gap-1.5">
-                          <EditableCell value={income.source ?? ""} onSave={(v) => handleInlineUpdate(income.id, "source", v)} />
+                          <EditableCell value={income.source ?? ""} onSave={(v) => handleInlineUpdate(income.id, "source", v)} className="tp-row-label" />
                           {income.subtype === "DIVIDEND" && (
                             <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700">Dividend</span>
                           )}
