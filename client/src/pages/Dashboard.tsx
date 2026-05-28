@@ -185,7 +185,7 @@ export function Dashboard() {
             {/* Headline — spans 2 cols */}
             <div className="col-span-6 sm:col-span-2 sm:border-r sm:border-border sm:pr-6">
               <SectionLabel>Net Worth</SectionLabel>
-              <DisplayStat as="p" className="text-3xl font-bold">{formatCurrency(scaledNetWorth.total)}</DisplayStat>
+              <DisplayStat as="p" className="tp-kpi">{formatCurrency(scaledNetWorth.total)}</DisplayStat>
               <Caption className="mt-1">
                 {refreshPhase === "running"
                   ? refreshTotal > 0
@@ -203,7 +203,7 @@ export function Dashboard() {
                 <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
                 <SectionLabel>Investments</SectionLabel>
               </div>
-              <DisplayStat as="p" className="text-base font-semibold">{formatCurrency(scaledNetWorth.investments)}</DisplayStat>
+              <DisplayStat as="p" className="tp-stat">{formatCurrency(scaledNetWorth.investments)}</DisplayStat>
             </div>
 
             {/* Investment Cash */}
@@ -212,7 +212,7 @@ export function Dashboard() {
                 <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
                 <SectionLabel>Inv. Cash</SectionLabel>
               </div>
-              <DisplayStat as="p" className="text-base font-semibold">{formatCurrency(scaledNetWorth.investmentCash)}</DisplayStat>
+              <DisplayStat as="p" className="tp-stat">{formatCurrency(scaledNetWorth.investmentCash)}</DisplayStat>
             </div>
 
             {/* Banking Cash */}
@@ -221,7 +221,7 @@ export function Dashboard() {
                 <Landmark className="h-3.5 w-3.5 text-muted-foreground" />
                 <SectionLabel>Banking Cash</SectionLabel>
               </div>
-              <DisplayStat as="p" className="text-base font-semibold">{formatCurrency(scaledNetWorth.bankingCash)}</DisplayStat>
+              <DisplayStat as="p" className="tp-stat">{formatCurrency(scaledNetWorth.bankingCash)}</DisplayStat>
             </div>
 
             {/* Credit Cards */}
@@ -230,7 +230,7 @@ export function Dashboard() {
                 <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
                 <SectionLabel>Credit Cards</SectionLabel>
               </div>
-              <DisplayStat as="p" className="text-base font-semibold text-destructive">−{formatCurrency(scaledNetWorth.creditCardDebt)}</DisplayStat>
+              <DisplayStat as="p" className="tp-stat text-destructive">−{formatCurrency(scaledNetWorth.creditCardDebt)}</DisplayStat>
             </div>
           </div>
         </Card>
@@ -238,12 +238,12 @@ export function Dashboard() {
 
       {/* Month selector */}
       <div className="flex items-start justify-between">
-        <h2 className="text-2xl font-bold">Monthly Summary</h2>
+        <h2 className="tp-page-title">Monthly Summary</h2>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={prevMonth} disabled={atMin}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="min-w-[8rem] text-center font-semibold">{monthLabel}</span>
+          <span className="min-w-[8rem] text-center font-display font-semibold text-17 text-ink">{monthLabel}</span>
           <Button variant="ghost" size="sm" onClick={nextMonth} disabled={atMax}>
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -260,7 +260,7 @@ export function Dashboard() {
             <div className="flex min-w-0 flex-1 flex-col">
               <div>
                 <SectionLabel>MTD Spend</SectionLabel>
-                <DisplayStat as="p" className="text-2xl font-bold">{fmtWhole(totalSpent)}</DisplayStat>
+                <DisplayStat as="p" className="tp-kpi-l">{fmtWhole(totalSpent)}</DisplayStat>
                 {budgetAmount !== null ? (
                   <Caption className="mt-0.5">of {fmtWhole(budgetAmount)} budget</Caption>
                 ) : (
@@ -316,14 +316,14 @@ export function Dashboard() {
                     <Cell fill={JOINT_COLOR} />
                   </Pie>
                 </PieChart>
-                <div className="mt-2 space-y-1 text-xs text-muted-foreground font-label">
-                  <div className="flex items-center gap-1.5">
+                <div className="mt-2 space-y-1">
+                  <div className="flex items-center gap-1.5 tp-fineprint">
                     <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: PERSONAL_COLOR }} />
-                    <span>Personal <StatValue className="font-medium text-foreground">{fmtWhole(personalSpent)}</StatValue></span>
+                    <span>Personal <StatValue className="font-medium text-ink">{fmtWhole(personalSpent)}</StatValue></span>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 tp-fineprint">
                     <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: JOINT_COLOR }} />
-                    <span>Joint <StatValue className="font-medium text-foreground">{fmtWhole(jointSpent)}</StatValue></span>
+                    <span>Joint <StatValue className="font-medium text-ink">{fmtWhole(jointSpent)}</StatValue></span>
                   </div>
                 </div>
               </div>
@@ -347,9 +347,9 @@ export function Dashboard() {
             <div className="min-w-0 flex-1">
               <SectionLabel>Budget Used</SectionLabel>
               {budgetPct !== null ? (
-                <DisplayStat as="p" className={`text-2xl font-bold ${isOverBudget ? "text-destructive" : ""}`}>{budgetPct}%</DisplayStat>
+                <DisplayStat as="p" className={`tp-kpi-l ${isOverBudget ? "text-destructive" : ""}`}>{budgetPct}%</DisplayStat>
               ) : (
-                <p className="text-sm text-muted-foreground">No budget set</p>
+                <p className="tp-caption">No budget set</p>
               )}
               {budgetRemaining !== null && (
                 <Caption className={`mt-0.5 ${budgetRemaining < 0 ? "text-destructive" : ""}`}>
@@ -370,13 +370,13 @@ export function Dashboard() {
                 const over = personalSpent > personalBudget;
                 return (
                   <div>
-                    <div className="mb-1 flex items-center justify-between text-xs font-label">
-                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <div className="mb-1 flex items-center justify-between tp-fineprint">
+                      <span className="flex items-center gap-1.5">
                         <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: PERSONAL_COLOR }} />
                         Personal
                       </span>
-                      <span className="text-muted-foreground">
-                        <StatValue className={`font-medium ${over ? "text-destructive" : "text-foreground"}`}>{fmtWhole(personalSpent)}</StatValue>
+                      <span>
+                        <StatValue className={`font-medium ${over ? "text-destructive" : "text-ink"}`}>{fmtWhole(personalSpent)}</StatValue>
                         {" / "}{fmtWhole(personalBudget)}
                         {personalRemaining !== null && (
                           <span className={over ? " text-destructive" : ""}>{" "}({over ? "+" : "−"}{fmtWhole(Math.abs(personalRemaining!))})</span>
@@ -394,13 +394,13 @@ export function Dashboard() {
                 const over = jointSpent > jointBudget;
                 return (
                   <div>
-                    <div className="mb-1 flex items-center justify-between text-xs font-label">
-                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <div className="mb-1 flex items-center justify-between tp-fineprint">
+                      <span className="flex items-center gap-1.5">
                         <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: JOINT_COLOR }} />
                         Joint
                       </span>
-                      <span className="text-muted-foreground">
-                        <StatValue className={`font-medium ${over ? "text-destructive" : "text-foreground"}`}>{fmtWhole(jointSpent)}</StatValue>
+                      <span>
+                        <StatValue className={`font-medium ${over ? "text-destructive" : "text-ink"}`}>{fmtWhole(jointSpent)}</StatValue>
                         {" / "}{fmtWhole(jointBudget)}
                         {jointRemaining !== null && (
                           <span className={over ? " text-destructive" : ""}>{" "}({over ? "+" : "−"}{fmtWhole(Math.abs(jointRemaining!))})</span>
@@ -446,13 +446,13 @@ export function Dashboard() {
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                   <XAxis
                     dataKey="day"
-                    tick={{ fontSize: 10, fill: "var(--color-muted-foreground)", style: { fontFamily: "var(--font-label)" } }}
+                    tick={{ fontSize: 10, fill: "var(--color-muted-foreground)", style: { fontFamily: "var(--font-mono)" } }}
                     tickLine={false}
                     interval={4}
                   />
                   <YAxis
                     tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-                    tick={{ fontSize: 10, fill: "var(--color-muted-foreground)", style: { fontFamily: "var(--font-label)" } }}
+                    tick={{ fontSize: 10, fill: "var(--color-muted-foreground)", style: { fontFamily: "var(--font-mono)" } }}
                     tickLine={false}
                     axisLine={false}
                     width={34}
@@ -498,7 +498,7 @@ export function Dashboard() {
                   )}
                 </LineChart>
               </ResponsiveContainer>
-              <div className="mt-1.5 flex flex-wrap justify-center gap-3 text-xs text-muted-foreground font-label">
+              <div className="mt-1.5 flex flex-wrap justify-center gap-3 tp-fineprint">
                 <span className="flex items-center gap-1">
                   <svg width="20" height="8">
                     <line x1="0" y1="4" x2="10" y2="4" stroke="var(--color-primary)" strokeWidth="2" />
@@ -517,7 +517,7 @@ export function Dashboard() {
               </div>
             </>
           ) : (
-            <div className="flex h-[148px] items-center justify-center text-xs text-muted-foreground">
+            <div className="flex h-[148px] items-center justify-center tp-caption">
               Loading…
             </div>
           )}
@@ -527,7 +527,7 @@ export function Dashboard() {
       {/* ── Spending vs. Category Averages + Spending Outliers — combined ──── */}
       <Card>
         {categoryAverages && categoryAverages.categories.length === 0 ? (
-          <div className="flex min-h-[120px] items-center justify-center text-xs text-muted-foreground">
+          <div className="flex min-h-[120px] items-center justify-center tp-caption">
             Not enough history to compute averages
           </div>
         ) : (
@@ -536,7 +536,7 @@ export function Dashboard() {
               {categoryAverages ? (
                 <CategoryVsAverageChart categories={categoryAverages.categories} yearLabel={yearLabel} compact />
               ) : (
-                <div className="flex h-full min-h-[120px] items-center justify-center text-xs text-muted-foreground">
+                <div className="flex h-full min-h-[120px] items-center justify-center tp-caption">
                   Loading…
                 </div>
               )}
@@ -545,7 +545,7 @@ export function Dashboard() {
               {outlierTransactions ? (
                 <OutlierTransactionsList categories={outlierTransactions.categories} />
               ) : (
-                <div className="flex min-h-[80px] items-center justify-center text-xs text-muted-foreground">
+                <div className="flex min-h-[80px] items-center justify-center tp-caption">
                   Loading…
                 </div>
               )}
@@ -563,8 +563,8 @@ export function Dashboard() {
             header={
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-lg font-semibold text-card-foreground">Largest Changes by Category</h3>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
+                  <h3 className="tp-card-title">Largest Changes by Category</h3>
+                  <p className="mt-0.5 tp-caption">
                     Top 10 subcategory changes vs {dashboardOutliers.previousMonthLabel} · {dashboardOutliers.comparisonNote}
                   </p>
                 </div>

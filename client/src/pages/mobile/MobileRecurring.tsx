@@ -107,7 +107,7 @@ function UpcomingStrip({ expenses }: { expenses: UpcomingExpenseItem[] }) {
                 <SectionLabel as="div" className="text-[10px]">
                   {isToday ? "Today" : DAY_NAMES[day.getDay()]}
                 </SectionLabel>
-                <div className={`text-base font-semibold leading-tight ${isToday ? "text-red-500" : "text-foreground"}`}>
+                <div className={`tp-panel-title leading-tight ${isToday ? "text-red-500" : ""}`}>
                   {day.getDate()}
                 </div>
               </div>
@@ -304,9 +304,9 @@ const AnnualCostPanel = memo(function AnnualCostPanel({
       <div className="mb-3 flex items-baseline justify-between">
         <div>
           <SectionLabel>Annual cost</SectionLabel>
-          <DisplayStat as="p" className="mt-0.5 text-xl font-bold">{formatCurrency(totalCost)}</DisplayStat>
+          <DisplayStat as="p" className="mt-0.5 tp-stat">{formatCurrency(totalCost)}</DisplayStat>
         </div>
-        <p className="text-xs text-muted-foreground font-label">{includedRules.length} active</p>
+        <p className="tp-fineprint">{includedRules.length} active</p>
       </div>
       <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart layout="vertical" data={data} margin={{ top: 0, right: 72, left: 0, bottom: 0 }}>
@@ -431,7 +431,7 @@ function RuleDetailSheet({
             {/* Header */}
             <div className="flex items-start justify-between px-4 pb-3 shrink-0">
               <div className="min-w-0 pr-3">
-                <h2 className="text-base font-semibold leading-tight">{rule.description}</h2>
+                <h2 className="tp-panel-title leading-tight">{rule.description}</h2>
                 <p className="mt-0.5 text-sm text-muted-foreground">{formatFrequency(rule.frequency, rule.interval)}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -570,7 +570,7 @@ function EditRuleModal({
     <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       {/* Header */}
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-        <h2 className="text-base font-semibold">Edit Recurring</h2>
+        <h2 className="tp-panel-title">Edit Recurring</h2>
         <button onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
           <X className="h-5 w-5" />
         </button>
@@ -702,7 +702,7 @@ function ConfirmSheet({
       <div className={cn("fixed bottom-0 left-0 right-0 z-[60] flex flex-col bg-background rounded-t-2xl shadow-xl transition-transform duration-250 ease-out", open ? "translate-y-0" : "translate-y-full")}>
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="px-4 pt-2 pb-4 space-y-3">
-          <h2 className="text-base font-semibold">{title}</h2>
+          <h2 className="tp-panel-title">{title}</h2>
           <div className="text-sm text-muted-foreground">{description}</div>
           {extra}
           <div className="flex gap-3 pt-1">
@@ -760,7 +760,7 @@ function DeleteRuleSheet({
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
 
         <div className="flex-1 overflow-y-auto overscroll-contain px-4 pt-2 pb-4 space-y-3">
-          <h2 className="text-base font-semibold">Delete recurring transaction?</h2>
+          <h2 className="tp-panel-title">Delete recurring transaction?</h2>
           <p className="text-sm text-muted-foreground">
             This <em>permanently</em> removes the recurring transaction for{" "}
             <span className="font-medium text-foreground">"{rule?.description}"</span>.
@@ -769,7 +769,7 @@ function DeleteRuleSheet({
 
           {/* Linked expenses summary */}
           {linkedExpenses === "loading" ? (
-            <p className="text-xs text-muted-foreground italic">Loading linked transactions…</p>
+            <p className="tp-caption italic">Loading linked transactions…</p>
           ) : totalLinked === 0 ? (
             <p className="rounded-md bg-muted/50 px-3 py-2 text-xs">
               No linked transactions — deleting will not affect any expenses.
@@ -899,7 +899,7 @@ function TransferRuleModal({
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-        <h2 className="text-base font-semibold">{rule ? "Edit Recurring Transfer" : "New Recurring Transfer"}</h2>
+        <h2 className="tp-panel-title">{rule ? "Edit Recurring Transfer" : "New Recurring Transfer"}</h2>
         <button onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
           <X className="h-5 w-5" />
         </button>
@@ -1016,7 +1016,7 @@ function TransferDetailSheet({
           <>
             <div className="flex items-start justify-between px-4 pb-3 shrink-0">
               <div className="min-w-0 pr-3">
-                <h2 className="text-base font-semibold leading-tight">{rule.description}</h2>
+                <h2 className="tp-panel-title leading-tight">{rule.description}</h2>
                 <p className="mt-0.5 text-sm text-muted-foreground">{formatFrequency(rule.frequency, rule.interval)}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -1185,7 +1185,7 @@ export function MobileRecurring() {
   return (
     <>
       <div className="space-y-0">
-        <h1 className="px-0 pb-4 text-2xl font-bold">Recurring</h1>
+        <h1 className="px-0 pb-4 tp-page-title">Recurring</h1>
 
         {/* Tab bar */}
         <div className="flex border-b border-border -mx-4 px-4">
@@ -1239,7 +1239,7 @@ export function MobileRecurring() {
                         >
                           <div className="min-w-0 flex-1">
                             <p className="truncate font-medium text-sm">{rule.description}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
+                            <p className="tp-caption mt-0.5">
                               {formatFrequency(rule.frequency, rule.interval)}
                               {" · "}{accountMap.get(rule.accountId) ?? "—"}
                               {" · next "}{formatDate(rule.nextExpenseDate ?? rule.nextOccurrence)}
@@ -1258,7 +1258,7 @@ export function MobileRecurring() {
               <div className="flex flex-col items-center gap-2 py-12 text-center">
                 <Repeat className="h-8 w-8 text-muted-foreground/40" />
                 <p className="text-sm font-medium">No recurring expenses</p>
-                <p className="text-xs text-muted-foreground max-w-[260px]">
+                <p className="tp-caption max-w-[260px]">
                   Create a recurring expense by toggling "Recurring expense" when adding a new expense.
                 </p>
               </div>
@@ -1286,7 +1286,7 @@ export function MobileRecurring() {
                         <div key={rule.id} className="flex items-center gap-3 px-4 py-3">
                           <div className="min-w-0 flex-1">
                             <p className="truncate font-medium text-sm">{rule.description}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
+                            <p className="tp-caption mt-0.5">
                               {formatFrequency(rule.frequency, rule.interval)}
                               {rule.endDate ? ` · ended ${formatDate(rule.endDate)}` : ""}
                             </p>
@@ -1327,14 +1327,14 @@ export function MobileRecurring() {
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium text-sm">{rule.description}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
+                      <p className="mt-0.5 tp-caption">
                         {formatFrequency(rule.frequency, rule.interval)} · {formatDate(rule.nextTransferDate ?? rule.nextOccurrence)}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
                       <p className="font-semibold text-sm">{formatCurrency(parseFloat(rule.amount))}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{rule.fromAccount.name}</p>
-                      <p className="flex items-center justify-end gap-0.5 text-xs text-muted-foreground">
+                      <p className="mt-0.5 tp-caption">{rule.fromAccount.name}</p>
+                      <p className="flex items-center justify-end gap-0.5 tp-caption">
                         <ArrowRight className="h-3 w-3 shrink-0" />
                         {rule.toAccount.name}
                       </p>
@@ -1346,7 +1346,7 @@ export function MobileRecurring() {
               <div className="flex flex-col items-center gap-2 py-12 text-center">
                 <Repeat className="h-8 w-8 text-muted-foreground/40" />
                 <p className="text-sm font-medium">No recurring transfers</p>
-                <p className="text-xs text-muted-foreground max-w-[260px]">
+                <p className="tp-caption max-w-[260px]">
                   Set up automatic transfers between your accounts on a schedule.
                 </p>
               </div>

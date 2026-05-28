@@ -216,12 +216,12 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
     return (
       <>
         {/* Amount cell */}
-        <td className={cn("py-1.5 pr-2 text-right tabular-nums font-label font-medium", amountClassName)}>
+        <td className={cn("py-2 pr-2 text-right tabular-nums font-mono font-medium", amountClassName)}>
           {event.amount > 0 ? "+" : event.amount === 0 ? "-" : ""}
           {formatCurrency(event.amount)}
         </td>
         {/* Edit cell */}
-        <td className="py-1.5 pr-4 w-14">
+        <td className="py-2 pr-4 w-14">
           <div className="flex items-center gap-1">
             <button
               onClick={() => { setValue(Math.abs(event.amount).toFixed(2)); setOpen(true); }}
@@ -254,22 +254,22 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
   return (
     <>
       {/* Amount cell — becomes inline input when editing */}
-      <td className="py-1.5 pr-2 text-right">
+      <td className="py-2 pr-2 text-right">
         <span className="inline-flex items-center justify-end gap-1">
-          <span className="text-xs text-muted-foreground">$</span>
+          <span className="tp-caption">$</span>
           <input
             type="text"
             inputMode="decimal"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            className="w-24 rounded border border-border bg-background px-1.5 py-0.5 text-xs tabular-nums font-label text-right focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-24 rounded border border-border bg-background px-1.5 py-0.5 text-xs tabular-nums font-mono text-right focus:outline-none focus:ring-1 focus:ring-primary"
             autoFocus
             onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setOpen(false); }}
           />
         </span>
       </td>
       {/* Edit cell — confirm / clear-override / cancel */}
-      <td className="py-1.5 pr-4 w-14">
+      <td className="py-2 pr-4 w-14">
         <div className="flex items-center gap-1">
           <button
             onClick={handleSave}
@@ -327,11 +327,11 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved, variant = "warning"
   if (!open) {
     return (
       <tr className={cn("border-b border-dashed", variant === "warning" ? "border-red-200" : "border-border")}>
-        <td colSpan={5} className="py-1.5 px-1">
+        <td colSpan={5} className="py-1.5 pl-4">
           <button
             onClick={() => { setDate(defaultDate); setOpen(true); }}
             className={cn(
-              "flex items-center gap-1.5 text-xs text-muted-foreground transition-colors",
+              "flex items-center gap-1.5 tp-caption transition-colors",
               variant === "warning" ? "hover:text-red-600" : "hover:text-foreground",
             )}
           >
@@ -345,7 +345,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved, variant = "warning"
 
   return (
     <tr className={cn("border-b border-dashed", variant === "warning" ? "border-red-300 bg-red-50/50" : "border-border bg-muted/20")}>
-      <td className="py-1.5 pr-4">
+      <td className="py-2 pl-4 pr-4">
         <input
           type="date"
           value={date}
@@ -354,7 +354,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved, variant = "warning"
           className="rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary w-[80px]"
         />
       </td>
-      <td className="py-1.5 pr-4">
+      <td className="py-2 pr-4">
         <input
           type="text"
           value={description}
@@ -363,7 +363,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved, variant = "warning"
           className="w-full rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </td>
-      <td className="py-1.5 pr-2 text-right">
+      <td className="py-2 pr-2 text-right">
         <input
           type="text"
           inputMode="decimal"
@@ -371,14 +371,14 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved, variant = "warning"
           onChange={(e) => setAmount(e.target.value)}
           placeholder="0.00"
           autoFocus
-          className="w-28 rounded border border-border bg-background px-2 py-0.5 text-xs tabular-nums font-label text-right focus:outline-none focus:ring-1 focus:ring-primary"
+          className="w-28 rounded border border-border bg-background px-2 py-0.5 text-xs tabular-nums font-mono text-right focus:outline-none focus:ring-1 focus:ring-primary"
           onKeyDown={(e) => {
             if (e.key === "Enter") handleSave();
             if (e.key === "Escape") setOpen(false);
           }}
         />
       </td>
-      <td className="py-1.5 pr-4 w-14" colSpan={2}>
+      <td className="py-2 pr-4 w-14" colSpan={2}>
         <div className="flex items-center gap-1">
           <button
             onClick={handleSave}
@@ -444,18 +444,18 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
 
   if (!editing) {
     return (
-      <tr className="group border-b border-border/50 bg-amber-50/50 hover:bg-amber-50 transition-colors">
-        <td className="py-1.5 pr-4 text-muted-foreground whitespace-nowrap">{fmtDate(event.date)}</td>
-        <td className="py-1.5 pr-4">
+      <tr className="group border-b border-border/50 bg-amber-50/50 hover:bg-amber-50 transition-colors last:border-b-0">
+        <td className="py-2 pl-4 pr-4 tp-fineprint whitespace-nowrap">{fmtDate(event.date)}</td>
+        <td className="py-2 pr-4">
           <div className="flex items-center gap-2">
             <span className="text-green-600 shrink-0">{eventIcon(event.type)}</span>
             <span className="font-medium">{event.description}</span>
           </div>
         </td>
-        <td className="py-1.5 pr-2 text-right tabular-nums font-label font-medium text-green-600">
+        <td className="py-2 pr-2 text-right tabular-nums font-mono font-medium text-green-600">
           +{formatCurrency(event.amount)}
         </td>
-        <td className="py-1.5 pr-4">
+        <td className="py-2 pr-4">
           <div className="flex items-center gap-1 h-[26px]">
             <button
               onClick={() => setEditing(true)}
@@ -475,7 +475,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
           </div>
         </td>
         <td className={cn(
-          "py-1.5 text-right tabular-nums font-label font-semibold",
+          "py-2 pr-4 text-right tabular-nums font-mono font-semibold",
           event.runningBalance < 0 ? "text-red-600" : "text-foreground",
         )}>
           {formatCurrency(event.runningBalance)}
@@ -485,8 +485,8 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
   }
 
   return (
-    <tr className="border-b border-border/50 bg-amber-50">
-      <td className="py-1.5 pr-4">
+    <tr className="border-b border-border/50 bg-amber-50 last:border-b-0">
+      <td className="py-2 pl-4 pr-4">
         <input
           type="date"
           value={date}
@@ -495,7 +495,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
           className="rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary w-[80px]"
         />
       </td>
-      <td className="py-1.5 pr-4">
+      <td className="py-2 pr-4">
         <input
           type="text"
           value={description}
@@ -505,20 +505,20 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
           onKeyDown={(e) => { if (e.key === "Escape") setEditing(false); }}
         />
       </td>
-      <td className="py-1.5 pr-2 text-right">
+      <td className="py-2 pr-2 text-right">
         <span className="inline-flex items-center justify-end gap-1">
-          <span className="text-xs text-muted-foreground">$</span>
+          <span className="tp-caption">$</span>
           <input
             type="text"
             inputMode="decimal"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="w-24 rounded border border-border bg-background px-1.5 py-0.5 text-xs tabular-nums font-label text-right focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-24 rounded border border-border bg-background px-1.5 py-0.5 text-xs tabular-nums font-mono text-right focus:outline-none focus:ring-1 focus:ring-primary"
             onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setEditing(false); }}
           />
         </span>
       </td>
-      <td className="py-1.5 pr-4 w-14">
+      <td className="py-2 pr-4 w-14">
         <div className="flex items-center gap-1">
           <button
             onClick={handleSave}
@@ -537,7 +537,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
         </div>
       </td>
       <td className={cn(
-        "py-1.5 text-right tabular-nums font-label font-semibold",
+        "py-2 pr-4 text-right tabular-nums font-mono font-semibold",
         event.runningBalance < 0 ? "text-red-600" : "text-foreground",
       )}>
         {formatCurrency(event.runningBalance)}
@@ -639,9 +639,9 @@ function StatementDetailPanel({ event, rowMidY, onClose }: StatementDetailPanelP
         </div>
 
         {loading ? (
-          <p className="py-3 text-center text-xs text-muted-foreground">Loading…</p>
+          <p className="py-3 text-center tp-caption">Loading…</p>
         ) : expenses.length === 0 ? (
-          <p className="py-3 text-center text-xs text-muted-foreground">No transactions found</p>
+          <p className="py-3 text-center tp-caption">No transactions found</p>
         ) : (
           <table className="w-full text-xs">
             <thead>
@@ -658,7 +658,7 @@ function StatementDetailPanel({ event, rowMidY, onClose }: StatementDetailPanelP
                     {fmtShort(exp.date.slice(0, 10))}
                   </td>
                   <td className="py-1.5 pr-2 max-w-[90px] truncate">{exp.vendor}</td>
-                  <td className="py-1.5 text-right tabular-nums font-label text-red-500">
+                  <td className="py-1.5 text-right tabular-nums font-mono text-red-500">
                     {formatCurrency(Math.abs(parseFloat(exp.amount)))}
                   </td>
                 </tr>
@@ -698,126 +698,128 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border">
-            <ColumnHeader className="py-2 pr-4 text-left w-24">Date</ColumnHeader>
-            <ColumnHeader className="py-2 pr-4 text-left">Description</ColumnHeader>
-            <ColumnHeader className="py-2 pr-2 text-right w-24">Amount</ColumnHeader>
-            <th className="py-2 pr-4 w-14" />
-            <ColumnHeader className="py-2 text-right w-24">Balance</ColumnHeader>
-          </tr>
-        </thead>
-        <tbody>
-          {events.map((event, idx) => (
-            <React.Fragment key={`event-${event.id}`}>
-              {idx === firstNegativeIdx && firstNegativeIdx !== -1 && (
-                <NewAdjustmentRow
-                  defaultDate={event.date}
-                  accountId={accountId}
-                  onSaved={onRefetch}
-                />
-              )}
-              {event.type === "BALANCE_ADJUSTMENT" ? (
-                <AdjustmentEventRow event={event} onSaved={onRefetch} />
-              ) : (
-                <tr className="group border-b border-border/50 hover:bg-muted/30 transition-colors">
-                  <td className="py-1.5 pr-4 text-muted-foreground whitespace-nowrap">{fmtDate(event.date)}</td>
-                  <td className="py-1.5 pr-4">
-                    <div className="flex items-center gap-2">
-                      <span className={cn("shrink-0", event.amount > 0 ? "text-green-600" : "text-red-500")}>
-                        {eventIcon(event.type)}
-                      </span>
-                      <span className="font-medium">{event.description}</span>
-                      {event.relatedAccountName && event.type !== "CC_CHARGE" && (
-                        <span className="text-xs text-muted-foreground">
-                          {event.type === "TRANSFER_IN" ? "from" : event.type === "TRANSFER_OUT" ? "to" : "·"}{" "}
-                          {event.relatedAccountName}
+    <div className="rounded-lg border border-border overflow-hidden bg-[rgba(255,255,255,0.55)]">
+      <div className="overflow-x-auto">
+        <table className="w-full text-13">
+          <thead>
+            <tr className="border-b border-border bg-[rgba(15,22,48,0.03)]">
+              <ColumnHeader className="py-2 pl-4 pr-4 text-left w-24">Date</ColumnHeader>
+              <ColumnHeader className="py-2 pr-4 text-left">Description</ColumnHeader>
+              <ColumnHeader className="py-2 pr-2 text-right w-24">Amount</ColumnHeader>
+              <th className="py-2 pr-4 w-14" />
+              <ColumnHeader className="py-2 pr-4 text-right w-24">Balance</ColumnHeader>
+            </tr>
+          </thead>
+          <tbody>
+            {events.map((event, idx) => (
+              <React.Fragment key={`event-${event.id}`}>
+                {idx === firstNegativeIdx && firstNegativeIdx !== -1 && (
+                  <NewAdjustmentRow
+                    defaultDate={event.date}
+                    accountId={accountId}
+                    onSaved={onRefetch}
+                  />
+                )}
+                {event.type === "BALANCE_ADJUSTMENT" ? (
+                  <AdjustmentEventRow event={event} onSaved={onRefetch} />
+                ) : (
+                  <tr className="group border-b border-border/50 hover:bg-muted/30 transition-colors last:border-b-0">
+                    <td className="py-2 pl-4 pr-4 tp-fineprint whitespace-nowrap">{fmtDate(event.date)}</td>
+                    <td className="py-2 pr-4">
+                      <div className="flex items-center gap-2">
+                        <span className={cn("shrink-0", event.amount > 0 ? "text-green-600" : "text-red-500")}>
+                          {eventIcon(event.type)}
                         </span>
-                      )}
-                      {event.confidence === "KNOWN" && event.type !== "CC_PAYMENT" && (
-                        <SectionLabel as="span" className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px]">
-                          Confirmed
-                        </SectionLabel>
-                      )}
-                      {event.type === "CC_PAYMENT" && !event.overrideId && (
-                        <SectionLabel as="span" className="rounded-full bg-muted px-1.5 py-0.5 text-[10px]">
-                          Estimated
-                        </SectionLabel>
-                      )}
-                      {event.overrideId && (
-                        <SectionLabel as="span" className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px]">
-                          Confirmed
-                        </SectionLabel>
-                      )}
-                    </div>
-                  </td>
-                  {event.type === "CC_PAYMENT" ? (
-                    <CCPaymentCells
-                      event={event}
-                      accountId={event.relatedAccountId ?? accountId}
-                      onSaved={onRefetch}
-                      amountClassName={event.amount > 0 ? "text-green-600" : "text-red-500"}
-                      onDetailClick={onCCPaymentClick ? (rowMidY) => onCCPaymentClick(event, rowMidY) : undefined}
-                      isDetailOpen={event.id === selectedCCPaymentId}
-                    />
-                  ) : (
-                    <>
-                      <td className={cn(
-                        "py-1.5 pr-2 text-right tabular-nums font-label font-medium",
-                        event.amount > 0 ? "text-green-600" : "text-red-500",
-                      )}>
-                        {event.amount > 0 ? "+" : event.amount === 0 ? "-" : ""}
-                        {formatCurrency(event.amount)}
-                      </td>
-                      <td className="py-1.5 pr-4 w-14">
-                        <div className="flex items-center gap-1 h-[26px]">
-                          {(event.type === "TRANSFER_IN" || event.type === "TRANSFER_OUT") &&
-                            event.transferId && (
-                            <>
-                              <button
-                                onClick={() => onEditTransfer?.(event)}
-                                className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
-                                title="Edit transfer"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                              {event.confidence === "PROJECTED" && (
+                        <span className="font-medium">{event.description}</span>
+                        {event.relatedAccountName && event.type !== "CC_CHARGE" && (
+                          <span className="tp-caption">
+                            {event.type === "TRANSFER_IN" ? "from" : event.type === "TRANSFER_OUT" ? "to" : "·"}{" "}
+                            {event.relatedAccountName}
+                          </span>
+                        )}
+                        {event.confidence === "KNOWN" && event.type !== "CC_PAYMENT" && (
+                          <SectionLabel as="span" className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px]">
+                            Confirmed
+                          </SectionLabel>
+                        )}
+                        {event.type === "CC_PAYMENT" && !event.overrideId && (
+                          <SectionLabel as="span" className="rounded-full bg-muted px-1.5 py-0.5 text-[10px]">
+                            Estimated
+                          </SectionLabel>
+                        )}
+                        {event.overrideId && (
+                          <SectionLabel as="span" className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px]">
+                            Confirmed
+                          </SectionLabel>
+                        )}
+                      </div>
+                    </td>
+                    {event.type === "CC_PAYMENT" ? (
+                      <CCPaymentCells
+                        event={event}
+                        accountId={event.relatedAccountId ?? accountId}
+                        onSaved={onRefetch}
+                        amountClassName={event.amount > 0 ? "text-green-600" : "text-red-500"}
+                        onDetailClick={onCCPaymentClick ? (rowMidY) => onCCPaymentClick(event, rowMidY) : undefined}
+                        isDetailOpen={event.id === selectedCCPaymentId}
+                      />
+                    ) : (
+                      <>
+                        <td className={cn(
+                          "py-2 pr-2 text-right tabular-nums font-mono font-medium",
+                          event.amount > 0 ? "text-green-600" : "text-red-500",
+                        )}>
+                          {event.amount > 0 ? "+" : event.amount === 0 ? "-" : ""}
+                          {formatCurrency(event.amount)}
+                        </td>
+                        <td className="py-2 pr-4 w-14">
+                          <div className="flex items-center gap-1 h-[26px]">
+                            {(event.type === "TRANSFER_IN" || event.type === "TRANSFER_OUT") &&
+                              event.transferId && (
+                              <>
                                 <button
-                                  onClick={async () => { await confirmTransfer(event.transferId!); onRefetch(); }}
-                                  className="rounded p-1.5 text-muted-foreground/40 hover:text-green-600 hover:bg-accent transition-colors"
-                                  title="Confirm transfer"
+                                  onClick={() => onEditTransfer?.(event)}
+                                  className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+                                  title="Edit transfer"
                                 >
-                                  <SquareCheckBig className="h-3.5 w-3.5" />
+                                  <Pencil className="h-3.5 w-3.5" />
                                 </button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </>
-                  )}
-                  <td className={cn(
-                    "py-1.5 text-right tabular-nums font-label font-semibold",
-                    event.runningBalance < 0 ? "text-red-600" : "text-foreground",
-                  )}>
-                    {formatCurrency(event.runningBalance)}
-                  </td>
-                </tr>
-              )}
-            </React.Fragment>
-          ))}
-          {firstNegativeIdx === -1 && events.length > 0 && (
-            <NewAdjustmentRow
-              defaultDate={events[events.length - 1].date}
-              accountId={accountId}
-              onSaved={onRefetch}
-              variant="neutral"
-            />
-          )}
-        </tbody>
-      </table>
+                                {event.confidence === "PROJECTED" && (
+                                  <button
+                                    onClick={async () => { await confirmTransfer(event.transferId!); onRefetch(); }}
+                                    className="rounded p-1.5 text-muted-foreground/40 hover:text-green-600 hover:bg-accent transition-colors"
+                                    title="Confirm transfer"
+                                  >
+                                    <SquareCheckBig className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </>
+                    )}
+                    <td className={cn(
+                      "py-2 pr-4 text-right tabular-nums font-mono font-semibold",
+                      event.runningBalance < 0 ? "text-red-600" : "text-foreground",
+                    )}>
+                      {formatCurrency(event.runningBalance)}
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+            {firstNegativeIdx === -1 && events.length > 0 && (
+              <NewAdjustmentRow
+                defaultDate={events[events.length - 1].date}
+                accountId={accountId}
+                onSaved={onRefetch}
+                variant="neutral"
+              />
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -846,7 +848,7 @@ function AccountPanel({ projection, windowEnd, onRefetch, selectedCCPaymentId, o
         <div className="flex items-center gap-6">
           <div>
             <SectionLabel className="mb-0.5">Today</SectionLabel>
-            <DisplayStat as="p" className="text-xl font-bold">{formatCurrency(projection.startBalance)}</DisplayStat>
+            <DisplayStat as="p" className="tp-stat">{formatCurrency(projection.startBalance)}</DisplayStat>
           </div>
           <div className="text-muted-foreground">→</div>
           <div>
@@ -854,7 +856,7 @@ function AccountPanel({ projection, windowEnd, onRefetch, selectedCCPaymentId, o
               {fmtDate(windowEnd)}
             </SectionLabel>
             <p className={cn(
-              "text-xl font-bold tabular-nums font-numeral",
+              "tp-kpi-l tabular-nums font-display",
               projection.endBalance < 0 ? "text-red-600" : "text-foreground"
             )}>
               {formatCurrency(projection.endBalance)}
@@ -1035,7 +1037,7 @@ function EditBalanceModal({
             />
           </div>
           {account?.balanceUpdatedAt && (
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 tp-caption">
               Last updated {(([y, m, d]) => new Date(+y, +m - 1, +d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }))(account.balanceUpdatedAt.slice(0, 10).split("-"))}
             </p>
           )}
@@ -1138,8 +1140,8 @@ export function CashFlow() {
             <Landmark className="h-4 w-4 text-gray-500" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm truncate">{account.name}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="tp-row-label truncate">{account.name}</p>
+            <p className="tp-caption">
               {account.type === "CHECKING" ? "Checking · Cash" : "Savings · Cash"}
             </p>
           </div>
@@ -1194,7 +1196,7 @@ export function CashFlow() {
   if (projections.length === 0) {
     return (
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold">Cash Flow</h2>
+        <h2 className="tp-page-title">Cash Flow</h2>
         <Card className="p-8 text-center">
           <p className="text-sm text-muted-foreground">
             No checking accounts found. Add accounts to see projections.
@@ -1207,7 +1209,7 @@ export function CashFlow() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold">Cash Flow</h2>
+        <h2 className="tp-page-title">Cash Flow</h2>
         <p className="text-sm text-muted-foreground mt-0.5">
           {fmtDate(data.windowStart)} – {fmtDate(data.windowEnd)} · {data.windowDays}-day projection
         </p>

@@ -194,7 +194,7 @@ function UpcomingStrip({ expenses }: { expenses: UpcomingExpenseItem[] }) {
                 <SectionLabel as="div" className="text-[11px]">
                   {isToday ? "Today" : DAY_NAMES[day.getDay()]}
                 </SectionLabel>
-                <div className={`text-lg font-semibold leading-tight ${isToday ? "text-red-500" : "text-foreground"}`}>
+                <div className={`tp-card-title leading-tight ${isToday ? "text-red-500" : ""}`}>
                   {day.getDate()}
                 </div>
               </div>
@@ -372,7 +372,7 @@ function AnnualCostTooltip({ active, payload }: { active?: boolean; payload?: { 
             <div className="min-w-0">
               <span className="truncate text-muted-foreground block" style={{ maxWidth: 140 }}>{item.description}</span>
               {item.proratedNote && (
-                <span className="text-xs text-muted-foreground/70">* {item.proratedNote}</span>
+                <span className="tp-caption/70">* {item.proratedNote}</span>
               )}
             </div>
             <span className={`shrink-0 font-medium ${item.isCredit ? "text-green-600" : ""}`}>
@@ -435,8 +435,8 @@ const AnnualCostPanel = memo(function AnnualCostPanel({
   return (
     <div>
       <SectionLabel>Annual cost</SectionLabel>
-      <DisplayStat as="p" className="mt-0.5 text-2xl font-bold">{formatCurrency(totalCost)}</DisplayStat>
-      <p className="mb-3 text-xs text-muted-foreground font-label">{includedRules.length} active recurring transactions</p>
+      <DisplayStat as="p" className="mt-0.5 tp-kpi-l">{formatCurrency(totalCost)}</DisplayStat>
+      <p className="mb-3 tp-fineprint">{includedRules.length} active recurring transactions</p>
       <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart layout="vertical" data={data} margin={{ top: 0, right: 88, left: 0, bottom: 0 }}>
           <XAxis type="number" hide domain={[0, "dataMax"]} />
@@ -557,7 +557,7 @@ function RuleTable({
   const hasActions = !!(onEdit || onArchive || onDelete);
 
   return (
-    <table className="w-full table-fixed text-sm">
+    <table className="w-full table-fixed text-13">
       <colgroup>
         {/* Description takes all remaining space */}
         <col />
@@ -588,7 +588,7 @@ function RuleTable({
           >
             <td className="py-3 pr-4">
               <p className="font-medium">{rule.description}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="tp-caption">
                 {formatFrequency(rule.frequency, rule.interval)}
               </p>
             </td>
@@ -606,7 +606,7 @@ function RuleTable({
             <td className="py-3 pr-4 truncate text-muted-foreground">
               {accountMap.get(rule.accountId) ?? "—"}
             </td>
-            <td className={`py-3 pr-3 text-right font-medium${parseFloat(rule.amount) < 0 ? " text-green-600" : ""}`}>
+            <td className={`py-3 pr-3 text-right font-medium font-mono tabular-nums${parseFloat(rule.amount) < 0 ? " text-green-600" : ""}`}>
               {displayAmount(rule.amount)}
             </td>
             <td className="py-3">
@@ -679,7 +679,7 @@ function ConfirmModal({
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
       <div className={`w-full ${wide ? "max-w-lg" : "max-w-sm"} rounded-lg bg-background p-6 shadow-xl text-foreground`}>
-        <h3 className="text-base font-semibold">{title}</h3>
+        <h3 className="tp-panel-title">{title}</h3>
         <div className="mt-2 text-sm text-muted-foreground">{children}</div>
         <div className="mt-4 flex gap-2">{actions}</div>
       </div>
@@ -790,7 +790,7 @@ function TransferRuleModal({
                 required
                 value={form.fromAccountId ?? ""}
                 onChange={(e) => set({ fromAccountId: e.target.value })}
-                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
               >
                 <option value="">— Select account —</option>
                 {bankAccounts.map((a) => (
@@ -807,7 +807,7 @@ function TransferRuleModal({
                 required
                 value={form.toAccountId ?? ""}
                 onChange={(e) => set({ toAccountId: e.target.value })}
-                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
               >
                 <option value="">— Select account —</option>
                 {bankAccounts.filter((a) => a.id !== form.fromAccountId).map((a) => (
@@ -826,7 +826,7 @@ function TransferRuleModal({
               <select
                 value={form.frequency ?? "MONTHLY"}
                 onChange={(e) => set({ frequency: e.target.value as TransferRuleFormData["frequency"] })}
-                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
               >
                 <option value="DAILY">Daily</option>
                 <option value="WEEKLY">Weekly</option>
@@ -1097,7 +1097,7 @@ export function Recurring() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold">Recurring</h2>
+        <h2 className="tp-page-title">Recurring</h2>
       </div>
 
       {/* ── Tab bar ── */}
@@ -1139,7 +1139,7 @@ export function Recurring() {
               {ruleGroups.map(([groupName, groupRules]) => (
                 <div key={groupName ?? "__ungrouped__"}>
                   {groupName && (
-                    <p className="mb-2 text-sm font-semibold">{groupName}</p>
+                    <p className="mb-2 tp-panel-title">{groupName}</p>
                   )}
                   <Card>
                     <RuleTable
@@ -1231,7 +1231,7 @@ export function Recurring() {
 
           <Card>
             {transferRules && transferRules.length > 0 ? (
-              <table className="w-full table-fixed text-sm">
+              <table className="w-full table-fixed text-13">
                 <colgroup>
                   <col />{/* Description */}
                   <col className="w-[110px]" />{/* Frequency */}
@@ -1266,13 +1266,13 @@ export function Recurring() {
                         {formatDate(rule.startDate)}
                       </td>
                       <td className="py-3 pr-4">
-                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1.5 tp-caption">
                           <span className="truncate">{rule.fromAccount.name}</span>
                           <ArrowRight className="h-3 w-3 shrink-0" />
                           <span className="truncate">{rule.toAccount.name}</span>
                         </span>
                       </td>
-                      <td className="py-3 pr-3 text-right tabular-nums font-label font-medium">
+                      <td className="py-3 pr-3 text-right tabular-nums font-mono font-medium">
                         {formatCurrency(parseFloat(rule.amount))}
                       </td>
                       <td className="py-3">
@@ -1468,7 +1468,7 @@ export function Recurring() {
             {/* Linked transaction summary */}
             <div className="mt-3">
               {linkedExpenses === "loading" ? (
-                <p className="text-xs text-muted-foreground italic">Loading linked transactions…</p>
+                <p className="tp-caption italic">Loading linked transactions…</p>
               ) : totalLinked === 0 ? (
                 <p className="rounded-md bg-muted/50 px-3 py-2 text-xs">
                   No transactions are linked to this recurring transaction — deleting it will not affect any expenses.
@@ -1554,7 +1554,7 @@ export function Recurring() {
               <select
                 value={editForm.accountId}
                 onChange={(e) => setEditForm((f) => ({ ...f, accountId: e.target.value }))}
-                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
               >
                 {(() => {
                   const current = (accounts ?? []).find((a) => a.id === editForm.accountId);
@@ -1577,7 +1577,7 @@ export function Recurring() {
               <select
                 value={editForm.categoryId}
                 onChange={(e) => setEditForm((f) => ({ ...f, categoryId: e.target.value }))}
-                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
               >
                 {categoryOptions.map((o) => (
                   <option key={o.id} value={o.id}>{o.label}</option>

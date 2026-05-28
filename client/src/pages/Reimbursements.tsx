@@ -33,7 +33,7 @@ export function ReimbursementsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold">Pending Reimbursements</h2>
+        <h2 className="tp-page-title">Pending Reimbursements</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Expenses you're expecting money back on — returns awaiting refunds, group expenses awaiting payment, etc.
         </p>
@@ -44,7 +44,7 @@ export function ReimbursementsPage() {
           <>
             {/* Desktop table */}
             <div className="hidden md:block">
-              <table className="w-full text-sm">
+              <table className="w-full text-13">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
                     <th className="pb-3 font-medium">Date</th>
@@ -100,7 +100,7 @@ export function ReimbursementsPage() {
                         {expense.category?.name} &middot; {formatDate(expense.date)}
                       </p>
                       {expense.reimbursementNote && (
-                        <p className="mt-0.5 text-xs text-muted-foreground">{expense.reimbursementNote}</p>
+                        <p className="mt-0.5 tp-caption">{expense.reimbursementNote}</p>
                       )}
                     </div>
                   </div>

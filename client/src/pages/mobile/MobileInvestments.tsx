@@ -87,9 +87,9 @@ function SummaryRow({
   return (
     <div className={`flex items-center justify-between gap-3 ${muted ? "text-muted-foreground" : ""}`}>
       <span className="text-sm">{label}</span>
-      <div className="flex items-center gap-2 tabular-nums font-label">
+      <div className="flex items-center gap-2 tabular-nums font-mono">
         <span className="text-sm font-medium">{formatCurrency(value)}</span>
-        <span className="text-xs text-muted-foreground w-8 text-right">{pct.toFixed(0)}%</span>
+        <span className="tp-caption w-8 text-right">{pct.toFixed(0)}%</span>
       </div>
     </div>
   );
@@ -97,12 +97,12 @@ function SummaryRow({
 
 function DeviationBadge({ delta }: { delta: number }) {
   if (Math.abs(delta) < 0.05) {
-    return <StatValue className="text-xs text-muted-foreground">on target</StatValue>;
+    return <StatValue className="tp-caption">on target</StatValue>;
   }
   const isClose = Math.abs(delta) < 0.5;
   const over = delta > 0;
   return (
-    <span className={`text-xs font-medium tabular-nums font-label ${isClose ? "text-green-600" : over ? "text-amber-600" : "text-blue-600"}`}>
+    <span className={`text-xs font-medium tabular-nums font-mono ${isClose ? "text-green-600" : over ? "text-amber-600" : "text-blue-600"}`}>
       {over ? "+" : ""}{delta.toFixed(1)}%
     </span>
   );
@@ -163,8 +163,8 @@ function TaxSheet({
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
           <div>
-            <h2 className="text-base font-semibold">Tax Buckets</h2>
-            <p className="text-xs text-muted-foreground">of invested value</p>
+            <h2 className="tp-panel-title">Tax Buckets</h2>
+            <p className="tp-caption">of invested value</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
             <X className="h-5 w-5" />
@@ -174,7 +174,7 @@ function TaxSheet({
           <div>
             <SummaryRow label="Taxable" value={taxableValue} total={investedValue} />
             {taxableCostBasisPct != null && taxableCostBasisPct > 0 && (
-              <p className="text-xs text-muted-foreground mt-0.5 text-right pr-10">
+              <p className="tp-caption mt-0.5 text-right pr-10">
                 {taxableCostBasisPct.toFixed(0)}% cost basis
               </p>
             )}
@@ -245,7 +245,7 @@ function WithdrawalSheet({
       >
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
-          <h2 className="text-base font-semibold">Monthly Withdrawals</h2>
+          <h2 className="tp-panel-title">Monthly Withdrawals</h2>
           <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
             <X className="h-5 w-5" />
           </button>
@@ -282,7 +282,7 @@ function WithdrawalSheet({
                       style={{ height: heightPct > 0 ? `${heightPct}%` : m.isFuture ? "3px" : "2px" }}
                     />
                   </div>
-                  <span className={`text-[9px] leading-none tabular-nums font-label text-center w-full ${
+                  <span className={`text-[9px] leading-none tabular-nums font-mono text-center w-full ${
                     isSelected ? "text-foreground font-semibold" : m.isFuture ? "text-muted-foreground/40" : "text-muted-foreground"
                   }`}>
                     {m.label}
@@ -308,7 +308,7 @@ function WithdrawalSheet({
               )}
             </div>
           ) : (
-            <p className="mt-3 text-center text-xs text-muted-foreground">Tap a bar to see details</p>
+            <p className="mt-3 text-center tp-caption">Tap a bar to see details</p>
           )}
         </div>
 
@@ -443,7 +443,7 @@ function RebalanceModal({
     <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       {/* Header */}
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-        <h2 className="text-base font-semibold">Rebalancing Simulator</h2>
+        <h2 className="tp-panel-title">Rebalancing Simulator</h2>
         <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
           <X className="h-5 w-5" />
         </button>
@@ -474,11 +474,11 @@ function RebalanceModal({
               <div className="space-y-2">
                 <SectionLabel>Projected Allocation</SectionLabel>
                 <div className="flex items-center gap-2">
-                  <span className="w-11 shrink-0 text-right text-xs text-muted-foreground">After</span>
+                  <span className="w-11 shrink-0 text-right tp-caption">After</span>
                   <StackedBar segments={manualProjectedSegments} />
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="w-11 shrink-0 text-right text-xs text-muted-foreground">Before</span>
+                  <span className="w-11 shrink-0 text-right tp-caption">Before</span>
                   <StackedBar segments={currentSegments} />
                 </div>
               </div>
@@ -496,29 +496,29 @@ function RebalanceModal({
                       {/* col 1, row 1 */}
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: color }} />
-                        <span className="text-sm font-medium truncate">{item.name}</span>
+                        <span className="tp-row-label truncate">{item.name}</span>
                       </div>
                       {/* col 2, rows 1–2 */}
                       <div className="relative row-span-2 self-stretch col-start-2 row-start-1">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none select-none">$</span>
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 tp-caption pointer-events-none select-none">$</span>
                         <input
                           type="text"
                           inputMode="decimal"
                           value={manualAdj[item.id] ?? ""}
                           onChange={(e) => setManualAdj((prev) => ({ ...prev, [item.id]: e.target.value }))}
                           placeholder="0"
-                          className="w-full h-full rounded-md border border-border bg-background pl-6 pr-3 py-2 text-sm text-right tabular-nums font-label focus:outline-none focus:border-primary"
+                          className="w-full h-full rounded-md border border-border bg-background pl-6 pr-3 py-2 text-sm text-right tabular-nums font-mono focus:outline-none focus:border-primary"
                         />
                       </div>
                       {/* col 1, row 2 */}
                       <div className="flex items-center gap-1.5 pl-[18px] mt-1 text-xs">
                         <StatValue className="text-muted-foreground">{item.actualPct.toFixed(1)}%</StatValue>
                         <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-                        <span className={`tabular-nums font-label font-medium ${
+                        <span className={`tabular-nums font-mono font-medium ${
                           delta == null ? "text-muted-foreground" : Math.abs(delta) < 0.5 ? "text-green-600" : delta > 0 ? "text-amber-600" : "text-blue-600"
                         }`}>{newPct.toFixed(1)}%</span>
                         {delta != null && (
-                          <span className={`tabular-nums font-label ${
+                          <span className={`tabular-nums font-mono ${
                             Math.abs(delta) < 0.5 ? "text-green-600" : delta > 0 ? "text-amber-600" : "text-blue-600"
                           }`}>
                             ({delta >= 0 ? "+" : ""}{delta.toFixed(1)}%)
@@ -564,7 +564,7 @@ function RebalanceModal({
                     onChange={(e) => setTolerancePct(parseFloat(e.target.value))}
                     className="w-full accent-primary"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="tp-caption">
                     {rebalanceMode === "buy-only"
                       ? <>Buy into under-allocated classes until each is within{" "}
                           <span className="font-medium">{tolerancePct.toFixed(1)}%</span> of target.</>
@@ -579,11 +579,11 @@ function RebalanceModal({
               <div className="space-y-2">
                 <SectionLabel>Projected Allocation</SectionLabel>
                 <div className="flex items-center gap-2">
-                  <span className="w-11 shrink-0 text-right text-xs text-muted-foreground">After</span>
+                  <span className="w-11 shrink-0 text-right tp-caption">After</span>
                   <StackedBar segments={autoProjectedSegments} />
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="w-11 shrink-0 text-right text-xs text-muted-foreground">Before</span>
+                  <span className="w-11 shrink-0 text-right tp-caption">Before</span>
                   <StackedBar segments={currentSegments} />
                 </div>
               </div>
@@ -607,7 +607,7 @@ function RebalanceModal({
                       <div className="flex items-center gap-2">
                         <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: color }} />
                         <span className="text-sm font-medium flex-1 truncate">{item.name}</span>
-                        <span className={`text-sm font-semibold tabular-nums font-label ${
+                        <span className={`text-13 font-semibold tabular-nums font-mono ${
                           isBuy ? "text-blue-600" : isSell ? "text-amber-600" : "text-muted-foreground"
                         }`}>
                           {isBuy ? `+${formatCurrency(adj)}` : isSell ? `−${formatCurrency(Math.abs(adj))}` : "—"}
@@ -616,9 +616,9 @@ function RebalanceModal({
                       <div className="flex items-center gap-1.5 pl-[18px] mt-1 text-xs">
                         <StatValue className="text-muted-foreground">{item.actualPct.toFixed(1)}%</StatValue>
                         <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-                        <span className={`tabular-nums font-label font-medium ${deltaColor}`}>{newPct.toFixed(1)}%</span>
+                        <span className={`tabular-nums font-mono font-medium ${deltaColor}`}>{newPct.toFixed(1)}%</span>
                         {delta != null && (
-                          <span className={`tabular-nums font-label ${deltaColor}`}>
+                          <span className={`tabular-nums font-mono ${deltaColor}`}>
                             ({delta >= 0 ? "+" : ""}{delta.toFixed(1)}%)
                           </span>
                         )}
@@ -637,7 +637,7 @@ function RebalanceModal({
         {tab === "manual" && (
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Net cash deployed</span>
-            <span className={`text-sm font-semibold tabular-nums font-label ${
+            <span className={`text-13 font-semibold tabular-nums font-mono ${
               manualDelta > 0 ? "text-green-600" : manualDelta < 0 ? "text-red-500" : "text-muted-foreground"
             }`}>
               {manualDelta >= 0 ? "+" : "−"}{formatCurrency(Math.abs(manualDelta))}
@@ -783,14 +783,14 @@ export function MobileInvestments() {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
-          <p className="font-medium text-sm truncate">{account.name}</p>
+          <p className="tp-row-label truncate">{account.name}</p>
           {pendingDividendAccountIds.has(account.id) && (
             <span className="shrink-0 inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700 whitespace-nowrap">
               Pending
             </span>
           )}
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="tp-caption">
           {(() => {
             const n = account.holdings.length + (account.manualCount ?? 0);
             return `${n} holding${n !== 1 ? "s" : ""}`;
@@ -842,11 +842,11 @@ export function MobileInvestments() {
             <div className="rounded-xl border border-border p-4 space-y-4">
               <div>
                 <SectionLabel>Total Portfolio</SectionLabel>
-                <DisplayStat as="p" className="text-2xl font-bold mt-0.5">{formatCurrency(totalPortfolioValue)}</DisplayStat>
+                <DisplayStat as="p" className="tp-kpi-l mt-0.5">{formatCurrency(totalPortfolioValue)}</DisplayStat>
                 {totalDayGain !== 0 && (
                   <GainBadge value={totalDayGain} pct={totalDayGainPct} label="1-day" className="mt-1" />
                 )}
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="tp-caption mt-1">
                   {refreshPhase === "running"
                     ? refreshTotal > 0
                       ? `Fetching latest prices… ${refreshCount} of ${refreshTotal} securities`
@@ -904,24 +904,24 @@ export function MobileInvestments() {
 
               <div className="grid grid-cols-2 gap-4 mb-3">
                 <div>
-                  <DisplayStat as="p" className="text-2xl font-bold">{rateStr}</DisplayStat>
-                  <p className="text-xs text-muted-foreground mt-0.5">annualized (YTD)</p>
+                  <DisplayStat as="p" className="tp-kpi-l">{rateStr}</DisplayStat>
+                  <p className="tp-fineprint mt-0.5">annualized (YTD)</p>
                 </div>
                 <div>
-                  <DisplayStat as="p" className="text-2xl font-bold">{formatCurrency(ytdTotal)}</DisplayStat>
-                  <p className="text-xs text-muted-foreground mt-0.5">withdrawn YTD</p>
+                  <DisplayStat as="p" className="tp-kpi-l">{formatCurrency(ytdTotal)}</DisplayStat>
+                  <p className="tp-fineprint mt-0.5">withdrawn YTD</p>
                 </div>
               </div>
 
               {targetRate !== null && ytdRate !== null && effectiveDenominator > 0 && (
-                <p className={`text-xs font-medium tabular-nums font-label mb-1.5 ${ytdRate <= targetRate ? "text-green-600" : "text-red-500"}`}>
+                <p className={`text-xs font-medium tabular-nums font-mono mb-1.5 ${ytdRate <= targetRate ? "text-green-600" : "text-red-500"}`}>
                   {ytdRate <= targetRate
                     ? `▼ ${((targetRate - ytdRate) * 100).toFixed(2)}% under target`
                     : `▲ ${((ytdRate - targetRate) * 100).toFixed(2)}% over target`}
                 </p>
               )}
 
-              <p className="text-xs text-muted-foreground mb-3">
+              <p className="tp-caption mb-3">
                 {investmentSettings?.withdrawalRateDenominator
                   ? `vs. ${formatCurrency(investmentSettings.withdrawalRateDenominator)} (fixed)`
                   : `vs. ${formatCurrency(totalPortfolioValue)} portfolio`}
@@ -1003,11 +1003,11 @@ export function MobileInvestments() {
                       return (
                         <div className="space-y-2 mb-4">
                           <div className="flex items-center gap-2">
-                            <span className="w-12 shrink-0 text-right text-xs text-muted-foreground">Target</span>
+                            <span className="w-12 shrink-0 text-right tp-caption">Target</span>
                             <StackedBar segments={targetSegments} />
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="w-12 shrink-0 text-right text-xs text-muted-foreground">Actual</span>
+                            <span className="w-12 shrink-0 text-right tp-caption">Actual</span>
                             <StackedBar segments={actualSegments} />
                           </div>
                         </div>
@@ -1031,11 +1031,11 @@ export function MobileInvestments() {
                               {delta != null && <DeviationBadge delta={delta} />}
                             </div>
                             <div className="flex items-center justify-between pl-[18px] mt-0.5">
-                              <span className="text-xs text-muted-foreground">
+                              <span className="tp-caption">
                                 {item.targetPct != null ? `target ${item.targetPct.toFixed(1)}%` : "no target"}
                               </span>
                               {deltaDollars != null && Math.abs(deltaDollars) >= 1 && (
-                                <span className={`text-xs tabular-nums font-label ${
+                                <span className={`text-xs tabular-nums font-mono ${
                                   deltaDollars > 0 ? "text-amber-600" : "text-blue-600"
                                 }`}>
                                   {deltaDollars >= 0 ? "+" : "−"}{formatCurrency(Math.abs(deltaDollars))}

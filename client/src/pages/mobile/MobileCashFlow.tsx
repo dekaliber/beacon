@@ -179,7 +179,7 @@ function EditBalanceSheet({
 
         {/* Header */}
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
-          <h2 className="text-base font-semibold">Edit Balance</h2>
+          <h2 className="tp-panel-title">Edit Balance</h2>
           <button
             type="button"
             onClick={onClose}
@@ -210,7 +210,7 @@ function EditBalanceSheet({
               />
             </div>
             {account?.balanceUpdatedAt && (
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 tp-caption">
                 Last updated {fmtDateLong(account.balanceUpdatedAt.slice(0, 10))}
               </p>
             )}
@@ -331,7 +331,7 @@ function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved,
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
 
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
-          <h2 className="text-base font-semibold">{isEditing ? "Edit Cash Injection" : "Add Cash Injection"}</h2>
+          <h2 className="tp-panel-title">{isEditing ? "Edit Cash Injection" : "Add Cash Injection"}</h2>
           <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
@@ -518,9 +518,9 @@ function CCPaymentSheet({
         {/* Header */}
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
           <div>
-            <h2 className="text-base font-semibold">{event?.description ?? "CC Payment"}</h2>
+            <h2 className="tp-panel-title">{event?.description ?? "CC Payment"}</h2>
             {periodLabel && (
-              <p className="text-xs text-muted-foreground mt-0.5">Statement period: {periodLabel}</p>
+              <p className="tp-caption mt-0.5">Statement period: {periodLabel}</p>
             )}
           </div>
           <button
@@ -576,9 +576,9 @@ function CCPaymentSheet({
             </div>
 
             {loadingExpenses ? (
-              <p className="py-4 text-center text-xs text-muted-foreground">Loading…</p>
+              <p className="py-4 text-center tp-caption">Loading…</p>
             ) : expenses.length === 0 ? (
-              <p className="py-4 text-center text-xs text-muted-foreground">No transactions found</p>
+              <p className="py-4 text-center tp-caption">No transactions found</p>
             ) : (
               <div className="rounded-md border border-border overflow-hidden">
                 {expenses.map((exp, i) => (
@@ -649,7 +649,7 @@ function BankingTile({
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-medium text-sm truncate">{account.name}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="tp-caption">
             {account.type === "CHECKING" ? "Checking · Cash" : "Savings · Cash"}
           </p>
         </div>
@@ -742,7 +742,7 @@ function MobileEventsLedger({
                 <p className="truncate font-medium">{event.description}</p>
               </div>
               <span className={cn(
-                "shrink-0 tabular-nums font-label font-medium",
+                "shrink-0 tabular-nums font-mono font-medium",
                 event.amount > 0 ? "text-green-600" : "text-red-500",
               )}>
                 {event.amount > 0 ? "+" : ""}{formatCurrency(event.amount)}
@@ -773,7 +773,7 @@ function MobileEventsLedger({
                 )}
               </p>
               <span className={cn(
-                "shrink-0 text-sm tabular-nums font-label font-semibold",
+                "shrink-0 text-sm tabular-nums font-mono font-semibold",
                 event.runningBalance < 0 ? "text-red-600" : "text-muted-foreground",
               )}>
                 {formatCurrency(event.runningBalance)}
@@ -786,7 +786,7 @@ function MobileEventsLedger({
         <button
           type="button"
           onClick={onAddInjection}
-          className="w-full flex items-center gap-1.5 py-2.5 text-xs text-muted-foreground hover:text-foreground border-b border-dashed border-border transition-colors"
+          className="w-full flex items-center gap-1.5 py-2.5 tp-caption hover:text-foreground border-b border-dashed border-border transition-colors"
         >
           <PlusCircle className="h-3.5 w-3.5" />
           Add cash injection
@@ -826,13 +826,13 @@ function ProjectionSection({
         <div className="flex items-center gap-6">
           <div>
             <SectionLabel className="mb-0.5">Today</SectionLabel>
-            <DisplayStat as="p" className="text-xl font-bold">{formatCurrency(projection.startBalance)}</DisplayStat>
+            <DisplayStat as="p" className="tp-stat">{formatCurrency(projection.startBalance)}</DisplayStat>
           </div>
           <div className="text-muted-foreground">→</div>
           <div>
             <SectionLabel className="mb-0.5">{fmtDate(windowEnd)}</SectionLabel>
             <p className={cn(
-              "text-xl font-bold tabular-nums font-numeral",
+              "tp-kpi-l tabular-nums font-display",
               projection.endBalance < 0 ? "text-red-600" : "text-foreground"
             )}>
               {formatCurrency(projection.endBalance)}
@@ -853,7 +853,7 @@ function ProjectionSection({
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-medium text-sm text-red-600">Projected shortfall</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="tp-caption">
                 {formatCurrency(shortfall)} starting {fmtDate(firstNegativeDate)}
               </p>
             </div>
@@ -954,7 +954,7 @@ export function MobileCashFlow() {
     <div>
       {/* Page header */}
       <div className="mb-6">
-        <h2 className="text-2xl font-bold">Cash Flow</h2>
+        <h2 className="tp-page-title">Cash Flow</h2>
         {data && (
           <p className="text-sm text-muted-foreground mt-0.5">
             {fmtDate(data.windowStart)} – {fmtDate(data.windowEnd)} · {data.windowDays}-day projection

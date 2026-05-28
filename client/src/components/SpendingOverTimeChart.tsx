@@ -72,7 +72,7 @@ export function SpendingOverTimeChart({ year, month }: { year: number; month: nu
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
-        <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+        <p className="mt-0.5 flex items-center gap-1 tp-caption">
           {drillCategory ? (
             <button onClick={handleDrillOut} className="text-primary hover:underline">
               All categories
@@ -123,7 +123,7 @@ export function SpendingOverTimeChart({ year, month }: { year: number; month: nu
                 tick={(props: any) => {
                   if (props.index === 0) return <g />;
                   return (
-                    <text x={props.x} y={props.y} dy={4} textAnchor="end" fontSize={12} fill="var(--color-muted-foreground)" style={{ fontFamily: "var(--font-label)" }}>
+                    <text x={props.x} y={props.y} dy={4} textAnchor="end" fontSize={12} fill="var(--color-muted-foreground)" style={{ fontFamily: "var(--font-mono)" }}>
                       {yTickFormatter(props.payload.value)}
                     </text>
                   );
@@ -159,7 +159,7 @@ export function SpendingOverTimeChart({ year, month }: { year: number; month: nu
                                   fontSize={10}
                                   fill={s.color}
                                   fontWeight="600"
-                                  style={{ fontFamily: "var(--font-label)" }}
+                                  style={{ fontFamily: "var(--font-mono)" }}
                                 >
                                   {fmtCompact(value)}
                                 </text>

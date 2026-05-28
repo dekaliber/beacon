@@ -35,7 +35,7 @@ export function PageHeadingMenu({
   }, [open]);
 
   if (items.length === 0) {
-    return <h1 className="text-2xl font-bold">{title}</h1>;
+    return <h1 className="tp-page-title">{title}</h1>;
   }
 
   return (
@@ -47,7 +47,7 @@ export function PageHeadingMenu({
         aria-haspopup="true"
         aria-expanded={open}
       >
-        <h1 className="text-2xl font-bold">{title}</h1>
+        <h1 className="tp-page-title">{title}</h1>
         <ChevronDown
           className={`h-4 w-4 text-muted-foreground transition-transform duration-150 ${
             open ? "rotate-180" : ""

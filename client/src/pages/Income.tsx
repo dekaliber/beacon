@@ -215,7 +215,7 @@ function EditableTypeaheadCell({
                   <button
                     key={item.id}
                     type="button"
-                    className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                    className={`block w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
                     onMouseDown={() => selectItem(item.id)}
                   >
                     {item.name}
@@ -228,7 +228,7 @@ function EditableTypeaheadCell({
       ) : color != null ? (
         <span
           onClick={startEditing}
-          className="inline-block cursor-pointer whitespace-nowrap rounded-md px-2 py-0.5 text-sm text-foreground"
+          className="inline-block cursor-pointer whitespace-nowrap rounded-md px-2 py-0.5 text-13 text-foreground"
           style={{ backgroundColor: color }}
         >
           {label}
@@ -651,7 +651,7 @@ function CategoryTypeahead({
           }
           setOpen((o) => !o);
         }}
-        className="w-full rounded-md border border-border px-3 py-2 text-left text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+        className="w-full rounded-md border border-border px-3 py-2 text-left text-[13px] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
       >
         {selectedLabel || <span className="text-muted-foreground">Select category</span>}
       </button>
@@ -664,20 +664,20 @@ function CategoryTypeahead({
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Type to filter..."
-              className="w-full rounded border border-border px-2 py-1 text-sm focus:outline-none"
+              className="w-full rounded border border-border px-2 py-1 text-[13px] focus:outline-none"
               autoFocus
             />
           </div>
           <div className="max-h-48 overflow-auto">
             {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-muted-foreground">No matches</p>
+              <p className="px-3 py-2 text-[13px] text-muted-foreground">No matches</p>
             ) : (
               filtered.map((o, i) => (
                 <button
                   key={o.id}
                   type="button"
                   tabIndex={-1}
-                  className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  className={`block w-full px-3 py-1.5 text-left text-[13px] ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
                   onMouseDown={() => selectItem(o.id)}
                 >
                   {o.parentLabel && <span className="text-muted-foreground">{o.parentLabel} &gt; </span>}
@@ -799,7 +799,7 @@ function ItemTypeahead({
           }
           setOpen((o) => !o);
         }}
-        className={`w-full rounded-md border px-3 py-2 text-left text-sm focus:outline-none focus:ring-1 ${error ? "border-destructive focus:border-destructive focus:ring-destructive/30" : "border-border focus:border-primary focus:ring-primary"}`}
+        className={`w-full rounded-md border px-3 py-2 text-left text-[13px] focus:outline-none focus:ring-1 ${error ? "border-destructive focus:border-destructive focus:ring-destructive/30" : "border-border focus:border-primary focus:ring-primary"}`}
       >
         {selectedLabel || <span className="text-muted-foreground">{placeholder ?? "Select..."}</span>}
       </button>
@@ -812,20 +812,20 @@ function ItemTypeahead({
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Type to filter..."
-              className="w-full rounded border border-border px-2 py-1 text-sm focus:outline-none"
+              className="w-full rounded border border-border px-2 py-1 text-[13px] focus:outline-none"
               autoFocus
             />
           </div>
           <div className="max-h-48 overflow-auto">
             {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-muted-foreground">No matches</p>
+              <p className="px-3 py-2 text-[13px] text-muted-foreground">No matches</p>
             ) : (
               filtered.map((item, i) => (
                 <button
                   key={item.id}
                   type="button"
                   tabIndex={-1}
-                  className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  className={`block w-full px-3 py-1.5 text-left text-[13px] ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
                   onMouseDown={() => selectItem(item.id)}
                 >
                   {item.name}
@@ -1265,7 +1265,7 @@ export function IncomePage() {
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
-        <h2 className="text-2xl font-bold">Income</h2>
+        <h2 className="tp-page-title">Income</h2>
         <div className="flex items-center gap-2">
           <Link
             to="/income/tax-estimator"
@@ -1340,22 +1340,22 @@ export function IncomePage() {
                         if (preset) setStaged((s) => ({ ...s, datePreset: label, startDate: preset.start, endDate: preset.end }));
                       }
                     }}
-                    className="appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                    className="appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
                   >
                     {dateRangePresets.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}
                     <option value="Custom">Custom</option>
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
                 </div>
-                <input type="date" value={staged.startDate} onChange={(e) => setStaged((s) => ({ ...s, startDate: e.target.value, datePreset: "Custom" }))} className="rounded-md border border-border px-2 py-1.5 text-sm" />
-                <span className="text-xs text-muted-foreground">→</span>
-                <input type="date" value={staged.endDate || todayStr} onChange={(e) => setStaged((s) => ({ ...s, endDate: e.target.value, datePreset: "Custom" }))} className="rounded-md border border-border px-2 py-1.5 text-sm" />
+                <input type="date" value={staged.startDate} onChange={(e) => setStaged((s) => ({ ...s, startDate: e.target.value, datePreset: "Custom" }))} className="rounded-md border border-border px-2 py-2 text-sm" />
+                <span className="tp-caption">→</span>
+                <input type="date" value={staged.endDate || todayStr} onChange={(e) => setStaged((s) => ({ ...s, endDate: e.target.value, datePreset: "Custom" }))} className="rounded-md border border-border px-2 py-2 text-sm" />
               </div>
             </div>
             <div>
               <label className="mb-1 block text-xs invisible select-none" aria-hidden="true">x</label>
               <div className="flex h-8 items-center gap-3">
-                <button onClick={resetFilters} className="text-sm text-muted-foreground hover:text-foreground hover:underline">
+                <button onClick={resetFilters} className="text-[13px] text-muted-foreground hover:text-foreground hover:underline">
                   Reset to defaults
                 </button>
                 <Button size="sm" onClick={applyFilters}>Apply</Button>
@@ -1383,7 +1383,7 @@ export function IncomePage() {
         <Card>
           <SectionLabel as="h3" className="mb-3 text-sm">Upcoming</SectionLabel>
           <div className="hidden md:block">
-            <table className="w-full table-fixed text-sm">
+            <table className="w-full table-fixed text-13">
               <thead>
                 <tr className="border-b border-border text-left text-muted-foreground">
                   <th className="w-[44px] pb-3 pr-2 text-center">
@@ -1452,7 +1452,7 @@ export function IncomePage() {
                         {income.account.isJoint ? "J" : "P"}
                       </span>
                     </td>
-                    <td className="w-[90px] py-2 text-right font-semibold text-green-600">
+                    <td className="w-[90px] py-2 text-right font-semibold font-mono tabular-nums text-green-600">
                       <EditableAmountCell
                         value={income.amount}
                         positive
@@ -1491,7 +1491,7 @@ export function IncomePage() {
         {incomes.length > 0 ? (
           <>
             <div className="hidden md:block">
-              <table className="w-full table-fixed text-sm">
+              <table className="w-full table-fixed text-13">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
                     <th className="w-[44px] pb-3 pr-2 text-center">
@@ -1569,7 +1569,7 @@ export function IncomePage() {
                           {income.account.isJoint ? "J" : "P"}
                         </span>
                       </td>
-                      <td className={`w-[90px] py-2 text-right font-semibold ${!income.isCashReceived ? "text-muted-foreground" : "text-green-600"}`}>
+                      <td className={`w-[90px] py-2 text-right font-semibold font-mono tabular-nums ${!income.isCashReceived ? "text-muted-foreground" : "text-green-600"}`}>
                         <EditableAmountCell
                           value={income.amount}
                           positive
@@ -1833,7 +1833,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
                   <select
                     value={taxClassification}
                     onChange={(e) => setTaxClassification(e.target.value)}
-                    className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                    className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
                   >
                     <option value="">Not specified</option>
                     <option value="CAPITAL_GAIN">Capital Gain</option>
@@ -2060,7 +2060,7 @@ function ImportModal({
           <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono">
             Date, Source, Category, Account, Amount
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="tp-caption">
             First row should be a header (it will be skipped). Dates can be YYYY-MM-DD or M/D/YYYY.
             {categoryNames.length > 0
               ? ` Category must match one of your income categories (e.g. ${categoryNames.slice(0, 3).join(", ")}${categoryNames.length > 3 ? "…" : ""}).`
@@ -2126,7 +2126,7 @@ function ImportModal({
                     <td className="px-2 py-1.5 max-w-[120px] truncate">{row.source || "—"}</td>
                     <td className="px-2 py-1.5">{row.categoryId ? (categories.find((c) => c.id === row.categoryId)?.name ?? row.categoryName) : row.categoryName}</td>
                     <td className="px-2 py-1.5 max-w-[100px] truncate">{row.accountName}</td>
-                    <td className="px-2 py-1.5 text-right font-medium text-green-600">
+                    <td className="px-2 py-1.5 text-right font-medium font-mono tabular-nums text-green-600">
                       {row.amount === 0 ? "—" : `+${formatCurrency(row.amount)}`}
                     </td>
                     <td className="px-2 py-1.5">

@@ -142,7 +142,7 @@ function CategoryPicker({ categories, initialId = "" }: { categories: Category[]
               >
                 <span className="flex flex-col">
                   {o.parentLabel && (
-                    <span className="text-xs text-muted-foreground leading-tight">{o.parentLabel}</span>
+                    <span className="tp-caption leading-tight">{o.parentLabel}</span>
                   )}
                   <span className={`text-sm ${selectedId === o.id ? "font-medium text-primary" : ""}`}>
                     {o.label}
@@ -244,7 +244,7 @@ function MobileIncomeModal({
     <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       {/* Header */}
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-        <h2 className="text-base font-semibold">{isEditing ? "Edit Income" : "Add Income"}</h2>
+        <h2 className="tp-panel-title">{isEditing ? "Edit Income" : "Add Income"}</h2>
         <button
           type="button"
           onClick={onClose}
@@ -649,7 +649,7 @@ function MobileIncomeFilterSheet({
 
         {/* Header */}
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
-          <h2 className="text-base font-semibold">Filters</h2>
+          <h2 className="tp-panel-title">Filters</h2>
           <button
             type="button"
             onClick={onClose}
@@ -692,8 +692,8 @@ function MobileIncomeFilterSheet({
               {accountOpen && (
                 <div className="mr-3 flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                   <button type="button" onClick={() => setStaged((s) => ({ ...s, accountIds: accounts.map((a) => a.id) }))} className="text-xs text-primary">All</button>
-                  <span className="text-xs text-muted-foreground/40">·</span>
-                  <button type="button" onClick={() => setStaged((s) => ({ ...s, accountIds: [] }))} className="text-xs text-muted-foreground">None</button>
+                  <span className="tp-caption/40">·</span>
+                  <button type="button" onClick={() => setStaged((s) => ({ ...s, accountIds: [] }))} className="tp-caption">None</button>
                 </div>
               )}
               <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-150 ${accountOpen ? "rotate-180" : ""}`} />
@@ -758,8 +758,8 @@ function MobileIncomeFilterSheet({
               {categoryOpen && (
                 <div className="mr-3 flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                   <button type="button" onClick={() => setStaged((s) => ({ ...s, categoryIds: [...new Set([...s.categoryIds, ...filteredCats.map((o) => o.id)])] }))} className="text-xs text-primary">All</button>
-                  <span className="text-xs text-muted-foreground/40">·</span>
-                  <button type="button" onClick={() => { const ids = new Set(filteredCats.map((o) => o.id)); setStaged((s) => ({ ...s, categoryIds: s.categoryIds.filter((id) => !ids.has(id)) })); }} className="text-xs text-muted-foreground">None</button>
+                  <span className="tp-caption/40">·</span>
+                  <button type="button" onClick={() => { const ids = new Set(filteredCats.map((o) => o.id)); setStaged((s) => ({ ...s, categoryIds: s.categoryIds.filter((id) => !ids.has(id)) })); }} className="tp-caption">None</button>
                 </div>
               )}
               <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-150 ${categoryOpen ? "rotate-180" : ""}`} />
@@ -869,7 +869,7 @@ function MobileIncomeFilterSheet({
             <button
               type="button"
               onClick={() => { onReset(); onClose(); }}
-              className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent"
+              className="flex-1 rounded-md border border-border py-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent"
             >
               Reset to defaults
             </button>
@@ -1088,7 +1088,7 @@ export function MobileIncome() {
     <>
       <div className="space-y-6">
         <div className="flex items-center gap-2">
-          <h1 className="flex-1 text-2xl font-bold">Income</h1>
+          <h1 className="flex-1 tp-page-title">Income</h1>
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input

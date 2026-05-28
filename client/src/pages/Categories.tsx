@@ -81,7 +81,7 @@ export function Categories() {
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
-        <h2 className="text-2xl font-bold">Categories</h2>
+        <h2 className="tp-page-title">Categories</h2>
         <Button onClick={openAdd}><Plus className="h-4 w-4" /> Add Category</Button>
       </div>
 
@@ -190,7 +190,7 @@ function CategoryList({ categories, expanded, icon: Icon, onToggleExpand, onAddC
               {cat.ignoreInBudget && <span title="Ignored in budget" className="inline-flex flex-shrink-0"><EyeOff className="h-4 w-4 text-gray-300" /></span>}
 
               {hasChildren && (
-                <span className="text-xs text-muted-foreground">
+                <span className="tp-caption">
                   {cat.children!.length} subcategories
                 </span>
               )}
@@ -313,7 +313,7 @@ function CategoryModal({ open, onClose, onSave, onDelete, category, parentId, ki
               <select
                 value={selectedKind}
                 onChange={(e) => setSelectedKind(e.target.value as "EXPENSE" | "INCOME")}
-                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
               >
                 <option value="EXPENSE">Expense</option>
                 <option value="INCOME">Income</option>
@@ -427,7 +427,7 @@ function CategoryModal({ open, onClose, onSave, onDelete, category, parentId, ki
                 <select
                   value={reassignTo}
                   onChange={(e) => setReassignTo(e.target.value)}
-                  className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground bg-background"
+                  className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground bg-background"
                 >
                   <option value="">Leave uncategorized</option>
                   {parents.map((parent) => {

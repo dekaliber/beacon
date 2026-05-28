@@ -41,7 +41,7 @@ export function MobileReimbursements() {
     <>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">Pending Reimbursements</h1>
+          <h1 className="tp-page-title">Pending Reimbursements</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Expenses you're expecting money back on.
           </p>
@@ -63,7 +63,7 @@ export function MobileReimbursements() {
           <div className="rounded-xl border border-border px-4 py-12 text-center">
             <AlertCircle className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
             <p className="text-sm font-medium">No pending reimbursements</p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 tp-caption">
               Flag an expense as expecting reimbursement from the Expenses page to track it here.
             </p>
           </div>
@@ -74,13 +74,13 @@ export function MobileReimbursements() {
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{expense.description}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="tp-caption">
                     {expense.category?.name
                       ? `${expense.category.name} · `
                       : ""}{formatDate(expense.date)}
                   </p>
                   {expense.reimbursementNote && (
-                    <p className="mt-0.5 text-xs text-muted-foreground">{expense.reimbursementNote}</p>
+                    <p className="mt-0.5 tp-caption">{expense.reimbursementNote}</p>
                   )}
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
@@ -119,7 +119,7 @@ export function MobileReimbursements() {
       >
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
-          <h2 className="text-base font-semibold">Mark as resolved?</h2>
+          <h2 className="tp-panel-title">Mark as resolved?</h2>
           <button type="button" onClick={closeSheet} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
             <X className="h-5 w-5" />
           </button>

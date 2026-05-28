@@ -64,7 +64,7 @@ function CategorySection({
               <span className="flex-1 text-sm font-medium">{cat.name}</span>
               {cat.ignoreInBudget && <EyeOff className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />}
               {hasChildren && (
-                <span className="text-xs text-muted-foreground">{cat.children!.length}</span>
+                <span className="tp-caption">{cat.children!.length}</span>
               )}
               <span className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                 <button
@@ -183,7 +183,7 @@ export function MobileCategories() {
     <>
       <div className="space-y-8">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Categories</h1>
+          <h1 className="tp-page-title">Categories</h1>
           <button
             type="button"
             onClick={openAdd}
@@ -328,7 +328,7 @@ function MobileCategoryModal({
     return (
       <div className="fixed inset-0 z-[60] flex flex-col bg-background">
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-          <h2 className="text-base font-semibold">Delete Category</h2>
+          <h2 className="tp-panel-title">Delete Category</h2>
           <button type="button" onClick={() => setConfirmDelete(false)} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
             <X className="h-5 w-5" />
           </button>
@@ -400,7 +400,7 @@ function MobileCategoryModal({
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-        <h2 className="text-base font-semibold">{title}</h2>
+        <h2 className="tp-panel-title">{title}</h2>
         <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
           <X className="h-5 w-5" />
         </button>

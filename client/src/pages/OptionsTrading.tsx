@@ -909,12 +909,12 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onDelete, o
                   className="h-3.5 w-3.5 rounded border-border accent-primary"
                 />
                 Draft
-                <span className="ml-auto text-xs text-muted-foreground font-normal">plan / limit order</span>
+                <span className="ml-auto tp-caption font-normal">plan / limit order</span>
               </label>
             </div>
           </div>
           {isDraft && (
-            <p className="mt-1 text-xs text-muted-foreground">Date confirmed when you open the position.</p>
+            <p className="mt-1 tp-caption">Date confirmed when you open the position.</p>
           )}
         </div>
 
@@ -953,10 +953,10 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onDelete, o
           <div className="flex items-center justify-between mb-1">
             <label className="text-xs font-medium">Stock Price at Open <span className="text-muted-foreground font-normal">(optional)</span></label>
             {priceAtOpenStatus === "fetching" && (
-              <span className="text-xs text-muted-foreground">Getting open price...</span>
+              <span className="tp-caption">Getting open price...</span>
             )}
             {priceAtOpenStatus === "success" && (
-              <span className="text-xs text-muted-foreground">Price as of {priceAtOpenLabel}</span>
+              <span className="tp-caption">Price as of {priceAtOpenLabel}</span>
             )}
             {priceAtOpenStatus === "error" && (
               <span className="text-xs text-destructive">Price fetch failed</span>
@@ -1802,7 +1802,6 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-xs font-medium mb-1">Starting Basis</label>
-          <p className="text-xs text-muted-foreground mb-2">Total capital allocated to options trading — used as the denominator for annualized return calculations.</p>
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
@@ -1811,11 +1810,11 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
               className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
+          <p className="tp-caption mt-1.5">Total capital allocated to options trading — used as the denominator for annualized return calculations.</p>
         </div>
 
         <div>
           <label className="block text-xs font-medium mb-1">Basis Adjustments</label>
-          <p className="text-xs text-muted-foreground mb-2">Record cash added to or removed from the trading account so the annualized return is calculated correctly going forward.</p>
 
           {/* Capital change history */}
           {runningBasisRows.length > 0 && (
@@ -1833,11 +1832,11 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
                 <tbody>
                   {runningBasisRows.map((row) => (
                     <tr key={row.id} className="border-t border-border">
-                      <td className="px-3 py-1.5 tabular-nums font-label">{row.effectiveDate}</td>
-                      <td className={cn("px-3 py-1.5 text-right tabular-nums font-label", Number(row.delta) >= 0 ? "text-green-600" : "text-red-600")}>
+                      <td className="px-3 py-1.5 tabular-nums font-mono">{row.effectiveDate}</td>
+                      <td className={cn("px-3 py-1.5 text-right tabular-nums font-mono", Number(row.delta) >= 0 ? "text-green-600" : "text-red-600")}>
                         {Number(row.delta) >= 0 ? "+" : ""}${Math.abs(Number(row.delta)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td className="px-3 py-1.5 text-right tabular-nums font-label">
+                      <td className="px-3 py-1.5 text-right tabular-nums font-mono">
                         ${row.runningBasis.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-3 py-1.5 text-muted-foreground">{row.note ?? ""}</td>
@@ -1861,7 +1860,7 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
             <div className="space-y-2">
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <label className="block text-xs text-muted-foreground mb-1">Date</label>
+                  <label className="block tp-caption mb-1">Date</label>
                   <input
                     type="date"
                     value={adjustDate} onChange={(e) => setAdjustDate(e.target.value)}
@@ -1869,7 +1868,7 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-xs text-muted-foreground mb-1">Amount (+ deposit / − withdrawal)</label>
+                  <label className="block tp-caption mb-1">Amount (+ deposit / − withdrawal)</label>
                   <input
                     type="text" inputMode="decimal" placeholder="e.g. 5000 or -2000"
                     value={adjustDelta} onChange={(e) => setAdjustDelta(e.target.value)}
@@ -1879,7 +1878,7 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
                 </div>
               </div>
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">Note (optional)</label>
+                <label className="block tp-caption mb-1">Note (optional)</label>
                 <input
                   type="text" placeholder="e.g. Additional funding"
                   value={adjustNote} onChange={(e) => setAdjustNote(e.target.value)}
@@ -1902,10 +1901,10 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
               ± Adjust basis
             </button>
           )}
+          <p className="tp-caption mt-1.5">Record cash added to or removed from the trading account so the annualized return is calculated correctly going forward.</p>
         </div>
         <div>
           <label className="block text-xs font-medium mb-1">Starting Week</label>
-          <p className="text-xs text-muted-foreground mb-2">First week counted toward performance. Sets the origin for charts and annualized return.</p>
           <select
             value={startingWeek}
             onChange={(e) => setStartingWeek(e.target.value)}
@@ -1916,10 +1915,10 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
               <option key={w.monIso} value={w.monIso}>{w.label}</option>
             ))}
           </select>
+          <p className="tp-caption mt-1.5">First week counted toward performance. Sets the origin for charts and annualized return.</p>
         </div>
         <div>
           <label className="block text-xs font-medium mb-1">Target Annual Return</label>
-          <p className="text-xs text-muted-foreground mb-2">Used for premium target charts and performance benchmarking.</p>
           <div className="relative">
             <input
               type="text" inputMode="decimal" required
@@ -1928,11 +1927,11 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
             />
             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
           </div>
+          <p className="tp-caption mt-1.5">Used for premium target charts and performance benchmarking.</p>
         </div>
         {bankingAccounts.length > 0 && (
           <div>
             <label className="block text-xs font-medium mb-1">Default Cash Account <span className="text-muted-foreground font-normal">(optional)</span></label>
-            <p className="text-xs text-muted-foreground mb-2">Pre-selected as the destination account for premium income when closing a position.</p>
             <select
               value={defaultCashAccountId}
               onChange={(e) => setDefaultCashAccountId(e.target.value)}
@@ -1943,6 +1942,7 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
+            <p className="tp-caption mt-1.5">Pre-selected as the destination account for premium income when closing a position.</p>
           </div>
         )}
         {error && <p className="text-sm text-destructive">{error}</p>}
@@ -2224,7 +2224,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
 
   if (positions.length === 0 && draftPositions.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground text-sm">
+      <div className="text-center py-12 tp-caption">
         No open positions. Click "Open Position" to add one.
       </div>
     );
@@ -2283,7 +2283,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
     COL_GROUPS.reduce((sum, g) => sum + (isColOpen(g.key) ? g.count : 1), 0) +
     1;
 
-  const thClass = "px-2 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap";
+  const thClass = "px-2 py-2 text-left font-mono text-[10px] font-medium tracking-[0.11em] uppercase text-[var(--color-ink-3)] whitespace-nowrap";
   const renderRow = (p: OptionsPosition, isGrouped = false, isDraftRow = false) => {
     // For draft rows, substitute page-load time so duration/ann-return calculations are meaningful
     const calcP = isDraftRow ? { ...p, openedAt: PAGE_LOAD_TIME } : p;
@@ -2291,7 +2291,8 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
     const isExpired = c.daysLeft < 0;
     const priorPnl = p.groupId ? (chainPnlMap.get(p.groupId) ?? 0) : 0;
     const hasChain = p.groupId != null && priorPnl !== 0;
-    const tdClass = hasChain ? "px-2 pt-2 pb-1 text-sm whitespace-nowrap" : "px-2 py-2 text-sm whitespace-nowrap";
+    const tdClass     = hasChain ? "px-2 pt-2 pb-1 text-13 font-mono tabular-nums whitespace-nowrap" : "px-2 py-2 text-13 font-mono tabular-nums whitespace-nowrap";
+    const tdTextClass = hasChain ? "px-2 pt-2 pb-1 text-13 whitespace-nowrap" : "px-2 py-2 text-13 whitespace-nowrap";
     const chainNet = hasChain ? priorPnl + c.totalPremiumNet : null;
 
     // Live section
@@ -2335,24 +2336,24 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
         ? (chainNet / chainCapitalAtRisk) * (365 / chainTotalDaysToExpiry) * 100
         : null;
 
-    const ctd = "px-2 pb-2 text-xs whitespace-nowrap text-muted-foreground";
+    const ctd = "px-2 pb-2 text-xs font-mono tabular-nums whitespace-nowrap text-muted-foreground";
 
-    // Opaque equivalents of the tr's semi-transparent bg colors over white (#FFFFFF):
-    //   bg-amber-50/50 → #FFFDF5; bg-muted/10 → #FEFEFE; bg-muted/30 → #FDFDFE
-    const stickyBg = isExpired ? "bg-[#FFFDF5]" : isGrouped ? "bg-[#FEFEFE]" : "bg-white";
-    const stickyTd = (leftPx: number, extra?: string) =>
-      cn(tdClass, "sticky z-[2] group-hover:bg-[#FDFDFE]", stickyBg, extra);
+    // Opaque equivalents of the tr's semi-transparent bg colors over the page base (#FAFCFE):
+    //   bg-amber-50/50 → #FFFDF5; bg-muted/10 → #FAFCFE; bg-muted/30 → #F5F8FC
+    const stickyBg = isExpired ? "bg-[#FFFDF5]" : "bg-[#FAFCFE]";
+    const stickyTd = (leftPx: number, extra?: string, textOnly = false) =>
+      cn(textOnly ? tdTextClass : tdClass, "sticky z-[2] group-hover:bg-[#F5F8FC]", stickyBg, extra);
 
     const primaryRow = (
       <tr key={p.id} className={cn("group", hasChain ? "" : "border-b border-border", "hover:bg-muted/30", isGrouped && "bg-muted/10", isExpired && "bg-amber-50/50", isDraftRow && "italic opacity-60")}>
         {/* ── Group 1: Position (always visible, frozen) ── */}
-        <td style={{ left: 0 }}   className={stickyTd(0, isGrouped ? "pl-8 pr-2" : "pl-4 pr-2")}>
+        <td style={{ left: 0 }}   className={stickyTd(0, isGrouped ? "pl-8 pr-2" : "pl-4 pr-2", true)}>
           <div className="flex items-center gap-1.5">
             <span className="font-medium">{p.ticker.symbol}</span>
             {p.group && <Link className="h-3 w-3 text-muted-foreground shrink-0" />}
           </div>
         </td>
-        <td style={{ left: 80 }}  className={stickyTd(80)}>
+        <td style={{ left: 80 }}  className={stickyTd(80, undefined, true)}>
           <span className={cn(
             "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
             p.optionType === "CALL" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"
@@ -2361,7 +2362,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
           </span>
         </td>
         <td style={{ left: 152 }} className={stickyTd(152)}>${fmtUSD(p.strikePrice)}</td>
-        <td style={{ left: 232 }} className={stickyTd(232, "border-r border-border/40")}>{fmtDate(p.expirationDate)}</td>
+        <td style={{ left: 232 }} className={stickyTd(232, "border-r border-border/40", true)}>{fmtDate(p.expirationDate)}</td>
 
         {/* ── Group 2: Trade Details ── */}
         {isColOpen("details") ? (
@@ -2396,7 +2397,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
             </td>
           </>
         ) : (
-          <td className={cn(tdClass, "border-l border-border/50 text-xs text-muted-foreground")}>
+          <td className={cn(tdClass, "border-l border-border/50 tp-caption")}>
             ${fmtUSD(c.totalPremiumNet)}
             <span className="mx-1">·</span>
             {c.daysLeft < 0 ? "Exp" : c.calDaysLeft === 0 ? "Today" : `${c.calDaysLeft}d`}
@@ -2537,10 +2538,10 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
     const chainRow = hasChain ? (
       <tr key={`${p.id}-chain`} className={cn("group", "border-b border-border", isGrouped && "bg-muted/10", isExpired && "bg-amber-50/50")}>
         {/* Label — frozen */}
-        <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] group-hover:bg-[#FDFDFE]", stickyBg, isGrouped ? "pl-8 pr-2" : "pl-4 pr-2", "font-medium text-muted-foreground/60 uppercase tracking-[1px] font-label text-[10px]")}>roll</td>
-        <td style={{ left: 80 }}  className={cn(ctd, "sticky z-[2] group-hover:bg-[#FDFDFE]", stickyBg)} />
-        <td style={{ left: 152 }} className={cn(ctd, "sticky z-[2] group-hover:bg-[#FDFDFE]", stickyBg)} />
-        <td style={{ left: 232 }} className={cn(ctd, "sticky z-[2] group-hover:bg-[#FDFDFE] border-r border-border/40", stickyBg)} />
+        <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] group-hover:bg-[#F5F8FC]", stickyBg, isGrouped ? "pl-8 pr-2" : "pl-4 pr-2", "font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-[10px]")}>roll</td>
+        <td style={{ left: 80 }}  className={cn(ctd, "sticky z-[2] group-hover:bg-[#F5F8FC]", stickyBg)} />
+        <td style={{ left: 152 }} className={cn(ctd, "sticky z-[2] group-hover:bg-[#F5F8FC]", stickyBg)} />
+        <td style={{ left: 232 }} className={cn(ctd, "sticky z-[2] group-hover:bg-[#F5F8FC] border-r border-border/40", stickyBg)} />
 
         {/* Details group — chain net per-share in Premium column */}
         {isColOpen("details") ? (
@@ -2662,11 +2663,11 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
           <col style={{ width: '80px', minWidth: '80px' }} />{/* Strike — sticky */}
           <col style={{ width: '96px', minWidth: '96px' }} />{/* Expiration — sticky */}
         </colgroup>
-        <thead className="bg-white">
+        <thead className="bg-[#FAFCFE]">
           {/* ── Row 1: group headers ── */}
           <tr className="bg-muted/20">
             {/* Position — always visible, no toggle */}
-            <th colSpan={4} style={{ left: 0 }} className="sticky z-[3] bg-[#FEFEFE] px-3 pt-2 pb-1 text-left text-[11px] font-medium text-muted-foreground/60 tracking-wide uppercase" />
+            <th colSpan={4} style={{ left: 0 }} className="sticky z-[3] bg-[#FAFCFE] px-3 pt-2 pb-1" />
             {/* Collapsible groups */}
             {COL_GROUPS.map(({ key, label, count }) => (
               <th
@@ -2674,7 +2675,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
                 colSpan={isColOpen(key) ? count : 1}
                 onClick={() => toggleColGroup(key)}
                 className={cn(
-                  "px-3 pt-2 pb-1 text-left text-[11px] font-medium tracking-wide uppercase cursor-pointer select-none transition-colors",
+                  "px-3 pt-2 pb-1 text-left font-mono text-[10px] font-medium tracking-[0.11em] uppercase cursor-pointer select-none transition-colors",
                   "border-l border-border/50",
                   isColOpen(key)
                     ? "text-muted-foreground/70 hover:text-muted-foreground"
@@ -2693,10 +2694,10 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
           </tr>
           {/* ── Row 2: column headers ── */}
           <tr className="border-b border-border bg-muted/30">
-            <th style={{ left: 0 }}   className={cn(thClass, "sticky z-[3] bg-[#FDFDFE] pl-4 pr-2")}>Ticker</th>
-            <th style={{ left: 80 }}  className={cn(thClass, "sticky z-[3] bg-[#FDFDFE]")}>Type</th>
-            <th style={{ left: 152 }} className={cn(thClass, "sticky z-[3] bg-[#FDFDFE]")}>Strike</th>
-            <th style={{ left: 232 }} className={cn(thClass, "sticky z-[3] bg-[#FDFDFE] border-r border-border/40")}>Expiration</th>
+            <th style={{ left: 0 }}   className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] pl-4 pr-2")}>Ticker</th>
+            <th style={{ left: 80 }}  className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Type</th>
+            <th style={{ left: 152 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Strike</th>
+            <th style={{ left: 232 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] border-r border-border/40")}>Expiration</th>
             {isColOpen("details") ? (
               <>
                 <th className={cn(thClass, "border-l border-border/50")}>Contracts</th>
@@ -2746,11 +2747,11 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
           {/* ── Draft section ── */}
           {sortedDrafts.length > 0 && (
             <tr className="bg-muted/40 border-y border-border">
-              <td colSpan={4} className="py-1.5 pl-4 sticky left-0 z-[2] bg-[#FCFDFE]">
+              <td colSpan={4} className="py-1.5 pl-4 sticky left-0 z-[2] bg-[#FAFCFE]">
                 <SectionLabel as="span" className="text-foreground">Draft Positions</SectionLabel>
               </td>
               <td colSpan={totalCols - 4} className="py-1.5 pr-4 text-right">
-                <span className="text-xs text-muted-foreground font-normal">Not included in totals · click <PlayCircle className="inline h-3 w-3 mb-0.5" /> to confirm &amp; open</span>
+                <span className="tp-caption font-normal">Not included in totals · click <PlayCircle className="inline h-3 w-3 mb-0.5" /> to confirm &amp; open</span>
               </td>
             </tr>
           )}
@@ -2759,7 +2760,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
           {/* ── Open section header (only when both sections are non-empty) ── */}
           {sortedDrafts.length > 0 && sorted.length > 0 && (
             <tr className="bg-muted/40 border-y border-border">
-              <td colSpan={4} className="py-1.5 pl-4 sticky left-0 z-[2] bg-[#FCFDFE]">
+              <td colSpan={4} className="py-1.5 pl-4 sticky left-0 z-[2] bg-[#FAFCFE]">
                 <SectionLabel as="span" className="text-foreground">Open Positions</SectionLabel>
               </td>
               <td colSpan={totalCols - 4} />
@@ -2798,7 +2799,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
       </table>
     </div>
     <div className="flex items-center justify-end gap-2 px-4 py-2 border-t border-border/50">
-      <span className="text-xs text-muted-foreground">
+      <span className="tp-caption">
         {lastFetchedAt != null ? (
           <>
             Prices as of{" "}
@@ -2881,7 +2882,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
 
   if (positions.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground text-sm">
+      <div className="text-center py-12 tp-caption">
         No closed positions yet.
       </div>
     );
@@ -2967,9 +2968,9 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
     });
   }
 
-  const thClass = "px-2 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap";
-  const tdClass = "px-2 py-2 text-sm whitespace-nowrap";
-  const tdClassChained = "px-2 pt-2 pb-1 text-sm whitespace-nowrap";
+  const thClass = "px-2 py-2 text-left font-mono text-[10px] font-medium tracking-[0.11em] uppercase text-[var(--color-ink-3)] whitespace-nowrap";
+  const tdClass = "px-2 py-2 text-13 font-mono tabular-nums whitespace-nowrap";
+  const tdClassChained = "px-2 pt-2 pb-1 text-13 font-mono tabular-nums whitespace-nowrap";
 
   return (
     <>
@@ -2982,11 +2983,11 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
           <col style={{ width: '96px', minWidth: '96px' }} />{/* Expiration — sticky */}
           <col style={{ width: '72px', minWidth: '72px' }} />{/* Contracts — sticky */}
         </colgroup>
-        <thead className="bg-white">
+        <thead className="bg-[#FAFCFE]">
           {/* ── Row 1: group headers ── */}
           <tr className="bg-muted/20">
             {/* Position + Contracts — always, no toggle */}
-            <th colSpan={5} style={{ left: 0 }} className="sticky z-[3] bg-[#FEFEFE] px-3 pt-2 pb-1" />
+            <th colSpan={5} style={{ left: 0 }} className="sticky z-[3] bg-[#FAFCFE] px-3 pt-2 pb-1" />
             {/* Collapsible groups */}
             {CLOSED_COL_GROUPS.map(({ key, label, count }) => (
               <th
@@ -2994,7 +2995,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                 colSpan={isColOpen(key) ? count : 1}
                 onClick={() => toggleColGroup(key)}
                 className={cn(
-                  "px-3 pt-2 pb-1 text-left text-[11px] font-medium tracking-wide uppercase cursor-pointer select-none transition-colors",
+                  "px-3 pt-2 pb-1 text-left font-mono text-[10px] font-medium tracking-[0.11em] uppercase cursor-pointer select-none transition-colors",
                   "border-l border-border/50",
                   isColOpen(key)
                     ? "text-muted-foreground/70 hover:text-muted-foreground"
@@ -3012,11 +3013,11 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
           </tr>
           {/* ── Row 2: column headers ── */}
           <tr className="border-b border-border bg-muted/30">
-            <th style={{ left: 0 }}   className={cn(thClass, "sticky z-[3] bg-[#FDFDFE] pl-4 pr-2")}>Ticker</th>
-            <th style={{ left: 80 }}  className={cn(thClass, "sticky z-[3] bg-[#FDFDFE]")}>Type</th>
-            <th style={{ left: 152 }} className={cn(thClass, "sticky z-[3] bg-[#FDFDFE]")}>Strike</th>
-            <th style={{ left: 232 }} className={cn(thClass, "sticky z-[3] bg-[#FDFDFE]")}>Expiration</th>
-            <th style={{ left: 328 }} className={cn(thClass, "sticky z-[3] bg-[#FDFDFE] border-r border-border/40")}>Contracts</th>
+            <th style={{ left: 0 }}   className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] pl-4 pr-2")}>Ticker</th>
+            <th style={{ left: 80 }}  className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Type</th>
+            <th style={{ left: 152 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Strike</th>
+            <th style={{ left: 232 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Expiration</th>
+            <th style={{ left: 328 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] border-r border-border/40")}>Contracts</th>
             {/* Dates group */}
             {isColOpen("dates") ? (
               <>
@@ -3071,7 +3072,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
               const weekPnl = positions.reduce((sum, p) => sum + (calcPosition(p).pnl ?? 0), 0);
               return [
               <tr key={`week-${label}`} className="bg-muted/40 border-y border-border cursor-pointer hover:bg-muted/60 select-none" onClick={() => toggleWeek(monday)}>
-                <td colSpan={5} className="py-1.5 pl-4 sticky left-0 z-[2] bg-[#FCFDFE]">
+                <td colSpan={5} className="py-1.5 pl-4 sticky left-0 z-[2] bg-[#FAFCFE]">
                   <div className="flex items-center gap-1.5">
                     <SectionLabel as="span" className="text-foreground">{label}</SectionLabel>
                     {isCollapsed ? <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" /> : <ChevronUp className="h-3 w-3 text-muted-foreground shrink-0" />}
@@ -3085,20 +3086,21 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
               </tr>,
               ...(isCollapsed ? [] : positions.map((p) => {
             const c = calcPosition(p);
-            const ctd = "px-2 pb-2 text-xs whitespace-nowrap text-muted-foreground";
+            const ctd = "px-2 pb-2 text-xs font-mono tabular-nums whitespace-nowrap text-muted-foreground";
             const cs = chainSummaryByFinalLegId.get(p.id);
             const td = cs ? tdClassChained : tdClass;
+            const tdText = cs ? "px-2 pt-2 pb-1 text-13 whitespace-nowrap" : "px-2 py-2 text-13 whitespace-nowrap";
 
             const positionRow = (
               <tr key={p.id} className={cn("group hover:bg-muted/30", cs ? "" : "border-b border-border")}>
                 {/* Position + Contracts — frozen */}
-                <td style={{ left: 0 }}   className={cn(td, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE] pl-4 pr-2")}>
+                <td style={{ left: 0 }}   className={cn(tdText, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC] pl-4 pr-2")}>
                   <div className="flex items-center gap-1.5">
                     <span className="font-medium">{p.ticker.symbol}</span>
                     {p.groupId && <Link className="h-3 w-3 text-muted-foreground shrink-0" />}
                   </div>
                 </td>
-                <td style={{ left: 80 }}  className={cn(td, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")}>
+                <td style={{ left: 80 }}  className={cn(tdText, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC]")}>
                   <span className={cn(
                     "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
                     p.optionType === "CALL" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"
@@ -3106,9 +3108,9 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                     {p.optionType === "CALL" ? "CC" : "CSP"}
                   </span>
                 </td>
-                <td style={{ left: 152 }} className={cn(td, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")}>${fmtUSD(p.strikePrice)}</td>
-                <td style={{ left: 232 }} className={cn(td, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")}>{fmtDate(p.expirationDate)}</td>
-                <td style={{ left: 328 }} className={cn(td, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE] border-r border-border/40")}>{p.contracts}</td>
+                <td style={{ left: 152 }} className={cn(td, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC]")}>${fmtUSD(p.strikePrice)}</td>
+                <td style={{ left: 232 }} className={cn(tdText, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC]")}>{fmtDate(p.expirationDate)}</td>
+                <td style={{ left: 328 }} className={cn(td, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC] border-r border-border/40")}>{p.contracts}</td>
                 {/* Dates group */}
                 {isColOpen("dates") ? (
                   <>
@@ -3154,7 +3156,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                     </span>
                   ) : "—"}
                 </td>
-                <td className={td}>
+                <td className={tdText}>
                   <span className={cn(
                     "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
                     p.outcome === "EXPIRED_WORTHLESS" ? "bg-green-100 text-green-700" :
@@ -3189,11 +3191,11 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
             const chainRow = cs ? (
               <tr key={`${p.id}-chain`} className="group border-b border-border">
                 {/* Label — frozen */}
-                <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE] pl-4 pr-2 font-medium text-muted-foreground/60 uppercase tracking-[1px] font-label text-[10px]")}>roll</td>
-                <td style={{ left: 80 }}  className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")} />
-                <td style={{ left: 152 }} className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")} />
-                <td style={{ left: 232 }} className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE]")} />
-                <td style={{ left: 328 }} className={cn(ctd, "sticky z-[2] bg-white group-hover:bg-[#FDFDFE] border-r border-border/40")} />
+                <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC] pl-4 pr-2 font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-[10px]")}>roll</td>
+                <td style={{ left: 80 }}  className={cn(ctd, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC]")} />
+                <td style={{ left: 152 }} className={cn(ctd, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC]")} />
+                <td style={{ left: 232 }} className={cn(ctd, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC]")} />
+                <td style={{ left: 328 }} className={cn(ctd, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC] border-r border-border/40")} />
                 {/* Dates group */}
                 {isColOpen("dates") ? (
                   <>
@@ -3253,7 +3255,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
     {confirmDelete && createPortal(
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
         <div className="w-full max-w-sm rounded-lg bg-background text-foreground p-6 shadow-xl">
-          <h3 className="text-base font-semibold">Delete position?</h3>
+          <h3 className="tp-panel-title">Delete position?</h3>
           <p className="mt-2 text-sm text-muted-foreground">
             Delete {confirmDelete.ticker.symbol} ${confirmDelete.strikePrice} {confirmDelete.optionType}? This cannot be undone.
           </p>
@@ -3387,7 +3389,7 @@ function PerformanceCharts({
           {targetWeekly != null && (
             <div className="flex items-center gap-1.5">
               <svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--color-muted-foreground)" strokeWidth="1.5" strokeDasharray="4 3" strokeOpacity="0.7" /></svg>
-              <span className="text-xs text-muted-foreground">Target ${fmtUSD(targetWeekly)}/wk</span>
+              <span className="tp-caption">Target ${fmtUSD(targetWeekly)}/wk</span>
             </div>
           )}
         </div>
@@ -3497,12 +3499,12 @@ function PerformanceCharts({
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
               <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="var(--color-primary)" strokeWidth="2" /></svg>
-              <span className="text-xs text-muted-foreground">Actual</span>
+              <span className="tp-caption">Actual</span>
             </div>
             {targetAnnual != null && (
               <div className="flex items-center gap-1.5">
                 <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="var(--color-muted-foreground)" strokeWidth="1.5" strokeDasharray="4 3" strokeOpacity="0.7" /></svg>
-                <span className="text-xs text-muted-foreground">Target</span>
+                <span className="tp-caption">Target</span>
               </div>
             )}
           </div>
@@ -3600,7 +3602,7 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
   const fmtRate = (r: number | null) => (r != null ? `${r.toFixed(1)}%` : "—");
 
   function MetricCells({ m }: { m: PerformanceMetrics }) {
-    const tdCls = "px-4 py-2 text-right tabular-nums font-label";
+    const tdCls = "px-4 py-2 text-right tabular-nums font-mono";
     return (
       <>
         <td className={tdCls}>{m.tradeCount}</td>
@@ -3672,7 +3674,7 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
               className="border-b border-border bg-muted/40 font-medium cursor-pointer hover:bg-muted/60 transition-colors"
               onClick={() => setExpanded((v) => !v)}
             >
-              <td className="px-4 py-2 text-sm">
+              <td className="px-4 py-2 text-13">
                 <span className="inline-flex items-center gap-1.5">
                   All
                   {expanded ? <ChevronUp className="h-3 w-3 text-muted-foreground" /> : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
@@ -3898,10 +3900,10 @@ function SummaryCards({
         <SectionLabel>Capital at Risk</SectionLabel>
         <div className="flex items-end mt-1">
           <div className="flex-1 min-w-0">
-            <p className="text-xl font-semibold truncate">
+            <p className="tp-stat truncate">
               {totalCapitalAtRisk > 0 ? `$${totalCapitalAtRisk.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "—"}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+            <p className="tp-caption mt-0.5 truncate">
               {openPositions.length > 0 ? `${openPositions.length} open position${openPositions.length !== 1 ? "s" : ""}` : "No open positions"}
             </p>
           </div>
@@ -3909,10 +3911,10 @@ function SummaryCards({
             <>
               <div className="w-px bg-border self-stretch shrink-0" />
               <div className="flex-1 min-w-0 pl-3">
-                <p className="text-xl font-semibold text-muted-foreground truncate">
+                <p className="tp-stat text-ink-3 truncate">
                   {`$${(settings.startingBasis - totalCapitalAtRisk).toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
                 </p>
-                <p className="text-xs text-muted-foreground mt-0.5">capital available</p>
+                <p className="tp-caption mt-0.5">capital available</p>
               </div>
             </>
           )}
@@ -3924,17 +3926,17 @@ function SummaryCards({
         <SectionLabel>Premium This Week</SectionLabel>
         <div className="flex items-end mt-1">
           <div className="flex-1 min-w-0">
-            <p className={cn("text-xl font-semibold truncate", premiumThisWeek >= 0 ? "text-green-600" : "text-red-600")}>
+            <p className={cn("tp-stat truncate", premiumThisWeek >= 0 ? "text-green-600" : "text-red-600")}>
               {premiumThisWeek !== 0 ? `$${fmtUSD(premiumThisWeek)}` : "$0.00"}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">realized</p>
+            <p className="tp-caption mt-0.5">realized</p>
           </div>
           <div className="w-px bg-border self-stretch shrink-0" />
           <div className="flex-1 min-w-0 pl-3">
-            <p className="text-xl font-semibold text-muted-foreground truncate">
+            <p className="tp-stat text-ink-3 truncate">
               {pendingThisWeek > 0 ? `$${fmtUSD(pendingThisWeek)}` : "$0"}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">pending</p>
+            <p className="tp-caption mt-0.5">pending</p>
           </div>
         </div>
       </Card>
@@ -3942,10 +3944,10 @@ function SummaryCards({
       {/* Cumulative Premium */}
       <Card className="p-6">
         <SectionLabel>Cumulative Premium</SectionLabel>
-        <p className={cn("text-xl font-semibold mt-1 truncate", cumulativePremium >= 0 ? "text-green-600" : "text-red-600")}>
+        <p className={cn("tp-stat mt-1 truncate", cumulativePremium >= 0 ? "text-green-600" : "text-red-600")}>
           {`$${fmtUSD(cumulativePremium)}`}
         </p>
-        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+        <p className="tp-caption mt-0.5 truncate">
           {annReturnFirstDate != null ? `since ${fmtDateTimeShort(new Date(annReturnFirstDate).toISOString())}` : "—"}
         </p>
       </Card>
@@ -3953,10 +3955,10 @@ function SummaryCards({
       {/* Ann. Rate of Return */}
       <Card className="p-6">
         <SectionLabel>Ann. Rate of Return</SectionLabel>
-        <p className={cn("text-xl font-semibold mt-1 truncate", annReturn != null ? (annReturn >= (settings?.targetReturn ?? 0) * 100 ? "text-green-600" : "text-amber-600") : undefined)}>
+        <p className={cn("tp-stat mt-1 truncate", annReturn != null ? (annReturn >= (settings?.targetReturn ?? 0) * 100 ? "text-green-600" : "text-amber-600") : undefined)}>
           {annReturn != null ? fmtPct(annReturn) : "—"}
         </p>
-        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+        <p className="tp-caption mt-0.5 truncate">
           {settings?.targetReturn != null ? `target: ${fmtPct(settings.targetReturn * 100)}` : "—"}
         </p>
       </Card>
@@ -4086,14 +4088,14 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
             {/* Tickers */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-medium">Tickers</label>
+                <label>Tickers</label>
                 {params.tickers.length > 0 && (
-                  <span className="text-xs text-muted-foreground">
+                  <label className="text-right">
                     Screening {params.tickers.length} ticker{params.tickers.length !== 1 ? "s" : ""} — one API call per expiration date.
-                  </span>
+                  </label>
                 )}
               </div>
-              <div className="flex flex-wrap gap-1.5 items-center min-h-[38px] rounded-md border border-border bg-background px-3 py-2 focus-within:ring-1 focus-within:ring-primary/40">
+              <div className="flex flex-wrap gap-1.5 items-center min-h-[38px] rounded-md border border-border bg-[rgba(255,255,255,0.78)] shadow-[var(--shadow-input)] px-3 py-2 focus-within:border-primary focus-within:shadow-[var(--shadow-focus-ring)] transition-[border-color,box-shadow] duration-[120ms]">
                 {params.tickers.map((sym) => (
                   <span key={sym} className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">
                     {sym}
@@ -4108,18 +4110,19 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
                   onKeyDown={handleKeyDown}
                   onBlur={() => tickerInput && addTicker(tickerInput)}
                   placeholder={params.tickers.length === 0 ? "Type ticker + Enter…" : ""}
-                  className="flex-1 min-w-[100px] bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                  className="flex-1 min-w-[100px] text-sm outline-none placeholder:text-muted-foreground"
+                  style={{ background: "transparent", border: "none", boxShadow: "none", borderRadius: 0, padding: 0 }}
                 />
               </div>
               {/* Quick-add tracked tickers */}
               {trackedSymbols.filter((s) => !params.tickers.includes(s)).length > 0 && (
-                <div className="flex flex-wrap gap-1 pt-1">
+                <div className="flex flex-wrap gap-1 pt-2">
                   {trackedSymbols.filter((s) => !params.tickers.includes(s)).map((sym) => (
                     <button
                       key={sym}
                       type="button"
                       onClick={() => addTicker(sym)}
-                      className="rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                      className="rounded border border-border px-1.5 py-0.5 tp-caption hover:border-primary hover:text-primary transition-colors"
                     >
                       + {sym}
                     </button>
@@ -4252,24 +4255,24 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
               </div>
             ) : (
               <div className="overflow-x-auto border-t border-border mt-2">
-                <table className="w-full text-sm">
+                <table className="w-full text-13">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
-                      <th className="pl-4 pr-2 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Ticker</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Type</th>
-                      <th className="px-2 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Expiration</th>
-                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">DTE</th>
-                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">Strike</th>
-                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">Underlying</th>
-                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">% to Strike</th>
-                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">Delta</th>
-                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">IV</th>
-                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">Last</th>
-                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">Bid / Ask</th>
-                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">Ann. Return</th>
-                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">OI</th>
-                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">Volume</th>
-                      <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground whitespace-nowrap">Contracts</th>
+                      <th className="pl-4 pr-2 py-2 text-left tp-table-header whitespace-nowrap">Ticker</th>
+                      <th className="px-2 py-2 text-left tp-table-header whitespace-nowrap">Type</th>
+                      <th className="px-2 py-2 text-left tp-table-header whitespace-nowrap">Expiration</th>
+                      <th className="px-2 py-2 text-right tp-table-header whitespace-nowrap">DTE</th>
+                      <th className="px-2 py-2 text-right tp-table-header whitespace-nowrap">Strike</th>
+                      <th className="px-2 py-2 text-right tp-table-header whitespace-nowrap">Underlying</th>
+                      <th className="px-2 py-2 text-right tp-table-header whitespace-nowrap">% to Strike</th>
+                      <th className="px-2 py-2 text-right tp-table-header whitespace-nowrap">Delta</th>
+                      <th className="px-2 py-2 text-right tp-table-header whitespace-nowrap">IV</th>
+                      <th className="px-2 py-2 text-right tp-table-header whitespace-nowrap">Last</th>
+                      <th className="px-2 py-2 text-right tp-table-header whitespace-nowrap">Bid / Ask</th>
+                      <th className="px-2 py-2 text-right tp-table-header whitespace-nowrap">Ann. Return</th>
+                      <th className="px-2 py-2 text-right tp-table-header whitespace-nowrap">OI</th>
+                      <th className="px-2 py-2 text-right tp-table-header whitespace-nowrap">Volume</th>
+                      <th className="px-2 py-2 text-center tp-table-header whitespace-nowrap">Contracts</th>
                       <th className="px-2 py-2"></th>
                     </tr>
                   </thead>
@@ -4310,33 +4313,33 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
                             </span>
                           </td>
                           <td className="px-2 py-2 text-muted-foreground">{fmtDate(r.expiration)}</td>
-                          <td className="px-2 py-2 text-right tabular-nums">{r.dte}d</td>
-                          <td className="px-2 py-2 text-right tabular-nums font-medium">${r.strike.toFixed(2)}</td>
-                          <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                          <td className="px-2 py-2 text-right tabular-nums font-mono">{r.dte}d</td>
+                          <td className="px-2 py-2 text-right tabular-nums font-mono font-medium">${r.strike.toFixed(2)}</td>
+                          <td className="px-2 py-2 text-right tabular-nums font-mono text-muted-foreground">
                             {r.underlyingPrice != null ? `$${r.underlyingPrice.toFixed(2)}` : "—"}
                           </td>
-                          <td className={cn("px-2 py-2 text-right tabular-nums", pctToStrike != null && pctToStrike < 0 ? "text-green-600" : pctToStrike != null && pctToStrike > 0 ? "text-red-600" : "")}>
+                          <td className={cn("px-2 py-2 text-right tabular-nums font-mono", pctToStrike != null && pctToStrike < 0 ? "text-green-600" : pctToStrike != null && pctToStrike > 0 ? "text-red-600" : "")}>
                             {pctToStrike != null ? `${pctToStrike >= 0 ? "+" : ""}${pctToStrike.toFixed(1)}%` : "—"}
                           </td>
-                          <td className={cn("px-2 py-2 text-right tabular-nums", r.delta != null && Math.abs(r.delta) > 0.5 ? "text-amber-600" : "")}>
+                          <td className={cn("px-2 py-2 text-right tabular-nums font-mono", r.delta != null && Math.abs(r.delta) > 0.5 ? "text-amber-600" : "")}>
                             {r.delta != null ? r.delta.toFixed(3) : "—"}
                           </td>
-                          <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                          <td className="px-2 py-2 text-right tabular-nums font-mono text-muted-foreground">
                             {r.iv != null ? `${(r.iv * 100).toFixed(1)}%` : "—"}
                           </td>
-                          <td className="px-2 py-2 text-right tabular-nums font-medium">
+                          <td className="px-2 py-2 text-right tabular-nums font-mono font-medium">
                             {r.last != null ? `$${r.last.toFixed(2)}` : "—"}
                           </td>
-                          <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                          <td className="px-2 py-2 text-right tabular-nums font-mono text-muted-foreground">
                             {r.bid != null ? `$${r.bid.toFixed(2)}` : "—"} / {r.ask != null ? `$${r.ask.toFixed(2)}` : "—"}
                           </td>
-                          <td className={cn("px-2 py-2 text-right tabular-nums font-medium", annReturn != null ? "text-green-600" : "")}>
+                          <td className={cn("px-2 py-2 text-right tabular-nums font-mono font-medium", annReturn != null ? "text-green-600" : "")}>
                             {annReturn != null ? `${annReturn.toFixed(1)}%` : "—"}
                           </td>
-                          <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                          <td className="px-2 py-2 text-right tabular-nums font-mono text-muted-foreground">
                             {r.openInterest != null ? r.openInterest.toLocaleString() : "—"}
                           </td>
-                          <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">
+                          <td className="px-2 py-2 text-right tabular-nums font-mono text-muted-foreground">
                             {r.volume != null ? r.volume.toLocaleString() : "—"}
                           </td>
                           <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
@@ -4469,7 +4472,7 @@ export function OptionsTrading() {
       <div className="space-y-3">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-2xl font-bold">Options Trading</h2>
+            <h2 className="tp-page-title">Options Trading</h2>
             <p className="text-sm text-muted-foreground mt-0.5 flex items-center flex-wrap gap-x-6">
               <span>{tradingWeekLabel}</span>
               {tickerEntries.length > 0 && (
@@ -4883,7 +4886,7 @@ function ImportOptionsModal({ open, onClose, onComplete }: {
             Ticker, Type, Strike Price, Expiration, Date Opened, Premium, Contracts,
             Cost Basis, Stock Price, Fees, Notes
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="tp-caption">
             First row should be a header (it will be skipped). Dates can be YYYY-MM-DD or M/D/YYYY.
             Type accepts CALL, PUT, CC, or CSP. Cost Basis, Stock Price, Fees, and Notes are optional.
             Dates without a time are treated as noon Eastern Time.

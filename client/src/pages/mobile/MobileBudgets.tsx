@@ -135,7 +135,7 @@ function BudgetSettingsSheet({
       )}>
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="px-4 pb-8 space-y-5">
-          <h2 className="text-base font-semibold">Budget Settings</h2>
+          <h2 className="tp-panel-title">Budget Settings</h2>
 
           <div className="space-y-1.5">
             <label className="block text-sm font-medium">Personal Annual Budget</label>
@@ -156,7 +156,7 @@ function BudgetSettingsSheet({
 
           <div className="space-y-1.5">
             <label className="block text-sm font-medium">Joint Annual Budget</label>
-            <p className="text-xs text-muted-foreground">
+            <p className="tp-caption">
               Enter your share of joint expenses. Actual joint spending is automatically
               divided by your {Math.round(jointSplitRatio * 100)}% split ratio.
             </p>
@@ -212,7 +212,7 @@ function PaceBar({ normalizedYTD, budget, pctElapsed }: { normalizedYTD: number;
           title={`${Math.round(pctElapsed * 100)}% of year elapsed`}
         />
       </div>
-      <div className="flex justify-between text-xs text-muted-foreground">
+      <div className="flex justify-between tp-caption">
         <span>{Math.round(spentPct)}% of budget used</span>
         <span>↑ {Math.round(pctElapsed * 100)}% of year elapsed</span>
       </div>
@@ -239,8 +239,8 @@ function ProjectionModal({ onClose }: { onClose: () => void }) {
           <X className="h-4 w-4" />
         </button>
 
-        <h3 className="mb-1 text-base font-semibold">How the annual projection works</h3>
-        <p className="mb-5 text-xs text-muted-foreground">
+        <h3 className="mb-1 tp-panel-title">How the annual projection works</h3>
+        <p className="mb-5 tp-caption">
           The projected annual spend, % vs pace, and progress bar use adjusted figures — not raw
           totals — to give you a stable view of your trajectory throughout the year.
         </p>
@@ -336,8 +336,8 @@ function ForecastRangeModal({ onClose }: { onClose: () => void }) {
           <X className="h-4 w-4" />
         </button>
 
-        <h3 className="mb-1 text-base font-semibold">How the forecast range works</h3>
-        <p className="mb-5 text-xs text-muted-foreground">
+        <h3 className="mb-1 tp-panel-title">How the forecast range works</h3>
+        <p className="mb-5 tp-caption">
           The range shows a statistical confidence band for your annual spend, based on how variable your monthly spending has been so far this year.
         </p>
 
@@ -383,9 +383,9 @@ function Metric({
 }) {
   return (
     <div className={plain ? "py-2.5" : "rounded-lg bg-muted/40 px-3 py-2.5"}>
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="tp-caption">{label}</p>
       <p className={`mt-0.5 text-lg font-bold leading-tight whitespace-nowrap ${valueClass ?? ""}`}>{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
+      {sub && <p className="mt-0.5 tp-caption">{sub}</p>}
     </div>
   );
 }
@@ -702,7 +702,7 @@ function BudgetPanelSection({
         return (
           <div>
             <div className="mb-1 flex items-center gap-1">
-              <p className="text-xs text-muted-foreground">Annual forecast range</p>
+              <p className="tp-caption">Annual forecast range</p>
               <button
                 onClick={() => setShowForecastModal(true)}
                 className="inline-flex items-center text-muted-foreground hover:text-foreground"
@@ -758,7 +758,7 @@ function BudgetPanelSection({
                 <Info className="h-3.5 w-3.5" />
               </button>
               {showSubtitleTip && (
-                <div className="absolute left-full top-1/2 z-10 ml-2 w-max max-w-[200px] -translate-y-1/2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-md">
+                <div className="absolute left-full top-1/2 z-10 ml-2 w-max max-w-[200px] -translate-y-1/2 rounded-lg border border-border bg-card px-3 py-2 tp-caption shadow-md">
                   {subtitle}
                 </div>
               )}
@@ -766,8 +766,8 @@ function BudgetPanelSection({
           )}
         </div>
         <div className="mt-1">
-          <p className="text-xs text-muted-foreground mb-0.5 font-label">{budgetLabel}</p>
-          <DisplayStat as="p" className="text-2xl font-bold">
+          <p className="tp-fineprint mb-0.5">{budgetLabel}</p>
+          <DisplayStat as="p" className="tp-kpi-l">
             {panel.effectiveAnnualBudget > 0 ? fmt(panel.effectiveAnnualBudget) : "—"}
           </DisplayStat>
         </div>
@@ -847,8 +847,8 @@ function SplitSection({ personal, joint }: { personal: BudgetPanel; joint: Budge
           <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
           <SectionLabel as="span">{label}</SectionLabel>
         </div>
-        <DisplayStat as="p" className="text-xl font-bold leading-tight">{fmt(ytd)}</DisplayStat>
-        <div className="space-y-0.5 text-xs font-label">
+        <DisplayStat as="p" className="tp-stat leading-tight">{fmt(ytd)}</DisplayStat>
+        <div className="space-y-0.5 text-xs font-mono">
           <p className={overTarget ? "text-destructive font-medium" : underTarget ? "text-success font-medium" : "text-muted-foreground"}>
             {Math.round(actualPct * 100)}% of actual spend
           </p>
@@ -864,7 +864,7 @@ function SplitSection({ personal, joint }: { personal: BudgetPanel; joint: Budge
     <Card>
       <CardHeader>
         <CardTitle>Personal vs. Joint</CardTitle>
-        <p className="mt-0.5 text-xs text-muted-foreground">YTD spend composition</p>
+        <p className="mt-0.5 tp-caption">YTD spend composition</p>
       </CardHeader>
       <div className="mb-4 space-y-1">
         <div className="relative h-5 overflow-hidden rounded-sm">
@@ -879,7 +879,7 @@ function SplitSection({ personal, joint }: { personal: BudgetPanel; joint: Budge
         {targetPersonalPct != null && (
           <div className="relative h-4">
             <span
-              className="absolute -translate-x-1/2 whitespace-nowrap text-xs text-muted-foreground"
+              className="absolute -translate-x-1/2 whitespace-nowrap tp-caption"
               style={{ left: `${targetPersonalPct * 100}%` }}
             >
               target {Math.round(targetPersonalPct * 100)}% / {Math.round(targetJointPct! * 100)}%
@@ -948,18 +948,18 @@ function MonthlyTrendSection({ monthlyTotals, monthlyBudget }: { monthlyTotals: 
       <div className="mt-2 flex items-center justify-center gap-4">
         <div className="flex items-center gap-1.5">
           <svg width={10} height={10}><rect width={10} height={10} rx={2} fill={PERSONAL_COLOR} /></svg>
-          <span className="text-xs text-muted-foreground">Personal</span>
+          <span className="tp-caption">Personal</span>
         </div>
         <div className="flex items-center gap-1.5">
           <svg width={10} height={10}><rect width={10} height={10} rx={2} fill={JOINT_COLOR} /></svg>
-          <span className="text-xs text-muted-foreground">Joint</span>
+          <span className="tp-caption">Joint</span>
         </div>
         {monthlyBudget != null && monthlyBudget > 0 && (
           <div className="flex items-center gap-1.5">
             <svg width={16} height={8}>
               <line x1="0" y1="4" x2="16" y2="4" stroke="var(--color-destructive)" strokeWidth="1" strokeDasharray="3 3" strokeOpacity="0.5" />
             </svg>
-            <span className="text-xs text-muted-foreground">Monthly budget</span>
+            <span className="tp-caption">Monthly budget</span>
           </div>
         )}
       </div>
@@ -995,8 +995,8 @@ function CategoryPacingTable({ outliers, year }: { outliers: CategoryOutliersDat
   return (
     <Card>
       <div className="mb-3">
-        <p className="text-sm font-medium text-card-foreground">Category Pacing</p>
-        <p className="text-xs text-muted-foreground">YTD spend vs same period {year - 1}</p>
+        <p className="tp-panel-title">Category Pacing</p>
+        <p className="tp-caption">YTD spend vs same period {year - 1}</p>
       </div>
       <table className="w-full text-xs">
         <thead>
@@ -1023,11 +1023,11 @@ function CategoryPacingTable({ outliers, year }: { outliers: CategoryOutliersDat
                     {item.categoryName}
                   </span>
                 </td>
-                <td className="py-1.5 px-2 text-right tabular-nums font-label">{formatCurrency(item.currentAmount)}</td>
-                <td className="py-1.5 px-2 text-right tabular-nums font-label text-muted-foreground">
+                <td className="py-1.5 px-2 text-right tabular-nums font-mono">{formatCurrency(item.currentAmount)}</td>
+                <td className="py-1.5 px-2 text-right tabular-nums font-mono text-muted-foreground">
                   {item.previousAmount > 0 ? formatCurrency(item.previousAmount) : "—"}
                 </td>
-                <td className={`py-1.5 pl-2 text-right tabular-nums font-label font-semibold ${changeColor}`}>
+                <td className={`py-1.5 pl-2 text-right tabular-nums font-mono font-semibold ${changeColor}`}>
                   {pct !== null
                     ? `${over ? "+" : ""}${Math.round(pct * 100)}%`
                     : item.previousAmount === 0 ? "new" : "—"}
@@ -1070,7 +1070,7 @@ function YoYBadge({ avgByYear, years, year }: { avgByYear: number[]; years: numb
     }`}>
       <div className="flex items-center gap-1">
         <Icon className="h-3.5 w-3.5 shrink-0" />
-        <span className="text-base font-semibold leading-none">{abs}%</span>
+        <span className="tp-panel-title leading-none">{abs}%</span>
       </div>
       <p className="mt-1 text-xs opacity-75">vs {year - 1}</p>
     </div>
@@ -1097,19 +1097,19 @@ function CategoryAvgMonthlyGrid({ year, completedMonths }: { year: number; compl
     <Card>
       <CardHeader>
         <CardTitle>Monthly Average by Category</CardTitle>
-        <p className="mt-0.5 text-xs text-muted-foreground">Average monthly spend across {monthLabel}</p>
+        <p className="mt-0.5 tp-caption">Average monthly spend across {monthLabel}</p>
       </CardHeader>
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
         {items.map((item: { categoryId: string; name: string; color: string; avgMonthly: number; trend: { avgByYear: number[] } | undefined }) => (
           <div key={item.categoryId} className="bg-muted/40 px-3 py-2.5 border-t border-border">
             <div className="flex items-center gap-1.5 mb-1">
               <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
-              <p className="truncate text-xs text-muted-foreground">{item.name}</p>
+              <p className="truncate tp-caption">{item.name}</p>
             </div>
             <div className="flex items-center mt-0.5">
               <div className="w-1/2">
                 <p className="text-base font-bold leading-tight">{formatCurrency(item.avgMonthly)}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">avg / month</p>
+                <p className="mt-0.5 tp-caption">avg / month</p>
               </div>
               <div className="w-1/2 flex justify-center">
                 {item.trend && trends && (

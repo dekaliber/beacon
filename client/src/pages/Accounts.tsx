@@ -122,7 +122,7 @@ export function Accounts() {
               </div>
               <div className="flex items-center gap-3">
                 {account.type === "INVESTMENT" && (
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground" title="Dividend election">
+                  <div className="flex items-center gap-1.5 tp-caption" title="Dividend election">
                     {account.dividendElection === "CASH" ? (
                       <>
                         <span>Cash</span>
@@ -141,7 +141,7 @@ export function Accounts() {
                   </div>
                 )}
                 {account.type === "CREDIT_CARD" && (account.closingDay != null || account.dueDay != null) && (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2 tp-caption">
                     {account.closingDay != null && (
                       <span title="Statement closes">Closes {nextDayOfMonth(account.closingDay)}</span>
                     )}
@@ -193,7 +193,7 @@ export function Accounts() {
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
-        <h2 className="text-2xl font-bold">Accounts</h2>
+        <h2 className="tp-page-title">Accounts</h2>
         <div className="flex items-center gap-2">
           <button
             onClick={toggleDemoMode}
@@ -450,7 +450,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
                 setAccountType(t);
                 if (t !== "INVESTMENT") setIsManaged(false);
               }}
-              className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+              className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
             >
               {Object.entries(accountTypeLabels).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
@@ -491,7 +491,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
             />
             <span className="text-sm font-medium">Joint account</span>
           </label>
-          <p className="mt-1 ml-6 text-xs text-muted-foreground">
+          <p className="mt-1 ml-6 tp-caption">
             Transactions from joint accounts are shared expenses/income
           </p>
         </div>
@@ -510,7 +510,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
               />
               <span className="text-sm font-medium">Tax-advantaged account</span>
             </label>
-            <p className="mt-1 ml-6 text-xs text-muted-foreground">
+            <p className="mt-1 ml-6 tp-caption">
               IRA, 401(k), HSA, 529, or similar. Investment sales and dividends will not generate income records.
             </p>
             {isTaxAdvantaged && (
@@ -520,7 +520,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
                   <select
                     value={taxAdvantageType}
                     onChange={(e) => setTaxAdvantageType(e.target.value as TaxAdvantageType | "")}
-                    className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground bg-background"
+                    className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground bg-background"
                   >
                     <option value="">Select type…</option>
                     <option value="TRADITIONAL">Traditional IRA / 401(k)</option>
@@ -547,7 +547,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
               />
               <span className="text-sm font-medium">Managed / robo-advisor account</span>
             </label>
-            <p className="mt-1 ml-6 text-xs text-muted-foreground">
+            <p className="mt-1 ml-6 tp-caption">
               {hasTrackedHoldings
                 ? "Cannot enable — this account already has holdings with lot-level purchase dates."
                 : "Lot-level acquisition dates are unavailable. Enter total shares and total cost basis per holding — cost per share is calculated automatically."}
@@ -570,7 +570,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
                   placeholder="e.g. 15"
                   className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 />
-                <p className="mt-1 text-xs text-muted-foreground">Day of month billing cycle closes</p>
+                <p className="mt-1 tp-caption">Day of month billing cycle closes</p>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1">Due Day</label>
@@ -582,7 +582,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
                   placeholder="e.g. 8"
                   className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 />
-                <p className="mt-1 text-xs text-muted-foreground">Day of month payment is due</p>
+                <p className="mt-1 tp-caption">Day of month payment is due</p>
               </div>
             </div>
             <div>
@@ -591,7 +591,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
                 <select
                   value={linkedBankAccountId}
                   onChange={(e) => setLinkedBankAccountId(e.target.value)}
-                  className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                  className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
                 >
                   <option value="">— None selected —</option>
                   {bankAccounts.map((a) => (
@@ -600,7 +600,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">Which bank account pays this card</p>
+              <p className="mt-1 tp-caption">Which bank account pays this card</p>
             </div>
           </div>
         )}
@@ -615,7 +615,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
                 <select
                   value={dividendElection}
                   onChange={(e) => setDividendElection(e.target.value)}
-                  className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                  className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
                 >
                   <option value="">Ask each time</option>
                   <option value="REINVEST">Always reinvest (DRIP)</option>
@@ -631,7 +631,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
                   <select
                     value={defaultCashAccountId}
                     onChange={(e) => setDefaultCashAccountId(e.target.value)}
-                    className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                    className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
                   >
                     <option value="">— None selected —</option>
                     {bankAccounts.map((a) => (
@@ -640,7 +640,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">Where cash dividends are deposited</p>
+                <p className="mt-1 tp-caption">Where cash dividends are deposited</p>
               </div>
             )}
           </div>
@@ -657,7 +657,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
               />
               <span className="text-sm font-medium">Hide account</span>
             </label>
-            <p className="mt-1 ml-6 text-xs text-muted-foreground">
+            <p className="mt-1 ml-6 tp-caption">
               Hidden accounts are excluded from dropdowns and the Investments page, but all data is preserved.
             </p>
           </div>

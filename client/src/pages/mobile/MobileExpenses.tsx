@@ -186,7 +186,7 @@ function CategoryPicker({ categories, initialId = "", externalId }: { categories
               >
                 <span className="flex flex-col">
                   {o.parentLabel && (
-                    <span className="text-xs text-muted-foreground leading-tight">{o.parentLabel}</span>
+                    <span className="tp-caption leading-tight">{o.parentLabel}</span>
                   )}
                   <span className={`text-sm ${selectedId === o.id ? "font-medium text-primary" : ""}`}>
                     {o.label}
@@ -480,7 +480,7 @@ function MobileExpenseModal({
     <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       {/* Header */}
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-        <h2 className="text-base font-semibold">{isEditing ? "Edit Expense" : "Add Expense"}</h2>
+        <h2 className="tp-panel-title">{isEditing ? "Edit Expense" : "Add Expense"}</h2>
         <button
           type="button"
           onClick={onClose}
@@ -705,7 +705,7 @@ function MobileExpenseModal({
                                 name="frequency"
                                 value={recurringFrequency}
                                 onChange={(e) => setRecurringFrequency(e.target.value)}
-                                className="appearance-none w-full rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                                className="appearance-none w-full rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
                               >
                                 {FREQUENCY_OPTIONS.map(({ value, singular, plural }) => {
                                   const n = parseInt(recurringInterval) || 1;
@@ -732,7 +732,7 @@ function MobileExpenseModal({
                                   <input
                                     name="endDate"
                                     type="date"
-                                    className="w-full appearance-none rounded-md border border-border px-2 py-1.5 pr-8 text-sm text-foreground focus:border-primary focus:outline-none"
+                                    className="w-full appearance-none rounded-md border border-border px-2 py-2 pr-8 text-sm text-foreground focus:border-primary focus:outline-none"
                                   />
                                   <Calendar className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                                 </div>
@@ -1118,7 +1118,7 @@ function MobileFilterSheet({
 
         {/* Header */}
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
-          <h2 className="text-base font-semibold">Filters</h2>
+          <h2 className="tp-panel-title">Filters</h2>
           <button
             type="button"
             onClick={onClose}
@@ -1142,8 +1142,8 @@ function MobileFilterSheet({
               {accountOpen && (
                 <div className="mr-3 flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                   <button type="button" onClick={() => setStaged((s) => ({ ...s, accountIds: accounts.map((a) => a.id) }))} className="text-xs text-primary">All</button>
-                  <span className="text-xs text-muted-foreground/40">·</span>
-                  <button type="button" onClick={() => setStaged((s) => ({ ...s, accountIds: [] }))} className="text-xs text-muted-foreground">None</button>
+                  <span className="tp-caption/40">·</span>
+                  <button type="button" onClick={() => setStaged((s) => ({ ...s, accountIds: [] }))} className="tp-caption">None</button>
                 </div>
               )}
               <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-150 ${accountOpen ? "rotate-180" : ""}`} />
@@ -1212,8 +1212,8 @@ function MobileFilterSheet({
               {categoryOpen && (
                 <div className="mr-3 flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                   <button type="button" onClick={() => setStaged((s) => ({ ...s, categoryIds: [...new Set([...s.categoryIds, ...filteredCats.map((o) => o.id)])] }))} className="text-xs text-primary">All</button>
-                  <span className="text-xs text-muted-foreground/40">·</span>
-                  <button type="button" onClick={() => { const ids = new Set(filteredCats.map((o) => o.id)); setStaged((s) => ({ ...s, categoryIds: s.categoryIds.filter((id) => !ids.has(id)) })); }} className="text-xs text-muted-foreground">None</button>
+                  <span className="tp-caption/40">·</span>
+                  <button type="button" onClick={() => { const ids = new Set(filteredCats.map((o) => o.id)); setStaged((s) => ({ ...s, categoryIds: s.categoryIds.filter((id) => !ids.has(id)) })); }} className="tp-caption">None</button>
                 </div>
               )}
               <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-150 ${categoryOpen ? "rotate-180" : ""}`} />
@@ -1268,8 +1268,8 @@ function MobileFilterSheet({
               {tagOpen && (
                 <div className="mr-3 flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                   <button type="button" onClick={() => setStaged((s) => ({ ...s, tagIds: tags.map((t) => t.id) }))} className="text-xs text-primary">All</button>
-                  <span className="text-xs text-muted-foreground/40">·</span>
-                  <button type="button" onClick={() => setStaged((s) => ({ ...s, tagIds: [] }))} className="text-xs text-muted-foreground">None</button>
+                  <span className="tp-caption/40">·</span>
+                  <button type="button" onClick={() => setStaged((s) => ({ ...s, tagIds: [] }))} className="tp-caption">None</button>
                 </div>
               )}
               <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-150 ${tagOpen ? "rotate-180" : ""}`} />
@@ -1371,7 +1371,7 @@ function MobileFilterSheet({
             <button
               type="button"
               onClick={() => { onReset(); onClose(); }}
-              className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent"
+              className="flex-1 rounded-md border border-border py-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent"
             >
               Reset to defaults
             </button>

@@ -196,21 +196,21 @@ function MonthCard({
             <div className="text-right space-y-0.5">
               {filter === "total" ? (
                 <>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="tp-caption">
                     Personal: <span className={`font-medium ${data.personalBudget > 0 && data.personalTotal > data.personalBudget ? "text-destructive" : "text-foreground"}`}>{formatCurrency(data.personalTotal)}</span>
                     {data.personalBudget > 0 && <span> / {formatCurrency(data.personalBudget)}</span>}
                   </div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="tp-caption">
                     Joint: <span className={`font-medium ${data.jointBudget > 0 && data.jointTotal > data.jointBudget ? "text-destructive" : "text-foreground"}`}>{formatCurrency(data.jointTotal)}</span>
                     {data.jointBudget > 0 && <span> / {formatCurrency(data.jointBudget)}</span>}
                   </div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="tp-caption">
                     Total: <span className={`font-medium ${isOver ? "text-destructive" : "text-foreground"}`}>{formatCurrency(data.combinedTotal)}</span>
                     {data.combinedBudget > 0 && <span> / {formatCurrency(data.combinedBudget)}</span>}
                   </div>
                 </>
               ) : (
-                <div className="text-xs text-muted-foreground">
+                <div className="tp-caption">
                   <span className={`font-medium ${isOver ? "text-destructive" : "text-foreground"}`}>{formatCurrency(total)}</span>
                   {budget > 0 && <span> / {formatCurrency(budget)}</span>}
                 </div>
@@ -300,7 +300,7 @@ export function MobileMonthlySpending() {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-bold flex-1">Monthly Spending</h1>
+        <h1 className="tp-page-title flex-1">Monthly Spending</h1>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setYear((y) => y - 1)}

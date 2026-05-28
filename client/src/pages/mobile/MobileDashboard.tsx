@@ -195,8 +195,8 @@ export function MobileDashboard() {
         {scaledNetWorth && (
           <Card>
             <SectionLabel>Net Worth</SectionLabel>
-            <DisplayStat as="p" className="mt-0.5 text-3xl font-bold">{formatCurrency(scaledNetWorth.total)}</DisplayStat>
-            <p className="text-xs text-muted-foreground mt-1 font-label">
+            <DisplayStat as="p" className="mt-0.5 tp-kpi-l">{formatCurrency(scaledNetWorth.total)}</DisplayStat>
+            <p className="tp-fineprint mt-1">
               {refreshPhase === "running"
                 ? refreshTotal > 0
                   ? `Fetching latest prices… ${refreshCount} of ${refreshTotal} securities`
@@ -242,9 +242,9 @@ export function MobileDashboard() {
         <Card>
           <div>
             <p className="text-sm text-muted-foreground">MTD Spend</p>
-            <DisplayStat as="p" className="text-2xl font-bold">{fmtWhole(totalSpent)}</DisplayStat>
+            <DisplayStat as="p" className="tp-kpi-l">{fmtWhole(totalSpent)}</DisplayStat>
             {budgetAmount !== null ? (
-              <p className="mt-0.5 text-xs text-muted-foreground font-label">of {fmtWhole(budgetAmount)} budget</p>
+              <p className="mt-0.5 tp-fineprint">of {fmtWhole(budgetAmount)} budget</p>
             ) : (
               <button
                 onClick={() => navigate("/budgets")}
@@ -258,14 +258,14 @@ export function MobileDashboard() {
           {/* Personal / Joint rows */}
           {showPersonalJoint && totalSpent > 0 && (
             <div className="mt-3 space-y-1.5 border-t border-border pt-3">
-              <div className="flex items-center justify-between text-sm font-label">
+              <div className="flex items-center justify-between text-sm font-mono">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: PERSONAL_COLOR }} />
                   Personal
                 </span>
                 <StatValue className="font-medium">{fmtWhole(personalSpent)}</StatValue>
               </div>
-              <div className="flex items-center justify-between text-sm font-label">
+              <div className="flex items-center justify-between text-sm font-mono">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: JOINT_COLOR }} />
                   Joint
@@ -282,16 +282,16 @@ export function MobileDashboard() {
             const prevMonthName = new Date(prevMonthYear, prevMonthNum - 1, 1).toLocaleDateString("en-US", { month: "short" });
             return (
               <div className="mt-3 border-t border-border pt-3">
-                <p className="text-xs text-muted-foreground font-label">vs last month</p>
-                <p className="mt-0.5 text-xs text-muted-foreground font-label">
-                  <span className="font-medium text-foreground font-label">{fmtWhole(prevMonthMtd)}</span>
+                <p className="tp-fineprint">vs last month</p>
+                <p className="mt-0.5 tp-fineprint">
+                  <span className="font-medium text-foreground font-mono">{fmtWhole(prevMonthMtd)}</span>
                   {" in "}{prevMonthName}{isCurrentMonth ? ` 1–${daysElapsed}` : ""}
                 </p>
                 <p className="mt-0.5 text-xs font-medium">
-                  <span className={`font-label ${momDelta! > 0 ? "text-destructive" : "text-success"}`}>
+                  <span className={`font-mono ${momDelta! > 0 ? "text-destructive" : "text-success"}`}>
                     {momDelta! > 0 ? "+" : "–"}{fmtWhole(Math.abs(momDelta!))}
                   </span>{" "}
-                  <span className="text-xs text-muted-foreground font-label">
+                  <span className="tp-fineprint">
                     ({momDelta! > 0 ? "↑" : "↓"}{Math.abs(momDeltaPct)}%)
                   </span>
                 </p>
@@ -325,13 +325,13 @@ export function MobileDashboard() {
             <div className="min-w-0 flex-1">
               <p className="text-sm text-muted-foreground">Budget Used</p>
               {budgetPct !== null ? (
-                <DisplayStat as="p" className={`text-2xl font-bold ${isOverBudget ? "text-destructive" : ""}`}>{budgetPct}%</DisplayStat>
+                <DisplayStat as="p" className={`tp-kpi-l ${isOverBudget ? "text-destructive" : ""}`}>{budgetPct}%</DisplayStat>
               ) : (
                 <p className="text-sm text-muted-foreground">No budget set</p>
               )}
               {budgetRemaining !== null && (
-                <p className={`mt-0.5 text-xs font-label ${budgetRemaining < 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                  <span className={`font-medium font-label ${budgetRemaining < 0 ? "text-destructive" : "text-foreground"}`}>
+                <p className={`mt-0.5 text-xs font-mono ${budgetRemaining < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                  <span className={`font-medium font-mono ${budgetRemaining < 0 ? "text-destructive" : "text-foreground"}`}>
                     {fmtWhole(Math.abs(budgetRemaining))}
                   </span>{" "}
                   {budgetRemaining < 0 ? "over budget" : "remaining"}
@@ -347,13 +347,13 @@ export function MobileDashboard() {
                 const over = personalSpent > personalBudget;
                 return (
                   <div>
-                    <div className="mb-1 flex items-center justify-between text-xs font-label">
+                    <div className="mb-1 flex items-center justify-between text-xs font-mono">
                       <span className="flex items-center gap-1.5 text-muted-foreground">
                         <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: PERSONAL_COLOR }} />
                         Personal
                       </span>
                       <span className="text-muted-foreground">
-                        <span className={`font-medium font-label ${over ? "text-destructive" : "text-foreground"}`}>{fmtWhole(personalSpent)}</span>
+                        <span className={`font-medium font-mono ${over ? "text-destructive" : "text-foreground"}`}>{fmtWhole(personalSpent)}</span>
                         {" / "}{fmtWhole(personalBudget)}
                         {personalRemaining !== null && (
                           <span className={over ? " text-destructive" : ""}>
@@ -379,13 +379,13 @@ export function MobileDashboard() {
                 const over = jointSpent > jointBudget;
                 return (
                   <div>
-                    <div className="mb-1 flex items-center justify-between text-xs font-label">
+                    <div className="mb-1 flex items-center justify-between text-xs font-mono">
                       <span className="flex items-center gap-1.5 text-muted-foreground">
                         <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: JOINT_COLOR }} />
                         Joint
                       </span>
                       <span className="text-muted-foreground">
-                        <span className={`font-medium font-label ${over ? "text-destructive" : "text-foreground"}`}>{fmtWhole(jointSpent)}</span>
+                        <span className={`font-medium font-mono ${over ? "text-destructive" : "text-foreground"}`}>{fmtWhole(jointSpent)}</span>
                         {" / "}{fmtWhole(jointBudget)}
                         {jointRemaining !== null && (
                           <span className={over ? " text-destructive" : ""}>
@@ -489,7 +489,7 @@ export function MobileDashboard() {
                   )}
                 </LineChart>
               </ResponsiveContainer>
-              <div className="mt-2 flex flex-wrap justify-center gap-3 text-xs text-muted-foreground font-label">
+              <div className="mt-2 flex flex-wrap justify-center gap-3 tp-fineprint">
                 <span className="flex items-center gap-1">
                   <svg width="20" height="8">
                     <line x1="0" y1="4" x2="10" y2="4" stroke="var(--color-primary)" strokeWidth="2" />
@@ -512,7 +512,7 @@ export function MobileDashboard() {
               </div>
             </>
           ) : (
-            <div className="flex h-[172px] items-center justify-center text-xs text-muted-foreground">
+            <div className="flex h-[172px] items-center justify-center tp-caption">
               Loading…
             </div>
           )}
@@ -521,7 +521,7 @@ export function MobileDashboard() {
         {/* ── Spending vs. Category Averages ────────────────────────────────── */}
         <Card>
           {categoryAverages && categoryAverages.categories.length === 0 ? (
-            <div className="flex min-h-[120px] items-center justify-center text-xs text-muted-foreground">
+            <div className="flex min-h-[120px] items-center justify-center tp-caption">
               Not enough history to compute averages
             </div>
           ) : categoryAverages ? (
@@ -531,7 +531,7 @@ export function MobileDashboard() {
               compact
             />
           ) : (
-            <div className="flex min-h-[120px] items-center justify-center text-xs text-muted-foreground">
+            <div className="flex min-h-[120px] items-center justify-center tp-caption">
               Loading…
             </div>
           )}
@@ -543,7 +543,7 @@ export function MobileDashboard() {
             {outlierTransactions ? (
               <OutlierTransactionsList categories={outlierTransactions.categories} />
             ) : (
-              <div className="flex min-h-[80px] items-center justify-center text-xs text-muted-foreground">
+              <div className="flex min-h-[80px] items-center justify-center tp-caption">
                 Loading…
               </div>
             )}
@@ -556,8 +556,8 @@ export function MobileDashboard() {
             {/* Header */}
             <div className="mb-3 flex items-center justify-between gap-2">
               <div>
-                <p className="text-sm font-medium text-card-foreground">Largest Changes</p>
-                <p className="text-xs text-muted-foreground font-label">
+                <p className="tp-panel-title">Largest Changes</p>
+                <p className="tp-fineprint">
                   vs {dashboardOutliers.previousMonthLabel} · {dashboardOutliers.comparisonNote}
                 </p>
               </div>
@@ -588,7 +588,7 @@ export function MobileDashboard() {
             {/* Table */}
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-border text-muted-foreground font-label">
+                <tr className="border-b border-border text-muted-foreground font-mono">
                   <th className="pb-1.5 text-left font-medium">Category</th>
                   <th className="pb-1.5 text-right font-medium">{abbrYear(dashboardOutliers.currentMonthLabel)}</th>
                   <th className="pb-1.5 text-right font-medium">{abbrYear(dashboardOutliers.previousMonthLabel)}</th>
@@ -605,10 +605,10 @@ export function MobileDashboard() {
                       key={o.categoryId ?? `__cat${i}__`}
                       className={`border-b border-border last:border-0 ${i % 2 === 0 ? "bg-muted/15" : ""}`}
                     >
-                      <td className="py-1.5 pr-2 text-muted-foreground font-label">{o.categoryName}</td>
-                      <td className="py-1.5 px-2 text-right tabular-nums font-label">{fmtWhole(o.currentAmount)}</td>
-                      <td className="py-1.5 px-2 text-right tabular-nums font-label text-muted-foreground font-label">{fmtWhole(o.previousAmount)}</td>
-                      <td className={`py-1.5 pl-2 text-right tabular-nums font-label font-semibold font-label ${deltaColor}`}>
+                      <td className="py-1.5 pr-2 text-muted-foreground font-mono">{o.categoryName}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums font-mono">{fmtWhole(o.currentAmount)}</td>
+                      <td className="py-1.5 px-2 text-right tabular-nums font-mono text-muted-foreground font-mono">{fmtWhole(o.previousAmount)}</td>
+                      <td className={`py-1.5 pl-2 text-right tabular-nums font-mono font-semibold font-mono ${deltaColor}`}>
                         {deltaSign}{fmtWhole(Math.abs(o.delta))}
                       </td>
                     </tr>

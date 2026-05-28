@@ -152,13 +152,13 @@ function SettingsSheet({
       )}>
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="px-4 pb-8 space-y-5">
-          <h2 className="text-base font-semibold">Withdrawal Rate Settings</h2>
+          <h2 className="tp-panel-title">Withdrawal Rate Settings</h2>
 
           {/* Portfolio denominator */}
           <div className="space-y-3">
             <div>
               <p className="text-sm font-medium mb-0.5">Portfolio Denominator</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="tp-caption">
                 Override with your portfolio value at retirement to track against a fixed baseline.
               </p>
             </div>
@@ -202,7 +202,7 @@ function SettingsSheet({
           <div className="space-y-2">
             <div>
               <p className="text-sm font-medium mb-0.5">Target Withdrawal Rate</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="tp-caption">
                 Your desired annual withdrawal rate. Leave blank for no target. Common guideline: 4%.
               </p>
             </div>
@@ -272,7 +272,7 @@ function MonthDetailSheet({
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
           <div>
             <p className="font-semibold">{label}</p>
-            <StatValue as="p" className="text-xs text-muted-foreground">{formatCurrency(total)} total</StatValue>
+            <StatValue as="p" className="tp-caption">{formatCurrency(total)} total</StatValue>
           </div>
           <button onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
             <X className="h-5 w-5" />
@@ -293,7 +293,7 @@ function MonthDetailSheet({
                   <div className="flex items-center justify-between gap-2">
                     <TypeBadge type={event.type} />
                     <span className={cn(
-                      "text-sm font-semibold tabular-nums font-label",
+                      "text-sm font-semibold tabular-nums font-mono",
                       amount < 0 ? "text-green-600" : "text-foreground",
                     )}>
                       {amount < 0 ? "−" : ""}{formatCurrency(Math.abs(amount))}
@@ -305,13 +305,13 @@ function MonthDetailSheet({
                     <span className={cn("text-sm truncate", isIncome ? "text-muted-foreground" : "font-medium")}>
                       {event.description || "—"}
                     </span>
-                    <StatValue className="text-xs text-muted-foreground flex-shrink-0">
+                    <StatValue className="tp-caption flex-shrink-0">
                       {formatDate(event.date)}
                     </StatValue>
                   </div>
 
                   {/* Account */}
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1 tp-caption">
                     {event.type === "transfer" && event.toAccount ? (
                       <>
                         <span className="truncate">{event.account.name}</span>
@@ -330,7 +330,7 @@ function MonthDetailSheet({
                     <div className="flex items-center gap-3 pt-0.5">
                       <button
                         onClick={() => { onClose(); setTimeout(() => onEdit(event), 200); }}
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                        className="flex items-center gap-1 tp-caption hover:text-foreground"
                       >
                         <Pencil className="h-3 w-3" />
                         Edit
@@ -488,7 +488,7 @@ function TransferFullscreen({
         <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <h2 className="text-base font-semibold flex-1">
+        <h2 className="tp-panel-title flex-1">
           {editingTransferId ? "Edit Transfer" : "Record Withdrawal"}
         </h2>
         <button
@@ -651,7 +651,7 @@ function DeleteConfirmSheet({
       )}>
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="px-4 pb-8 space-y-4">
-          <h2 className="text-base font-semibold">Delete Transfer</h2>
+          <h2 className="tp-panel-title">Delete Transfer</h2>
           <p className="text-sm text-muted-foreground">
             This removes the record from Beacon but does not reverse any account balance changes.
           </p>
@@ -762,7 +762,7 @@ export function MobileWithdrawals() {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-bold">Withdrawals</h1>
+        <h1 className="tp-page-title">Withdrawals</h1>
         <div className="flex flex-1 items-center justify-end gap-1">
           <button
             onClick={() => setYear((y) => y - 1)}
@@ -795,13 +795,13 @@ export function MobileWithdrawals() {
             <SectionLabel className="mb-0.5">
               YTD Total
             </SectionLabel>
-            <DisplayStat as="p" className="text-2xl font-bold">{formatCurrency(ytdTotal)}</DisplayStat>
+            <DisplayStat as="p" className="tp-kpi-l">{formatCurrency(ytdTotal)}</DisplayStat>
           </div>
           <div className="text-right">
             <SectionLabel className="mb-0.5">
               Annualized Rate
             </SectionLabel>
-            <DisplayStat as="p" className="text-2xl font-bold">
+            <DisplayStat as="p" className="tp-kpi-l">
               {effectiveDenominator > 0 ? formatRate(ytdRate) : "—"}
             </DisplayStat>
           </div>
@@ -837,7 +837,7 @@ export function MobileWithdrawals() {
         <div className="rounded-xl border border-border p-6 text-center space-y-3">
           <ArrowUpRight className="h-8 w-8 text-muted-foreground mx-auto opacity-40" />
           <p className="font-semibold text-sm">No withdrawals recorded for {year}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="tp-caption">
             Dividends and interest appear here automatically. Add a transfer to record a brokerage withdrawal.
           </p>
           <Button
@@ -887,7 +887,7 @@ export function MobileWithdrawals() {
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">{monthLabel}</p>
                   {monthRate !== null && (
-                    <StatValue as="p" className="text-xs text-muted-foreground">
+                    <StatValue as="p" className="tp-caption">
                       {formatRate(monthRate)} annualized
                     </StatValue>
                   )}

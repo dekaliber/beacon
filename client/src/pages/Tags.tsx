@@ -107,7 +107,7 @@ export function TagsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
-        <h2 className="text-2xl font-bold">Tags</h2>
+        <h2 className="tp-page-title">Tags</h2>
         <Button onClick={() => { setEditing(null); setModalOpen(true); }}>
           <Plus className="h-4 w-4" /> Add Tag
         </Button>
@@ -120,7 +120,7 @@ export function TagsPage() {
               {col.map(([groupName, groupTags]) => (
                 <Card key={groupName ?? "__ungrouped__"}>
                   {groupName && (
-                    <p className="mb-2 text-sm font-semibold">{groupName}</p>
+                    <p className="mb-2 tp-panel-title">{groupName}</p>
                   )}
                   <div className="divide-y divide-border">
                     {groupTags.map((tag) => {
@@ -140,9 +140,9 @@ export function TagsPage() {
                                 className="h-6 w-6 flex-shrink-0 rounded-md"
                                 style={{ backgroundColor: tag.color ?? "var(--color-gray-400)" }}
                               />
-                              <span className="truncate font-medium">{tag.name}</span>
+                              <span className="truncate tp-row-label">{tag.name}</span>
                             </button>
-                            <div className="flex flex-shrink-0 items-center gap-3 text-xs tabular-nums font-label text-muted-foreground">
+                            <div className="flex flex-shrink-0 items-center gap-3 tp-numeric text-ink-3">
                               {(tag.personalTotal > 0 || tag.jointTotal > 0) && (
                                 <>
                                   {tag.personalTotal > 0 && (
@@ -182,9 +182,9 @@ export function TagsPage() {
                           {isExpanded && (
                             <div className="border-t border-border/50 pb-1 pl-9 pt-1">
                               {isLoading ? (
-                                <p className="py-2 text-center text-xs text-muted-foreground">Loading…</p>
+                                <p className="py-2 text-center tp-caption">Loading…</p>
                               ) : expenses.length === 0 && orphanedOffsets.length === 0 ? (
-                                <p className="py-2 text-center text-xs text-muted-foreground">No expenses</p>
+                                <p className="py-2 text-center tp-caption">No expenses</p>
                               ) : (
                                 <table className="w-full table-fixed text-xs">
                                   <colgroup>
@@ -211,7 +211,7 @@ export function TagsPage() {
                                         return (
                                           <>
                                             <tr key={exp.id} className="border-b border-border/30">
-                                              <td className="py-1.5 pr-3 tabular-nums font-label text-muted-foreground">
+                                              <td className="py-1.5 pr-3 tabular-nums font-mono text-muted-foreground">
                                                 {formatDate(exp.date.slice(0, 10))}
                                               </td>
                                               <td className="py-1.5 pr-2">
@@ -225,7 +225,7 @@ export function TagsPage() {
                                                   {exp.account.isJoint ? "J" : "P"}
                                                 </span>
                                               </td>
-                                              <td className="py-1.5 text-right tabular-nums font-label">
+                                              <td className="py-1.5 text-right tabular-nums font-mono">
                                                 {formatCurrency(parseFloat(exp.amount))}
                                               </td>
                                             </tr>
@@ -246,7 +246,7 @@ export function TagsPage() {
                                                     {offset.account.isJoint ? "J" : "P"}
                                                   </span>
                                                 </td>
-                                                <td className="py-1 text-right tabular-nums font-label">
+                                                <td className="py-1 text-right tabular-nums font-mono">
                                                   {formatCurrency(parseFloat(offset.amount))}
                                                 </td>
                                               </tr>
@@ -257,7 +257,7 @@ export function TagsPage() {
                                         const offset = item.data;
                                         return (
                                           <tr key={offset.id} className="border-b border-border/30 last:border-0">
-                                            <td className="py-1 pr-3 tabular-nums font-label text-muted-foreground">
+                                            <td className="py-1 pr-3 tabular-nums font-mono text-muted-foreground">
                                               {formatDate(offset.date.slice(0, 10))}
                                             </td>
                                             <td className="py-1 pr-2">
@@ -278,7 +278,7 @@ export function TagsPage() {
                                                 {offset.account.isJoint ? "J" : "P"}
                                               </span>
                                             </td>
-                                            <td className="py-1 text-right tabular-nums font-label text-amber-600">
+                                            <td className="py-1 text-right tabular-nums font-mono text-amber-600">
                                               {formatCurrency(parseFloat(offset.amount))}
                                             </td>
                                           </tr>

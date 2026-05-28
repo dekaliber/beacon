@@ -139,7 +139,7 @@ function GainCell({
   const Icon = pos ? TrendingUp : TrendingDown;
   const cell = (
     <span
-      className={`inline-flex font-medium tabular-nums font-label ${
+      className={`inline-flex font-medium tabular-nums font-mono ${
         pos ? "text-green-600" : "text-red-500"
       } text-${size} ${size === "base" && pct != null ? "flex-col items-start" : "flex-row items-center gap-1"}`}
     >
@@ -360,7 +360,7 @@ function TickerSearch({
           className="w-full rounded-md border border-primary px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
         {loading && (
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">Searching…</div>
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 tp-caption">Searching…</div>
         )}
         {results.length > 0 && (
           <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-md border border-border bg-background shadow-lg max-h-64 overflow-y-auto">
@@ -372,10 +372,10 @@ function TickerSearch({
                 onClick={() => onSelect(r)}
               >
                 <div className="flex flex-col min-w-0">
-                  <span className="font-semibold text-sm leading-tight">{r.ticker}</span>
-                  <span className="text-xs text-muted-foreground truncate">{r.name}</span>
+                  <span className="font-semibold text-13 leading-tight">{r.ticker}</span>
+                  <span className="tp-caption truncate">{r.name}</span>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground flex-shrink-0 ml-3">
+                <div className="flex items-center gap-2 tp-caption flex-shrink-0 ml-3">
                   <span className="rounded bg-muted px-1.5 py-0.5">{r.type}</span>
                   {mode === "stocks" && <span>{r.exchange}</span>}
                 </div>
@@ -633,13 +633,13 @@ function AddInvestmentModal({
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-2 flex-wrap">
-                <span className="font-bold text-sm">{selectedTicker?.ticker}</span>
+                <span className="font-bold text-13">{selectedTicker?.ticker}</span>
                 <span className="text-sm text-muted-foreground truncate">{selectedTicker?.name}</span>
               </div>
               {fetchingPrice ? (
-                <p className="text-xs text-muted-foreground mt-0.5">Fetching price…</p>
+                <p className="tp-caption mt-0.5">Fetching price…</p>
               ) : fetchedPrice != null ? (
-                <p className="text-xs text-muted-foreground mt-0.5">{formatCurrency(fetchedPrice)}</p>
+                <p className="tp-caption mt-0.5">{formatCurrency(fetchedPrice)}</p>
               ) : null}
             </div>
           </div>
@@ -657,7 +657,7 @@ function AddInvestmentModal({
           </div>
 
           {managed && (
-            <p className="text-xs text-muted-foreground bg-muted/40 rounded px-3 py-2">
+            <p className="tp-caption bg-muted/40 rounded px-3 py-2">
               Managed account: enter total shares and total cost basis — cost per share is calculated automatically. Short/long-term gain breakdown will come from the realized gains panel.
             </p>
           )}
@@ -825,7 +825,7 @@ function LotRow({
               inputMode="decimal"
               value={cps}
               onChange={(e) => setCps(e.target.value)}
-              className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums font-label"
+              className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums font-mono"
             />
           </div>
         </td>
@@ -836,11 +836,11 @@ function LotRow({
             inputMode="decimal"
             value={qty}
             onChange={(e) => setQty(e.target.value)}
-            className="w-full rounded border border-border px-2 py-1 text-xs tabular-nums font-label focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full rounded border border-border px-2 py-1 text-xs tabular-nums font-mono focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </td>
         {/* Col 5: computed total cost */}
-        <td className="py-2 px-2 tabular-nums font-label text-muted-foreground">{formatCurrency(editTotalCost)}</td>
+        <td className="py-2 px-2 tabular-nums font-mono text-muted-foreground">{formatCurrency(editTotalCost)}</td>
         {/* Cols 6–8: save/cancel */}
         <td colSpan={3} className="py-2 px-2">
           <div className="flex items-center gap-2">
@@ -858,19 +858,19 @@ function LotRow({
 
   return (
     <>
-      <tr className="text-xs text-muted-foreground hover:bg-muted/30 group">
+      <tr className="tp-caption hover:bg-muted/30 group">
         <td colSpan={2} className="py-2 pl-4 pr-2">
           {lot.acquiredDate ? formatDate(lot.acquiredDate) : <span className="italic text-muted-foreground/60">Managed</span>}
         </td>
-        <td className="py-2 px-2 tabular-nums font-label">{formatCurrency(lot.costPerShare)}</td>
-        <td className="py-2 px-2 tabular-nums font-label">
+        <td className="py-2 px-2 tabular-nums font-mono">{formatCurrency(lot.costPerShare)}</td>
+        <td className="py-2 px-2 tabular-nums font-mono">
           {parseFloat(lot.quantity).toLocaleString(undefined, { maximumFractionDigits: 8 })}
         </td>
-        <td className="py-2 px-2 tabular-nums font-label">{formatCurrency(gains.totalCost)}</td>
-        <td className="py-2 px-2 tabular-nums font-label">
+        <td className="py-2 px-2 tabular-nums font-mono">{formatCurrency(gains.totalCost)}</td>
+        <td className="py-2 px-2 tabular-nums font-mono">
           {gains.marketValue != null ? formatCurrency(gains.marketValue) : "—"}
         </td>
-        <td className="py-2 pl-2 pr-2 tabular-nums font-label">
+        <td className="py-2 pl-2 pr-2 tabular-nums font-mono">
           <GainCell value={gains.totalGain} pct={gains.totalGainPct} />
         </td>
         <td className="py-2 pr-3">
@@ -887,7 +887,7 @@ function LotRow({
       {showDeleteModal && createPortal(
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-lg bg-background text-foreground p-6 shadow-xl">
-            <h3 className="text-base font-semibold">Delete {lot.acquiredDate ? formatDate(lot.acquiredDate) : "managed"} lot?</h3>
+            <h3 className="tp-panel-title">Delete {lot.acquiredDate ? formatDate(lot.acquiredDate) : "managed"} lot?</h3>
             {deleteWarning ? (
               <>
                 <p className="mt-2 text-sm text-amber-600">{deleteWarning}</p>
@@ -1009,7 +1009,7 @@ function AddLotRow({
             placeholder="0.00"
             autoFocus
             onChange={(e) => setQty(e.target.value)}
-            className="w-full rounded border border-border px-2 py-1 text-xs tabular-nums font-label focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full rounded border border-border px-2 py-1 text-xs tabular-nums font-mono focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
         <div className="flex-1 min-w-0">
@@ -1022,7 +1022,7 @@ function AddLotRow({
               value={cps}
               placeholder="0.00"
               onChange={(e) => setCps(e.target.value)}
-              className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums font-label"
+              className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums font-mono"
             />
           </div>
         </div>
@@ -1040,7 +1040,7 @@ function AddLotRow({
           <Button type="submit" disabled={saving} className="h-7 text-xs px-2 py-0">
             {saving ? "Saving…" : "Save"}
           </Button>
-          <button type="button" onClick={onCancel} className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+          <button type="button" onClick={onCancel} className="tp-caption hover:text-foreground hover:underline">
             Cancel
           </button>
         </div>
@@ -1068,7 +1068,7 @@ function AddLotRow({
             value={cps}
             placeholder="0.00"
             onChange={(e) => setCps(e.target.value)}
-            className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums font-label"
+            className="w-full rounded border border-border pl-5 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary tabular-nums font-mono"
           />
         </div>
       </td>
@@ -1079,7 +1079,7 @@ function AddLotRow({
           value={qty}
           placeholder="0.00"
           onChange={(e) => setQty(e.target.value)}
-          className="w-full rounded border border-border px-2 py-1 text-xs tabular-nums font-label focus:outline-none focus:ring-1 focus:ring-primary"
+          className="w-full rounded border border-border px-2 py-1 text-xs tabular-nums font-mono focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </td>
       <td colSpan={4} className="py-2 px-2">
@@ -1090,7 +1090,7 @@ function AddLotRow({
           <button
             type="button"
             onClick={onCancel}
-            className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+            className="tp-caption hover:text-foreground hover:underline"
           >
             Cancel
           </button>
@@ -1165,24 +1165,24 @@ function HoldingRow({
         onClick={onToggle}
       >
         <td className="py-3 pl-4 pr-2">
-          <span className="font-bold text-sm">{holding.ticker}</span>
+          <span className="font-bold text-13">{holding.ticker}</span>
         </td>
         <td className="py-3 px-2 overflow-hidden">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-sm text-muted-foreground truncate">{holding.name}</span>
           </div>
         </td>
-        <td className="py-3 px-2 text-sm tabular-nums font-label">
+        <td className="py-3 px-2 tp-numeric">
           {holding.currentPrice != null ? formatCurrency(holding.currentPrice) : <span className="text-muted-foreground">—</span>}
         </td>
-        <td className="py-3 px-2 text-sm tabular-nums font-label">
+        <td className="py-3 px-2 tp-numeric">
           {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}
         </td>
-        <td className="py-3 px-2 text-sm tabular-nums font-label">{formatCurrency(holding.totalCost)}</td>
-        <td className="py-3 px-2 text-sm tabular-nums font-label font-medium">
+        <td className="py-3 px-2 tp-numeric">{formatCurrency(holding.totalCost)}</td>
+        <td className="py-3 px-2 tp-numeric font-semibold">
           {holding.marketValue != null ? formatCurrency(holding.marketValue) : <span className="text-muted-foreground">—</span>}
         </td>
-        <td className="py-3 pl-2 pr-2 text-sm relative z-10">
+        <td className="py-3 pl-2 pr-2 text-13 relative z-10">
           <GainCell
             value={holding.totalGain}
             pct={holding.totalGainPct}
@@ -1256,7 +1256,7 @@ function HoldingRow({
                   <div className="ml-auto self-center">
                     <button
                       onClick={(e) => { e.stopPropagation(); setAddingLot(true); }}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      className="flex items-center gap-1 tp-caption hover:text-foreground transition-colors"
                       title="Update aggregate position"
                     >
                       <Pencil className="h-3 w-3" />
@@ -1266,7 +1266,7 @@ function HoldingRow({
                 </div>
                 {addingLot && (
                   <div className="mt-3 pt-3 border-t border-border">
-                    <p className="text-xs text-muted-foreground mb-2">Replace aggregate position (total shares + total cost basis):</p>
+                    <p className="tp-caption mb-2">Replace aggregate position (total shares + total cost basis):</p>
                     <AddLotRow
                       holdingId={holding.id}
                       defaultDate={null}
@@ -1284,7 +1284,7 @@ function HoldingRow({
           ) : (
             <>
               {/* Lot sub-header: "Purchase Date" spans Symbol+Name so it never wraps */}
-              <tr className="bg-muted/20 text-[11px] text-muted-foreground uppercase tracking-[1px] font-label">
+              <tr className="bg-muted/20 text-[11px] text-muted-foreground uppercase tracking-[1px] font-mono">
                 <th colSpan={2} className="py-1.5 pl-4 pr-2 text-left font-medium whitespace-nowrap">
                   Purchase Date
                 </th>
@@ -1336,7 +1336,7 @@ function HoldingRow({
               {/* Group editor — always editable regardless of managed status */}
               <tr className="border-b border-border bg-muted/5">
                 <td colSpan={8} className="py-2 pl-4 pr-4">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2 tp-caption">
                     <SectionLabel as="span">Group</SectionLabel>
                     <span className="text-border">·</span>
                     {editingGroup ? (
@@ -1379,7 +1379,7 @@ function HoldingRow({
       {showDeleteModal && createPortal(
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-lg bg-background text-foreground p-6 shadow-xl">
-            <h3 className="text-base font-semibold">Delete {holding.ticker}?</h3>
+            <h3 className="tp-panel-title">Delete {holding.ticker}?</h3>
             {deleteWarning ? (
               <>
                 <p className="mt-2 text-sm text-amber-600">{deleteWarning}</p>
@@ -1592,7 +1592,7 @@ function ImportInvestmentsModal({
           <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono">
             Symbol, Purchase Date, Price, Quantity
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="tp-caption">
             First row should be a header (it will be skipped). Dates can be YYYY-MM-DD or M/D/YYYY.
             Symbols are case-insensitive. If a holding for a symbol doesn't exist yet, it will be
             created automatically.
@@ -1666,10 +1666,10 @@ function ImportInvestmentsModal({
                       <td className="px-2 py-1.5 text-muted-foreground">{i + 1}</td>
                       <td className="px-2 py-1.5 font-semibold">{row.symbol || "—"}</td>
                       <td className="px-2 py-1.5">{row.purchaseDate}</td>
-                      <td className="px-2 py-1.5 text-right tabular-nums font-label">
+                      <td className="px-2 py-1.5 text-right tabular-nums font-mono">
                         {row.price > 0 ? formatCurrency(row.price) : "—"}
                       </td>
-                      <td className="px-2 py-1.5 text-right tabular-nums font-label">
+                      <td className="px-2 py-1.5 text-right tabular-nums font-mono">
                         {row.quantity > 0
                           ? row.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })
                           : "—"}
@@ -1916,25 +1916,25 @@ function ManualHoldingRow({
     <>
       <tr className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
         {/* Symbol — blank for manual entries */}
-        <td className="py-3 pl-4 pr-2 text-sm text-muted-foreground">—</td>
+        <td className="py-3 pl-4 pr-2 text-13 text-muted-foreground">—</td>
         {/* Name */}
-        <td className="py-3 px-2 text-sm max-w-0">
+        <td className="py-3 px-2 text-13 max-w-0">
           <span className="block truncate">{entry.name}</span>
         </td>
         {/* Price — blank */}
-        <td className="py-3 px-2 text-sm text-muted-foreground">—</td>
+        <td className="py-3 px-2 text-13 text-muted-foreground">—</td>
         {/* Quantity — blank */}
-        <td className="py-3 px-2 text-sm text-muted-foreground">—</td>
+        <td className="py-3 px-2 text-13 text-muted-foreground">—</td>
         {/* Total Cost */}
-        <td className="py-3 px-2 text-sm tabular-nums font-label">
+        <td className="py-3 px-2 tp-numeric">
           {entry.totalCost != null
             ? formatCurrency(entry.totalCost)
             : <span className="text-muted-foreground">—</span>}
         </td>
         {/* Market Value */}
-        <td className="py-3 px-2 text-sm tabular-nums font-label">{formatCurrency(entry.marketValue)}</td>
+        <td className="py-3 px-2 tp-numeric">{formatCurrency(entry.marketValue)}</td>
         {/* Total Gain */}
-        <td className="py-3 pl-2 pr-2 text-sm"><GainCell value={gain} /></td>
+        <td className="py-3 pl-2 pr-2 text-13"><GainCell value={gain} /></td>
         {/* Actions: edit + delete (replaces the expand chevron used by regular rows) */}
         <td className="py-3 pr-3">
           <div className="flex items-center justify-end gap-1">
@@ -1958,7 +1958,7 @@ function ManualHoldingRow({
       {showDeleteModal && createPortal(
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-lg bg-background text-foreground p-6 shadow-xl">
-            <h3 className="text-base font-semibold">Delete {entry.name}?</h3>
+            <h3 className="tp-panel-title">Delete {entry.name}?</h3>
             <p className="mt-2 text-sm text-muted-foreground">
               Are you sure you want to delete this investment? This action cannot be undone.
             </p>
@@ -2071,22 +2071,22 @@ function StickyHoldingRow({
                     onClick={onToggle}
                   >
                     <td className="py-3 pl-4 pr-2">
-                      <span className="font-bold text-sm">{holding.ticker}</span>
+                      <span className="font-bold text-13">{holding.ticker}</span>
                     </td>
                     <td className="py-3 px-2 overflow-hidden">
                       <span className="text-sm text-muted-foreground truncate block">{holding.name}</span>
                     </td>
-                    <td className="py-3 px-2 text-sm tabular-nums font-label">
+                    <td className="py-3 px-2 tp-numeric">
                       {holding.currentPrice != null ? formatCurrency(holding.currentPrice) : <span className="text-muted-foreground">—</span>}
                     </td>
-                    <td className="py-3 px-2 text-sm tabular-nums font-label">
+                    <td className="py-3 px-2 tp-numeric">
                       {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}
                     </td>
-                    <td className="py-3 px-2 text-sm tabular-nums font-label">{formatCurrency(holding.totalCost)}</td>
-                    <td className="py-3 px-2 text-sm tabular-nums font-label font-medium">
+                    <td className="py-3 px-2 tp-numeric">{formatCurrency(holding.totalCost)}</td>
+                    <td className="py-3 px-2 tp-numeric font-semibold">
                       {holding.marketValue != null ? formatCurrency(holding.marketValue) : <span className="text-muted-foreground">—</span>}
                     </td>
-                    <td className="py-3 pl-2 pr-2 text-sm">
+                    <td className="py-3 pl-2 pr-2 text-13">
                       <GainCell value={holding.totalGain} pct={holding.totalGainPct} />
                     </td>
                     <td className="py-3 pr-3" onClick={(e) => e.stopPropagation()}>
@@ -2379,7 +2379,7 @@ function SellModal({
                     value={shares}
                     placeholder="0.000000"
                     onChange={(e) => setShares(e.target.value)}
-                    className="w-full rounded border border-border px-3 py-2 text-sm tabular-nums font-label focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full rounded border border-border px-3 py-2 tp-numeric focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
                 {mode === "sell" && (
@@ -2393,7 +2393,7 @@ function SellModal({
                         value={price}
                         placeholder="0.00"
                         onChange={(e) => setPrice(e.target.value)}
-                        className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums font-label focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="w-full rounded border border-border pl-7 pr-3 py-2 tp-numeric focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </div>
                   </div>
@@ -2405,7 +2405,7 @@ function SellModal({
                   <select
                     value={method}
                     onChange={(e) => setMethod(e.target.value as typeof method)}
-                    className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                    className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
                   >
                     {COST_BASIS_METHODS.map((m) => (
                       <option key={m.value} value={m.value}>{m.label}</option>
@@ -2413,7 +2413,7 @@ function SellModal({
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">{methodInfo.description}</p>
+                <p className="mt-1.5 tp-caption">{methodInfo.description}</p>
               </div>
             </>
           ) : (
@@ -2426,7 +2426,7 @@ function SellModal({
                 <div className="max-h-52 overflow-y-auto rounded border border-border">
                   <table className="w-full text-xs">
                     <thead className="sticky top-0 bg-gray-100 z-10">
-                      <tr className="text-muted-foreground uppercase tracking-[1px] font-label">
+                      <tr className="text-muted-foreground uppercase tracking-[1px] font-mono">
                         <th className="py-2 px-3 text-left font-medium">Acquired</th>
                         <th className="py-2 px-3 text-right font-medium">Available</th>
                         <th className="py-2 px-3 text-right font-medium">Cost/Share</th>
@@ -2438,13 +2438,13 @@ function SellModal({
                         const available = parseFloat(lot.quantity);
                         return (
                           <tr key={lot.id} className="border-t border-border hover:bg-muted/20">
-                            <td className="py-2 px-3 tabular-nums font-label">
+                            <td className="py-2 px-3 tabular-nums font-mono">
                               {lot.acquiredDate ? formatDate(lot.acquiredDate) : "—"}
                             </td>
-                            <td className="py-2 px-3 text-right tabular-nums font-label">
+                            <td className="py-2 px-3 text-right tabular-nums font-mono">
                               {available.toLocaleString(undefined, { maximumFractionDigits: 8 })}
                             </td>
-                            <td className="py-2 px-3 text-right tabular-nums font-label">
+                            <td className="py-2 px-3 text-right tabular-nums font-mono">
                               {formatCurrency(parseFloat(lot.costPerShare))}
                             </td>
                             <td className="py-2 px-3">
@@ -2455,7 +2455,7 @@ function SellModal({
                                   value={lotInputs[lot.id] ?? ""}
                                   placeholder="0"
                                   onChange={(e) => setLotInputs((prev) => ({ ...prev, [lot.id]: e.target.value }))}
-                                  className="w-14 rounded border border-border px-2 py-1 text-left tabular-nums font-label focus:outline-none focus:ring-1 focus:ring-primary text-xs"
+                                  className="w-14 rounded border border-border px-2 py-1 text-left tabular-nums font-mono focus:outline-none focus:ring-1 focus:ring-primary text-xs"
                                 />
                                 <button
                                   type="button"
@@ -2483,7 +2483,7 @@ function SellModal({
                     readOnly
                     value={lotTotalShares > 0 ? lotTotalShares.toLocaleString(undefined, { maximumFractionDigits: 8 }) : ""}
                     placeholder="0"
-                    className="w-full rounded border border-border px-3 py-2 text-sm tabular-nums font-label bg-muted text-muted-foreground cursor-default"
+                    className="w-full rounded border border-border px-3 py-2 tp-numeric bg-muted text-muted-foreground cursor-default"
                   />
                 </div>
                 {mode === "sell" && (
@@ -2497,7 +2497,7 @@ function SellModal({
                         value={price}
                         placeholder="0.00"
                         onChange={(e) => setPrice(e.target.value)}
-                        className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums font-label focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="w-full rounded border border-border pl-7 pr-3 py-2 tp-numeric focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </div>
                   </div>
@@ -2527,7 +2527,7 @@ function SellModal({
                     value={fees}
                     placeholder="0.00"
                     onChange={(e) => setFees(e.target.value)}
-                    className="w-full rounded border border-border pl-7 pr-3 py-2 text-sm tabular-nums font-label focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full rounded border border-border pl-7 pr-3 py-2 tp-numeric focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                 </div>
               </div>
@@ -2540,7 +2540,7 @@ function SellModal({
               <select
                 value={destAccountId}
                 onChange={(e) => setDestAccountId(e.target.value)}
-                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
               >
                 <option value="">Select account…</option>
                 {eligibleAccounts.map((a) => (
@@ -2550,7 +2550,7 @@ function SellModal({
               <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
             </div>
             {mode === "transfer" && transferEligibleAccounts.length === 0 && (
-              <p className="mt-1 text-xs text-muted-foreground">No other investment accounts found.</p>
+              <p className="mt-1 tp-caption">No other investment accounts found.</p>
             )}
           </div>
 
@@ -2569,7 +2569,7 @@ function SellModal({
           <div className="overflow-x-auto rounded border border-border">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-muted/40 text-muted-foreground uppercase tracking-[1px] font-label">
+                <tr className="bg-muted/40 text-muted-foreground uppercase tracking-[1px] font-mono">
                   <th className="py-2 px-3 text-left font-medium">Lot Date</th>
                   <th className="py-2 px-3 text-right font-medium">Shares</th>
                   <th className="py-2 px-3 text-right font-medium">Cost/Share</th>
@@ -2582,11 +2582,11 @@ function SellModal({
               <tbody>
                 {preview!.lotBreakdown.map((lot, i) => (
                   <tr key={i} className="border-t border-border">
-                    <td className="py-2 px-3 tabular-nums font-label">{formatDate(lot.acquiredDate)}</td>
-                    <td className="py-2 px-3 text-right tabular-nums font-label">
+                    <td className="py-2 px-3 tabular-nums font-mono">{formatDate(lot.acquiredDate)}</td>
+                    <td className="py-2 px-3 text-right tabular-nums font-mono">
                       {lot.shares.toLocaleString(undefined, { maximumFractionDigits: 8 })}
                     </td>
-                    <td className="py-2 px-3 text-right tabular-nums font-label">{formatCurrency(lot.costPerShare)}</td>
+                    <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.costPerShare)}</td>
                     <td className="py-2 px-3">
                       <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
                         lot.termType === "LONG"
@@ -2596,9 +2596,9 @@ function SellModal({
                         {lot.termType === "LONG" ? "Long-term" : "Short-term"}
                       </span>
                     </td>
-                    <td className="py-2 px-3 text-right tabular-nums font-label">{formatCurrency(lot.proceeds)}</td>
-                    <td className="py-2 px-3 text-right tabular-nums font-label">{formatCurrency(lot.costBasis)}</td>
-                    <td className={`py-2 px-3 text-right tabular-nums font-label font-medium ${gainColor(lot.gain)}`}>
+                    <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.proceeds)}</td>
+                    <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.costBasis)}</td>
+                    <td className={`py-2 px-3 text-right tabular-nums font-mono font-medium ${gainColor(lot.gain)}`}>
                       {lot.gain >= 0 ? "+" : ""}{formatCurrency(lot.gain)}
                     </td>
                   </tr>
@@ -2624,7 +2624,7 @@ function SellModal({
             {preview!.stShares > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Short-Term Gain</span>
-                <span className={`tabular-nums font-label font-medium ${gainColor(preview!.stGain)}`}>
+                <span className={`tabular-nums font-mono font-medium ${gainColor(preview!.stGain)}`}>
                   {preview!.stGain >= 0 ? "+" : ""}{formatCurrency(preview!.stGain)}
                 </span>
               </div>
@@ -2632,14 +2632,14 @@ function SellModal({
             {preview!.ltShares > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Long-Term Gain</span>
-                <span className={`tabular-nums font-label font-medium ${gainColor(preview!.ltGain)}`}>
+                <span className={`tabular-nums font-mono font-medium ${gainColor(preview!.ltGain)}`}>
                   {preview!.ltGain >= 0 ? "+" : ""}{formatCurrency(preview!.ltGain)}
                 </span>
               </div>
             )}
             <div className={`flex justify-between border-t border-border pt-2 ${preview!.stShares > 0 && preview!.ltShares > 0 ? "col-span-2" : ""}`}>
               <span className="font-medium">Total Taxable Gain</span>
-              <span className={`tabular-nums font-label font-bold ${gainColor(preview!.totalGain)}`}>
+              <span className={`tabular-nums font-mono font-bold ${gainColor(preview!.totalGain)}`}>
                 {preview!.totalGain >= 0 ? "+" : ""}{formatCurrency(preview!.totalGain)}
               </span>
             </div>
@@ -2688,7 +2688,7 @@ function SellModal({
             <div className="overflow-x-auto rounded border border-border">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-muted/40 text-muted-foreground uppercase tracking-[1px] font-label">
+                  <tr className="bg-muted/40 text-muted-foreground uppercase tracking-[1px] font-mono">
                     <th className="py-2 px-3 text-left font-medium">Lot Date</th>
                     <th className="py-2 px-3 text-right font-medium">Shares</th>
                     <th className="py-2 px-3 text-right font-medium">Cost/Share</th>
@@ -2698,12 +2698,12 @@ function SellModal({
                 <tbody>
                   {transferLotBreakdown.map((lot, i) => (
                     <tr key={i} className="border-t border-border">
-                      <td className="py-2 px-3 tabular-nums font-label">{lot.acquiredDate ? formatDate(lot.acquiredDate) : "—"}</td>
-                      <td className="py-2 px-3 text-right tabular-nums font-label">
+                      <td className="py-2 px-3 tabular-nums font-mono">{lot.acquiredDate ? formatDate(lot.acquiredDate) : "—"}</td>
+                      <td className="py-2 px-3 text-right tabular-nums font-mono">
                         {lot.shares.toLocaleString(undefined, { maximumFractionDigits: 8 })}
                       </td>
-                      <td className="py-2 px-3 text-right tabular-nums font-label">{formatCurrency(lot.costPerShare)}</td>
-                      <td className="py-2 px-3 text-right tabular-nums font-label">{formatCurrency(lot.shares * lot.costPerShare)}</td>
+                      <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.costPerShare)}</td>
+                      <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.shares * lot.costPerShare)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2711,7 +2711,7 @@ function SellModal({
             </div>
           )}
 
-          <p className="text-xs text-muted-foreground">
+          <p className="tp-caption">
             Cost basis and acquisition dates are preserved in the destination account. No taxable event is recorded.
           </p>
 
@@ -2776,7 +2776,7 @@ function EditSaleActivityModal({
       {/* Explanation */}
       <div className="flex gap-2.5 rounded-md bg-muted/60 border border-border p-3 mb-5">
         <AlertCircle className="shrink-0 mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
-        <p className="text-xs text-muted-foreground leading-relaxed">
+        <p className="tp-caption leading-relaxed">
           Only <strong className="text-foreground">price per share</strong> and <strong className="text-foreground">fees</strong> can be corrected here.
           Shares, date, and cost basis are locked because the original per-lot breakdown is not
           retained after a sale commits — editing those fields would produce incorrect gain figures.
@@ -2843,7 +2843,7 @@ function EditSaleActivityModal({
           </div>
           <div>
             <p className="text-muted-foreground mb-0.5">Gain / Loss</p>
-            <p className={`font-medium tabular-nums font-label ${gain >= 0 ? "text-green-600" : "text-red-500"}`}>
+            <p className={`font-medium tabular-nums font-mono ${gain >= 0 ? "text-green-600" : "text-red-500"}`}>
               {gain >= 0 ? "+" : ""}{formatCurrency(gain)}
             </p>
           </div>
@@ -3149,7 +3149,7 @@ function ReviewDividendModal({
                 <select
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
-                  className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                  className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
                 >
                   <option value="">No category</option>
                   {categories.map((c) => (
@@ -3225,7 +3225,7 @@ function ReviewDividendModal({
             <select
               value={taxClassification}
               onChange={(e) => setTaxClassification(e.target.value as TaxClassification | "")}
-              className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+              className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
             >
               <option value="">Not specified</option>
               <option value="CAPITAL_GAIN">Capital Gain</option>
@@ -3482,7 +3482,7 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
             <span className="font-medium text-foreground">{pos.ticker.symbol}</span>
             <span className="text-muted-foreground">${Number(pos.strikePrice).toFixed(2)} {pos.optionType} · {pos.contracts} contract{pos.contracts !== 1 ? "s" : ""}</span>
           </div>
-          <div className="text-xs text-muted-foreground">
+          <div className="tp-caption">
             Assigned from options position · Premium ${Number(pos.premiumPerShare).toFixed(4)}/share
             {(Number(pos.feesOpen) || Number(pos.feesClose)) ? ` · Fees $${((Number(pos.feesOpen) || 0) + (Number(pos.feesClose) || 0)).toFixed(2)}` : ""}
           </div>
@@ -3651,7 +3651,7 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
     return (
       <Card className="p-8 text-center">
         <p className="text-sm font-medium text-muted-foreground">No activity yet</p>
-        <p className="text-xs text-muted-foreground mt-1">
+        <p className="tp-caption mt-1">
           Purchases, sales, and dividends will appear here once recorded.
         </p>
       </Card>
@@ -3683,10 +3683,10 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-bold text-xs">{pb.ticker}</span>
-                      <span className="text-xs text-muted-foreground">from options assignment · {acquired}</span>
+                      <span className="tp-caption">from options assignment · {acquired}</span>
                     </div>
                     <div className="flex items-center gap-3 mt-0.5">
-                      <span className="text-xs text-muted-foreground">
+                      <span className="tp-caption">
                         {shares.toLocaleString()} shares @ ${cps.toFixed(4)}/share
                       </span>
                       <span className="text-xs font-medium">≈ {formatCurrency(shares * cps)}</span>
@@ -3742,10 +3742,10 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-mono font-bold text-xs">{pd.ticker}</span>
-                    <span className="text-xs text-muted-foreground">Ex-date: {formatDate(pd.exDate)}</span>
+                    <span className="tp-caption">Ex-date: {formatDate(pd.exDate)}</span>
                   </div>
                   <div className="flex items-center gap-3 mt-0.5">
-                    <span className="text-xs text-muted-foreground">
+                    <span className="tp-caption">
                       ${parseFloat(pd.perShareAmount).toFixed(6)}/share
                       {" × "}
                       {parseFloat(pd.sharesAtExDate).toLocaleString(undefined, { maximumFractionDigits: 4 })} shares
@@ -3797,7 +3797,7 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
               {hasActiveFilters && (
                 <button
                   onClick={clearFilters}
-                  className="text-xs text-muted-foreground hover:text-foreground underline"
+                  className="tp-caption hover:text-foreground underline"
                 >
                   Clear filters
                 </button>
@@ -3857,9 +3857,9 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" style={{ tableLayout: "fixed", minWidth: "900px" }}>
+            <table className="w-full text-13" style={{ tableLayout: "fixed", minWidth: "900px" }}>
               <thead>
-                <tr className="text-[11px] text-muted-foreground uppercase tracking-[1px] font-label bg-muted/30 border-b border-border">
+                <tr className="text-[11px] text-muted-foreground uppercase tracking-[1px] font-mono bg-muted/30 border-b border-border">
                   <th style={{ width: "110px" }} className="py-2 pl-4 pr-2 text-left font-medium">Date</th>
                   <th style={{ width: "90px" }} className="py-2 px-2 text-left font-medium">Type</th>
                   <th style={{ width: "80px" }} className="py-2 px-2 text-left font-medium">Symbol</th>
@@ -3900,33 +3900,33 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
 
                   return (
                     <tr key={a.id} className="border-b border-border hover:bg-muted/20 group">
-                      <td className="py-3 pl-4 pr-2 tabular-nums font-label">{formatDate(a.date)}</td>
+                      <td className="py-3 pl-4 pr-2 tabular-nums font-mono">{formatDate(a.date)}</td>
                       <td className="py-3 px-2">
                         <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${badgeClass}`}>
                           {badgeLabel}
                         </span>
                       </td>
                       <td className="py-3 px-2 font-mono font-bold text-xs">{a.ticker}</td>
-                      <td className="py-3 px-2 text-right tabular-nums font-label">
+                      <td className="py-3 px-2 text-right tabular-nums font-mono">
                         {a.shares != null
                           ? a.shares.toLocaleString(undefined, { maximumFractionDigits: 8 })
                           : "—"}
                       </td>
-                      <td className="py-3 px-2 text-right tabular-nums font-label">
+                      <td className="py-3 px-2 text-right tabular-nums font-mono">
                         {a.pricePerShare != null ? formatCurrency(a.pricePerShare) : "—"}
                       </td>
                       {/* Gross / total cost */}
-                      <td className="py-3 px-2 text-right tabular-nums font-label">{formatCurrency(a.amount)}</td>
+                      <td className="py-3 px-2 text-right tabular-nums font-mono">{formatCurrency(a.amount)}</td>
                       {/* Fees — not applicable for purchases */}
-                      <td className="py-3 px-2 text-right tabular-nums font-label text-muted-foreground">
+                      <td className="py-3 px-2 text-right tabular-nums font-mono text-muted-foreground">
                         {!isPurchase && fees > 0 ? `(${formatCurrency(fees)})` : "—"}
                       </td>
                       {/* Net proceeds — show for sales; show cost for purchases */}
-                      <td className="py-3 px-2 text-right tabular-nums font-label font-medium">
+                      <td className="py-3 px-2 text-right tabular-nums font-mono font-medium">
                         {isPurchase ? formatCurrency(a.amount) : formatCurrency(net)}
                       </td>
                       {/* Gain / loss — only for sales */}
-                      <td className={`py-3 px-2 text-right tabular-nums font-label font-medium ${
+                      <td className={`py-3 px-2 text-right tabular-nums font-mono font-medium ${
                         isSale
                           ? isGainPositive
                             ? "text-green-600"
@@ -4100,9 +4100,9 @@ function RealizedGainSnapshotPanel({
       <div className="px-4 py-4">
         {snapshot ? (
           <div className="space-y-3">
-            <table className="w-full max-w-sm text-sm">
+            <table className="w-full max-w-sm text-13">
               <thead>
-                <tr className="text-[11px] text-muted-foreground uppercase tracking-[1px] font-label">
+                <tr className="text-[11px] text-muted-foreground uppercase tracking-[1px] font-mono">
                   <th className="text-left font-medium pb-1.5 pr-8" />
                   <th className="text-right font-medium pb-1.5 pr-6">Long-Term</th>
                   <th className="text-right font-medium pb-1.5">Short-Term</th>
@@ -4111,35 +4111,35 @@ function RealizedGainSnapshotPanel({
               <tbody className="divide-y divide-border">
                 <tr>
                   <td className="py-1.5 pr-8 text-muted-foreground">Gains</td>
-                  <td className="py-1.5 pr-6 text-right tabular-nums font-label text-green-600 font-medium">
+                  <td className="py-1.5 pr-6 text-right tabular-nums font-mono text-green-600 font-medium">
                     {snapshot.longTermGain != null ? formatCurrency(snapshot.longTermGain) : "—"}
                   </td>
-                  <td className="py-1.5 text-right tabular-nums font-label text-green-600 font-medium">
+                  <td className="py-1.5 text-right tabular-nums font-mono text-green-600 font-medium">
                     {snapshot.shortTermGain != null ? formatCurrency(snapshot.shortTermGain) : "—"}
                   </td>
                 </tr>
                 <tr>
                   <td className="py-1.5 pr-8 text-muted-foreground">Losses</td>
-                  <td className="py-1.5 pr-6 text-right tabular-nums font-label text-red-500 font-medium">
+                  <td className="py-1.5 pr-6 text-right tabular-nums font-mono text-red-500 font-medium">
                     {snapshot.longTermLoss != null ? formatCurrency(snapshot.longTermLoss) : "—"}
                   </td>
-                  <td className="py-1.5 text-right tabular-nums font-label text-red-500 font-medium">
+                  <td className="py-1.5 text-right tabular-nums font-mono text-red-500 font-medium">
                     {snapshot.shortTermLoss != null ? formatCurrency(snapshot.shortTermLoss) : "—"}
                   </td>
                 </tr>
                 <tr className="font-semibold">
                   <td className="py-1.5 pr-8">Net</td>
-                  <td className={`py-1.5 pr-6 text-right tabular-nums font-label ${netLT >= 0 ? "text-green-600" : "text-red-500"}`}>
+                  <td className={`py-1.5 pr-6 text-right tabular-nums font-mono ${netLT >= 0 ? "text-green-600" : "text-red-500"}`}>
                     {netLT >= 0 ? "+" : "−"}{formatCurrency(Math.abs(netLT))}
                   </td>
-                  <td className={`py-1.5 text-right tabular-nums font-label ${netST >= 0 ? "text-green-600" : "text-red-500"}`}>
+                  <td className={`py-1.5 text-right tabular-nums font-mono ${netST >= 0 ? "text-green-600" : "text-red-500"}`}>
                     {netST >= 0 ? "+" : "−"}{formatCurrency(Math.abs(netST))}
                   </td>
                 </tr>
               </tbody>
             </table>
             {snapshot.notes && (
-              <p className="text-xs text-muted-foreground italic">{snapshot.notes}</p>
+              <p className="tp-caption italic">{snapshot.notes}</p>
             )}
             <div className="flex items-center gap-4 pt-1">
               <button onClick={startEdit} className="flex items-center gap-1 text-xs text-primary hover:underline">
@@ -4148,7 +4148,7 @@ function RealizedGainSnapshotPanel({
               {!showDeleteConfirm ? (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
+                  className="flex items-center gap-1 tp-caption hover:text-destructive transition-colors"
                 >
                   <Trash2 className="h-3 w-3" /> Clear
                 </button>
@@ -4179,7 +4179,7 @@ function RealizedGainSnapshotPanel({
 
   return (
     <form onSubmit={handleSave} className="px-4 py-4 space-y-4">
-      <p className="text-xs text-muted-foreground">
+      <p className="tp-caption">
         Paste in the YTD realized gain/loss totals from your account dashboard (e.g. Wealthfront).
       </p>
       <div className="grid grid-cols-2 gap-3 max-w-sm">
@@ -4514,7 +4514,7 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
             <Upload className="h-3.5 w-3.5" />
             Select QFX file
           </Button>
-          <div className="text-xs text-muted-foreground">
+          <div className="tp-caption">
             <span>Export from Wealthfront → Documents → Export to Quicken</span>
             {lastDateData?.lastDate && (
               <span className="ml-3 text-foreground/60">
@@ -4605,7 +4605,7 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
             >
               Cancel
             </Button>
-            <p className="text-xs text-muted-foreground">
+            <p className="tp-caption">
               {parsed.transactions.length} total transactions · duplicate FITIDs will be skipped
             </p>
           </div>
@@ -4748,7 +4748,7 @@ function GrowthChartTooltip({ active, payload, label }: any) {
           </div>
           <div className="flex justify-between gap-4 pt-1 border-t border-border">
             <span className="text-muted-foreground">Unrealized gain</span>
-            <span className={`font-medium tabular-nums font-label ${pos ? "text-green-600" : "text-red-500"}`}>
+            <span className={`font-medium tabular-nums font-mono ${pos ? "text-green-600" : "text-red-500"}`}>
               {pos ? "+" : ""}{formatCurrency(d.unrealizedGain!)} ({pos ? "+" : ""}{d.unrealizedGainPct!.toFixed(2)}%)
             </span>
           </div>
@@ -4777,7 +4777,7 @@ function GrowthChartTooltip({ active, payload, label }: any) {
                   <span className="text-muted-foreground">
                     {isSell ? "Sold" : "Bought"} {sharesStr} {ev.ticker}
                   </span>
-                  <span className={`font-medium tabular-nums font-label ${isSell ? "text-amber-600" : "text-green-600"}`}>
+                  <span className={`font-medium tabular-nums font-mono ${isSell ? "text-amber-600" : "text-green-600"}`}>
                     {isSell ? "-" : "+"}{formatCurrency(ev.netAmount)}
                   </span>
                 </div>
@@ -4849,7 +4849,7 @@ function GrowthChart({ accountId, isManaged, onImportClick, onDayGain }: { accou
         ))}
       </div>
       {periodGain != null && (
-        <div className={`text-right text-sm font-semibold tabular-nums font-label ${periodGain >= 0 ? "text-green-600" : "text-red-500"}`}>
+        <div className={`text-right tp-numeric font-semibold ${periodGain >= 0 ? "text-green-600" : "text-red-500"}`}>
           <div>{periodGain >= 0 ? "+" : "−"}{formatCurrency(Math.abs(periodGain))}
             {periodGainPct != null && (
               <span className="text-xs ml-1 opacity-70">({Math.abs(periodGainPct).toFixed(2)}%)</span>
@@ -4931,7 +4931,7 @@ function GrowthChart({ accountId, isManaged, onImportClick, onDayGain }: { accou
     tickFormatter: (v: number) => `$${(v / 1000).toFixed(0)}k` };
 
   const legend = (
-    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+    <div className="flex items-center gap-4 mt-2 tp-caption">
       <span className="flex items-center gap-1.5">
         <span className="inline-block w-6 h-0.5 bg-indigo-600" />
         Market value
@@ -5233,8 +5233,8 @@ export function InvestmentAccount() {
             )}
           </div>
           <div>
-            <h2 className="text-xl font-bold leading-tight">{account.name}</h2>
-            <p className="text-xs text-muted-foreground">
+            <h2 className="tp-card-title leading-tight">{account.name}</h2>
+            <p className="tp-caption">
               {isBanking
                 ? account.type === "CHECKING" ? "Checking Account" : "Savings Account"
                 : "Investment Account"}
@@ -5250,7 +5250,7 @@ export function InvestmentAccount() {
         <>
           {/* Prominent market value — only when there's something to total */}
           {(holdings.length > 0 || manuals.length > 0 || cashBalance != null) && (
-            <DisplayStat as="p" className="text-3xl font-bold">{formatCurrency(totalMarketValue)}</DisplayStat>
+            <DisplayStat as="p" className="tp-kpi-l">{formatCurrency(totalMarketValue)}</DisplayStat>
           )}
 
           {/* Chart + summary row */}
@@ -5334,7 +5334,7 @@ export function InvestmentAccount() {
                         onChange={(e) => setCashInput(e.target.value)}
                         autoFocus
                         placeholder="0.00"
-                        className="w-full rounded border border-border pl-5 pr-2 py-1 text-sm tabular-nums font-label focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="w-full rounded border border-border pl-5 pr-2 py-1 tp-numeric focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </div>
                     <button
@@ -5356,7 +5356,7 @@ export function InvestmentAccount() {
                   </form>
                 ) : cashBalance != null ? (
                   <div>
-                    <DisplayStat as="p" className="text-base font-semibold">{formatCurrency(cashBalance)}</DisplayStat>
+                    <DisplayStat as="p" className="tp-stat">{formatCurrency(cashBalance)}</DisplayStat>
                     {account.cashBalanceUpdatedAt && (
                       <p className="text-[11px] text-muted-foreground mt-0.5">
                         Updated {new Date(account.cashBalanceUpdatedAt).toLocaleDateString("en-US", {
@@ -5408,8 +5408,8 @@ export function InvestmentAccount() {
       {isBanking && (
         <Card className="p-6">
           <SectionLabel className="mb-1">Current Balance</SectionLabel>
-          <DisplayStat as="p" className="text-3xl font-bold">{formatCurrency(account.balance)}</DisplayStat>
-          <p className="text-xs text-muted-foreground mt-2 font-label">
+          <DisplayStat as="p" className="tp-kpi-l">{formatCurrency(account.balance)}</DisplayStat>
+          <p className="tp-fineprint mt-2">
             Cash position — balance managed in{" "}
             <button className="text-primary underline" onClick={() => navigate("/accounts")}>
               Accounts
@@ -5514,7 +5514,7 @@ export function InvestmentAccount() {
               <div className="overflow-x-auto">
                 <table className="w-full" style={{ tableLayout: "fixed", minWidth: "1080px" }}>
                   <thead>
-                    <tr className="text-[11px] text-muted-foreground uppercase tracking-[1px] font-label bg-muted/30 border-b border-border">
+                    <tr className="text-[11px] text-muted-foreground uppercase tracking-[1px] font-mono bg-muted/30 border-b border-border">
                       <th
                         style={{ width: "80px" }}
                         className="py-2 pl-4 pr-2 text-left font-medium"
@@ -5557,7 +5557,7 @@ export function InvestmentAccount() {
                                   {group || "Other"}
                                 </SectionLabel>
                               </td>
-                              <td className="py-1.5 px-2 text-xs font-semibold tabular-nums font-label">
+                              <td className="py-1.5 px-2 text-xs font-semibold tabular-nums font-mono">
                                 {formatCurrency(groupMV)}
                               </td>
                               <td className="py-1.5 pl-2 pr-2">
@@ -5632,7 +5632,7 @@ export function InvestmentAccount() {
                   <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                   <h3 className="font-semibold text-sm">Transaction History</h3>
                 </div>
-                <p className="text-xs text-muted-foreground">Import QFX to enable the growth chart</p>
+                <p className="tp-caption">Import QFX to enable the growth chart</p>
               </div>
               <QfxImportPanel accountId={accountId!} onImported={() => { refetch(); refreshChart(); }} />
             </Card>
@@ -5664,7 +5664,7 @@ export function InvestmentAccount() {
                   </div>
                 </div>
                 {gainSnapshot && (
-                  <span className="text-xs text-muted-foreground">
+                  <span className="tp-caption">
                     Updated {formatDate(gainSnapshot.snapshotDate)}
                   </span>
                 )}

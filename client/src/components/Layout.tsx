@@ -231,24 +231,21 @@ export function UserMenu() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const initials = user?.firstName?.[0] ?? user?.emailAddresses?.[0]?.emailAddress?.[0] ?? "?";
-
   return (
     <div className="relative ml-2" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className={cn(
-          "flex items-center justify-center rounded-full w-8 h-8 text-xs font-semibold transition-colors",
-          open
-            ? "bg-primary text-primary-foreground"
-            : "bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-        )}
+        className="flex items-center justify-center w-[34px] h-[34px] rounded-[6px] text-white text-[13px] font-medium transition-opacity hover:opacity-90"
+        style={{
+          background: "linear-gradient(135deg, var(--color-primary) 0%, oklch(0.55 0.14 320) 100%)",
+          boxShadow: "0 1px 0 rgba(255,255,255,.5) inset, 0 0 0 1px rgba(15,20,40,.12), 0 4px 10px -2px color-mix(in oklab, var(--color-primary) 35%, transparent)",
+        }}
         aria-label="User menu"
       >
-        {user?.imageUrl ? (
-          <img src={user.imageUrl} alt="avatar" className="w-8 h-8 rounded-full object-cover" />
+        {user?.imageUrl && !user.imageUrl.includes("img.clerk.com") ? (
+          <img src={user.imageUrl} alt="avatar" className="w-full h-full rounded-[6px] object-cover" />
         ) : (
-          initials.toUpperCase()
+          (user?.firstName?.[0] ?? user?.emailAddresses?.[0]?.emailAddress?.[0] ?? "?").toUpperCase()
         )}
       </button>
 
@@ -293,25 +290,25 @@ export function UserMenu() {
 export function Layout() {
 
   return (
-    <div className="min-h-screen bg-muted">
-      {/* Top nav bar */}
-      <header className="sticky top-0 z-50 border-b border-border bg-background">
-        <div className="mx-auto flex h-14 max-w-7xl items-center px-4">
+    <div className="min-h-screen">
+      {/* Floating glass topbar */}
+      <header className="sticky top-4 z-50 mx-auto mt-4 max-w-7xl px-4">
+        <div className="flex h-14 items-center gap-6 rounded-xl border border-border bg-card pl-[18px] pr-3 backdrop-blur-[22px] backdrop-saturate-[140%] shadow-card">
           <Link to="/" className="mr-8 hover:opacity-80 transition-opacity">
-            <img src="/beacon-logo.png" alt="Beacon" width={108} height={30} />
+            <img src="/beacon-logo.png" alt="Beacon" width={92} height={26} />
           </Link>
 
-          <nav className="flex flex-1 gap-1 overflow-x-auto">
+          <nav className="flex flex-1 gap-1">
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) =>
                   cn(
-                    "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-normal transition-colors whitespace-nowrap",
+                    "tp-nav-link",
                     isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      ? "bg-white/[.78] shadow-[0_1px_0_rgba(255,255,255,.85)_inset,0_1px_2px_rgba(15,20,40,.06),0_4px_10px_-4px_rgba(15,20,40,.12)]"
+                      : "hover:bg-white/40"
                   )
                 }
               >

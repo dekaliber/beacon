@@ -161,7 +161,7 @@ export function BulkEditModal({
               <select
                 value={categorySelectValue}
                 onChange={(e) => handleCategoryChange(e.target.value)}
-                className="w-full appearance-none rounded-md border border-border py-1.5 pl-2 pr-6 text-sm text-foreground"
+                className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
               >
                 <option value="" disabled>Select a category...</option>
                 <option value="__null__">No category (clear)</option>
@@ -188,7 +188,7 @@ export function BulkEditModal({
           {tagsEnabled && (
             <div className="ml-6 space-y-2">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground">Mode:</span>
+                <span className="tp-caption">Mode:</span>
                 {(["add", "remove", "replace"] as TagMode[]).map((mode) => (
                   <button
                     key={mode}

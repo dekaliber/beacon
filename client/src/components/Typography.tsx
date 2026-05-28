@@ -9,10 +9,10 @@ import type {
 
 type WithAs = { as?: ElementType; className?: string; children?: ReactNode };
 
-/** Uppercase tracked small label for card/section/panel headers.
- *  @example <SectionLabel>Net Worth</SectionLabel>
- *  @example <SectionLabel as="h3" className="mb-2">Portfolio</SectionLabel> */
-export function SectionLabel({
+/** Mono uppercase eyebrow above a card or section heading.
+ *  @example <Eyebrow>Spent this month</Eyebrow>
+ *  @example <Eyebrow as="h3" className="mb-2">Portfolio</Eyebrow> */
+export function Eyebrow({
   as: Tag = "p",
   className,
   children,
@@ -20,10 +20,7 @@ export function SectionLabel({
 }: WithAs & HTMLAttributes<HTMLElement>) {
   return (
     <Tag
-      className={cn(
-        "text-xs font-medium text-muted-foreground uppercase tracking-[1px] font-label",
-        className,
-      )}
+      className={cn("tp-eyebrow", className)}
       {...(props as object)}
     >
       {children}
@@ -31,7 +28,25 @@ export function SectionLabel({
   );
 }
 
-/** Table <th> with the standard column-header label styling.
+/** Stronger variant of Eyebrow — ink-2 instead of ink-3.
+ *  @example <EyebrowLoud>Year-to-date</EyebrowLoud> */
+export function EyebrowLoud({
+  as: Tag = "p",
+  className,
+  children,
+  ...props
+}: WithAs & HTMLAttributes<HTMLElement>) {
+  return (
+    <Tag
+      className={cn("tp-eyebrow-loud", className)}
+      {...(props as object)}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+/** Table <th> with TableHeader recipe styling.
  *  @example <ColumnHeader className="text-right w-24">Amount</ColumnHeader> */
 export function ColumnHeader({
   className,
@@ -40,10 +55,7 @@ export function ColumnHeader({
 }: ThHTMLAttributes<HTMLTableCellElement>) {
   return (
     <th
-      className={cn(
-        "text-[10px] font-medium text-muted-foreground uppercase tracking-[1px] font-label",
-        className,
-      )}
+      className={cn("tp-table-header", className)}
       {...props}
     >
       {children}
@@ -51,11 +63,10 @@ export function ColumnHeader({
   );
 }
 
-/** Wraps a small/inline numeric value in Geist Mono + tabular figures.
- *  Use for text-sm/text-xs amounts in tables, lists, and inline context.
- *  Caller supplies size and weight via className.
- *  @example <StatValue className="font-medium text-foreground">{amount}</StatValue>
- *  @example <StatValue className="text-xs font-semibold">{fmtAmount(t.amount)}</StatValue> */
+/** Numeric value in Geist Mono + tabular figures — for amounts in rows/tables.
+ *  Only sets the typeface and tnum; caller controls size, weight, and color.
+ *  For a complete row-amount recipe use .tp-numeric directly.
+ *  @example <StatValue className="text-13 font-medium text-ink">{fmtAmount(amount)}</StatValue> */
 export function StatValue({
   as: Tag = "span",
   className,
@@ -64,7 +75,7 @@ export function StatValue({
 }: WithAs & HTMLAttributes<HTMLElement>) {
   return (
     <Tag
-      className={cn("tabular-nums font-label", className)}
+      className={cn("font-mono tabular-nums", className)}
       {...(props as object)}
     >
       {children}
@@ -72,10 +83,11 @@ export function StatValue({
   );
 }
 
-/** Wraps a display-level numeric value in Hanken Grotesk + tabular figures.
- *  Use sparingly for headline numbers at text-base or larger.
- *  @example <DisplayStat as="p" className="text-3xl font-bold">{formatCurrency(total)}</DisplayStat>
- *  @example <DisplayStat as="p" className="text-2xl font-bold">{budgetPct}%</DisplayStat> */
+/** Display-level numeric value in Hanken Grotesk + tabular figures.
+ *  Only sets the typeface and tnum; caller controls size and weight.
+ *  Add a tp-* recipe class (tp-kpi, tp-stat, etc.) for a complete treatment.
+ *  @example <DisplayStat className="tp-kpi">{formatCurrency(total)}</DisplayStat>
+ *  @example <DisplayStat className="tp-stat text-up">{budgetPct}%</DisplayStat> */
 export function DisplayStat({
   as: Tag = "span",
   className,
@@ -84,7 +96,7 @@ export function DisplayStat({
 }: WithAs & HTMLAttributes<HTMLElement>) {
   return (
     <Tag
-      className={cn("tabular-nums font-numeral", className)}
+      className={cn("font-display tabular-nums", className)}
       {...(props as object)}
     >
       {children}
@@ -92,9 +104,9 @@ export function DisplayStat({
   );
 }
 
-/** Supporting context text below a stat or heading (no uppercase).
+/** Supporting context text below a stat or heading — no uppercase.
  *  @example <Caption>of {formatCurrency(budget)} budget</Caption>
- *  @example <Caption as="span" className="shrink-0">{fmtDate(date)}</Caption> */
+ *  @example <Caption as="span">{fmtDate(date)}</Caption> */
 export function Caption({
   as: Tag = "p",
   className,
@@ -103,7 +115,7 @@ export function Caption({
 }: WithAs & HTMLAttributes<HTMLElement>) {
   return (
     <Tag
-      className={cn("text-xs text-muted-foreground font-label", className)}
+      className={cn("tp-caption", className)}
       {...(props as object)}
     >
       {children}
@@ -111,7 +123,25 @@ export function Caption({
   );
 }
 
-/** Form field <label> with standard label styling.
+/** Tiny mono label riding beside or under a value — pace labels, timestamps.
+ *  @example <Fineprint>of $3,900 budget</Fineprint> */
+export function Fineprint({
+  as: Tag = "span",
+  className,
+  children,
+  ...props
+}: WithAs & HTMLAttributes<HTMLElement>) {
+  return (
+    <Tag
+      className={cn("tp-fineprint", className)}
+      {...(props as object)}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+/** Form field <label> with eyebrow-style label treatment.
  *  @example <FieldLabel htmlFor="amount">Amount</FieldLabel> */
 export function FieldLabel({
   className,
@@ -120,13 +150,13 @@ export function FieldLabel({
 }: LabelHTMLAttributes<HTMLLabelElement>) {
   return (
     <label
-      className={cn(
-        "text-xs font-medium text-muted-foreground uppercase tracking-[1px] font-label",
-        className,
-      )}
+      className={cn("tp-eyebrow", className)}
       {...props}
     >
       {children}
     </label>
   );
 }
+
+/** @deprecated Use <Eyebrow> instead */
+export const SectionLabel = Eyebrow;

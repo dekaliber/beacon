@@ -118,7 +118,7 @@ function GainText({ value, pct, size = "sm" }: { value: number | null; pct?: num
   const Icon = positive ? TrendingUp : TrendingDown;
   const sizeClass = size === "base" ? "text-base font-semibold" : "text-sm font-medium";
   return (
-    <span className={`inline-flex items-center gap-1 tabular-nums font-label ${positive ? "text-green-600" : "text-red-500"} ${sizeClass}`}>
+    <span className={`inline-flex items-center gap-1 tabular-nums font-mono ${positive ? "text-green-600" : "text-red-500"} ${sizeClass}`}>
       <Icon className="h-3.5 w-3.5 shrink-0" />
       {formatCurrency(Math.abs(value))}
       {pct != null && <span className="text-xs opacity-70">({Math.abs(pct).toFixed(2)}%)</span>}
@@ -162,7 +162,7 @@ function GhostMobileGrowthChart() {
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <p className="text-xs text-muted-foreground text-center px-6">
+          <p className="tp-caption text-center px-6">
             No data yet. Add dated lots to track growth over time.
           </p>
         </div>
@@ -219,7 +219,7 @@ function MobileGrowthChart({ accountId }: { accountId: string }) {
           ))}
         </div>
         {periodGain != null && (
-          <span className={`text-sm font-semibold tabular-nums font-label ${periodGain >= 0 ? "text-green-600" : "text-red-500"}`}>
+          <span className={`text-13 font-semibold tabular-nums font-mono ${periodGain >= 0 ? "text-green-600" : "text-red-500"}`}>
             {periodGain >= 0 ? "+" : "−"}{formatCurrency(Math.abs(periodGain))}
             {periodGainPct != null && (
               <span className="text-xs ml-1 opacity-70">({Math.abs(periodGainPct).toFixed(2)}%)</span>
@@ -229,11 +229,11 @@ function MobileGrowthChart({ accountId }: { accountId: string }) {
       </div>
 
       {loading ? (
-        <div className="h-[120px] flex items-center justify-center text-xs text-muted-foreground">
+        <div className="h-[120px] flex items-center justify-center tp-caption">
           Loading…
         </div>
       ) : points.length === 0 ? (
-        <div className="h-[120px] flex items-center justify-center text-xs text-muted-foreground text-center px-4">
+        <div className="h-[120px] flex items-center justify-center tp-caption text-center px-4">
           No data for this period.
         </div>
       ) : (
@@ -332,9 +332,9 @@ function CashEditSheet({
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
           <div>
-            <h2 className="text-base font-semibold">Settlement Cash</h2>
+            <h2 className="tp-panel-title">Settlement Cash</h2>
             {updatedAt && (
-              <p className="text-xs text-muted-foreground">
+              <p className="tp-caption">
                 Updated {new Date(updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
               </p>
             )}
@@ -353,7 +353,7 @@ function CashEditSheet({
               onChange={(e) => setInput(e.target.value)}
               placeholder="0.00"
               autoFocus
-              className="w-full rounded-md border border-border pl-7 pr-3 py-3 text-sm tabular-nums font-label focus:border-primary focus:outline-none"
+              className="w-full rounded-md border border-border pl-7 pr-3 py-3 text-sm tabular-nums font-mono focus:border-primary focus:outline-none"
             />
           </div>
           <div className="flex gap-3">
@@ -377,7 +377,7 @@ function CashEditSheet({
             <button
               type="button"
               onClick={() => onSaved(null).then(onClose)}
-              className="w-full text-center text-xs text-muted-foreground hover:text-destructive"
+              className="w-full text-center tp-caption hover:text-destructive"
             >
               Clear cash balance
             </button>
@@ -457,7 +457,7 @@ function LotEditScreen({
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-        <h2 className="text-base font-semibold">{lot ? "Edit Lot" : "Add Purchase"}</h2>
+        <h2 className="tp-panel-title">{lot ? "Edit Lot" : "Add Purchase"}</h2>
         <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
           <X className="h-5 w-5" />
         </button>
@@ -647,7 +647,7 @@ function HoldingDetailSheet({
             <div className="flex items-center gap-2">
               <span className="font-bold text-lg">{holding?.ticker}</span>
               {holding?.type && (
-                <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                <span className="rounded bg-muted px-1.5 py-0.5 tp-caption">
                   {holding.type}
                 </span>
               )}
@@ -704,11 +704,11 @@ function HoldingDetailSheet({
               {(holding.shortTermGain !== 0 || holding.longTermGain !== 0) && (
                 <div className="rounded-md bg-muted/50 px-4 py-3 flex gap-6 text-sm">
                   <div>
-                    <p className="text-xs text-muted-foreground mb-0.5">Short-Term</p>
+                    <p className="tp-caption mb-0.5">Short-Term</p>
                     <GainText value={holding.shortTermGain} />
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground mb-0.5">Long-Term</p>
+                    <p className="tp-caption mb-0.5">Long-Term</p>
                     <GainText value={holding.longTermGain} />
                   </div>
                 </div>
@@ -738,16 +738,16 @@ function HoldingDetailSheet({
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
                               {lot.acquiredDate && (
-                                <p className="text-xs text-muted-foreground mb-0.5">{formatDate(lot.acquiredDate)}</p>
+                                <p className="tp-caption mb-0.5">{formatDate(lot.acquiredDate)}</p>
                               )}
                               <div className="flex items-center gap-2 flex-wrap">
                                 <StatValue className="text-sm">
                                   {parseFloat(lot.quantity).toLocaleString(undefined, { maximumFractionDigits: 8 })} sh
                                 </StatValue>
-                                <span className="text-xs text-muted-foreground">
+                                <span className="tp-caption">
                                   @ {formatCurrency(parseFloat(lot.costPerShare))}/sh
                                 </span>
-                                <span className="text-xs text-muted-foreground">
+                                <span className="tp-caption">
                                   = {formatCurrency(gains.totalCost)}
                                 </span>
                               </div>
@@ -975,23 +975,23 @@ function ActivityDetailSheet({
             {isSale && a.shortTermGain != null && a.longTermGain != null && (
               <div className="rounded-md bg-muted/50 px-3 py-2.5 flex gap-6 text-sm">
                 <div>
-                  <p className="text-xs text-muted-foreground mb-0.5">Short-Term</p>
+                  <p className="tp-caption mb-0.5">Short-Term</p>
                   <GainText value={a.shortTermGain} />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground mb-0.5">Long-Term</p>
+                  <p className="tp-caption mb-0.5">Long-Term</p>
                   <GainText value={a.longTermGain} />
                 </div>
               </div>
             )}
             {a.notes && (
               <div className="pt-1">
-                <p className="text-xs text-muted-foreground mb-0.5">Notes</p>
+                <p className="tp-caption mb-0.5">Notes</p>
                 <p className="text-sm">{a.notes}</p>
               </div>
             )}
             {(isSale || (!isPurchase && !isSale)) && (
-              <p className="text-xs text-muted-foreground pt-2 border-t border-border">
+              <p className="tp-caption pt-2 border-t border-border">
                 To edit this transaction, use the desktop app.
               </p>
             )}
@@ -1006,7 +1006,7 @@ function Row({ label, value, muted, bold }: { label: string; value: string; mute
   return (
     <div className="flex items-center justify-between">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <span className={`text-sm tabular-nums font-label ${muted ? "text-muted-foreground" : ""} ${bold ? "font-semibold" : ""}`}>
+      <span className={`text-sm tabular-nums font-mono ${muted ? "text-muted-foreground" : ""} ${bold ? "font-semibold" : ""}`}>
         {value}
       </span>
     </div>
@@ -1072,7 +1072,7 @@ function TickerSearch({
         className="w-full rounded-md border border-primary px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
       />
       {loading && (
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">Searching…</span>
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 tp-caption">Searching…</span>
       )}
       {results.length > 0 && (
         <div className="absolute left-0 right-0 top-full mt-1 z-10 rounded-md border border-border bg-background shadow-lg max-h-72 overflow-y-auto">
@@ -1084,9 +1084,9 @@ function TickerSearch({
             >
               <div className="flex flex-col min-w-0">
                 <span className="font-semibold text-sm">{r.ticker}</span>
-                <span className="text-xs text-muted-foreground truncate">{r.name}</span>
+                <span className="tp-caption truncate">{r.name}</span>
               </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0 ml-3">
+              <div className="flex items-center gap-2 tp-caption shrink-0 ml-3">
                 <span className="rounded bg-muted px-1.5 py-0.5">{r.type}</span>
               </div>
             </button>
@@ -1203,7 +1203,7 @@ function AddInvestmentFullscreen({
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-        <h2 className="text-base font-semibold">
+        <h2 className="tp-panel-title">
           {step === "search" ? "Add Investment" : `Add ${selected?.ticker}`}
         </h2>
         <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
@@ -1225,7 +1225,7 @@ function AddInvestmentFullscreen({
               </button>
               <div className="min-w-0">
                 <p className="font-semibold text-sm">{selected.ticker}</p>
-                <p className="text-xs text-muted-foreground truncate">{selected.name}</p>
+                <p className="tp-caption truncate">{selected.name}</p>
               </div>
               {fetchedPrice != null && (
                 <StatValue className="ml-auto text-sm text-muted-foreground shrink-0">
@@ -1293,7 +1293,7 @@ function AddInvestmentFullscreen({
                   const g = computeLotGains(lot.quantity, lot.costPerShare, managed ? null : lot.acquiredDate || null, fetchedPrice);
                   if (!g.totalGain) return null;
                   return (
-                    <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border">
+                    <div className="flex items-center justify-between tp-caption pt-1 border-t border-border">
                       <span>Unrealized gain</span>
                       <GainText value={g.totalGain} />
                     </div>
@@ -1402,7 +1402,7 @@ function AddManualFullscreen({
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-        <h2 className="text-base font-semibold">{editing ? "Edit Manual Investment" : "Add Manual Investment"}</h2>
+        <h2 className="tp-panel-title">{editing ? "Edit Manual Investment" : "Add Manual Investment"}</h2>
         <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
           <X className="h-5 w-5" />
         </button>
@@ -1634,8 +1634,8 @@ export function MobileInvestmentAccount() {
             <LineChart className="h-4 w-4 text-gray-500" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl font-bold leading-tight truncate">{account.name}</h1>
-            <p className="text-xs text-muted-foreground">
+            <h1 className="tp-card-title leading-tight truncate">{account.name}</h1>
+            <p className="tp-caption">
               Investment Account
               {account.isJoint && " · Joint"}
               {account.isManaged && " · Managed"}
@@ -1646,7 +1646,7 @@ export function MobileInvestmentAccount() {
         {/* Market value — only when there's something to total */}
         {hasHoldings && (
           <div>
-            <DisplayStat as="p" className="text-2xl font-bold">{formatCurrency(totalMarketValue)}</DisplayStat>
+            <DisplayStat as="p" className="tp-kpi-l">{formatCurrency(totalMarketValue)}</DisplayStat>
           </div>
         )}
 
@@ -1758,9 +1758,9 @@ export function MobileInvestmentAccount() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-sm">{holding.ticker}</span>
-                    <span className="text-xs text-muted-foreground truncate">{holding.name}</span>
+                    <span className="tp-caption truncate">{holding.name}</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="tp-caption mt-0.5">
                     {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 4 })} shares
                   </p>
                 </div>
@@ -1783,8 +1783,8 @@ export function MobileInvestmentAccount() {
                 className="flex w-full items-center gap-3 rounded-xl border border-border px-4 py-3 text-left hover:bg-accent/50 transition-colors active:opacity-60"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{m.name}</p>
-                  <p className="text-xs text-muted-foreground">Manual</p>
+                  <p className="tp-row-label truncate">{m.name}</p>
+                  <p className="tp-caption">Manual</p>
                 </div>
                 <div className="text-right shrink-0">
                   <StatValue as="p" className="text-sm font-semibold">{formatCurrency(m.marketValue)}</StatValue>
@@ -1841,9 +1841,9 @@ export function MobileInvestmentAccount() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <span className="font-mono font-bold text-xs">{pd.ticker}</span>
-                            <span className="text-xs text-muted-foreground">Ex-date: {formatDate(pd.exDate)}</span>
+                            <span className="tp-caption">Ex-date: {formatDate(pd.exDate)}</span>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">
+                          <p className="tp-caption mt-0.5">
                             ${parseFloat(pd.perShareAmount).toFixed(4)}/sh × {parseFloat(pd.sharesAtExDate).toLocaleString(undefined, { maximumFractionDigits: 4 })} sh
                             {" ≈ "}<span className="font-medium text-foreground">{formatCurrency(parseFloat(pd.estimatedTotal))}</span>
                           </p>
@@ -1857,12 +1857,12 @@ export function MobileInvestmentAccount() {
                               refetchNotifications();
                             } catch { /* ignore */ }
                           }}
-                          className="shrink-0 text-xs text-muted-foreground hover:text-foreground border border-border rounded-md px-2 py-1"
+                          className="shrink-0 tp-caption hover:text-foreground border border-border rounded-md px-2 py-1"
                         >
                           Dismiss
                         </button>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1.5">
+                      <p className="tp-caption mt-1.5">
                         To confirm this dividend, use the desktop app.
                       </p>
                     </div>
@@ -1910,7 +1910,7 @@ export function MobileInvestmentAccount() {
                   {(selectedTickers.size > 0 || selectedTypes.size > 0) && (
                     <button
                       onClick={() => { setSelectedTickers(new Set()); setSelectedTypes(new Set()); }}
-                      className="text-xs text-muted-foreground underline"
+                      className="tp-caption underline"
                     >
                       Clear
                     </button>
@@ -1948,10 +1948,10 @@ export function MobileInvestmentAccount() {
                           {badgeLabel}
                         </span>
                         <span className="font-mono font-bold text-xs">{a.ticker}</span>
-                        <span className="text-xs text-muted-foreground">{formatDate(a.date)}</span>
+                        <span className="tp-caption">{formatDate(a.date)}</span>
                       </div>
                       {a.shares != null && (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="tp-caption">
                           {a.shares.toLocaleString(undefined, { maximumFractionDigits: 4 })} sh
                           {a.pricePerShare != null && ` @ ${formatCurrency(a.pricePerShare)}`}
                         </p>

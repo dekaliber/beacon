@@ -1,34 +1,213 @@
 @import "tailwindcss";
 
 @theme {
-  --font-body: "DM Sans", system-ui, -apple-system, sans-serif;
-  --font-numeral: "Hanken Grotesk", system-ui, sans-serif;
-  --font-label: "Geist Mono", "Courier New", monospace;
+  /* ── Type stack ─────────────────────────────────────────────────────── */
+  --font-sans:    "Plus Jakarta Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  --font-display: "Hanken Grotesk", system-ui, sans-serif;
+  --font-mono:    "Geist Mono", "Courier New", monospace;
 
-  --color-primary: #4F46E5;
+  /* ── Type scale — off-ladder sizes not in Tailwind's built-in scale ── */
+  --text-10: 10px;
+  --text-11: 11px;
+  --text-13: 13px;
+  --text-15: 15px;
+  --text-17: 17px;
+  --text-19: 19px;
+  --text-32: 32px;
+  --text-42: 42px;
+
+  /* ── Ink ramp ────────────────────────────────────────────────────────── */
+  --color-ink:   oklch(0.16 0.020 265); /* headings, KPIs, row labels */
+  --color-ink-2: oklch(0.34 0.016 265); /* lede body, nav default */
+  --color-ink-3: oklch(0.52 0.012 265); /* eyebrows, captions, fineprint */
+  --color-ink-4: oklch(0.70 0.010 265); /* muted / disabled */
+  --color-ink-5: oklch(0.86 0.008 265); /* hairlines, icon tints */
+
+  /* ── Semantic ────────────────────────────────────────────────────────── */
+  --color-up:        oklch(0.62 0.13 158); /* positive delta, under-budget */
+  --color-up-soft:   color-mix(in oklab, oklch(0.62 0.13 158) 14%, transparent);
+  --color-down:      oklch(0.60 0.18 25);  /* negative delta, over-budget */
+  --color-down-soft: color-mix(in oklab, oklch(0.60 0.18 25) 14%, transparent);
+  --color-warn:      oklch(0.72 0.13 75);  /* reimbursement, soft alert */
+  --color-warn-soft: color-mix(in oklab, oklch(0.72 0.13 75) 16%, transparent);
+
+  /* ── Brand / UI ──────────────────────────────────────────────────────── */
+  --color-primary:          oklch(0.56 0.16 268);
+  --color-primary-deep:     oklch(0.44 0.18 268);
+  --color-primary-soft:     oklch(0.92 0.04 268);
   --color-primary-foreground: #FFFFFF;
   --color-secondary: #F1F5F9;
   --color-secondary-foreground: #0F172A;
   --color-muted: #F8FAFC;
-  --color-muted-foreground: #64748B;
+  --color-muted-foreground: oklch(0.52 0.012 265); /* = ink-3 */
   --color-accent: #F1F5F9;
   --color-accent-foreground: #0F172A;
   --color-destructive: #EF4444;
-  --color-border: #E2E8F0;
-  --color-ring: #4F46E5;
-  --color-background: #FFFFFF;
-  --color-foreground: #0F172A;
-  --color-card: #FFFFFF;
-  --color-card-foreground: #0F172A;
+  --color-border: oklch(0.16 0.020 265 / 0.07);
+  --color-ring: oklch(0.56 0.16 268);
+  --color-background: oklch(0.985 0.006 260);
+  --color-foreground: oklch(0.16 0.020 265); /* = ink */
+  --color-card: oklch(1 0 0 / 0.62);
+  --color-card-foreground: oklch(0.16 0.020 265);
   --color-success: #10B981;
   --color-warning: #F59E0B;
+
+  /* ── Mesh gradient stops ─────────────────────────────────── */
+
+  /* ── Glass ───────────────────────────────────────────────── */
+  --color-glass-edge: rgba(255, 255, 255, 0.85); /* inner top-edge highlight */
+
+  /* ── Shadows ─────────────────────────────────────────────── */
+  --shadow-accent:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 6px 18px -8px color-mix(in oklab, var(--color-primary) 60%, transparent),
+    0 2px 4px rgba(15, 20, 40, 0.08);
+  --shadow-card:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 1px 2px rgba(15, 20, 40, 0.04),
+    0 8px 22px -14px rgba(15, 20, 40, 0.14),
+    0 24px 56px -28px rgba(15, 20, 40, 0.18);
+  --shadow-soft:
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 4px 14px -6px rgba(15, 20, 40, 0.08);
+  /* Shared inset base + 3px accent halo — used by text inputs and button focus */
+  --shadow-input:
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 1px 2px rgba(15, 20, 40, 0.04);
+  --shadow-focus-ring:
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 0 0 3px color-mix(in oklab, var(--color-primary) 14%, transparent);
+  --shadow-pop:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 14px 34px -16px rgba(20, 30, 80, 0.28),
+    0 2px 4px rgba(15, 20, 40, 0.04);
 }
 
 body {
   @apply bg-background text-foreground;
   margin: 0;
-  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: -0.005em;
+  position: relative;
+  isolation: isolate;
 }
+
+/* Layer 1 — calm single-hue backdrop */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  background:
+    radial-gradient(90% 60% at 50% -12%, oklch(0.91 0.055 268 / .70) 0%, transparent 68%),
+    radial-gradient(55% 55% at 102% 104%, oklch(0.93 0.030 232 / .55) 0%, transparent 70%),
+    var(--color-background);
+  opacity: 0.92;
+}
+
+/* Layer 2 — subtle SVG fractal-noise tile, multiplied on top */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .04 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  opacity: 0.7;
+  mix-blend-mode: multiply;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Input system — mirrors beacon-v4-input-states.html
+   Unlayered (no @layer) so these supersede Tailwind utility classes,
+   giving every input a consistent glass surface + correct focus ring.
+   ───────────────────────────────────────────────────────────────────── */
+
+/* ── Base: glass surface + inset shadow ────────────────────────────── */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+textarea {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-foreground);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  box-shadow: var(--shadow-input);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"])::placeholder,
+textarea::placeholder {
+  color: oklch(0.70 0.010 265); /* ink-4 — lighter than muted-foreground */
+}
+
+/* ── Focus (text-entry): full accent ring ──────────────────────────── */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="date"]):not([type="month"]):focus,
+textarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus-ring);
+  outline: none;
+}
+
+/* ── Picker inputs (select, date): tint border only — no ring ──────── */
+select,
+input[type="date"],
+input[type="month"] {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-foreground);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  box-shadow: var(--shadow-input);
+  transition: border-color 0.12s;
+}
+
+select:hover, select:focus,
+input[type="date"]:hover, input[type="date"]:focus,
+input[type="month"]:hover, input[type="month"]:focus {
+  border-color: color-mix(in oklab, var(--color-primary) 30%, oklch(0.16 0.020 265 / 0.12));
+  outline: none;
+}
+
+/* Date inputs — monospace numerals */
+input[type="date"],
+input[type="month"] {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* ── Disabled ──────────────────────────────────────────────────────── */
+input:disabled,
+textarea:disabled,
+select:disabled {
+  background: rgba(255, 255, 255, 0.4);
+  color: oklch(0.70 0.010 265);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* ── Number input — hide spinners (project convention) ─────────────── */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  appearance: none;
+}
+
+/* ── Labels ────────────────────────────────────────────────────────── */
+label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-muted-foreground);
+  display: block;
+}
+
+label.flex {
+  display: flex;
+}
+
+/* ─────────────────────────────────────────────────────────────────────*/
 
 .recharts-wrapper *:focus {
   outline: none;
@@ -123,4 +302,207 @@ svg.lucide {
   80%  { left:  0px; top: 60px; animation-timing-function: ease-out; }
   94%  { left:  0px; top: 30px; }
   100% { left:  0px; top: 30px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Typography Recipes — 12 named patterns from the design system.
+   Use these classes directly or as the base for Typography.tsx components.
+   Never introduce a new size/face combination that isn't one of these.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* PageTitle — Hanken 30/600/−0.025em · ink
+   Where: top of every page below the topbar */
+.tp-page-title {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--color-ink);
+}
+
+/* CardTitle — Hanken 17/600/−0.015em · ink
+   Where: heading inside any full-width card */
+.tp-card-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--color-ink);
+}
+
+/* PanelTitle — Hanken 15/600/−0.015em · ink
+   Where: compact panel or section heading inside a grid */
+.tp-panel-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--color-ink);
+}
+
+/* Eyebrow — Mono 10.5/500/+0.10em uppercase · ink-3
+   Where: above titles, breakdown tiles, section sub-labels */
+.tp-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+}
+
+/* EyebrowLoud — Mono 11/500/+0.14em uppercase · ink-2
+   Where: when an eyebrow needs to push back against a heading */
+.tp-eyebrow-loud {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink-2);
+}
+
+/* KPI-L — Hanken 32/600/−0.025em tnum · ink
+   Where: primary number inside a single-stat card (Budgets "Total remaining",
+   Dashboard MTD Spend / Budget Used) */
+.tp-kpi-l {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  font-feature-settings: "tnum";
+  color: var(--color-ink);
+}
+
+/* KPI — Hanken 42/600/−0.025em tnum · ink
+   Where: headline number on a card panel; cents use .tp-kpi-cents */
+.tp-kpi {
+  font-family: var(--font-display);
+  font-size: 42px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  font-feature-settings: "tnum";
+  color: var(--color-ink);
+}
+.tp-kpi-cents {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--color-ink-3);
+  vertical-align: 0.55em;
+  margin-left: 2px;
+}
+
+/* StatValue — Hanken 19/600/−0.018em tnum · ink
+   Where: mid-size number inside stat grids and monthly-average cards */
+.tp-stat {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  font-feature-settings: "tnum";
+  color: var(--color-ink);
+}
+
+/* Numeric — Mono 13/500 tnum+zero · ink
+   Where: amounts, percentages, dates inside dense rows and table cells */
+.tp-numeric {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  font-feature-settings: "tnum", "zero";
+  color: var(--color-ink);
+}
+
+/* RowLabel — Body 13/500/−0.005em · ink
+   Where: category name, merchant, account — the text half of a data row */
+.tp-row-label {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--color-ink);
+}
+
+/* Caption — Body 12/400/−0.005em · ink-3
+   Where: .card-sub, stat labels, secondary helper copy */
+.tp-caption {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: -0.005em;
+  color: var(--color-ink-3);
+}
+
+/* Fineprint — Mono 11/500/+0.02em tnum · ink-3
+   Where: pace-bar labels, "of $X budget", ticker rail, last-synced */
+.tp-fineprint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-feature-settings: "tnum";
+  color: var(--color-ink-3);
+}
+
+/* DeltaPill — Mono 11/500 tnum · semantic color via inline or modifier
+   Where: .delta-pill, .status-pill, .delta-mini on KPIs and stat values */
+.tp-delta-pill {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  font-feature-settings: "tnum";
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+.tp-delta-pill.up {
+  background: var(--color-up-soft);
+  color: var(--color-up);
+  border-color: color-mix(in oklab, var(--color-up) 22%, transparent);
+}
+.tp-delta-pill.down {
+  background: var(--color-down-soft);
+  color: var(--color-down);
+  border-color: color-mix(in oklab, var(--color-down) 22%, transparent);
+}
+.tp-delta-pill.warn {
+  background: var(--color-warn-soft);
+  color: var(--color-warn);
+  border-color: color-mix(in oklab, var(--color-warn) 22%, transparent);
+}
+
+/* TableHeader — Mono 10/500/+0.11em uppercase · ink-3
+   Where: thead th, column header rows in any data grid */
+.tp-table-header {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+}
+
+/* NavLink — Body 13/400/−0.005em · ink-2 (active: 500 · ink)
+   Where: topbar primary nav, sidebar nav links, page tabs */
+.tp-nav-link {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.005em;
+  color: var(--color-ink-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  white-space: nowrap;
+  transition: color 150ms, background-color 150ms, box-shadow 150ms;
+}
+.tp-nav-link[aria-current="page"] {
+  font-weight: 500;
+  color: var(--color-ink);
 }

@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
 import { SectionLabel } from "@/components/Typography";
 
@@ -33,11 +34,20 @@ export function MultiSelectDropdown({
   const [open, setOpen] = useState(false);
   const [flipUp, setFlipUp] = useState(false);
   const [search, setSearch] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
+  const [panelPos, setPanelPos] = useState({ top: 0, left: 0 });
 
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click — panel is portalled to <body> so it's a separate
+  // DOM subtree from triggerRef; we must check both refs.
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        triggerRef.current && !triggerRef.current.contains(target) &&
+        (!panelRef.current || !panelRef.current.contains(target))
+      ) {
         setOpen(false);
         setSearch("");
       }
@@ -76,6 +86,19 @@ export function MultiSelectDropdown({
 
   const isActive = selected.length > 0;
 
+  const handleOpen = () => {
+    if (!open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const flip = window.innerHeight - rect.bottom < 240;
+      setFlipUp(flip);
+      setPanelPos({
+        top: flip ? rect.top - 4 : rect.bottom + 4,
+        left: rect.left,
+      });
+    }
+    setOpen((v) => !v);
+  };
+
   const renderOption = (opt: MultiSelectOption) => (
     <button
       key={opt.id}
@@ -96,75 +119,87 @@ export function MultiSelectDropdown({
     </button>
   );
 
+  // The panel is portalled to document.body so that backdrop-filter on ancestor
+  // Cards cannot act as a containing block or stacking context for the panel.
+  // position:fixed + viewport-relative coords from getBoundingClientRect() then
+  // work correctly regardless of what's in the component tree above this.
+  const panel = open ? (
+    <div
+      ref={panelRef}
+      style={{
+        position: "fixed",
+        top: panelPos.top,
+        left: panelPos.left,
+        transform: flipUp ? "translateY(-100%)" : undefined,
+        zIndex: 9999,
+      }}
+      className="min-w-[200px] rounded-md border border-border bg-background shadow-lg"
+    >
+      <div className="flex gap-3 border-b border-border px-3 py-1.5">
+        <button
+          type="button"
+          onClick={selectAll}
+          className="text-xs text-primary hover:underline"
+        >
+          Select all
+        </button>
+        <button
+          type="button"
+          onClick={deselectAll}
+          className="tp-caption hover:underline"
+        >
+          Deselect all
+        </button>
+      </div>
+      {searchable && (
+        <div className="border-b border-border p-2">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search…"
+            className="w-full rounded border border-border px-2 py-1 text-sm focus:outline-none"
+            autoFocus
+          />
+        </div>
+      )}
+      <div className="max-h-52 overflow-auto">
+        {groups ? (
+          groups.map((group) => {
+            const groupOptions = visibleOptions.filter((o) => o.groupKey === group.key);
+            if (groupOptions.length === 0) return null;
+            return (
+              <div key={group.key}>
+                <SectionLabel className="px-3 pt-2 pb-0.5">{group.label}</SectionLabel>
+                {groupOptions.map(renderOption)}
+              </div>
+            );
+          })
+        ) : visibleOptions.length === 0 ? (
+          <p className="px-3 py-2 text-sm text-muted-foreground">No categories found</p>
+        ) : (
+          visibleOptions.map(renderOption)
+        )}
+      </div>
+    </div>
+  ) : null;
+
   return (
-    <div ref={ref} className="relative">
+    <div ref={triggerRef} className="relative">
       <button
         type="button"
-        onClick={() => {
-          if (!open && ref.current) {
-            const rect = ref.current.getBoundingClientRect();
-            setFlipUp(window.innerHeight - rect.bottom < 240);
-          }
-          setOpen(!open);
-        }}
-        className={`flex items-center gap-1 rounded-md border px-2 py-1.5 text-sm ${
-          isActive ? "border-primary text-primary" : "border-border text-foreground"
+        onClick={handleOpen}
+        className={`relative flex items-center rounded-[6px] border pl-2 pr-6 py-2 text-[13px] bg-white/[.78] [box-shadow:var(--shadow-input)] transition-[border-color] duration-[120ms] outline-none ${
+          isActive
+            ? "border-primary text-primary hover:border-primary"
+            : "border-[var(--color-border)] text-foreground hover:border-[color-mix(in_oklab,var(--color-primary)_30%,oklch(0.16_0.020_265_/_0.12))]"
         }`}
       >
         <span className="max-w-[140px] truncate">{buttonLabel}</span>
-        <ChevronDown className="h-3 w-3 flex-shrink-0 opacity-50" />
+        <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
       </button>
 
-      {open && (
-        <div className={`absolute left-0 z-50 min-w-[200px] rounded-md border border-border bg-background shadow-lg ${flipUp ? "bottom-full mb-1" : "top-full mt-1"}`}>
-          <div className="flex gap-3 border-b border-border px-3 py-1.5">
-            <button
-              type="button"
-              onClick={selectAll}
-              className="text-xs text-primary hover:underline"
-            >
-              Select all
-            </button>
-            <button
-              type="button"
-              onClick={deselectAll}
-              className="text-xs text-muted-foreground hover:underline"
-            >
-              Deselect all
-            </button>
-          </div>
-          {searchable && (
-            <div className="border-b border-border p-2">
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search…"
-                className="w-full rounded border border-border px-2 py-1 text-sm focus:outline-none"
-                autoFocus
-              />
-            </div>
-          )}
-          <div className="max-h-52 overflow-auto">
-            {groups ? (
-              groups.map((group) => {
-                const groupOptions = visibleOptions.filter((o) => o.groupKey === group.key);
-                if (groupOptions.length === 0) return null;
-                return (
-                  <div key={group.key}>
-                    <SectionLabel className="px-3 pt-2 pb-0.5">{group.label}</SectionLabel>
-                    {groupOptions.map(renderOption)}
-                  </div>
-                );
-              })
-            ) : visibleOptions.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-muted-foreground">No categories found</p>
-            ) : (
-              visibleOptions.map(renderOption)
-            )}
-          </div>
-        </div>
-      )}
+      {createPortal(panel, document.body)}
     </div>
   );
 }

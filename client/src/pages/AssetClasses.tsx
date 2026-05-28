@@ -130,7 +130,7 @@ export function AssetClassesPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Asset Classes</h2>
+          <h2 className="tp-page-title">Asset Classes</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
             Define your target allocation and color-code each class for charts.
           </p>
@@ -410,7 +410,7 @@ function AssetClassModal({ open, onClose, onSave, onDelete, editing, isChild }: 
         {showTargetInput && (
           <div>
             <label className="block text-xs font-medium mb-1">Target Allocation</label>
-            <p className="mb-2 text-xs text-muted-foreground">
+            <p className="mb-2 tp-caption">
               Percentage of your portfolio to allocate here. Leave blank to remove.
             </p>
             <div className="relative">

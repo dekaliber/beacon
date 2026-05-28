@@ -14,7 +14,7 @@ const bottomNavItems = [
 
 export function MobileLayout() {
   return (
-    <div className="flex min-h-screen flex-col bg-muted/30">
+    <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-50 border-b border-border bg-background">
         <div className="flex h-14 items-center justify-between px-4">
           <NavLink to="/"><img src="/beacon-logo.png" alt="Beacon" width={108} height={30} /></NavLink>

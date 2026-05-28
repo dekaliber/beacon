@@ -21,8 +21,8 @@ export function OutlierTransactionsList({ categories }: OutlierTransactionsListP
 
   return (
     <div className="w-full">
-      <h3 className="text-lg font-semibold text-card-foreground">Spending Outliers</h3>
-      <p className="mt-0.5 mb-3 text-xs text-muted-foreground">Largest transactions driving above average category spend</p>
+      <h3 className="tp-card-title">Spending Outliers</h3>
+      <p className="mt-0.5 mb-3 tp-caption">Largest transactions driving above average category spend</p>
       <div className="space-y-4">
         {categories.map((cat) => {
           const excessPct = Math.round((cat.excess / cat.historicalAvgMonthly) * 100);
@@ -30,15 +30,15 @@ export function OutlierTransactionsList({ categories }: OutlierTransactionsListP
             <div key={cat.categoryId ?? "__unknown__"}>
               {/* Category header */}
               <div className="mb-1.5 flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-card-foreground">
+                <span className="flex items-center gap-1.5 tp-row-label">
                   <span
                     className="inline-block h-2 w-2 shrink-0 rounded-full"
                     style={{ backgroundColor: cat.categoryColor }}
                   />
                   {cat.categoryName}
                 </span>
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-label">
-                  <StatValue className="font-medium text-foreground">{fmtAmount(cat.currentMonthTotal)}</StatValue>
+                <span className="flex items-center gap-1.5 tp-fineprint">
+                  <StatValue className="font-medium text-ink">{fmtAmount(cat.currentMonthTotal)}</StatValue>
                   <span>vs {fmtAmount(cat.historicalAvgMonthly)} avg</span>
                   <StatValue className="font-medium text-destructive">+{excessPct}%</StatValue>
                 </span>
@@ -58,18 +58,18 @@ export function OutlierTransactionsList({ categories }: OutlierTransactionsListP
                       {t.isJoint ? "J" : "P"}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-medium text-foreground">
+                      <p className="truncate tp-row-label">
                         {t.description}
                         {t.vendor && (
-                          <span className="ml-1.5 font-normal text-muted-foreground">{t.vendor}</span>
+                          <span className="ml-1.5 font-normal text-ink-3">{t.vendor}</span>
                         )}
                       </p>
                     </div>
                     {t.isPending && (
-                      <span className="shrink-0 text-[10px] italic text-muted-foreground">pending</span>
+                      <span className="shrink-0 tp-fineprint italic">pending</span>
                     )}
-                    <Caption as="span" className="shrink-0">{fmtDate(t.date)}</Caption>
-                    <StatValue className="shrink-0 text-xs font-semibold">{fmtAmount(t.amount)}</StatValue>
+                    <span className="shrink-0 tp-fineprint">{fmtDate(t.date)}</span>
+                    <StatValue className="shrink-0 tp-numeric">{fmtAmount(t.amount)}</StatValue>
                   </div>
                 ))}
               </div>

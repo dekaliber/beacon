@@ -124,7 +124,7 @@ function WithdrawalSettingsModal({
         <div className="space-y-3">
           <div>
             <p className="text-sm font-medium mb-0.5">Portfolio Denominator</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="tp-caption">
               The value used as the denominator when calculating your withdrawal rate. Override
               with your portfolio value at retirement to track against a fixed baseline.
             </p>
@@ -169,7 +169,7 @@ function WithdrawalSettingsModal({
         <div className="space-y-2">
           <div>
             <p className="text-sm font-medium mb-0.5">Target Withdrawal Rate</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="tp-caption">
               Your desired annual withdrawal rate as a percentage. Leave blank to track without
               a target. The common guideline is 4%.
             </p>
@@ -485,7 +485,7 @@ function WithdrawalRow({
   return (
     <tr className={`group ${isIncome ? "bg-muted/40" : "bg-white"}`}>
       {/* Date */}
-      <td className="py-2.5 pl-4 pr-2 text-sm tabular-nums font-label whitespace-nowrap">
+      <td className="py-2.5 pl-4 pr-2 text-13 whitespace-nowrap">
         <span className={isIncome ? "text-muted-foreground" : ""}>
           {formatDate(event.date)}
         </span>
@@ -497,14 +497,14 @@ function WithdrawalRow({
       </td>
 
       {/* Description */}
-      <td className="py-2.5 px-2 text-sm min-w-0 max-w-[200px] truncate">
+      <td className="py-2.5 px-2 text-13 min-w-0 max-w-[200px] truncate">
         <span className={isIncome ? "text-muted-foreground" : "font-medium"}>
           {event.description || "—"}
         </span>
       </td>
 
       {/* Account */}
-      <td className="py-2.5 px-2 text-sm">
+      <td className="py-2.5 px-2 text-13">
         <span className={isIncome ? "text-muted-foreground" : ""}>
           {event.type === "transfer" && event.toAccount ? (
             <span className="flex items-center gap-1 whitespace-nowrap">
@@ -519,7 +519,7 @@ function WithdrawalRow({
       </td>
 
       {/* Amount */}
-      <td className="py-2.5 px-2 text-right text-sm font-medium tabular-nums font-label whitespace-nowrap">
+      <td className="py-2.5 px-2 text-right tp-numeric font-semibold whitespace-nowrap">
         <span className={
           isIncome
             ? "text-muted-foreground"
@@ -606,13 +606,13 @@ function MonthSection({
         onClick={() => setCollapsed((c) => !c)}
         className="w-full flex items-center pl-4 pr-2 py-2 bg-muted/50 border-b border-border hover:bg-muted/70 transition-colors text-left"
       >
-        <span className="text-sm font-semibold flex-1">{label}</span>
+        <span className="tp-panel-title flex-1">{label}</span>
         {rate !== null && (
-          <StatValue className="text-xs text-muted-foreground mr-4">
+          <StatValue className="tp-caption mr-4">
             {formatRate(rate)} annualized
           </StatValue>
         )}
-        <StatValue className="w-[110px] text-right text-sm font-semibold">{formatCurrency(total)}</StatValue>
+        <StatValue className="w-[110px] text-right tp-stat">{formatCurrency(total)}</StatValue>
         <span className="w-[72px] flex items-center justify-center">
           <ChevronIcon className="h-3.5 w-3.5 text-muted-foreground" />
         </span>
@@ -620,7 +620,7 @@ function MonthSection({
 
       {/* Rows */}
       {!collapsed && (
-        <table className="w-full table-fixed">
+        <table className="w-full table-fixed text-13">
           <colgroup>
             <col className="w-[90px]" />
             <col className="w-[130px]" />
@@ -780,7 +780,7 @@ export function WithdrawalsPage() {
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
-          <h2 className="text-2xl font-bold">Withdrawals</h2>
+          <h2 className="tp-page-title">Withdrawals</h2>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
@@ -806,7 +806,7 @@ export function WithdrawalsPage() {
             <SectionLabel className="mb-0.5">
               YTD Total
             </SectionLabel>
-            <DisplayStat as="p" className="text-2xl font-bold">{formatCurrency(ytdTotal)}</DisplayStat>
+            <DisplayStat as="p" className="tp-kpi-l">{formatCurrency(ytdTotal)}</DisplayStat>
           </div>
           <div className="w-px self-stretch bg-border hidden sm:block" />
           <div>
@@ -814,11 +814,11 @@ export function WithdrawalsPage() {
               Annualized Rate (YTD)
             </SectionLabel>
             <div className="flex items-baseline gap-2">
-              <DisplayStat as="p" className="text-2xl font-bold">
+              <DisplayStat as="p" className="tp-kpi-l">
                 {effectiveDenominator > 0 ? formatRate(ytdRate) : "—"}
               </DisplayStat>
               {targetRate !== null && effectiveDenominator > 0 && ytdRate !== null && (
-                <span className={`text-sm font-medium tabular-nums font-label ${
+                <span className={`text-sm font-medium tabular-nums font-mono ${
                   ytdRate <= targetRate ? "text-green-600" : "text-red-500"
                 }`}>
                   {ytdRate <= targetRate
@@ -828,7 +828,7 @@ export function WithdrawalsPage() {
               )}
             </div>
             {targetRate !== null && (
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="tp-caption mt-0.5">
                 target: {(targetRate * 100).toFixed(2)}%
               </p>
             )}
@@ -844,7 +844,7 @@ export function WithdrawalsPage() {
           </button>
         </div>
         {effectiveDenominator === 0 && investmentAccountsData !== undefined && (
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mt-2 tp-caption">
             <button
               onClick={() => setSettingsModalOpen(true)}
               className="text-primary underline underline-offset-2"

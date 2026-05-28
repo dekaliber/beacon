@@ -66,14 +66,14 @@ function AccountRow({ account, allAccounts, onTap }: { account: Account; allAcco
           )}
         </div>
         {account.type === "CREDIT_CARD" && (account.closingDay != null || account.dueDay != null) && (
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="mt-0.5 tp-caption">
             {account.closingDay != null && `Closes ${nextDayOfMonth(account.closingDay)}`}
             {account.closingDay != null && account.dueDay != null && " · "}
             {account.dueDay != null && `Due ${nextDayOfMonth(account.dueDay)}`}
           </p>
         )}
         {account.type === "INVESTMENT" && account.dividendElection && (
-          <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+          <p className="mt-0.5 flex items-center gap-1 tp-caption">
             {account.dividendElection === "CASH" ? (
               <>
                 <span>Cash</span>
@@ -183,7 +183,7 @@ export function MobileAccounts() {
     <>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Accounts</h1>
+          <h1 className="tp-page-title">Accounts</h1>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -214,7 +214,7 @@ export function MobileAccounts() {
           <div className="rounded-xl border border-border bg-card px-6 py-12 text-center">
             <Landmark className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
             <p className="text-sm font-medium">No accounts</p>
-            <p className="mt-1 text-xs text-muted-foreground">Add your bank accounts, credit cards, and investments.</p>
+            <p className="mt-1 tp-caption">Add your bank accounts, credit cards, and investments.</p>
             <button
               type="button"
               onClick={openAdd}
@@ -391,7 +391,7 @@ function MobileAccountModal({
     return (
       <div className="fixed inset-0 z-[60] flex flex-col bg-background">
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-          <h2 className="text-base font-semibold">Hide Account</h2>
+          <h2 className="tp-panel-title">Hide Account</h2>
           <button type="button" onClick={() => setHideWarning(null)} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
             <X className="h-5 w-5" />
           </button>
@@ -431,7 +431,7 @@ function MobileAccountModal({
     <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       {/* Header */}
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-        <h2 className="text-base font-semibold">{account ? "Edit Account" : "Add Account"}</h2>
+        <h2 className="tp-panel-title">{account ? "Edit Account" : "Add Account"}</h2>
         <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
           <X className="h-5 w-5" />
         </button>
@@ -511,7 +511,7 @@ function MobileAccountModal({
             </span>
             <span className="flex flex-col gap-0.5">
               <span className={isJoint ? "text-primary" : ""}>Joint account</span>
-              <span className="text-xs text-muted-foreground">Transactions from joint accounts are shared expenses/income</span>
+              <span className="tp-caption">Transactions from joint accounts are shared expenses/income</span>
             </span>
           </button>
 
@@ -532,7 +532,7 @@ function MobileAccountModal({
                 </span>
                 <span className="flex flex-col gap-0.5">
                   <span className={isTaxAdvantaged ? "text-primary" : ""}>Tax-advantaged account</span>
-                  <span className="text-xs text-muted-foreground">IRA, 401(k), HSA, 529, or similar. Investment sales and dividends will not generate income records.</span>
+                  <span className="tp-caption">IRA, 401(k), HSA, 529, or similar. Investment sales and dividends will not generate income records.</span>
                 </span>
               </button>
               {isTaxAdvantaged && (
@@ -567,7 +567,7 @@ function MobileAccountModal({
                 />
                 <span className="text-sm font-medium">Managed / robo-advisor account</span>
               </label>
-              <p className="mt-1 ml-6 text-xs text-muted-foreground">
+              <p className="mt-1 ml-6 tp-caption">
                 {hasTrackedHoldings
                   ? "Cannot enable — this account already has holdings with lot-level purchase dates."
                   : "Lot-level acquisition dates are unavailable. Enter total shares and cost basis per holding."}
@@ -590,7 +590,7 @@ function MobileAccountModal({
                     placeholder="e.g. 15"
                     className="w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
                   />
-                  <p className="mt-1 text-xs text-muted-foreground">Day billing cycle closes</p>
+                  <p className="mt-1 tp-caption">Day billing cycle closes</p>
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium">Due Day</label>
@@ -602,7 +602,7 @@ function MobileAccountModal({
                     placeholder="e.g. 8"
                     className="w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
                   />
-                  <p className="mt-1 text-xs text-muted-foreground">Day payment is due</p>
+                  <p className="mt-1 tp-caption">Day payment is due</p>
                 </div>
               </div>
               <div>
@@ -620,7 +620,7 @@ function MobileAccountModal({
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">Which bank account pays this card</p>
+                <p className="mt-1 tp-caption">Which bank account pays this card</p>
               </div>
             </div>
           )}
@@ -660,7 +660,7 @@ function MobileAccountModal({
                     </select>
                     <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">Where cash dividends are deposited</p>
+                  <p className="mt-1 tp-caption">Where cash dividends are deposited</p>
                 </div>
               )}
             </div>
@@ -682,7 +682,7 @@ function MobileAccountModal({
               </span>
               <span className="flex flex-col gap-0.5">
                 <span className={isHidden ? "text-primary" : ""}>Hide account</span>
-                <span className="text-xs text-muted-foreground">Hidden accounts are excluded from dropdowns and the Investments page, but all data is preserved.</span>
+                <span className="tp-caption">Hidden accounts are excluded from dropdowns and the Investments page, but all data is preserved.</span>
               </span>
             </button>
           )}

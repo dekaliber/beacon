@@ -21,7 +21,7 @@ function ExpenseRow({ exp }: { exp: Expense }) {
       <div className="flex items-center gap-2 py-2 pl-11 pr-4">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm">{exp.vendor || exp.description}</p>
-          <p className="text-xs text-muted-foreground">{formatDate(exp.date.slice(0, 10))}</p>
+          <p className="tp-caption">{formatDate(exp.date.slice(0, 10))}</p>
         </div>
         <span
           className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold text-white"
@@ -129,7 +129,7 @@ function TagRow({
         </button>
 
         {/* Totals */}
-        <div className="flex shrink-0 items-center gap-2 text-xs tabular-nums font-label text-muted-foreground">
+        <div className="flex shrink-0 items-center gap-2 text-xs tabular-nums font-mono text-muted-foreground">
           {tag.personalTotal > 0 && (
             <span className="flex items-center gap-1">
               <span className="inline-flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold text-white" style={{ backgroundColor: PERSONAL_COLOR }}>P</span>
@@ -167,9 +167,9 @@ function TagRow({
       {expanded && (
         <div className="border-t border-border/50 bg-muted/30">
           {loading ? (
-            <p className="py-4 text-center text-xs text-muted-foreground">Loading…</p>
+            <p className="py-4 text-center tp-caption">Loading…</p>
           ) : rows.length === 0 ? (
-            <p className="py-4 text-center text-xs text-muted-foreground">No expenses</p>
+            <p className="py-4 text-center tp-caption">No expenses</p>
           ) : (
             <div className="divide-y divide-border/50">
               {rows.map((item) =>
@@ -235,7 +235,7 @@ export function MobileTags() {
     <>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Tags</h1>
+          <h1 className="tp-page-title">Tags</h1>
           <button
             type="button"
             onClick={openAdd}
@@ -249,7 +249,7 @@ export function MobileTags() {
           <div className="rounded-xl border border-border px-4 py-12 text-center">
             <TagIcon className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
             <p className="text-sm font-medium">No tags yet</p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 tp-caption">
               Create tags to label and group your expenses.
             </p>
             <button
@@ -345,7 +345,7 @@ function MobileTagModal({
     return (
       <div className="fixed inset-0 z-[60] flex flex-col bg-background">
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-          <h2 className="text-base font-semibold">Delete Tag</h2>
+          <h2 className="tp-panel-title">Delete Tag</h2>
           <button type="button" onClick={() => setConfirmDelete(false)} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
             <X className="h-5 w-5" />
           </button>
@@ -384,7 +384,7 @@ function MobileTagModal({
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-        <h2 className="text-base font-semibold">{tag ? "Edit Tag" : "Add Tag"}</h2>
+        <h2 className="tp-panel-title">{tag ? "Edit Tag" : "Add Tag"}</h2>
         <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
           <X className="h-5 w-5" />
         </button>

@@ -194,7 +194,7 @@ export function SecuritiesPage() {
               return (
                 <StatValue
                   key={w.assetClassId}
-                  className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground font-medium whitespace-nowrap"
+                  className="rounded bg-muted px-1.5 py-0.5 tp-caption font-medium whitespace-nowrap"
                 >
                   {abbrev} {pct}%
                 </StatValue>
@@ -244,7 +244,7 @@ export function SecuritiesPage() {
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
-            <h2 className="text-2xl font-bold">Securities</h2>
+            <h2 className="tp-page-title">Securities</h2>
           </div>
         </div>
         <p className="text-sm text-muted-foreground mt-1">
@@ -536,7 +536,7 @@ function EditModal({ open, instrument, allInstruments, assetClasses, onClose, on
                 <span className="flex h-3.5 w-3.5 cursor-default items-center justify-center rounded-full border border-muted-foreground/40 text-[9px] font-bold leading-none text-muted-foreground">
                   ?
                 </span>
-                <span className="pointer-events-none invisible absolute bottom-full left-1/2 mb-2 w-64 -translate-x-1/2 rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100">
+                <span className="pointer-events-none invisible absolute bottom-full left-1/2 mb-2 w-64 -translate-x-1/2 rounded-md border border-border bg-background px-3 py-2 tp-caption opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100">
                   Long-term gains taxed at the lesser of 28% or your ordinary income rate. Applies to grantor-trust gold and silver ETFs (e.g. GLD, IAU, SLV).
                 </span>
               </span>
@@ -547,7 +547,7 @@ function EditModal({ open, instrument, allInstruments, assetClasses, onClose, on
         {/* ── Equivalents ── */}
         {!instrument?.isManual && <div>
           <h3 className="text-sm font-semibold mb-1">Equivalents</h3>
-          <p className="text-xs text-muted-foreground mb-3">
+          <p className="tp-caption mb-3">
             Link securities that track the same portfolio (e.g. VTSAX ↔ VTI). They will share these asset class weights.
           </p>
 
@@ -627,7 +627,7 @@ function WeightInput({ id, value, onChange }: { id: string; value: string; onCha
         placeholder="0"
         className="w-full rounded border border-border px-2 py-1 pr-6 text-right text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
       />
-      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 tp-caption">%</span>
     </div>
   );
 }

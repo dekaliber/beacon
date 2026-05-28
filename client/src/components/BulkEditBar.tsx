@@ -269,28 +269,28 @@ export function BulkEditBar({
   const applyBtnCls =
     "mt-2 w-full rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50 hover:opacity-90 transition-opacity";
 
-  const sepCls = "w-px bg-primary-foreground/30 my-2 self-stretch shrink-0";
+  const sepCls = "w-px bg-white/[.18] my-2 self-stretch shrink-0";
 
   const btnCls = (type: ActivePopover) =>
-    `flex items-center gap-1.5 px-4 py-2.5 transition-colors whitespace-nowrap ${
-      active === type ? "bg-white/20" : "hover:bg-white/10"
+    `inline-flex items-center gap-[6px] px-[14px] py-[10px] transition-[background] whitespace-nowrap ${
+      active === type ? "bg-white/20" : "hover:bg-white/[.12]"
     }`;
 
   return (
     <>
     <div
       ref={barRef}
-      className="fixed top-[60px] left-1/2 z-40 -translate-x-1/2 flex items-stretch rounded-full bg-primary text-primary-foreground shadow-lg text-sm font-medium select-none"
+      className="fixed top-[96px] left-1/2 z-40 -translate-x-1/2 inline-flex items-stretch rounded-full bg-gradient-to-b from-primary to-primary-deep text-white text-[13px] font-normal select-none backdrop-blur-[20px] shadow-[0_1px_0_rgba(255,255,255,.25)_inset,0_14px_34px_-16px_rgba(20,30,80,.35),0_4px_10px_-2px_rgba(15,20,40,.18)]"
     >
       {/* Count */}
-      <span className="flex items-center px-4 py-2.5 whitespace-nowrap">
+      <span className="flex items-center px-[16px] py-[10px] whitespace-nowrap">
         {ids.length} selected
       </span>
 
       {selectionTotals && (
         <>
           <span className={sepCls} />
-          <span className="flex items-center px-4 py-2.5 whitespace-nowrap text-primary-foreground/90 text-sm">
+          <span className="flex items-center px-[16px] py-[10px] whitespace-nowrap text-white/[.85]">
             {selectionTotals.hasPersonal && selectionTotals.hasJoint ? (
               <>Personal: {formatCurrency(selectionTotals.personal)} <span className="mx-1.5 opacity-50">•</span> Joint: {formatCurrency(selectionTotals.joint)}</>
             ) : selectionTotals.hasJoint ? (
@@ -357,7 +357,7 @@ export function BulkEditBar({
               autoFocus
             />
             {selectedCategoryLabel && (
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 tp-caption">
                 Selected: <span className="font-medium text-foreground">{selectedCategoryLabel}</span>
               </p>
             )}
@@ -524,7 +524,7 @@ export function BulkEditBar({
             type="button"
             onClick={handleSetAsPrimary}
             disabled={primaryLoading}
-            className="flex items-center gap-1.5 px-4 py-2.5 transition-colors whitespace-nowrap hover:bg-white/10 disabled:opacity-50"
+            className="inline-flex items-center gap-[6px] px-[14px] py-[10px] transition-[background] whitespace-nowrap hover:bg-white/[.12] disabled:opacity-50"
           >
             <Star className="h-3.5 w-3.5" />
             {primaryLoading ? "Setting…" : "Set as primary"}
@@ -541,7 +541,7 @@ export function BulkEditBar({
             type="button"
             onClick={() => { if (!groupActionDisabled) handleGroupAction(); }}
             disabled={groupLoading || (groupAction === "group" && groupActionDisabled)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 transition-colors whitespace-nowrap ${groupAction === "group" && groupActionDisabled ? "opacity-40 cursor-not-allowed" : "hover:bg-white/10 disabled:opacity-50"}`}
+            className={`inline-flex items-center gap-[6px] px-[14px] py-[10px] transition-[background] whitespace-nowrap ${groupAction === "group" && groupActionDisabled ? "opacity-40 cursor-not-allowed" : "hover:bg-white/[.12] disabled:opacity-50"}`}
             title={groupAction === "group" && groupActionDisabled ? groupActionDisabledTitle : groupAction === "group" ? "Group selected transactions" : "Remove from group"}
           >
             {groupAction === "group" ? (
@@ -560,7 +560,7 @@ export function BulkEditBar({
         type="button"
         onClick={() => { if (!deleteDisabled) { setActive(null); setShowDeleteConfirm(true); } }}
         disabled={deleteDisabled}
-        className={`flex items-center gap-1.5 px-4 py-2.5 transition-colors whitespace-nowrap ${deleteDisabled ? "opacity-40 cursor-not-allowed" : "hover:bg-white/10"}`}
+        className={`inline-flex items-center gap-[6px] px-[14px] py-[10px] transition-[background] whitespace-nowrap ${deleteDisabled ? "opacity-40 cursor-not-allowed" : "hover:bg-white/[.12]"}`}
         title={deleteDisabled ? deleteDisabledTitle : "Delete selected transactions"}
       >
         <Trash2 className="h-3.5 w-3.5" />
@@ -573,7 +573,7 @@ export function BulkEditBar({
       <button
         type="button"
         onClick={onClear}
-        className="flex items-center px-3 py-2.5 hover:bg-white/10 rounded-r-full transition-colors"
+        className="inline-flex items-center justify-center w-9 rounded-r-full hover:bg-white/[.16] transition-[background]"
         title="Clear selection"
       >
         <X className="h-4 w-4" />
@@ -584,7 +584,7 @@ export function BulkEditBar({
     {showDeleteConfirm && (
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
         <div className="w-full max-w-sm rounded-lg bg-background text-foreground p-6 shadow-xl">
-          <h3 className="text-base font-semibold">Delete {ids.length} transaction{ids.length !== 1 ? "s" : ""}?</h3>
+          <h3 className="tp-panel-title">Delete {ids.length} transaction{ids.length !== 1 ? "s" : ""}?</h3>
           <p className="mt-2 text-sm text-muted-foreground">
             Are you sure you want to delete {ids.length === 1 ? "this transaction" : `these ${ids.length} transactions`}? This action cannot be undone.
           </p>

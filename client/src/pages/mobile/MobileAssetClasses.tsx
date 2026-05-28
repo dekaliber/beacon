@@ -102,7 +102,7 @@ export function MobileAssetClasses() {
     <>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Asset Classes</h1>
+          <h1 className="tp-page-title">Asset Classes</h1>
           <button
             type="button"
             onClick={() => openAdd(null)}
@@ -136,7 +136,7 @@ export function MobileAssetClasses() {
           <div className="rounded-xl border border-border bg-card px-6 py-12 text-center">
             <PieChart className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
             <p className="text-sm font-medium">No asset classes yet</p>
-            <p className="mt-1 text-xs text-muted-foreground">Define a target allocation and color-code each class for charts.</p>
+            <p className="mt-1 tp-caption">Define a target allocation and color-code each class for charts.</p>
             <button
               type="button"
               onClick={() => openAdd(null)}
@@ -318,7 +318,7 @@ function MobileAssetClassModal({
     <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold">{title}</h2>
+          <h2 className="tp-panel-title">{title}</h2>
           {editing?.isSystem && (
             <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
               built-in
@@ -363,7 +363,7 @@ function MobileAssetClassModal({
           {showTargetInput && (
             <div>
               <label className="mb-1.5 block text-sm font-medium">Target Allocation</label>
-              <p className="mb-2 text-xs text-muted-foreground">Percentage of your portfolio to allocate here. Leave blank to remove.</p>
+              <p className="mb-2 tp-caption">Percentage of your portfolio to allocate here. Leave blank to remove.</p>
               <div className="relative">
                 <input
                   name="targetPct"
