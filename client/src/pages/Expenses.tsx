@@ -89,6 +89,20 @@ interface GroupMeta {
   isLastInGroup: boolean;
 }
 
+// Returns the bottom edge of the nearest ancestor that clips overflow (auto/scroll/hidden).
+// Used by typeaheads to decide whether to flip their dropdown upward.
+function getScrollParentBottom(el: Element): number {
+  let parent = el.parentElement;
+  while (parent && parent !== document.documentElement) {
+    const { overflow, overflowY } = window.getComputedStyle(parent);
+    if (/(auto|scroll|hidden)/.test(overflow) || /(auto|scroll|hidden)/.test(overflowY)) {
+      return parent.getBoundingClientRect().bottom;
+    }
+    parent = parent.parentElement;
+  }
+  return window.innerHeight;
+}
+
 // ── Currency input helper ──
 function CurrencyInput({ name, defaultValue, required, onChange, autoFocus }: { name: string; defaultValue?: string; required?: boolean; onChange?: (value: number) => void; autoFocus?: boolean }) {
   const [rawValue, setRawValue] = useState(() => {
@@ -225,14 +239,14 @@ function VendorAutocomplete({
           setValue(e.target.value);
           if (ref.current) {
             const rect = ref.current.getBoundingClientRect();
-            setFlipUp(window.innerHeight - rect.bottom < 240);
+            setFlipUp(getScrollParentBottom(ref.current) - rect.bottom < 240);
           }
           setOpen(true);
         }}
         onFocus={() => {
           if (ref.current) {
             const rect = ref.current.getBoundingClientRect();
-            setFlipUp(window.innerHeight - rect.bottom < 240);
+            setFlipUp(getScrollParentBottom(ref.current) - rect.bottom < 240);
           }
           setOpen(true);
         }}
@@ -371,14 +385,14 @@ function CategoryTypeahead({
           if (related && !(related.compareDocumentPosition(e.currentTarget) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
           if (ref.current) {
             const rect = ref.current.getBoundingClientRect();
-            setFlipUp(window.innerHeight - rect.bottom < 240);
+            setFlipUp(getScrollParentBottom(ref.current) - rect.bottom < 240);
           }
           setOpen(true);
         }}
         onClick={() => {
           if (!open && ref.current) {
             const rect = ref.current.getBoundingClientRect();
-            setFlipUp(window.innerHeight - rect.bottom < 240);
+            setFlipUp(getScrollParentBottom(ref.current) - rect.bottom < 240);
           }
           setOpen((o) => !o);
         }}
@@ -520,14 +534,14 @@ function AccountTypeahead({
           if (related && !(related.compareDocumentPosition(e.currentTarget) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
           if (ref.current) {
             const rect = ref.current.getBoundingClientRect();
-            setFlipUp(window.innerHeight - rect.bottom < 240);
+            setFlipUp(getScrollParentBottom(ref.current) - rect.bottom < 240);
           }
           setOpen(true);
         }}
         onClick={() => {
           if (!open && ref.current) {
             const rect = ref.current.getBoundingClientRect();
-            setFlipUp(window.innerHeight - rect.bottom < 240);
+            setFlipUp(getScrollParentBottom(ref.current) - rect.bottom < 240);
           }
           setOpen((o) => !o);
         }}
@@ -675,14 +689,14 @@ function TagTypeahead({
           if (related && !(related.compareDocumentPosition(e.currentTarget) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
           if (ref.current) {
             const rect = ref.current.getBoundingClientRect();
-            setFlipUp(window.innerHeight - rect.bottom < 240);
+            setFlipUp(getScrollParentBottom(ref.current) - rect.bottom < 240);
           }
           setOpen(true);
         }}
         onClick={() => {
           if (!open && ref.current) {
             const rect = ref.current.getBoundingClientRect();
-            setFlipUp(window.innerHeight - rect.bottom < 240);
+            setFlipUp(getScrollParentBottom(ref.current) - rect.bottom < 240);
           }
           setOpen((o) => !o);
         }}

@@ -1089,11 +1089,11 @@ export function TaxEstimatorPage() {
 
       {/* Stat strip */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="relative rounded-lg border border-border bg-card px-4 py-3 backdrop-blur-[22px] backdrop-saturate-[140%] shadow-card before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-t-lg before:pointer-events-none before:bg-gradient-to-r before:from-transparent before:via-white/85 before:to-transparent">
+        <div className="relative rounded-lg border border-border bg-card px-4 py-3 shadow-card before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-t-lg before:pointer-events-none before:bg-gradient-to-r before:from-transparent before:via-white/85 before:to-transparent">
           <p className="tp-caption">Total Income (MAGI)</p>
           <DisplayStat as="p" className="mt-1 tp-stat">{formatCurrency(calc.magi)}</DisplayStat>
         </div>
-        <div className="relative rounded-lg border border-border bg-card px-4 py-3 backdrop-blur-[22px] backdrop-saturate-[140%] shadow-card before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-t-lg before:pointer-events-none before:bg-gradient-to-r before:from-transparent before:via-white/85 before:to-transparent">
+        <div className="relative rounded-lg border border-border bg-card px-4 py-3 shadow-card before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-t-lg before:pointer-events-none before:bg-gradient-to-r before:from-transparent before:via-white/85 before:to-transparent">
           <p className="tp-caption flex items-center gap-1.5">
             Estimated Federal Tax
             {useTmt && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-100 text-violet-700">TMT</span>}
@@ -1113,7 +1113,7 @@ export function TaxEstimatorPage() {
             );
           })()}
         </div>
-        <div className="relative rounded-lg border border-border bg-card px-4 py-3 backdrop-blur-[22px] backdrop-saturate-[140%] shadow-card before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-t-lg before:pointer-events-none before:bg-gradient-to-r before:from-transparent before:via-white/85 before:to-transparent">
+        <div className="relative rounded-lg border border-border bg-card px-4 py-3 shadow-card before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-t-lg before:pointer-events-none before:bg-gradient-to-r before:from-transparent before:via-white/85 before:to-transparent">
           <p className="tp-caption flex items-center gap-1.5">
             Estimated State Tax <span className="text-muted-foreground/60">(CA)</span>
             {useCaTmt && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-100 text-violet-700">TMT</span>}

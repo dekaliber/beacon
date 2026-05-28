@@ -9,8 +9,10 @@ export function Card({ className, children }: CardProps) {
   return (
     <div className={cn(
       "relative rounded-lg border border-border bg-card p-6",
-      // Glass surface
-      "backdrop-blur-[22px] backdrop-saturate-[140%]",
+      // Glass surface (translucent fill + edge highlight + shadow).
+      // backdrop-blur intentionally omitted: combined with shadow-card it triggered
+      // a Chromium compositing artifact (a stray horizontal bar behind modals) and
+      // added no visible frost over the near-flat background.
       "shadow-card",
       // Inner top-edge highlight
       "before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-px",
