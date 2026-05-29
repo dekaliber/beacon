@@ -827,7 +827,7 @@ function AllocationCard({
             style={{ gridTemplateColumns: "10px 160px 1fr 44px 48px 60px 90px" }}>
             <span className="h-2 w-2 rounded-sm bg-muted-foreground/30 flex-shrink-0" />
             <span className="text-sm text-muted-foreground col-span-6 min-w-0 flex items-center gap-x-1 flex-wrap">
-              <span>Unclassified / Not Included</span>
+              <span className="text-13">Unclassified / Not Included</span>
               <span className="text-xs">({formatCurrency(unclassifiedValue)})</span>
               <span className="text-muted-foreground/40">·</span>
               <Link
@@ -1250,7 +1250,7 @@ if (!displayAccounts) return <BeaconLoader />;
         <h2 className="tp-page-title">Investments</h2>
         <Link
           to="/investments/securities"
-          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          className="tp-nav-link hover:bg-accent hover:text-accent-foreground"
         >
           <Library className="h-4 w-4" />
           Securities
@@ -1319,9 +1319,8 @@ if (!displayAccounts) return <BeaconLoader />;
               <div>
                 <div className="flex items-baseline gap-1.5 mb-2.5">
                   <SectionLabel>
-                    Tax Buckets
+                    Tax Buckets (of Invested)
                   </SectionLabel>
-                  <p className="tp-caption/60 italic">of Invested</p>
                 </div>
                 <div className="space-y-1.5">
                   <div>

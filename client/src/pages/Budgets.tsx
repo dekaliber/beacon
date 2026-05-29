@@ -1247,14 +1247,14 @@ export function Budgets() {
         <div className="flex items-center gap-3">
           <Link
             to="/budgets/monthly-spending"
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            className="tp-nav-link hover:bg-accent hover:text-accent-foreground"
           >
             <CalendarDays className="h-4 w-4" />
             Monthly Spending
           </Link>
           <button
             onClick={() => setBudgetModalOpen(true)}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            className="tp-nav-link hover:bg-accent hover:text-accent-foreground"
           >
             <Pencil className="h-4 w-4" />
             Edit Budget
