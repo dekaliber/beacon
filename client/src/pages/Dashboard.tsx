@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Cell, ResponsiveContainer,
@@ -47,11 +47,19 @@ export function Dashboard() {
   const { data: mtdChart }           = useApi(() => getMtdChart(year, month),            [year, month]);
   const { data: outlierTransactions } = useApi(() => getOutlierTransactions(year, month), [year, month]);
   const { data: dataRange } = useApi(() => getDataRange(), []);
-  const { data: netWorth } = useApi(() => getNetWorth(), []);
+  const { data: netWorth, refetch: refetchNetWorth } = useApi(() => getNetWorth(), []);
   const { isDemoMode, demoFactor } = useDemo();
 
   const { phase: refreshPhase, count: refreshCount, total: refreshTotal, nextUpdateAt } =
     usePriceRefresh({ source: "Dashboard" });
+
+  const prevRefreshPhaseRef = useRef(refreshPhase);
+  useEffect(() => {
+    if (prevRefreshPhaseRef.current !== "done" && refreshPhase === "done") {
+      refetchNetWorth();
+    }
+    prevRefreshPhaseRef.current = refreshPhase;
+  }, [refreshPhase, refetchNetWorth]);
 
   const scaledNetWorth = useMemo(() => {
     if (!netWorth) return null;
