@@ -293,7 +293,11 @@ export function Layout() {
     <div className="min-h-screen">
       {/* Floating glass topbar */}
       <header className="sticky top-4 z-50 mx-auto mt-4 max-w-7xl px-4">
-        <div className="flex h-14 items-center gap-6 rounded-xl border border-border bg-card pl-[18px] pr-3 shadow-card">
+        {/* backdrop-blur kept here (unlike body Cards): the nav is a sticky layer with
+            real content scrolling behind it, so the frost is load-bearing. See the
+            no-backdrop-blur-on-cards note — if the modal compositing bar resurfaces on
+            this bar, decouple shadow-card from the backdrop-filter element. */}
+        <div className="flex h-14 items-center gap-6 rounded-xl border border-border bg-card pl-[18px] pr-3 backdrop-blur-[22px] backdrop-saturate-[140%] shadow-card">
           <Link to="/" className="mr-8 hover:opacity-80 transition-opacity">
             <img src="/beacon-logo.png" alt="Beacon" width={92} height={26} />
           </Link>
