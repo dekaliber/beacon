@@ -2049,9 +2049,9 @@ function StickyHoldingRow({
   onToggle: () => void;
 }) {
   return createPortal(
-    <div style={{ position: "fixed", top: 56, left: 0, right: 0, zIndex: 40 }}>
+    <div style={{ position: "fixed", top: 72, left: 0, right: 0, zIndex: 40 }}>
       <div className="mx-auto max-w-7xl px-4 md:px-6">
-        <div className="border-x border-b border-border bg-card">
+        <div className="border-x border-b border-border bg-background">
           <div className="overflow-x-auto">
             <div className="px-6">
               <table style={{ tableLayout: "fixed", width: "100%", minWidth: "1080px" }}>

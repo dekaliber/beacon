@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { useApi } from "@/hooks/useApi";
 import {
   getOptionsSettings,
@@ -2112,6 +2112,10 @@ type ColGroupKey = (typeof COL_GROUPS)[number]["key"];
 function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, chainMaxCapitalAtRiskMap, onEdit, onClose, onConfirm, onPositionUpdated }: OpenPositionsTableProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [openColGroups, setOpenColGroups] = useState<Set<ColGroupKey>>(new Set(["live"]));
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const theadRef = useRef<HTMLTableSectionElement>(null);
+  const portalScrollRef = useRef<HTMLDivElement>(null);
+  const [stickyRect, setStickyRect] = useState<{ left: number; width: number; colWidths: number[] } | null>(null);
   // Live data: auto-fetched stock prices; editing buffer for the inline prem field
   const [livePrices, setLivePrices] = useState<Map<string, number>>(() => {
     try {
@@ -2156,6 +2160,34 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
       next.has(g) ? next.delete(g) : next.add(g);
       return next;
     });
+
+  useEffect(() => {
+    const NAV_BOTTOM = 72;
+    const handleScroll = () => {
+      const el = tableContainerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      if (rect.top < NAV_BOTTOM && rect.bottom > NAV_BOTTOM) {
+        const cells = theadRef.current?.rows[1]?.cells;
+        const colWidths = cells ? Array.from(cells).map(c => c.getBoundingClientRect().width) : [];
+        setStickyRect({ left: rect.left, width: rect.width, colWidths });
+      } else {
+        setStickyRect(null);
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Re-measure column widths after the DOM updates when a column group is toggled
+  useLayoutEffect(() => {
+    setStickyRect(prev => {
+      if (!prev) return null;
+      const cells = theadRef.current?.rows[1]?.cells;
+      const colWidths = cells ? Array.from(cells).map(c => c.getBoundingClientRect().width) : prev.colWidths;
+      return { ...prev, colWidths };
+    });
+  }, [openColGroups]);
 
   const fetchQuoteForPosition = async (p: OptionsPosition) => {
     if (calcPosition(p).daysLeft < 0) return; // no chain data for expired options
@@ -2655,7 +2687,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
 
   return (
     <>
-    <div className="overflow-x-auto">
+    <div ref={tableContainerRef} className="overflow-x-auto" onScroll={(e) => { if (portalScrollRef.current) portalScrollRef.current.scrollLeft = e.currentTarget.scrollLeft; }}>
       <table className="w-full text-left border-collapse min-w-[700px]">
         <colgroup>
           <col style={{ width: '80px', minWidth: '80px' }} />{/* Ticker — sticky */}
@@ -2663,7 +2695,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
           <col style={{ width: '80px', minWidth: '80px' }} />{/* Strike — sticky */}
           <col style={{ width: '96px', minWidth: '96px' }} />{/* Expiration — sticky */}
         </colgroup>
-        <thead className="bg-[#FAFCFE]">
+        <thead ref={theadRef} className="bg-[#FAFCFE]">
           {/* ── Row 1: group headers ── */}
           <tr className="bg-muted/20">
             {/* Position — always visible, no toggle */}
@@ -2821,6 +2853,96 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
         Refresh all premiums
       </button>
     </div>
+
+    {/* Sticky column-header portal — shown when the thead has scrolled above the nav */}
+    {stickyRect && createPortal(
+      <div style={{ position: "fixed", top: 72, left: stickyRect.left, width: stickyRect.width, zIndex: 45 }}>
+        <div ref={portalScrollRef} className="bg-background overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          <table className="w-full text-left border-collapse" style={{ tableLayout: "fixed" }}>
+            <colgroup>
+              {stickyRect.colWidths.map((w, i) => <col key={i} style={{ width: `${w}px` }} />)}
+            </colgroup>
+            <thead className="bg-[#FAFCFE]">
+              <tr className="bg-muted/20">
+                <th colSpan={4} style={{ left: 0 }} className="sticky z-[3] bg-[#FAFCFE] px-3 pt-2 pb-1" />
+                {COL_GROUPS.map(({ key, label, count }) => (
+                  <th
+                    key={key}
+                    colSpan={isColOpen(key) ? count : 1}
+                    onClick={() => toggleColGroup(key)}
+                    className={cn(
+                      "px-3 pt-2 pb-1 text-left font-mono text-[10px] font-medium tracking-[0.11em] uppercase cursor-pointer select-none transition-colors",
+                      "border-l border-border/50",
+                      isColOpen(key)
+                        ? "text-muted-foreground/70 hover:text-muted-foreground"
+                        : "text-muted-foreground/50 hover:text-muted-foreground/80"
+                    )}
+                  >
+                    <div className="flex items-center gap-1">
+                      {label}
+                      {isColOpen(key)
+                        ? <ChevronUp className="h-3 w-3 shrink-0" />
+                        : <ChevronDown className="h-3 w-3 shrink-0" />}
+                    </div>
+                  </th>
+                ))}
+                <th className="pt-2 pb-1" />
+              </tr>
+              <tr className="border-b border-border bg-muted/30">
+                <th style={{ left: 0 }}   className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] pl-4 pr-2")}>Ticker</th>
+                <th style={{ left: 80 }}  className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Type</th>
+                <th style={{ left: 152 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Strike</th>
+                <th style={{ left: 232 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] border-r border-border/40")}>Expiration</th>
+                {isColOpen("details") ? (
+                  <>
+                    <th className={cn(thClass, "border-l border-border/50")}>Contracts</th>
+                    <th className={thClass}>Premium</th>
+                    <th className={thClass}>Opened</th>
+                    <th className={thClass}>Stock @ Open</th>
+                    <th className={thClass}>Delta @ Open</th>
+                  </>
+                ) : (
+                  <th className={cn(thClass, "border-l border-border/50 text-muted-foreground/40 italic")}>Contracts</th>
+                )}
+                {isColOpen("return") ? (
+                  <>
+                    <th className={cn(thClass, "border-l border-border/50")}>Total Prem</th>
+                    <th className={thClass}>Days Left</th>
+                    <th className={thClass}>Ann. Return</th>
+                  </>
+                ) : (
+                  <th className={cn(thClass, "border-l border-border/50 text-muted-foreground/40 italic")}>Total Prem</th>
+                )}
+                {isColOpen("risk") ? (
+                  <>
+                    <th className={cn(thClass, "border-l border-border/50")}>Duration</th>
+                    <th className={thClass}>Capital @ Risk</th>
+                    <th className={thClass}>Breakeven</th>
+                    <th className={thClass}>% to Strike</th>
+                  </>
+                ) : (
+                  <th className={cn(thClass, "border-l border-border/50 text-muted-foreground/40 italic")}>% to Strike</th>
+                )}
+                {isColOpen("live") ? (
+                  <>
+                    <th className={cn(thClass, "border-l border-border/50")}>Stock Now</th>
+                    <th className={thClass}>Cur. Prem</th>
+                    <th className={thClass}>% OTM</th>
+                    <th className={thClass}>Ann. Return</th>
+                    <th className={thClass}>Live P&L</th>
+                    <th className={thClass}>% Gain</th>
+                  </>
+                ) : (
+                  <th className={cn(thClass, "border-l border-border/50 text-muted-foreground/40 italic")}>Live P&L</th>
+                )}
+                <th className={thClass} />
+              </tr>
+            </thead>
+          </table>
+        </div>
+      </div>,
+      document.body
+    )}
     </>
   );
 }
@@ -2843,6 +2965,10 @@ type ClosedColGroupKey = (typeof CLOSED_COL_GROUPS)[number]["key"];
 function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }: ClosedPositionsTableProps) {
   const [confirmDelete, setConfirmDelete] = useState<OptionsPosition | null>(null);
   const [openColGroups, setOpenColGroups] = useState<Set<ClosedColGroupKey>>(new Set(["pnl"]));
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const theadRef = useRef<HTMLTableSectionElement>(null);
+  const portalScrollRef = useRef<HTMLDivElement>(null);
+  const [stickyRect, setStickyRect] = useState<{ left: number; width: number; colWidths: number[] } | null>(null);
 
   // Collapse weeks older than the previous week by default.
   const [collapsedWeeks, setCollapsedWeeks] = useState<Set<string>>(() => {
@@ -2879,6 +3005,34 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
       next.has(g) ? next.delete(g) : next.add(g);
       return next;
     });
+
+  useEffect(() => {
+    const NAV_BOTTOM = 72;
+    const handleScroll = () => {
+      const el = tableContainerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      if (rect.top < NAV_BOTTOM && rect.bottom > NAV_BOTTOM) {
+        const cells = theadRef.current?.rows[1]?.cells;
+        const colWidths = cells ? Array.from(cells).map(c => c.getBoundingClientRect().width) : [];
+        setStickyRect({ left: rect.left, width: rect.width, colWidths });
+      } else {
+        setStickyRect(null);
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Re-measure column widths after the DOM updates when a column group is toggled
+  useLayoutEffect(() => {
+    setStickyRect(prev => {
+      if (!prev) return null;
+      const cells = theadRef.current?.rows[1]?.cells;
+      const colWidths = cells ? Array.from(cells).map(c => c.getBoundingClientRect().width) : prev.colWidths;
+      return { ...prev, colWidths };
+    });
+  }, [openColGroups]);
 
   if (positions.length === 0) {
     return (
@@ -2974,7 +3128,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
 
   return (
     <>
-    <div className="overflow-x-auto">
+    <div ref={tableContainerRef} className="overflow-x-auto" onScroll={(e) => { if (portalScrollRef.current) portalScrollRef.current.scrollLeft = e.currentTarget.scrollLeft; }}>
       <table className="w-full text-left border-collapse min-w-[700px]">
         <colgroup>
           <col style={{ width: '80px', minWidth: '80px' }} />{/* Ticker — sticky */}
@@ -2983,7 +3137,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
           <col style={{ width: '96px', minWidth: '96px' }} />{/* Expiration — sticky */}
           <col style={{ width: '72px', minWidth: '72px' }} />{/* Contracts — sticky */}
         </colgroup>
-        <thead className="bg-[#FAFCFE]">
+        <thead ref={theadRef} className="bg-[#FAFCFE]">
           {/* ── Row 1: group headers ── */}
           <tr className="bg-muted/20">
             {/* Position + Contracts — always, no toggle */}
@@ -3252,6 +3406,74 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
         </tbody>
       </table>
     </div>
+    {/* Sticky column-header portal — shown when the thead has scrolled above the nav */}
+    {stickyRect && createPortal(
+      <div style={{ position: "fixed", top: 72, left: stickyRect.left, width: stickyRect.width, zIndex: 45 }}>
+        <div ref={portalScrollRef} className="bg-background overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          <table className="w-full text-left border-collapse" style={{ tableLayout: "fixed" }}>
+            <colgroup>
+              {stickyRect.colWidths.map((w, i) => <col key={i} style={{ width: `${w}px` }} />)}
+            </colgroup>
+            <thead className="bg-[#FAFCFE]">
+              <tr className="bg-muted/20">
+                <th colSpan={5} style={{ left: 0 }} className="sticky z-[3] bg-[#FAFCFE] px-3 pt-2 pb-1" />
+                {CLOSED_COL_GROUPS.map(({ key, label, count }) => (
+                  <th
+                    key={key}
+                    colSpan={isColOpen(key) ? count : 1}
+                    onClick={() => toggleColGroup(key)}
+                    className={cn(
+                      "px-3 pt-2 pb-1 text-left font-mono text-[10px] font-medium tracking-[0.11em] uppercase cursor-pointer select-none transition-colors",
+                      "border-l border-border/50",
+                      isColOpen(key)
+                        ? "text-muted-foreground/70 hover:text-muted-foreground"
+                        : "text-muted-foreground/50 hover:text-muted-foreground/80"
+                    )}
+                  >
+                    <div className="flex items-center gap-1">
+                      {label}
+                      {isColOpen(key) ? <ChevronUp className="h-3 w-3 shrink-0" /> : <ChevronDown className="h-3 w-3 shrink-0" />}
+                    </div>
+                  </th>
+                ))}
+                <th colSpan={3} className="pt-2 pb-1" />
+              </tr>
+              <tr className="border-b border-border bg-muted/30">
+                <th style={{ left: 0 }}   className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] pl-4 pr-2")}>Ticker</th>
+                <th style={{ left: 80 }}  className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Type</th>
+                <th style={{ left: 152 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Strike</th>
+                <th style={{ left: 232 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Expiration</th>
+                <th style={{ left: 328 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] border-r border-border/40")}>Contracts</th>
+                {isColOpen("dates") ? (
+                  <>
+                    <th className={cn(thClass, "border-l border-border/50")}>Opened</th>
+                    <th className={thClass}>Closed</th>
+                    <th className={thClass}>Days in Trade</th>
+                  </>
+                ) : (
+                  <th className={cn(thClass, "border-l border-border/50 text-muted-foreground/40 italic")}>Days in Trade</th>
+                )}
+                {isColOpen("pnl") ? (
+                  <>
+                    <th className={cn(thClass, "border-l border-border/50")}>Open Prem</th>
+                    <th className={thClass}>Close Prem</th>
+                    <th className={thClass}>Total Fees</th>
+                    <th className={thClass}>P/L</th>
+                  </>
+                ) : (
+                  <th className={cn(thClass, "border-l border-border/50 text-muted-foreground/40 italic")}>P/L</th>
+                )}
+                <th className={thClass}>Ann. Return</th>
+                <th className={thClass}>Outcome</th>
+                <th className={thClass} />
+              </tr>
+            </thead>
+          </table>
+        </div>
+      </div>,
+      document.body
+    )}
+
     {confirmDelete && createPortal(
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
         <div className="w-full max-w-sm rounded-lg bg-background text-foreground p-6 shadow-xl">
@@ -3911,7 +4133,7 @@ function SummaryCards({
             <>
               <div className="w-px bg-border self-stretch shrink-0" />
               <div className="flex-1 min-w-0 pl-3">
-                <p className="tp-stat text-ink-3 truncate">
+                <p className="tp-stat truncate" style={{ color: "var(--color-ink-3)" }}>
                   {`$${(settings.startingBasis - totalCapitalAtRisk).toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
                 </p>
                 <p className="tp-caption mt-0.5">capital available</p>
@@ -3926,14 +4148,14 @@ function SummaryCards({
         <SectionLabel>Premium This Week</SectionLabel>
         <div className="flex items-end mt-1">
           <div className="flex-1 min-w-0">
-            <p className={cn("tp-stat truncate", premiumThisWeek >= 0 ? "text-green-600" : "text-red-600")}>
+            <p className="tp-stat truncate" style={{ color: premiumThisWeek >= 0 ? "var(--color-success)" : "var(--color-destructive)" }}>
               {premiumThisWeek !== 0 ? `$${fmtUSD(premiumThisWeek)}` : "$0.00"}
             </p>
             <p className="tp-caption mt-0.5">realized</p>
           </div>
           <div className="w-px bg-border self-stretch shrink-0" />
           <div className="flex-1 min-w-0 pl-3">
-            <p className="tp-stat text-ink-3 truncate">
+            <p className="tp-stat truncate" style={{ color: "var(--color-ink-3)" }}>
               {pendingThisWeek > 0 ? `$${fmtUSD(pendingThisWeek)}` : "$0"}
             </p>
             <p className="tp-caption mt-0.5">pending</p>
@@ -3944,7 +4166,7 @@ function SummaryCards({
       {/* Cumulative Premium */}
       <Card className="p-6">
         <SectionLabel>Cumulative Premium</SectionLabel>
-        <p className={cn("tp-stat mt-1 truncate", cumulativePremium >= 0 ? "text-green-600" : "text-red-600")}>
+        <p className="tp-stat mt-1 truncate" style={{ color: cumulativePremium >= 0 ? "var(--color-success)" : "var(--color-destructive)" }}>
           {`$${fmtUSD(cumulativePremium)}`}
         </p>
         <p className="tp-caption mt-0.5 truncate">
@@ -3955,7 +4177,7 @@ function SummaryCards({
       {/* Ann. Rate of Return */}
       <Card className="p-6">
         <SectionLabel>Ann. Rate of Return</SectionLabel>
-        <p className={cn("tp-stat mt-1 truncate", annReturn != null ? (annReturn >= (settings?.targetReturn ?? 0) * 100 ? "text-green-600" : "text-amber-600") : undefined)}>
+        <p className="tp-stat mt-1 truncate" style={{ color: annReturn != null ? (annReturn >= (settings?.targetReturn ?? 0) * 100 ? "var(--color-success)" : "var(--color-warning)") : undefined }}>
           {annReturn != null ? fmtPct(annReturn) : "—"}
         </p>
         <p className="tp-caption mt-0.5 truncate">
@@ -4473,7 +4695,7 @@ export function OptionsTrading() {
         <div className="flex items-start justify-between">
           <div>
             <h2 className="tp-page-title">Options Trading</h2>
-            <p className="text-sm text-muted-foreground mt-0.5 flex items-center flex-wrap gap-x-6">
+            <p className="tp-caption mt-0.5 flex items-center flex-wrap gap-x-6">
               <span>{tradingWeekLabel}</span>
               {tickerEntries.length > 0 && (
                 <span className="flex items-center gap-x-4">
