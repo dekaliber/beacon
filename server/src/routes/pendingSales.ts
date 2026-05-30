@@ -146,18 +146,21 @@ pendingSaleRoutes.post("/:id/confirm", async (req, res) => {
     });
   }
 
+  // pricePerShare is the composite (strike + premiumNet). Pass actual saleFees so
+  // computeSell correctly deducts them from the gain.
   const calc = computeSell(
     eligibleLots,
     sharesToSell,
     pricePerShare,
     saleDate,
-    0, // fees already baked into pricePerShare (strike + premium − fees/share)
+    saleFees,
     costBasisMethod,
     lotAllocations
   );
 
-  const grossProceeds = Math.round(calc.grossProceeds * 100) / 100;
-  const netProceeds = Math.round(calc.netProceeds * 100) / 100;
+  // Gross proceeds for the SALE activity = strike × shares only (option premium
+  // was already recorded as a separate "Options Premium" income entry).
+  const strikeGrossProceeds = Math.round(Number(pendingSale.optionsPosition.strikePrice) * sharesToSell * 100) / 100;
   const stGain = Math.round(calc.stGain * 100) / 100;
   const ltGain = Math.round(calc.ltGain * 100) / 100;
   const totalGain = stGain + ltGain;
@@ -203,7 +206,7 @@ pendingSaleRoutes.post("/:id/confirm", async (req, res) => {
         date: saleDate,
         shares: sharesToSell,
         pricePerShare,
-        amount: grossProceeds,
+        amount: strikeGrossProceeds,
         fees: feesStored,
         costBasis: Math.round(calc.totalCostBasis * 100) / 100,
         shortTermGain: stGain,
@@ -214,13 +217,12 @@ pendingSaleRoutes.post("/:id/confirm", async (req, res) => {
     });
 
     // 4. Create Income record for taxable accounts.
-    // amount = strike × shares − saleFees (actual cash received at assignment minus
-    // broker/SEC transaction fees — the premium was already recorded as a separate
-    // "Options Premium" income entry, so using the full "amount realized" here would
-    // double-count it in cash-flow reports).
-    // taxableAmount = totalGain, which IS computed from the full amount realized
-    // (strike + premium − optionFees/share) via pricePerShare, so the capital gain
-    // is correctly stated even though the income amount only shows strike proceeds.
+    // amount  = strike × shares − saleFees  (cash-flow view: excludes the option
+    //           premium since that was already recorded as a separate income entry)
+    // taxableAmount = totalGain = (composite × shares − saleFees) − costBasis
+    //   where composite = strike + premiumPerShare − optionFees/share
+    //   This equals (strike×shares − saleFees − costBasis) + (premium×shares − optionFees),
+    //   i.e. net proceeds minus cost basis plus option premium net of option fees. ✓
     const saleProceeds = Math.round((Number(pendingSale.optionsPosition.strikePrice) * sharesToSell - saleFees) * 100) / 100;
     let income = null;
     if (!holding.account.isTaxAdvantaged) {

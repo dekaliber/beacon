@@ -3646,13 +3646,12 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
     setLoading(true);
     try {
       const feesVal = parseFloat(fees.replace(/,/g, "")) || 0;
-      // Pass composite price (strike + premium net) so the preview correctly
-      // reflects the full amount realized including the option premium.
-      const compositePrice = salePriceVal + premiumNetPerShare;
+      // Use strike price only — the option premium is added to the gain separately
+      // in the display, matching what the server will record.
       const baseRequest = {
         holdingId: holding.id,
         sharesToSell: selectionMode === "method" ? sharesVal : lotTotalShares,
-        pricePerShare: compositePrice,
+        pricePerShare: salePriceVal,
         saleDate,
         fees: feesVal,
       };
@@ -3875,102 +3874,124 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
             </Button>
           </div>
         </div>
-      ) : (
-        <div className="space-y-4">
-          {/* Lot breakdown table */}
-          <div className="overflow-x-auto rounded border border-border">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-muted/40 tp-table-header">
-                  <th className="py-2 px-3 text-left">Lot Date</th>
-                  <th className="py-2 px-3 text-right">Shares</th>
-                  <th className="py-2 px-3 text-right">Cost/Share</th>
-                  <th className="py-2 px-3 text-left">Term</th>
-                  <th className="py-2 px-3 text-right">Proceeds</th>
-                  <th className="py-2 px-3 text-right">Cost Basis</th>
-                  <th className="py-2 px-3 text-right">Gain / Loss</th>
-                </tr>
-              </thead>
-              <tbody>
-                {preview!.lotBreakdown.map((lot, i) => (
-                  <tr key={i} className="border-t border-border">
-                    <td className="py-2 px-3 tabular-nums font-mono">{formatDate(lot.acquiredDate)}</td>
-                    <td className="py-2 px-3 text-right tabular-nums font-mono">
-                      {lot.shares.toLocaleString(undefined, { maximumFractionDigits: 8 })}
-                    </td>
-                    <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.costPerShare)}</td>
-                    <td className="py-2 px-3">
-                      <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                        lot.termType === "LONG"
-                          ? "bg-up-soft text-up-deep"
-                          : "bg-warn-soft text-warn-deep"
-                      }`}>
-                        {lot.termType === "LONG" ? "Long-term" : "Short-term"}
-                      </span>
-                    </td>
-                    <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.proceeds)}</td>
-                    <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.costBasis)}</td>
-                    <td className={`py-2 px-3 text-right tabular-nums font-mono font-medium ${gainColor(lot.gain)}`}>
-                      {lot.gain >= 0 ? "+" : ""}{formatCurrency(lot.gain)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      ) : (() => {
+          // Per-lot net proceeds: distribute fees proportionally across lots
+          const totalPreviewShares = preview!.stShares + preview!.ltShares;
+          const feesVal = parseFloat(fees.replace(/,/g, "")) || 0;
+          const lotsWithNet = preview!.lotBreakdown.map(lot => {
+            const lotFees = totalPreviewShares > 0 ? feesVal * (lot.shares / totalPreviewShares) : 0;
+            const netProceeds = lot.proceeds - lotFees;
+            const netGain = netProceeds - lot.costBasis;
+            return { ...lot, netProceeds, netGain };
+          });
 
-          {/* Summary */}
-          <div className="rounded border border-border bg-muted/20 p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-13">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Gross Proceeds</span>
-              <StatValue className="font-medium">{formatCurrency(preview!.grossProceeds)}</StatValue>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Fees</span>
-              <StatValue className="font-medium">{preview!.fees > 0 ? `(${formatCurrency(preview!.fees)})` : "—"}</StatValue>
-            </div>
-            <div className="flex justify-between border-t border-border pt-2 col-span-2">
-              <span className="font-medium">Net Proceeds</span>
-              <StatValue className="font-bold">{formatCurrency(preview!.netProceeds)}</StatValue>
-            </div>
-            {preview!.stShares > 0 && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Short-Term Gain</span>
-                <span className={`tabular-nums font-mono font-medium ${gainColor(preview!.stGain)}`}>
-                  {preview!.stGain >= 0 ? "+" : ""}{formatCurrency(preview!.stGain)}
-                </span>
+          // premiumNetPerShare = premiumPerShare - optionFees/shares (baked in at creation time)
+          // so premiumNetPerShare * totalShares = premiumPerShare * totalShares - optionFees
+          const premiumNetDisplay = premiumNetPerShare * totalPreviewShares;
+
+          // Taxable gain per term = base gain from preview + premium net allocated by term weight
+          const stPremiumShare = totalPreviewShares > 0 ? premiumNetDisplay * (preview!.stShares / totalPreviewShares) : 0;
+          const ltPremiumShare = totalPreviewShares > 0 ? premiumNetDisplay * (preview!.ltShares / totalPreviewShares) : 0;
+          const stTaxableGain = preview!.stGain + stPremiumShare;
+          const ltTaxableGain = preview!.ltGain + ltPremiumShare;
+          const totalTaxableGain = stTaxableGain + ltTaxableGain;
+
+          return (
+            <div className="space-y-4">
+              {/* Lot breakdown table — Proceeds = net (after fees), Gain = net proceeds − cost basis */}
+              <div className="overflow-x-auto rounded border border-border">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-muted/40 tp-table-header">
+                      <th className="py-2 px-3 text-left">Lot Date</th>
+                      <th className="py-2 px-3 text-right">Shares</th>
+                      <th className="py-2 px-3 text-right">Cost/Share</th>
+                      <th className="py-2 px-3 text-left">Term</th>
+                      <th className="py-2 px-3 text-right">Proceeds</th>
+                      <th className="py-2 px-3 text-right">Cost Basis</th>
+                      <th className="py-2 px-3 text-right">Gain / Loss</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lotsWithNet.map((lot, i) => (
+                      <tr key={i} className="border-t border-border">
+                        <td className="py-2 px-3 tabular-nums font-mono">{formatDate(lot.acquiredDate)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums font-mono">
+                          {lot.shares.toLocaleString(undefined, { maximumFractionDigits: 8 })}
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.costPerShare)}</td>
+                        <td className="py-2 px-3">
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                            lot.termType === "LONG" ? "bg-up-soft text-up-deep" : "bg-warn-soft text-warn-deep"
+                          }`}>
+                            {lot.termType === "LONG" ? "Long-term" : "Short-term"}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.netProceeds)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.costBasis)}</td>
+                        <td className={`py-2 px-3 text-right tabular-nums font-mono font-medium ${gainColor(lot.netGain)}`}>
+                          {lot.netGain >= 0 ? "+" : ""}{formatCurrency(lot.netGain)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            )}
-            {preview!.ltShares > 0 && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Long-Term Gain</span>
-                <span className={`tabular-nums font-mono font-medium ${gainColor(preview!.ltGain)}`}>
-                  {preview!.ltGain >= 0 ? "+" : ""}{formatCurrency(preview!.ltGain)}
-                </span>
+
+              {/* Summary */}
+              <div className="rounded border border-border bg-muted/20 p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-13">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Gross Proceeds</span>
+                  <StatValue className="font-medium">{formatCurrency(preview!.grossProceeds)}</StatValue>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Fees</span>
+                  <StatValue className="font-medium">{feesVal > 0 ? `(${formatCurrency(feesVal)})` : "—"}</StatValue>
+                </div>
+                <div className="flex justify-between border-t border-border pt-2 col-span-2">
+                  <span className="font-medium">Net Proceeds</span>
+                  <StatValue className="font-bold">{formatCurrency(preview!.netProceeds)}</StatValue>
+                </div>
+                {preview!.stShares > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Short-Term Gain</span>
+                    <span className={`tabular-nums font-mono font-medium ${gainColor(stTaxableGain)}`}>
+                      {stTaxableGain >= 0 ? "+" : ""}{formatCurrency(stTaxableGain)}
+                    </span>
+                  </div>
+                )}
+                {preview!.ltShares > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Long-Term Gain</span>
+                    <span className={`tabular-nums font-mono font-medium ${gainColor(ltTaxableGain)}`}>
+                      {ltTaxableGain >= 0 ? "+" : ""}{formatCurrency(ltTaxableGain)}
+                    </span>
+                  </div>
+                )}
+                <div className={`flex justify-between border-t border-border pt-2 ${preview!.stShares > 0 && preview!.ltShares > 0 ? "col-span-2" : ""}`}>
+                  <span className="font-medium">Total Taxable Gain</span>
+                  <span className={`tabular-nums font-mono font-bold ${gainColor(totalTaxableGain)}`}>
+                    {totalTaxableGain >= 0 ? "+" : ""}{formatCurrency(totalTaxableGain)}
+                  </span>
+                </div>
               </div>
-            )}
-            <div className={`flex justify-between border-t border-border pt-2 ${preview!.stShares > 0 && preview!.ltShares > 0 ? "col-span-2" : ""}`}>
-              <span className="font-medium">Total Taxable Gain</span>
-              <span className={`tabular-nums font-mono font-bold ${gainColor(preview!.totalGain)}`}>
-                {preview!.totalGain >= 0 ? "+" : ""}{formatCurrency(preview!.totalGain)}
-              </span>
+
+              <p className="tp-caption">Option premium net of option fees is included in the taxable gain.</p>
+
+              {error && <p className="text-sm text-down">{error}</p>}
+
+              <div className="flex gap-2 pt-1">
+                <Button variant="secondary" onClick={() => { setStep("input"); setError(""); }} className="flex-1">
+                  ← Back
+                </Button>
+                <Button onClick={handleConfirm} disabled={saving} className="flex-1">
+                  {saving ? "Recording…" : "Confirm Sale"}
+                </Button>
+              </div>
             </div>
-          </div>
-
-          <p className="tp-caption">Option premium net of fees is included in proceeds and taxable gain.</p>
-
-          {error && <p className="text-sm text-down">{error}</p>}
-
-          <div className="flex gap-2 pt-1">
-            <Button variant="secondary" onClick={() => { setStep("input"); setError(""); }} className="flex-1">
-              ← Back
-            </Button>
-            <Button onClick={handleConfirm} disabled={saving} className="flex-1">
-              {saving ? "Recording…" : "Confirm Sale"}
-            </Button>
-          </div>
-        </div>
-      )}
+          );
+        })()
+      }
     </Modal>
   );
 }
