@@ -2826,7 +2826,7 @@ investmentRoutes.delete("/manual/:id", async (req, res) => {
 // ── GET /api/investments/activity/:accountId ───────────────────────────────
 // Returns all investment activity events for an account (sales, dividends)
 
-function serializeActivity(a: any) {
+export function serializeActivity(a: any) {
   return {
     id: a.id,
     accountId: a.accountId,
@@ -2968,7 +2968,7 @@ const sellInputSchema = z.object({
   })).optional(),
 });
 
-interface LotAllocation {
+export interface LotAllocation {
   lotId: string;
   acquiredDate: Date | null;
   shares: number;
@@ -2992,7 +2992,7 @@ interface SellCalculation {
   totalGain: number;
 }
 
-function computeSell(
+export function computeSell(
   lots: { id: string; quantity: any; costPerShare: any; acquiredDate: Date | null }[],
   sharesToSell: number,
   pricePerShare: number,

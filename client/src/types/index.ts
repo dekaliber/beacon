@@ -748,6 +748,7 @@ export interface NotificationAccountGroup {
 export interface NotificationData {
   pendingDividends: NotificationAccountGroup[];
   pendingBuys: NotificationAccountGroup[];
+  pendingSales: NotificationAccountGroup[];
   totalCount: number;
 }
 
@@ -766,6 +767,37 @@ export interface PendingBuy {
   confirmedAt: string | null;
   dismissedAt: string | null;
   lotId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  optionsPosition: {
+    id: string;
+    ticker: { symbol: string; id: string };
+    strikePrice: string;
+    contracts: number;
+    contractsAssigned: number | null;
+    expirationDate: string;
+    premiumPerShare: string;
+    feesOpen: string | null;
+    feesClose: string | null;
+    optionType: string;
+  };
+}
+
+export type PendingSaleStatus = "PENDING" | "CONFIRMED" | "DISMISSED";
+
+export interface PendingSale {
+  id: string;
+  userId: string;
+  accountId: string;
+  optionsPositionId: string;
+  ticker: string;
+  status: PendingSaleStatus;
+  quantity: string;       // Decimal serialized as string
+  pricePerShare: string;  // Decimal serialized as string (strike + premium − fees/share)
+  saleDate: string;       // ISO date
+  confirmedAt: string | null;
+  dismissedAt: string | null;
+  activityId: string | null;
   createdAt: string;
   updatedAt: string;
   optionsPosition: {

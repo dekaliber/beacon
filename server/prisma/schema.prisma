@@ -53,6 +53,12 @@ enum PendingBuyStatus {
   DISMISSED
 }
 
+enum PendingSaleStatus {
+  PENDING
+  CONFIRMED
+  DISMISSED
+}
+
 enum DividendElection {
   REINVEST
   CASH
@@ -122,6 +128,7 @@ model Account {
   gainSnapshots         RealizedGainSnapshot[]
   pendingDividends      PendingDividend[]
   pendingBuys           PendingBuy[]
+  pendingSales          PendingSale[]
   optionsPositions      OptionsPosition[]     @relation("OptionsInvestmentAccount")
   statementOverrides    StatementOverride[]
   transfersFrom         Transfer[]     @relation("TransferFrom")
@@ -555,6 +562,7 @@ model InvestmentActivity {
   lot              InvestmentLot?     @relation(fields: [lotId], references: [id], onDelete: SetNull)
   incomes          Income[]
   pendingDividend  PendingDividend?
+  pendingSale      PendingSale?
 
   @@index([accountId])
   @@index([date])
@@ -729,6 +737,31 @@ model PendingBuy {
 
   @@index([accountId, status])
   @@map("pending_buys")
+}
+
+// Confirmed entries produce an InvestmentActivity (SALE) + reduce InvestmentLots.
+model PendingSale {
+  id                String            @id @default(cuid())
+  userId            String
+  accountId         String
+  optionsPositionId String            @unique
+  ticker            String
+  status            PendingSaleStatus @default(PENDING)
+  quantity          Decimal           @db.Decimal(18, 8)
+  pricePerShare     Decimal           @db.Decimal(18, 8) // strike + premium − fees/share
+  saleDate          DateTime          @db.Date
+  confirmedAt       DateTime?
+  dismissedAt       DateTime?
+  activityId        String?           @unique
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  account         Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  optionsPosition OptionsPosition      @relation(fields: [optionsPositionId], references: [id], onDelete: Cascade)
+  activity        InvestmentActivity?  @relation(fields: [activityId], references: [id], onDelete: SetNull)
+
+  @@index([accountId, status])
+  @@map("pending_sales")
 }
 
 // ── Cash flow models ─────────────────────────────────────────────────────────
@@ -999,6 +1032,7 @@ model OptionsPosition {
 
   // Back-relations
   pendingBuy         PendingBuy?
+  pendingSale        PendingSale?
   assignedLots       InvestmentLot[] @relation("LotFromAssignment")
 
   @@index([userId, status])

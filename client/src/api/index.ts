@@ -41,6 +41,7 @@ import type {
   QfxDividendInput,
   OrphanedOffset,
   PendingBuy,
+  PendingSale,
 } from "../types";
 
 // Accounts
@@ -928,6 +929,26 @@ export const confirmPendingBuy = (
 
 export const dismissPendingBuy = (id: string) =>
   api.post<PendingBuy>(`/pending-buys/${id}/dismiss`, {});
+
+// ── Pending Sales ─────────────────────────────────────────────────────────────
+
+export const getPendingSales = (accountId: string) =>
+  api.get<PendingSale[]>(`/pending-sales/${accountId}`);
+
+export const confirmPendingSale = (
+  id: string,
+  data: {
+    saleDate: string;
+    pricePerShare: number;
+    costBasisMethod?: string;
+    lotAllocations?: { lotId: string; shares: number }[];
+    destinationAccountId: string;
+    notes?: string | null;
+  }
+) => api.post<{ pendingSale: PendingSale }>(`/pending-sales/${id}/confirm`, data);
+
+export const dismissPendingSale = (id: string) =>
+  api.post<PendingSale>(`/pending-sales/${id}/dismiss`, {});
 
 export type AssignmentBatch = {
   strikePrice: string;

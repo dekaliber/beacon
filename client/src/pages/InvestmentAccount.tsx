@@ -79,6 +79,9 @@ import {
   getPendingBuys,
   confirmPendingBuy,
   dismissPendingBuy,
+  getPendingSales,
+  confirmPendingSale,
+  dismissPendingSale,
 } from "@/api";
 import type { SellPreviewResult } from "@/api";
 import { ApiError } from "@/api/client";
@@ -87,7 +90,7 @@ import { useNotifications } from "@/context/NotificationContext";
 import { isPriceRefreshNeeded, formatQuantity } from "@/lib/priceUtils";
 import { useDemo } from "@/context/DemoContext";
 import { scaleGrowthPoints, scaleManuals, scaleHolding } from "@/lib/demo";
-import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity, GrowthPoint, GrowthEvent, PendingDividend, TaxClassification, Category, ConfirmedDividendInfo, PendingBuy } from "@/types";
+import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity, GrowthPoint, GrowthEvent, PendingDividend, TaxClassification, Category, ConfirmedDividendInfo, PendingBuy, PendingSale } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import { SectionLabel, StatValue, DisplayStat } from "@/components/Typography";
 
@@ -140,7 +143,7 @@ function GainCell({
   const cell = (
     <span
       className={`inline-flex font-medium tabular-nums font-mono ${
-        pos ? "text-green-600" : "text-red-500"
+        pos ? "text-up" : "text-down"
       } text-${size} ${size === "base" && pct != null ? "flex-col items-start" : "flex-row items-center gap-1"}`}
     >
       <span className="inline-flex items-center gap-1">
@@ -468,7 +471,7 @@ function LotFormEntry({
         type="button"
         onClick={onRemove}
         disabled={!canRemove}
-        className="flex-shrink-0 pb-1 p-1.5 text-muted-foreground hover:text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="flex-shrink-0 pb-1 p-1.5 text-muted-foreground hover:text-down disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         title="Remove lot"
       >
         <Trash2 className="h-4 w-4" />
@@ -687,7 +690,7 @@ function AddInvestmentModal({
             </button>
           )}
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <p className="text-sm text-down">{error}</p>}
 
           <div className="flex justify-end gap-2 pt-2 border-t border-border">
             <Button type="button" variant="secondary" onClick={onClose}>
@@ -844,7 +847,7 @@ function LotRow({
         {/* Cols 6–8: save/cancel */}
         <td colSpan={3} className="py-2 px-2">
           <div className="flex items-center gap-2">
-            <button onClick={handleSave} disabled={saving} className="text-green-600 hover:text-green-700">
+            <button onClick={handleSave} disabled={saving} className="text-up hover:text-up-deep">
               <Check className="h-4 w-4" />
             </button>
             <button onClick={() => setEditing(false)} className="text-muted-foreground hover:text-foreground">
@@ -878,7 +881,7 @@ function LotRow({
             <button onClick={() => setEditing(true)} className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors">
               <Pencil className="h-3.5 w-3.5" />
             </button>
-            <button onClick={handleDeleteRequest} className="p-1.5 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors">
+            <button onClick={handleDeleteRequest} className="p-1.5 rounded text-muted-foreground/40 hover:text-down hover:bg-down/10 transition-colors">
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -890,7 +893,7 @@ function LotRow({
             <h3 className="tp-panel-title">Delete {lot.acquiredDate ? formatDate(lot.acquiredDate) : "managed"} lot?</h3>
             {deleteWarning ? (
               <>
-                <p className="mt-2 text-sm text-amber-600">{deleteWarning}</p>
+                <p className="mt-2 text-sm text-warn">{deleteWarning}</p>
                 <p className="mt-2 text-sm text-muted-foreground">
                   If you recorded this purchase by mistake, you can force-delete. Otherwise, use the <strong>Sell</strong> function to properly record a sale.
                 </p>
@@ -907,7 +910,7 @@ function LotRow({
                     type="button"
                     onClick={() => handleDeleteConfirm(true)}
                     disabled={deleting}
-                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-sm font-medium text-down hover:bg-down/20 transition-colors disabled:opacity-50"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     {deleting ? "Deleting..." : "Delete Anyway"}
@@ -932,7 +935,7 @@ function LotRow({
                     type="button"
                     onClick={() => handleDeleteConfirm(false)}
                     disabled={deleting}
-                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-sm font-medium text-down hover:bg-down/20 transition-colors disabled:opacity-50"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     {deleting ? "Deleting..." : "Confirm Delete"}
@@ -1211,7 +1214,7 @@ function HoldingRow({
             <Tooltip content="Delete this investment">
               <button
                 onClick={(e) => { e.stopPropagation(); handleDeleteRequest(); }}
-                className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                className="p-1.5 rounded hover:bg-down/10 text-muted-foreground hover:text-down transition-colors"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -1350,7 +1353,7 @@ function HoldingRow({
                           placeholder="e.g. US Stocks"
                           className="rounded border border-border px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary w-36"
                         />
-                        <button onClick={handleGroupSave} disabled={savingGroup} className="text-green-600 hover:text-green-700">
+                        <button onClick={handleGroupSave} disabled={savingGroup} className="text-up hover:text-up-deep">
                           <Check className="h-3.5 w-3.5" />
                         </button>
                         <button onClick={() => setEditingGroup(false)} className="text-muted-foreground hover:text-foreground">
@@ -1382,7 +1385,7 @@ function HoldingRow({
             <h3 className="tp-panel-title">Delete {holding.ticker}?</h3>
             {deleteWarning ? (
               <>
-                <p className="mt-2 text-sm text-amber-600">{deleteWarning}</p>
+                <p className="mt-2 text-sm text-warn">{deleteWarning}</p>
                 <p className="mt-2 text-sm text-muted-foreground">
                   Deleting this holding will orphan its sale history (the records will be preserved but unlinked). If you still want to proceed, confirm below.
                 </p>
@@ -1399,7 +1402,7 @@ function HoldingRow({
                     type="button"
                     onClick={() => handleDeleteConfirm(true)}
                     disabled={deleting}
-                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-sm font-medium text-down hover:bg-down/20 transition-colors disabled:opacity-50"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     {deleting ? "Deleting..." : "Delete Anyway"}
@@ -1424,7 +1427,7 @@ function HoldingRow({
                     type="button"
                     onClick={() => handleDeleteConfirm(false)}
                     disabled={deleting}
-                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-sm font-medium text-down hover:bg-down/20 transition-colors disabled:opacity-50"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     {deleting ? "Deleting..." : "Confirm Delete"}
@@ -1632,8 +1635,8 @@ function ImportInvestmentsModal({
                 onClick={() => setShowErrorsOnly((v) => !v)}
                 className={`flex items-center gap-1.5 rounded px-2 py-0.5 text-xs transition-colors ${
                   showErrorsOnly
-                    ? "bg-destructive/15 text-destructive font-medium"
-                    : "text-destructive hover:bg-destructive/10"
+                    ? "bg-down/15 text-down font-medium"
+                    : "text-down hover:bg-down/10"
                 }`}
               >
                 <AlertCircle className="h-3 w-3" />
@@ -1661,7 +1664,7 @@ function ImportInvestmentsModal({
                   return (
                     <tr
                       key={i}
-                      className={`border-b border-border ${row.errors.length > 0 ? "bg-destructive/5" : ""}`}
+                      className={`border-b border-border ${row.errors.length > 0 ? "bg-down/5" : ""}`}
                     >
                       <td className="px-2 py-1.5 text-muted-foreground">{i + 1}</td>
                       <td className="px-2 py-1.5 font-semibold">{row.symbol || "—"}</td>
@@ -1676,11 +1679,11 @@ function ImportInvestmentsModal({
                       </td>
                       <td className="px-2 py-1.5">
                         {row.errors.length > 0 ? (
-                          <span className="text-destructive" title={row.errors.join("; ")}>
+                          <span className="text-down" title={row.errors.join("; ")}>
                             <AlertCircle className="inline h-3 w-3" /> {row.errors[0]}
                           </span>
                         ) : (
-                          <span className="text-green-600">
+                          <span className="text-up">
                             <Check className="inline h-3 w-3" />
                           </span>
                         )}
@@ -1723,13 +1726,13 @@ function ImportInvestmentsModal({
       {step === "result" && result && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-4">
-            <CheckCircle2 className="h-6 w-6 text-green-600 shrink-0" />
+            <CheckCircle2 className="h-6 w-6 text-up shrink-0" />
             <div>
               <p className="text-sm font-medium">
                 {result.imported} lot{result.imported !== 1 ? "s" : ""} imported successfully
               </p>
               {result.errors.length > 0 && (
-                <p className="text-xs text-destructive mt-1">
+                <p className="text-xs text-down mt-1">
                   {result.errors.length} row{result.errors.length !== 1 ? "s" : ""} failed
                 </p>
               )}
@@ -1737,7 +1740,7 @@ function ImportInvestmentsModal({
           </div>
 
           {result.errors.length > 0 && (
-            <div className="max-h-[150px] overflow-auto rounded-md border border-border p-2 text-xs text-destructive">
+            <div className="max-h-[150px] overflow-auto rounded-md border border-border p-2 text-xs text-down">
               {result.errors.map((e, i) => (
                 <div key={i}>Row {e.row}: {e.message}</div>
               ))}
@@ -1871,7 +1874,7 @@ function AddManualInvestmentModal({
           </div>
         )}
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="text-sm text-down">{error}</p>}
 
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="secondary" onClick={onClose}>
@@ -1947,7 +1950,7 @@ function ManualHoldingRow({
             </button>
             <button
               onClick={() => setShowDeleteModal(true)}
-              className="p-1.5 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
+              className="p-1.5 rounded text-muted-foreground/40 hover:text-down hover:bg-down/10 transition-colors"
               title="Delete manual investment"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -1975,7 +1978,7 @@ function ManualHoldingRow({
                 type="button"
                 onClick={handleDeleteConfirm}
                 disabled={deleting}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-sm font-medium text-down hover:bg-down/20 transition-colors disabled:opacity-50"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 {deleting ? "Deleting..." : "Confirm Delete"}
@@ -2315,7 +2318,7 @@ function SellModal({
   };
 
   const gainColor = (v: number) =>
-    v >= 0 ? "text-green-600" : "text-red-500";
+    v >= 0 ? "text-up" : "text-down";
 
   const destAccount = eligibleAccounts.find((a) => a.id === destAccountId);
 
@@ -2554,7 +2557,7 @@ function SellModal({
             )}
           </div>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <p className="text-sm text-down">{error}</p>}
 
           <div className="flex gap-2 pt-1">
             <Button variant="secondary" onClick={onClose} className="flex-1">Cancel</Button>
@@ -2590,8 +2593,8 @@ function SellModal({
                     <td className="py-2 px-3">
                       <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
                         lot.termType === "LONG"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-amber-100 text-amber-700"
+                          ? "bg-up-soft text-up-deep"
+                          : "bg-warn-soft text-warn-deep"
                       }`}>
                         {lot.termType === "LONG" ? "Long-term" : "Short-term"}
                       </span>
@@ -2645,7 +2648,7 @@ function SellModal({
             </div>
           </div>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <p className="text-sm text-down">{error}</p>}
 
           <div className="flex gap-2 pt-1">
             <Button variant="secondary" onClick={() => { setStep("input"); setError(null); }} className="flex-1">
@@ -2715,7 +2718,7 @@ function SellModal({
             Cost basis and acquisition dates are preserved in the destination account. No taxable event is recorded.
           </p>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <p className="text-sm text-down">{error}</p>}
 
           <div className="flex gap-2 pt-1">
             <Button variant="secondary" onClick={() => { setStep("input"); setError(null); }} className="flex-1">
@@ -2843,14 +2846,14 @@ function EditSaleActivityModal({
           </div>
           <div>
             <p className="text-muted-foreground mb-0.5">Gain / Loss</p>
-            <p className={`font-medium tabular-nums font-mono ${gain >= 0 ? "text-green-600" : "text-red-500"}`}>
+            <p className={`font-medium tabular-nums font-mono ${gain >= 0 ? "text-up" : "text-down"}`}>
               {gain >= 0 ? "+" : ""}{formatCurrency(gain)}
             </p>
           </div>
         </div>
       )}
 
-      {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
+      {error && <p className="text-sm text-down mb-3">{error}</p>}
 
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
@@ -3064,7 +3067,7 @@ function ReviewDividendModal({
         </div>
 
         {/* Verification warning */}
-        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+        <div className="flex items-start gap-2 rounded-md border border-warn-line bg-warn-soft px-3 py-2.5 text-xs text-warn-deep">
           <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
           <p>Please verify all amounts against your actual payment record before confirming.</p>
         </div>
@@ -3204,7 +3207,7 @@ function ReviewDividendModal({
               </div>
             </div>
             {reinvestDiscrepancy > 0.05 && (
-              <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <div className="flex items-start gap-2 rounded-md border border-warn-line bg-warn-soft px-3 py-2 text-xs text-warn-deep">
                 <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                 <p>
                   Price × shares ({formatCurrency(parseFloat(reinvestPrice) * parseFloat(reinvestQuantity))}) differs
@@ -3252,7 +3255,7 @@ function ReviewDividendModal({
           />
         </div>
 
-        {error && <p className="text-sm text-red-500">{error}</p>}
+        {error && <p className="text-sm text-down">{error}</p>}
 
         <div className="flex justify-between">
           <Button
@@ -3340,7 +3343,7 @@ function EditConfirmedDividendModal({
         <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
       ) : fetchError ? (
         <div className="space-y-4">
-          <p className="text-sm text-red-500">{fetchError}</p>
+          <p className="text-sm text-down">{fetchError}</p>
           <div className="flex justify-end">
             <Button variant="ghost" onClick={onClose}>Close</Button>
           </div>
@@ -3353,7 +3356,7 @@ function EditConfirmedDividendModal({
           </div>
 
           {dividendInfo.isDrip && (
-            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+            <div className="flex items-start gap-2 rounded-md border border-warn-line bg-warn-soft px-3 py-2.5 text-xs text-warn-deep">
               <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
               <p>DRIP reinvestments cannot be edited after confirmation. Dismiss and re-confirm to make changes.</p>
             </div>
@@ -3410,7 +3413,7 @@ function EditConfirmedDividendModal({
             />
           </div>
 
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-sm text-down">{error}</p>}
 
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={onClose} disabled={saving}>
@@ -3488,7 +3491,7 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
           </div>
         </div>
 
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 flex gap-2">
+        <div className="rounded-md border border-warn-line bg-warn-soft px-3 py-2 text-xs text-warn-deep flex gap-2">
           <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <span>Verify all amounts against your brokerage confirmation before confirming.</span>
         </div>
@@ -3545,7 +3548,7 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
           />
         </div>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="text-sm text-down">{error}</p>}
 
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
@@ -3556,9 +3559,245 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
   );
 }
 
+// ── Pending Sale Modal ────────────────────────────────────────────────────────
+
+interface PendingSaleModalProps {
+  pendingSale: PendingSale;
+  accounts: Account[];
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSaleModalProps) {
+  const pos = pendingSale.optionsPosition;
+  const defaultSaleDate = pendingSale.saleDate.split("T")[0];
+  const defaultShares = Number(pendingSale.quantity);
+  const defaultPricePerShare = Number(pendingSale.pricePerShare);
+
+  const [saleDate, setSaleDate] = useState(defaultSaleDate);
+  const [shares, setShares] = useState(defaultShares.toString());
+  const [pricePerShare, setPricePerShare] = useState(defaultPricePerShare.toFixed(4).replace(/\.?0+$/, ""));
+  const [selectionMode, setSelectionMode] = useState<"method" | "lots">("method");
+  const [method, setMethod] = useState<"FIFO" | "LIFO" | "MIN_TAX" | "MAX_GAIN">("FIFO");
+  const [lotInputs, setLotInputs] = useState<Record<string, string>>({});
+  const [destAccountId, setDestAccountId] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // Fetch lots for the holding so user can pick specific ones
+  const { data: holdings } = useApi(
+    () => getInvestmentHoldings(pendingSale.accountId),
+    [pendingSale.accountId]
+  );
+  const holding = holdings?.find(h => h.ticker === pendingSale.ticker) ?? null;
+  const sortedLots = holding
+    ? [...holding.lots].sort((a, b) => {
+        if (!a.acquiredDate) return 1;
+        if (!b.acquiredDate) return -1;
+        return a.acquiredDate < b.acquiredDate ? -1 : 1;
+      })
+    : [];
+
+  const lotAllocations = sortedLots
+    .map(lot => ({ lotId: lot.id, shares: parseFloat((lotInputs[lot.id] || "0").replace(/,/g, "")) || 0 }))
+    .filter(a => a.shares > 0);
+  const lotTotalShares = lotAllocations.reduce((s, a) => s + a.shares, 0);
+
+  const eligibleAccounts = accounts.filter(a => a.type !== "CREDIT_CARD");
+  const sharesNum = parseFloat(shares.replace(/,/g, "")) || 0;
+  const priceNum = parseFloat(pricePerShare.replace(/,/g, "")) || 0;
+  const grossProceeds = sharesNum * priceNum;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!destAccountId) { setError("Select an account to receive proceeds."); return; }
+    const sharesVal = parseFloat(shares.replace(/,/g, ""));
+    if (isNaN(sharesVal) || sharesVal <= 0) { setError("Enter a valid number of shares."); return; }
+    const priceVal = parseFloat(pricePerShare.replace(/,/g, ""));
+    if (isNaN(priceVal) || priceVal <= 0) { setError("Enter a valid price per share."); return; }
+    if (selectionMode === "lots" && lotAllocations.length === 0) {
+      setError("Specify shares for at least one lot."); return;
+    }
+
+    setSaving(true);
+    try {
+      const base = { saleDate, pricePerShare: priceVal, destinationAccountId: destAccountId, notes: notes || null };
+      await confirmPendingSale(pendingSale.id, selectionMode === "method"
+        ? { ...base, costBasisMethod: method }
+        : { ...base, lotAllocations }
+      );
+      onSaved();
+    } catch (err: any) {
+      setError(err?.message ?? "Failed to confirm sale.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputClass = "w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
+  const dollarInputClass = "w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
+
+  return (
+    <Modal open onClose={onClose} title={`Review Pending Sale — ${pendingSale.ticker}`}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Origin summary */}
+        <div className="rounded-md bg-muted/30 px-3 py-2 text-sm space-y-0.5">
+          <div className="flex items-center gap-3">
+            <span className="font-medium text-foreground">{pos.ticker.symbol}</span>
+            <span className="text-muted-foreground">${Number(pos.strikePrice).toFixed(2)} Call · {pos.contracts} contract{pos.contracts !== 1 ? "s" : ""}</span>
+          </div>
+          <div className="tp-caption">
+            Shares called away — assigned from covered call · Premium ${Number(pos.premiumPerShare).toFixed(4)}/share
+            {(Number(pos.feesOpen) || Number(pos.feesClose)) ? ` · Fees $${((Number(pos.feesOpen) || 0) + (Number(pos.feesClose) || 0)).toFixed(2)}` : ""}
+          </div>
+        </div>
+
+        <div className="rounded-md border border-warn-line bg-warn-soft px-3 py-2 text-xs text-warn-deep flex gap-2">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <span>Price per share is pre-filled as strike + premium − fees (your tax-basis "amount realized"). Verify against your brokerage confirmation before confirming.</span>
+        </div>
+
+        {/* Sale Date */}
+        <div>
+          <label className="block text-xs font-medium mb-1">Sale Date</label>
+          <input
+            type="date" required
+            value={saleDate} onChange={e => setSaleDate(e.target.value)}
+            className={inputClass}
+          />
+        </div>
+
+        {/* Shares / Price per Share */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium mb-1">Shares Sold</label>
+            <input
+              type="text" inputMode="numeric" required
+              placeholder="0"
+              value={shares} onChange={e => setShares(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1">Price Per Share</label>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+              <input
+                type="text" inputMode="decimal" required
+                placeholder="0.0000"
+                value={pricePerShare} onChange={e => setPricePerShare(e.target.value)}
+                className={dollarInputClass}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Gross Proceeds */}
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">Gross Proceeds</span>
+          <span className="font-semibold">{formatCurrency(grossProceeds)}</span>
+        </div>
+
+        {/* Lot Selection */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-medium">Lot Selection</label>
+            <div className="flex gap-1">
+              <button type="button" onClick={() => setSelectionMode("method")}
+                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${selectionMode === "method" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+                Method
+              </button>
+              <button type="button" onClick={() => setSelectionMode("lots")}
+                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${selectionMode === "lots" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+                Specific Lots
+              </button>
+            </div>
+          </div>
+
+          {selectionMode === "method" ? (
+            <select
+              value={method}
+              onChange={e => setMethod(e.target.value as typeof method)}
+              className="appearance-none w-full rounded-md border border-border px-3 py-2 pl-2 pr-6 text-sm text-foreground"
+            >
+              <option value="FIFO">FIFO — First In, First Out</option>
+              <option value="LIFO">LIFO — Last In, First Out</option>
+              <option value="MIN_TAX">Min Tax — Highest Cost Basis First</option>
+              <option value="MAX_GAIN">Max Gain — Lowest Cost Basis First</option>
+            </select>
+          ) : (
+            <div className="space-y-1">
+              {sortedLots.length === 0 && (
+                <p className="text-xs text-muted-foreground">No lots found for {pendingSale.ticker}.</p>
+              )}
+              {sortedLots.map(lot => (
+                <div key={lot.id} className="flex items-center gap-3 py-1">
+                  <div className="flex-1 text-xs">
+                    <span className="font-medium">{lot.acquiredDate ? formatDate(lot.acquiredDate) : "Unknown date"}</span>
+                    <span className="text-muted-foreground ml-2">{parseFloat(lot.quantity)} shares @ ${parseFloat(lot.costPerShare).toFixed(4)}</span>
+                  </div>
+                  <input
+                    type="text" inputMode="decimal"
+                    placeholder="0"
+                    value={lotInputs[lot.id] || ""}
+                    onChange={e => setLotInputs(prev => ({ ...prev, [lot.id]: e.target.value }))}
+                    className="w-20 rounded-md border border-border px-2 py-1 text-xs text-right focus:border-primary focus:outline-none"
+                  />
+                </div>
+              ))}
+              {selectionMode === "lots" && lotTotalShares > 0 && (
+                <div className="flex justify-between text-xs font-medium pt-1 border-t border-border">
+                  <span>Total shares selected</span>
+                  <span>{lotTotalShares.toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Destination Account */}
+        <div>
+          <label className="block text-xs font-medium mb-1">Proceeds To</label>
+          <select
+            required
+            value={destAccountId}
+            onChange={e => setDestAccountId(e.target.value)}
+            className="appearance-none w-full rounded-md border border-border px-3 py-2 pl-2 pr-6 text-sm text-foreground"
+          >
+            <option value="">Select account…</option>
+            {eligibleAccounts.map(a => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Notes */}
+        <div>
+          <label className="block text-xs font-medium mb-1">Notes <span className="text-muted-foreground font-normal">(optional)</span></label>
+          <textarea
+            rows={2}
+            value={notes} onChange={e => setNotes(e.target.value)}
+            placeholder="e.g. CC assigned"
+            className="w-full rounded-md border border-border px-3 py-2 text-sm resize-none focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+
+        {error && <p className="text-sm text-down">{error}</p>}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit" disabled={saving}>{saving ? "Confirming…" : "Confirm Sale"}</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 // ── Activity Tab ──────────────────────────────────────────────────────────────
 
-function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accountId: string; onHoldingsChanged?: () => void; onAccountChanged?: () => void }) {
+function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged }: { accountId: string; accounts: Account[]; onHoldingsChanged?: () => void; onAccountChanged?: () => void }) {
   const { data: activities, loading: activitiesLoading, refetch: refetchActivities } = useApi(
     () => getInvestmentActivity(accountId),
     [accountId]
@@ -3571,6 +3810,10 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
     () => getPendingBuys(accountId),
     [accountId]
   );
+  const { data: pendingSales, loading: salesLoading, refetch: refetchSales } = useApi(
+    () => getPendingSales(accountId),
+    [accountId]
+  );
   const { data: allCategories } = useApi(() => getFlatCategories("INCOME"), []);
   const { refetch: refetchNotifications } = useNotifications();
 
@@ -3578,6 +3821,7 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
   const [editingDividendActivityId, setEditingDividendActivityId] = useState<string | null>(null);
   const [reviewingDividend, setReviewingDividend] = useState<PendingDividend | null>(null);
   const [reviewingBuy, setReviewingBuy] = useState<PendingBuy | null>(null);
+  const [reviewingSale, setReviewingSale] = useState<PendingSale | null>(null);
 
   // Filter state — empty Set means "no filter / show all"
   const [selectedTickers, setSelectedTickers] = useState<Set<string>>(new Set());
@@ -3627,10 +3871,11 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
     });
   }, [activities, selectedTickers, selectedTypes]);
 
-  const loading = activitiesLoading || dividendsLoading || buysLoading;
+  const loading = activitiesLoading || dividendsLoading || buysLoading || salesLoading;
   const hasPendingDividends = pendingDividends && pendingDividends.length > 0;
   const hasPendingBuys = pendingBuys && pendingBuys.length > 0;
-  const hasPending = hasPendingDividends || hasPendingBuys;
+  const hasPendingSales = pendingSales && pendingSales.length > 0;
+  const hasPending = hasPendingDividends || hasPendingBuys || hasPendingSales;
 
   if (loading) {
     return (
@@ -3664,12 +3909,12 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
       {hasPendingBuys && (
         <Card className="overflow-hidden mb-4">
           <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-            <Clock className="h-4 w-4 text-amber-500" />
+            <Clock className="h-4 w-4 text-warn" />
             <h3 className="font-semibold text-sm">Pending Buys</h3>
-            <span className="ml-1 inline-flex items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5">
+            <span className="ml-1 inline-flex items-center justify-center rounded-full bg-warn-soft text-warn-deep text-[10px] font-semibold px-1.5 py-0.5">
               {pendingBuys!.length}
             </span>
-            <span className="ml-auto text-sm font-semibold text-amber-600">
+            <span className="ml-auto text-sm font-semibold text-warn">
               {formatCurrency(pendingBuys!.reduce((sum, pb) => sum + Number(pb.quantity) * Number(pb.costPerShare), 0))}
             </span>
           </div>
@@ -3723,16 +3968,79 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
         </Card>
       )}
 
+      {/* Pending Sales card */}
+      {hasPendingSales && (
+        <Card className="overflow-hidden mb-4">
+          <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+            <Clock className="h-4 w-4 text-down" />
+            <h3 className="font-semibold text-sm">Pending Sales</h3>
+            <span className="ml-1 inline-flex items-center justify-center rounded-full bg-down-soft text-down text-[10px] font-semibold px-1.5 py-0.5">
+              {pendingSales!.length}
+            </span>
+            <span className="ml-auto text-sm font-semibold text-down">
+              {formatCurrency(pendingSales!.reduce((sum, ps) => sum + Number(ps.quantity) * Number(ps.pricePerShare), 0))}
+            </span>
+          </div>
+          <div className="divide-y divide-border">
+            {pendingSales!.map((ps) => {
+              const shares = Number(ps.quantity);
+              const pps = Number(ps.pricePerShare);
+              const saleDate = ps.saleDate.split("T")[0];
+              return (
+                <div key={ps.id} className="flex items-center gap-3 px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-xs">{ps.ticker}</span>
+                      <span className="tp-caption">from covered call assignment · {saleDate}</span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-0.5">
+                      <span className="tp-caption">
+                        {shares.toLocaleString()} shares @ ${pps.toFixed(4)}/share
+                      </span>
+                      <span className="text-xs font-medium">≈ {formatCurrency(shares * pps)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs h-7 px-2 text-muted-foreground"
+                      onClick={async () => {
+                        try {
+                          await dismissPendingSale(ps.id);
+                          refetchSales();
+                          refetchNotifications();
+                        } catch { /* ignore */ }
+                      }}
+                    >
+                      Dismiss
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="text-xs h-7 px-3 flex items-center gap-1"
+                      onClick={() => setReviewingSale(ps)}
+                    >
+                      Review
+                      <ChevronRight className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
       {/* Pending Dividends card */}
       {hasPendingDividends && (
         <Card className="overflow-hidden mb-4">
           <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-            <Clock className="h-4 w-4 text-violet-500" />
+            <Clock className="h-4 w-4 text-violet-deep" />
             <h3 className="font-semibold text-sm">Pending Dividends</h3>
-            <span className="ml-1 inline-flex items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-semibold px-1.5 py-0.5">
+            <span className="ml-1 inline-flex items-center justify-center rounded-full bg-violet-soft text-violet-deep text-[10px] font-semibold px-1.5 py-0.5">
               {pendingDividends!.length}
             </span>
-            <span className="ml-auto text-sm font-semibold text-violet-600">
+            <span className="ml-auto text-sm font-semibold text-violet-deep">
               {formatCurrency(pendingDividends!.reduce((sum, pd) => sum + parseFloat(pd.estimatedTotal), 0))}
             </span>
           </div>
@@ -3835,12 +4143,12 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
                 {(["PURCHASE", "SALE", "DIVIDEND", "TRANSFER"] as const).filter(t => presentTypes.has(t)).map((type) => {
                   const active = selectedTypes.has(type);
                   const colorClass = type === "PURCHASE"
-                    ? active ? "bg-green-100 text-green-700 border-green-300" : "border-border text-muted-foreground hover:border-green-300 hover:text-green-700"
+                    ? active ? "bg-up-soft text-up-deep border-up-line" : "border-border text-muted-foreground hover:border-up-line hover:text-up-deep"
                     : type === "SALE"
                     ? active ? "bg-blue-100 text-blue-700 border-blue-300" : "border-border text-muted-foreground hover:border-blue-300 hover:text-blue-700"
                     : type === "TRANSFER"
-                    ? active ? "bg-amber-100 text-amber-700 border-amber-300" : "border-border text-muted-foreground hover:border-amber-300 hover:text-amber-700"
-                    : active ? "bg-violet-100 text-violet-700 border-violet-300" : "border-border text-muted-foreground hover:border-violet-300 hover:text-violet-700";
+                    ? active ? "bg-warn-soft text-warn-deep border-warn-line" : "border-border text-muted-foreground hover:border-warn-line hover:text-warn-deep"
+                    : active ? "bg-violet-soft text-violet-deep border-violet-soft" : "border-border text-muted-foreground hover:border-violet-soft hover:text-violet-deep";
                   const label = type === "PURCHASE" ? "Purchase" : type === "SALE" ? "Sale" : type === "TRANSFER" ? "Transfer" : "Dividend";
                   return (
                     <button
@@ -3892,10 +4200,10 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
                   const badgeClass = isSale
                     ? "bg-blue-100 text-blue-700"
                     : isPurchase
-                    ? "bg-green-100 text-green-700"
+                    ? "bg-up-soft text-up-deep"
                     : isTransfer
-                    ? "bg-amber-100 text-amber-700"
-                    : "bg-violet-100 text-violet-700";
+                    ? "bg-warn-soft text-warn-deep"
+                    : "bg-violet-soft text-violet-deep";
                   const badgeLabel = isSale ? "Sale" : isPurchase ? "Purchase" : isTransfer ? "Transfer" : "Dividend";
 
                   return (
@@ -3929,8 +4237,8 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
                       <td className={`py-3 px-2 text-right tabular-nums font-mono font-medium ${
                         isSale
                           ? isGainPositive
-                            ? "text-green-600"
-                            : "text-red-500"
+                            ? "text-up"
+                            : "text-down"
                           : "text-muted-foreground"
                       }`}>
                         {isSale
@@ -4012,6 +4320,21 @@ function ActivityTab({ accountId, onHoldingsChanged, onAccountChanged }: { accou
           onSaved={() => {
             setReviewingBuy(null);
             refetchBuys();
+            refetchActivities();
+            refetchNotifications();
+            onHoldingsChanged?.();
+            onAccountChanged?.();
+          }}
+        />
+      )}
+      {reviewingSale && (
+        <PendingSaleModal
+          pendingSale={reviewingSale}
+          accounts={accounts}
+          onClose={() => setReviewingSale(null)}
+          onSaved={() => {
+            setReviewingSale(null);
+            refetchSales();
             refetchActivities();
             refetchNotifications();
             onHoldingsChanged?.();
@@ -4111,28 +4434,28 @@ function RealizedGainSnapshotPanel({
               <tbody className="divide-y divide-border">
                 <tr>
                   <td className="py-1.5 pr-8 text-muted-foreground">Gains</td>
-                  <td className="py-1.5 pr-6 text-right tabular-nums font-mono text-green-600 font-medium">
+                  <td className="py-1.5 pr-6 text-right tabular-nums font-mono text-up font-medium">
                     {snapshot.longTermGain != null ? formatCurrency(snapshot.longTermGain) : "—"}
                   </td>
-                  <td className="py-1.5 text-right tabular-nums font-mono text-green-600 font-medium">
+                  <td className="py-1.5 text-right tabular-nums font-mono text-up font-medium">
                     {snapshot.shortTermGain != null ? formatCurrency(snapshot.shortTermGain) : "—"}
                   </td>
                 </tr>
                 <tr>
                   <td className="py-1.5 pr-8 text-muted-foreground">Losses</td>
-                  <td className="py-1.5 pr-6 text-right tabular-nums font-mono text-red-500 font-medium">
+                  <td className="py-1.5 pr-6 text-right tabular-nums font-mono text-down font-medium">
                     {snapshot.longTermLoss != null ? formatCurrency(snapshot.longTermLoss) : "—"}
                   </td>
-                  <td className="py-1.5 text-right tabular-nums font-mono text-red-500 font-medium">
+                  <td className="py-1.5 text-right tabular-nums font-mono text-down font-medium">
                     {snapshot.shortTermLoss != null ? formatCurrency(snapshot.shortTermLoss) : "—"}
                   </td>
                 </tr>
                 <tr className="font-semibold">
                   <td className="py-1.5 pr-8">Net</td>
-                  <td className={`py-1.5 pr-6 text-right tabular-nums font-mono ${netLT >= 0 ? "text-green-600" : "text-red-500"}`}>
+                  <td className={`py-1.5 pr-6 text-right tabular-nums font-mono ${netLT >= 0 ? "text-up" : "text-down"}`}>
                     {netLT >= 0 ? "+" : "−"}{formatCurrency(Math.abs(netLT))}
                   </td>
-                  <td className={`py-1.5 text-right tabular-nums font-mono ${netST >= 0 ? "text-green-600" : "text-red-500"}`}>
+                  <td className={`py-1.5 text-right tabular-nums font-mono ${netST >= 0 ? "text-up" : "text-down"}`}>
                     {netST >= 0 ? "+" : "−"}{formatCurrency(Math.abs(netST))}
                   </td>
                 </tr>
@@ -4148,14 +4471,14 @@ function RealizedGainSnapshotPanel({
               {!showDeleteConfirm ? (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
-                  className="flex items-center gap-1 tp-caption hover:text-destructive transition-colors"
+                  className="flex items-center gap-1 tp-caption hover:text-down transition-colors"
                 >
                   <Trash2 className="h-3 w-3" /> Clear
                 </button>
               ) : (
                 <span className="flex items-center gap-2 text-xs">
                   <span className="text-muted-foreground">Clear this snapshot?</span>
-                  <button onClick={handleDelete} disabled={deleting} className="text-destructive hover:underline font-medium">
+                  <button onClick={handleDelete} disabled={deleting} className="text-down hover:underline font-medium">
                     {deleting ? "Clearing…" : "Confirm"}
                   </button>
                   <button onClick={() => setShowDeleteConfirm(false)} className="text-muted-foreground hover:text-foreground">
@@ -4526,7 +4849,7 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
       )}
 
       {parseError && (
-        <div className="flex items-center gap-2 text-xs text-red-600">
+        <div className="flex items-center gap-2 text-xs text-down">
           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
           {parseError}
         </div>
@@ -4614,7 +4937,7 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
 
       {result && (
         <div className="space-y-2">
-          <div className="flex items-center gap-2 text-xs text-green-700">
+          <div className="flex items-center gap-2 text-xs text-up-deep">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
             <span>
               {result.imported} new transaction{result.imported !== 1 ? "s" : ""}
@@ -4748,7 +5071,7 @@ function GrowthChartTooltip({ active, payload, label }: any) {
           </div>
           <div className="flex justify-between gap-4 pt-1 border-t border-border">
             <span className="text-muted-foreground">Unrealized gain</span>
-            <span className={`font-medium tabular-nums font-mono ${pos ? "text-green-600" : "text-red-500"}`}>
+            <span className={`font-medium tabular-nums font-mono ${pos ? "text-up" : "text-down"}`}>
               {pos ? "+" : ""}{formatCurrency(d.unrealizedGain!)} ({pos ? "+" : ""}{d.unrealizedGainPct!.toFixed(2)}%)
             </span>
           </div>
@@ -4777,7 +5100,7 @@ function GrowthChartTooltip({ active, payload, label }: any) {
                   <span className="text-muted-foreground">
                     {isSell ? "Sold" : "Bought"} {sharesStr} {ev.ticker}
                   </span>
-                  <span className={`font-medium tabular-nums font-mono ${isSell ? "text-amber-600" : "text-green-600"}`}>
+                  <span className={`font-medium tabular-nums font-mono ${isSell ? "text-warn" : "text-up"}`}>
                     {isSell ? "-" : "+"}{formatCurrency(ev.netAmount)}
                   </span>
                 </div>
@@ -4849,7 +5172,7 @@ function GrowthChart({ accountId, isManaged, onImportClick, onDayGain }: { accou
         ))}
       </div>
       {periodGain != null && (
-        <div className={`text-right tp-numeric font-semibold ${periodGain >= 0 ? "text-green-600" : "text-red-500"}`}>
+        <div className={`text-right tp-numeric font-semibold ${periodGain >= 0 ? "text-up" : "text-down"}`}>
           <div>{periodGain >= 0 ? "+" : "−"}{formatCurrency(Math.abs(periodGain))}
             {periodGainPct != null && (
               <span className="text-xs ml-1 opacity-70">({Math.abs(periodGainPct).toFixed(2)}%)</span>
@@ -4943,11 +5266,11 @@ function GrowthChart({ accountId, isManaged, onImportClick, onDayGain }: { accou
         </span>
       )}
       <span className="flex items-center gap-1.5">
-        <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
+        <span className="inline-block w-2.5 h-2.5 rounded-full bg-up" />
         Buy
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500" />
+        <span className="inline-block w-2.5 h-2.5 rounded-full bg-warn" />
         Sell
       </span>
     </div>
@@ -5343,7 +5666,7 @@ export function InvestmentAccount() {
                       className="rounded p-1.5 hover:bg-accent transition-colors"
                       aria-label="Save"
                     >
-                      <Check className="h-3.5 w-3.5 text-green-600" />
+                      <Check className="h-3.5 w-3.5 text-up" />
                     </button>
                     <button
                       type="button"
@@ -5397,7 +5720,7 @@ export function InvestmentAccount() {
             >
               {tab}
               {tab === "activity" && hasActivityNotification && (
-                <span className="absolute top-1.5 right-1 h-1.5 w-1.5 rounded-full bg-red-500" />
+                <span className="absolute top-1.5 right-1 h-1.5 w-1.5 rounded-full bg-down" />
               )}
             </button>
           ))}
@@ -5420,7 +5743,7 @@ export function InvestmentAccount() {
 
       {/* Investment account — Activity tab */}
       {isInvestment && activeTab === "activity" && (
-        <ActivityTab accountId={accountId!} onHoldingsChanged={refetch} onAccountChanged={refetchAccounts} />
+        <ActivityTab accountId={accountId!} accounts={accounts ?? []} onHoldingsChanged={refetch} onAccountChanged={refetchAccounts} />
       )}
 
       {/* Sell modal */}

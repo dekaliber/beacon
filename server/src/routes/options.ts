@@ -305,14 +305,15 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
 
   const updated = await prisma.optionsPosition.findUnique({
     where: { id: req.params.id },
-    include: { ticker: true, group: true, pendingBuy: true },
+    include: { ticker: true, group: true, pendingBuy: true, pendingSale: true },
   });
 
-  // When a position is being assigned and has an investment account linked,
+  // When a PUT is assigned and has an investment account linked,
   // create a PendingBuy (if one doesn't already exist for this position).
   if (
     updated &&
     updated.outcome === "ASSIGNED" &&
+    updated.optionType === "PUT" &&
     updated.investmentAccountId &&
     !updated.pendingBuy
   ) {
@@ -348,6 +349,53 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
   ) {
     await prisma.pendingBuy.update({
       where: { id: updated.pendingBuy.id },
+      data: { accountId: updated.investmentAccountId },
+    });
+  }
+
+  // When a CALL is assigned and has an investment account linked,
+  // create a PendingSale so the user can review and confirm the lot disposition.
+  // pricePerShare = strike + premium − fees/share (the full "amount realized" per share
+  // for tax purposes; the premium's own income record has taxableAmount = 0).
+  if (
+    updated &&
+    updated.outcome === "ASSIGNED" &&
+    updated.optionType === "CALL" &&
+    updated.investmentAccountId &&
+    !updated.pendingSale
+  ) {
+    const shares = (updated.contractsAssigned ?? updated.contracts) * 100;
+    const totalFees = (Number(updated.feesOpen) || 0) + (Number(updated.feesClose) || 0);
+    const pricePerShare =
+      Number(updated.strikePrice) +
+      Number(updated.premiumPerShare) -
+      totalFees / shares;
+
+    await prisma.pendingSale.upsert({
+      where: { optionsPositionId: updated.id },
+      create: {
+        userId,
+        accountId: updated.investmentAccountId,
+        optionsPositionId: updated.id,
+        ticker: updated.ticker.symbol,
+        quantity: shares,
+        pricePerShare: Math.max(0, pricePerShare),
+        saleDate: updated.expirationDate,
+      },
+      update: {},
+    });
+  }
+
+  // If a PENDING sale already exists but the investment account changed, redirect it.
+  if (
+    updated &&
+    updated.pendingSale &&
+    updated.pendingSale.status === "PENDING" &&
+    updated.investmentAccountId &&
+    updated.pendingSale.accountId !== updated.investmentAccountId
+  ) {
+    await prisma.pendingSale.update({
+      where: { id: updated.pendingSale.id },
       data: { accountId: updated.investmentAccountId },
     });
   }

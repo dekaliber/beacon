@@ -129,16 +129,22 @@ function NotificationBell() {
   const totalCount = notifications?.totalCount ?? 0;
   const pendingDividends = notifications?.pendingDividends ?? [];
   const pendingBuys = notifications?.pendingBuys ?? [];
+  const pendingSales = notifications?.pendingSales ?? [];
 
-  // Merge per-account: build a map of accountId → { name, dividends, buys }
-  const accountMap = new Map<string, { accountId: string; accountName: string; dividends: number; buys: number }>();
+  // Merge per-account: build a map of accountId → { name, dividends, buys, sales }
+  const accountMap = new Map<string, { accountId: string; accountName: string; dividends: number; buys: number; sales: number }>();
   for (const g of pendingDividends) {
-    accountMap.set(g.accountId, { accountId: g.accountId, accountName: g.accountName, dividends: g.count, buys: 0 });
+    accountMap.set(g.accountId, { accountId: g.accountId, accountName: g.accountName, dividends: g.count, buys: 0, sales: 0 });
   }
   for (const g of pendingBuys) {
     const existing = accountMap.get(g.accountId);
     if (existing) existing.buys = g.count;
-    else accountMap.set(g.accountId, { accountId: g.accountId, accountName: g.accountName, dividends: 0, buys: g.count });
+    else accountMap.set(g.accountId, { accountId: g.accountId, accountName: g.accountName, dividends: 0, buys: g.count, sales: 0 });
+  }
+  for (const g of pendingSales) {
+    const existing = accountMap.get(g.accountId);
+    if (existing) existing.sales = g.count;
+    else accountMap.set(g.accountId, { accountId: g.accountId, accountName: g.accountName, dividends: 0, buys: 0, sales: g.count });
   }
   const mergedAccounts = [...accountMap.values()];
 
@@ -171,7 +177,7 @@ function NotificationBell() {
       >
         <Bell className="h-4 w-4" />
         {totalCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white leading-none">
+          <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-down text-[9px] font-bold text-white leading-none">
             {totalCount > 99 ? "99+" : totalCount}
           </span>
         )}
@@ -193,6 +199,7 @@ function NotificationBell() {
                 const parts: string[] = [];
                 if (a.dividends > 0) parts.push(`${a.dividends} pending ${a.dividends === 1 ? "dividend" : "dividends"}`);
                 if (a.buys > 0) parts.push(`${a.buys} pending ${a.buys === 1 ? "buy" : "buys"}`);
+                if (a.sales > 0) parts.push(`${a.sales} pending ${a.sales === 1 ? "sale" : "sales"}`);
                 return (
                   <button
                     key={a.accountId}
