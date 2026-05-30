@@ -25,8 +25,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({ error: res.statusText })) as Record<string, unknown>;
-    const message = (data.error as any)?.message || data.message || data.error || `Request failed: ${res.status}`;
-    throw new ApiError(String(message), res.status, data);
+    const rawError = (data.error as any)?.message || data.message || data.error;
+    const message = typeof rawError === "string" ? rawError : rawError != null ? JSON.stringify(rawError) : `Request failed: ${res.status}`;
+    throw new ApiError(message, res.status, data);
   }
 
   if (res.status === 204) return undefined as T;

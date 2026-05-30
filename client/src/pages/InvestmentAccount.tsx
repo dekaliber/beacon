@@ -2572,14 +2572,14 @@ function SellModal({
           <div className="overflow-x-auto rounded border border-border">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-muted/40 text-muted-foreground uppercase tracking-[1px] font-mono">
-                  <th className="py-2 px-3 text-left font-medium">Lot Date</th>
-                  <th className="py-2 px-3 text-right font-medium">Shares</th>
-                  <th className="py-2 px-3 text-right font-medium">Cost/Share</th>
-                  <th className="py-2 px-3 text-left font-medium">Term</th>
-                  <th className="py-2 px-3 text-right font-medium">Proceeds</th>
-                  <th className="py-2 px-3 text-right font-medium">Cost Basis</th>
-                  <th className="py-2 px-3 text-right font-medium">Gain / Loss</th>
+                <tr className="bg-muted/40 tp-table-header">
+                  <th className="py-2 px-3 text-left">Lot Date</th>
+                  <th className="py-2 px-3 text-right">Shares</th>
+                  <th className="py-2 px-3 text-right">Cost/Share</th>
+                  <th className="py-2 px-3 text-left">Term</th>
+                  <th className="py-2 px-3 text-right">Proceeds</th>
+                  <th className="py-2 px-3 text-right">Cost Basis</th>
+                  <th className="py-2 px-3 text-right">Gain / Loss</th>
                 </tr>
               </thead>
               <tbody>
@@ -2611,7 +2611,7 @@ function SellModal({
           </div>
 
           {/* Sell — summary */}
-          <div className="rounded border border-border bg-muted/20 p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+          <div className="rounded border border-border bg-muted/20 p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-13">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Gross Proceeds</span>
               <StatValue className="font-medium">{formatCurrency(preview!.grossProceeds)}</StatValue>
@@ -2691,11 +2691,11 @@ function SellModal({
             <div className="overflow-x-auto rounded border border-border">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-muted/40 text-muted-foreground uppercase tracking-[1px] font-mono">
-                    <th className="py-2 px-3 text-left font-medium">Lot Date</th>
-                    <th className="py-2 px-3 text-right font-medium">Shares</th>
-                    <th className="py-2 px-3 text-right font-medium">Cost/Share</th>
-                    <th className="py-2 px-3 text-right font-medium">Cost Basis</th>
+                  <tr className="bg-muted/40 tp-table-header">
+                    <th className="py-2 px-3 text-left">Lot Date</th>
+                    <th className="py-2 px-3 text-right">Shares</th>
+                    <th className="py-2 px-3 text-right">Cost/Share</th>
+                    <th className="py-2 px-3 text-right">Cost Basis</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3463,7 +3463,7 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
         acquiredDate,
         quantity: parseFloat(quantity.replace(/,/g, "")),
         costPerShare: parseFloat(costPerShare.replace(/,/g, "")),
-        notes: notes || null,
+        notes: notes || undefined,
       });
       onSaved();
     } catch {
@@ -3496,17 +3496,7 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
           <span>Verify all amounts against your brokerage confirmation before confirming.</span>
         </div>
 
-        {/* Acquired Date */}
-        <div>
-          <label className="block text-xs font-medium mb-1">Acquired Date</label>
-          <input
-            type="date" required
-            value={acquiredDate} onChange={(e) => setAcquiredDate(e.target.value)}
-            className={inputClass}
-          />
-        </div>
-
-        {/* Quantity / Cost per Share */}
+        {/* Quantity / Cost per Share — first */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium mb-1">Shares Acquired</label>
@@ -3518,7 +3508,7 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
             />
           </div>
           <div>
-            <label className="block text-xs font-medium mb-1">Cost Per Share</label>
+            <label className="block text-xs font-medium mb-1">Cost / Share</label>
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
@@ -3529,6 +3519,16 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
               />
             </div>
           </div>
+        </div>
+
+        {/* Acquired Date */}
+        <div>
+          <label className="block text-xs font-medium mb-1">Acquired Date</label>
+          <input
+            type="date" required
+            value={acquiredDate} onChange={(e) => setAcquiredDate(e.target.value)}
+            className={inputClass}
+          />
         </div>
 
         {/* Total cost */}
@@ -3573,11 +3573,12 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
   const defaultSaleDate = pendingSale.saleDate.split("T")[0];
   const defaultShares = Number(pendingSale.quantity);
   // pricePerShare stored on the record is the composite (strike + premium net).
-  // We split it back so the user sees and edits just the strike (actual cash received),
-  // and the premium net is shown separately as context for the taxable calculation.
+  // We split it back so the user sees/edits just the strike price, and the
+  // premium net is folded back in at confirm time for correct gain calculation.
   const strikePrice = Number(pos.strikePrice);
   const premiumNetPerShare = Number(pendingSale.pricePerShare) - strikePrice;
 
+  const [step, setStep] = useState<"input" | "preview">("input");
   const [saleDate, setSaleDate] = useState(defaultSaleDate);
   const [shares, setShares] = useState(defaultShares.toString());
   const [salePrice, setSalePrice] = useState(strikePrice.toFixed(4).replace(/\.?0+$/, ""));
@@ -3588,6 +3589,8 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
   const [fees, setFees] = useState("");
   const [destAccountId, setDestAccountId] = useState("");
   const [notes, setNotes] = useState("");
+  const [preview, setPreview] = useState<SellPreviewResult | null>(null);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -3605,7 +3608,7 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
       })
     : [];
 
-  // Once lots load, pre-fill suggested lot quantities (full lot quantity for each suggested lot)
+  // Once lots load, pre-fill suggested lot quantities
   const [suggestedApplied, setSuggestedApplied] = useState(false);
   useEffect(() => {
     if (suggestedApplied || !hasSuggestedLots || sortedLots.length === 0) return;
@@ -3627,16 +3630,8 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
   const lotTotalShares = lotAllocations.reduce((s, a) => s + a.shares, 0);
 
   const eligibleAccounts = accounts.filter(a => a.type !== "CREDIT_CARD");
-  const sharesNum = parseFloat(shares.replace(/,/g, "")) || 0;
-  const salePriceNum = parseFloat(salePrice.replace(/,/g, "")) || 0;
-  const feesNum = parseFloat(fees.replace(/,/g, "")) || 0;
-  const grossProceeds = sharesNum * salePriceNum;
-  const optionPremiumNet = premiumNetPerShare * sharesNum;
-  const netProceeds = grossProceeds - feesNum;
-  const taxableProceeds = netProceeds + optionPremiumNet;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleNext = async () => {
     setError("");
     if (!destAccountId) { setError("Select an account to receive proceeds."); return; }
     const sharesVal = parseFloat(shares.replace(/,/g, ""));
@@ -3646,12 +3641,49 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
     if (selectionMode === "lots" && lotAllocations.length === 0) {
       setError("Specify shares for at least one lot."); return;
     }
+    if (!holding) { setError("Holding data not yet loaded — please try again."); return; }
 
-    setSaving(true);
+    setLoading(true);
     try {
       const feesVal = parseFloat(fees.replace(/,/g, "")) || 0;
-      // Send composite effective price (strike + premium net) for correct gain calculation
-      const base = { saleDate, pricePerShare: salePriceVal + premiumNetPerShare, fees: feesVal, destinationAccountId: destAccountId, notes: notes || null };
+      // Pass composite price (strike + premium net) so the preview correctly
+      // reflects the full amount realized including the option premium.
+      const compositePrice = salePriceVal + premiumNetPerShare;
+      const baseRequest = {
+        holdingId: holding.id,
+        sharesToSell: selectionMode === "method" ? sharesVal : lotTotalShares,
+        pricePerShare: compositePrice,
+        saleDate,
+        fees: feesVal,
+      };
+      const result = await previewSell(
+        selectionMode === "method"
+          ? { ...baseRequest, costBasisMethod: method }
+          : { ...baseRequest, lotAllocations }
+      );
+      setPreview(result);
+      setStep("preview");
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to preview sale.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!preview) return;
+    setSaving(true);
+    setError("");
+    try {
+      const salePriceVal = parseFloat(salePrice.replace(/,/g, ""));
+      const feesVal = parseFloat(fees.replace(/,/g, "")) || 0;
+      const base = {
+        saleDate,
+        pricePerShare: salePriceVal + premiumNetPerShare,
+        fees: feesVal,
+        destinationAccountId: destAccountId,
+        notes: notes || undefined,
+      };
       await confirmPendingSale(pendingSale.id, selectionMode === "method"
         ? { ...base, costBasisMethod: method }
         : { ...base, lotAllocations }
@@ -3659,206 +3691,286 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
       onSaved();
     } catch (err: any) {
       setError(err?.message ?? "Failed to confirm sale.");
+      setStep("input");
     } finally {
       setSaving(false);
     }
   };
 
+  const gainColor = (v: number) => v >= 0 ? "text-up" : "text-down";
+
   const inputClass = "w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
   const dollarInputClass = "w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
   return (
-    <Modal open onClose={onClose} title={`Review Pending Sale — ${pendingSale.ticker}`}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Origin summary */}
-        <div className="rounded-md bg-muted/30 px-3 py-2 text-sm space-y-0.5">
-          <div className="flex items-center gap-3">
-            <span className="font-medium text-foreground">{pos.ticker.symbol}</span>
-            <span className="text-muted-foreground">${Number(pos.strikePrice).toFixed(2)} Call · {pos.contracts} contract{pos.contracts !== 1 ? "s" : ""}</span>
+    <Modal
+      open
+      onClose={onClose}
+      title={`Review Pending Sale — ${pendingSale.ticker}`}
+      className={step === "preview" ? "max-w-3xl" : undefined}
+    >
+      {step === "input" ? (
+        <div className="space-y-4">
+          {/* Origin summary */}
+          <div className="rounded-md bg-muted/30 px-3 py-2 text-sm space-y-0.5">
+            <div className="flex items-center gap-3">
+              <span className="font-medium text-foreground">{pos.ticker.symbol}</span>
+              <span className="text-muted-foreground">${Number(pos.strikePrice).toFixed(2)} Call · {pos.contracts} contract{pos.contracts !== 1 ? "s" : ""}</span>
+            </div>
+            <div className="tp-caption">
+              Shares called away — assigned from covered call · Premium ${Number(pos.premiumPerShare).toFixed(4)}/share
+              {(Number(pos.feesOpen) || Number(pos.feesClose)) ? ` · Fees $${((Number(pos.feesOpen) || 0) + (Number(pos.feesClose) || 0)).toFixed(2)}` : ""}
+            </div>
           </div>
-          <div className="tp-caption">
-            Shares called away — assigned from covered call · Premium ${Number(pos.premiumPerShare).toFixed(4)}/share
-            {(Number(pos.feesOpen) || Number(pos.feesClose)) ? ` · Fees $${((Number(pos.feesOpen) || 0) + (Number(pos.feesClose) || 0)).toFixed(2)}` : ""}
+
+          <div className="rounded-md border border-warn-line bg-warn-soft px-3 py-2 text-xs text-warn-deep flex gap-2">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            <span>Verify all amounts against your brokerage confirmation before confirming.</span>
           </div>
-        </div>
 
-        <div className="rounded-md border border-warn-line bg-warn-soft px-3 py-2 text-xs text-warn-deep flex gap-2">
-          <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-          <span>Verify all amounts against your brokerage confirmation before confirming.</span>
-        </div>
-
-        {/* Sale Date */}
-        <div>
-          <label className="block text-xs font-medium mb-1">Sale Date</label>
-          <input
-            type="date" required
-            value={saleDate} onChange={e => setSaleDate(e.target.value)}
-            className={inputClass}
-          />
-        </div>
-
-        {/* Shares / Strike Price */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-medium mb-1">Shares Sold</label>
-            <input
-              type="text" inputMode="numeric" required
-              placeholder="0"
-              value={shares} onChange={e => setShares(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1">Sale Price Per Share</label>
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+          {/* Shares Sold / Sale Price — first */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium mb-1">Shares Sold</label>
               <input
-                type="text" inputMode="decimal" required
-                placeholder="0.0000"
-                value={salePrice} onChange={e => setSalePrice(e.target.value)}
-                className={dollarInputClass}
+                type="text" inputMode="numeric" required
+                placeholder="0"
+                value={shares} onChange={e => setShares(e.target.value)}
+                className={inputClass}
               />
             </div>
-          </div>
-        </div>
-
-        {/* Proceeds & taxable gain summary */}
-        <div className="rounded border border-border bg-muted/20 p-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Gross Proceeds</span>
-            <StatValue className="font-medium">{formatCurrency(grossProceeds)}</StatValue>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Fees</span>
-            <StatValue className="font-medium">{feesNum > 0 ? `(${formatCurrency(feesNum)})` : "—"}</StatValue>
-          </div>
-          <div className="flex justify-between border-t border-border pt-1.5 col-span-2">
-            <span className="font-medium">Net Proceeds</span>
-            <StatValue className="font-bold">{formatCurrency(netProceeds)}</StatValue>
-          </div>
-          <div className="flex justify-between border-t border-border pt-1.5">
-            <span className="text-muted-foreground">Option Premium (net)</span>
-            <StatValue className="font-medium text-up">+{formatCurrency(optionPremiumNet)}</StatValue>
-          </div>
-          <div className="flex justify-between border-t border-border pt-1.5">
-            <span className="font-medium">Taxable Proceeds</span>
-            <StatValue className="font-bold">{formatCurrency(taxableProceeds)}</StatValue>
-          </div>
-          <p className="col-span-2 text-xs text-muted-foreground mt-0.5">
-            ST/LT gain breakdown computed at confirmation based on lot cost basis.
-          </p>
-        </div>
-
-        {/* Lot Selection */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-medium">Lot Selection</label>
-            <div className="flex gap-1">
-              <button type="button" onClick={() => setSelectionMode("method")}
-                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${selectionMode === "method" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
-                Method
-              </button>
-              <button type="button" onClick={() => setSelectionMode("lots")}
-                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${selectionMode === "lots" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
-                Specific Lots
-              </button>
+            <div>
+              <label className="block text-xs font-medium mb-1">Sale Price / Share</label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                <input
+                  type="text" inputMode="decimal" required
+                  placeholder="0.0000"
+                  value={salePrice} onChange={e => setSalePrice(e.target.value)}
+                  className={dollarInputClass}
+                />
+              </div>
             </div>
           </div>
 
-          {selectionMode === "method" ? (
+          {/* Sale Date + Fees — half width each */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium mb-1">Sale Date</label>
+              <input
+                type="date" required
+                value={saleDate} onChange={e => setSaleDate(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">
+                Fees <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                <input
+                  type="text" inputMode="decimal"
+                  placeholder="0.00"
+                  value={fees} onChange={e => setFees(e.target.value)}
+                  className={dollarInputClass}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Lot Selection */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-medium">Lot Selection</label>
+              <div className="flex gap-1">
+                <button type="button" onClick={() => setSelectionMode("method")}
+                  className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${selectionMode === "method" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+                  Method
+                </button>
+                <button type="button" onClick={() => setSelectionMode("lots")}
+                  className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${selectionMode === "lots" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+                  Specific Lots
+                </button>
+              </div>
+            </div>
+
+            {selectionMode === "method" ? (
+              <select
+                value={method}
+                onChange={e => setMethod(e.target.value as typeof method)}
+                className="appearance-none w-full rounded-md border border-border px-3 py-2 pl-2 pr-6 text-sm text-foreground"
+              >
+                <option value="FIFO">FIFO — First In, First Out</option>
+                <option value="LIFO">LIFO — Last In, First Out</option>
+                <option value="MIN_TAX">Min Tax — Highest Cost Basis First</option>
+                <option value="MAX_GAIN">Max Gain — Lowest Cost Basis First</option>
+              </select>
+            ) : (
+              <div className="space-y-1">
+                {sortedLots.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No lots found for {pendingSale.ticker}.</p>
+                )}
+                {sortedLots.map(lot => (
+                  <div key={lot.id} className="flex items-center gap-3 py-1">
+                    <div className="flex-1 text-xs">
+                      <span className="font-medium">{lot.acquiredDate ? formatDate(lot.acquiredDate) : "Unknown date"}</span>
+                      <span className="text-muted-foreground ml-2">{parseFloat(lot.quantity)} shares @ ${parseFloat(lot.costPerShare).toFixed(4)}</span>
+                      {pendingSale.suggestedLotIds.includes(lot.id) && (
+                        <span className="ml-1.5 text-[10px] font-medium text-primary bg-primary/10 px-1 py-0.5 rounded">assigned lot</span>
+                      )}
+                    </div>
+                    <input
+                      type="text" inputMode="decimal"
+                      placeholder="0"
+                      value={lotInputs[lot.id] || ""}
+                      onChange={e => setLotInputs(prev => ({ ...prev, [lot.id]: e.target.value }))}
+                      className="w-20 rounded-md border border-border px-2 py-1 text-xs text-right focus:border-primary focus:outline-none"
+                    />
+                  </div>
+                ))}
+                {selectionMode === "lots" && lotTotalShares > 0 && (
+                  <div className="flex justify-between text-xs font-medium pt-1 border-t border-border">
+                    <span>Total shares selected</span>
+                    <span>{lotTotalShares.toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Proceeds To */}
+          <div>
+            <label className="block text-xs font-medium mb-1">Proceeds To</label>
             <select
-              value={method}
-              onChange={e => setMethod(e.target.value as typeof method)}
+              required
+              value={destAccountId}
+              onChange={e => setDestAccountId(e.target.value)}
               className="appearance-none w-full rounded-md border border-border px-3 py-2 pl-2 pr-6 text-sm text-foreground"
             >
-              <option value="FIFO">FIFO — First In, First Out</option>
-              <option value="LIFO">LIFO — Last In, First Out</option>
-              <option value="MIN_TAX">Min Tax — Highest Cost Basis First</option>
-              <option value="MAX_GAIN">Max Gain — Lowest Cost Basis First</option>
-            </select>
-          ) : (
-            <div className="space-y-1">
-              {sortedLots.length === 0 && (
-                <p className="text-xs text-muted-foreground">No lots found for {pendingSale.ticker}.</p>
-              )}
-              {sortedLots.map(lot => (
-                <div key={lot.id} className="flex items-center gap-3 py-1">
-                  <div className="flex-1 text-xs">
-                    <span className="font-medium">{lot.acquiredDate ? formatDate(lot.acquiredDate) : "Unknown date"}</span>
-                    <span className="text-muted-foreground ml-2">{parseFloat(lot.quantity)} shares @ ${parseFloat(lot.costPerShare).toFixed(4)}</span>
-                    {pendingSale.suggestedLotIds.includes(lot.id) && (
-                      <span className="ml-1.5 text-[10px] font-medium text-primary bg-primary/10 px-1 py-0.5 rounded">assigned lot</span>
-                    )}
-                  </div>
-                  <input
-                    type="text" inputMode="decimal"
-                    placeholder="0"
-                    value={lotInputs[lot.id] || ""}
-                    onChange={e => setLotInputs(prev => ({ ...prev, [lot.id]: e.target.value }))}
-                    className="w-20 rounded-md border border-border px-2 py-1 text-xs text-right focus:border-primary focus:outline-none"
-                  />
-                </div>
+              <option value="">Select account…</option>
+              {eligibleAccounts.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
               ))}
-              {selectionMode === "lots" && lotTotalShares > 0 && (
-                <div className="flex justify-between text-xs font-medium pt-1 border-t border-border">
-                  <span>Total shares selected</span>
-                  <span>{lotTotalShares.toLocaleString()}</span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+            </select>
+          </div>
 
-        {/* Sale Fees */}
-        <div>
-          <label className="block text-xs font-medium mb-1">
-            Fees <span className="text-muted-foreground font-normal">(optional)</span>
-          </label>
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-            <input
-              type="text" inputMode="decimal"
-              placeholder="0.00"
-              value={fees} onChange={e => setFees(e.target.value)}
-              className={dollarInputClass}
+          {/* Notes */}
+          <div>
+            <label className="block text-xs font-medium mb-1">Notes <span className="text-muted-foreground font-normal">(optional)</span></label>
+            <textarea
+              rows={2}
+              value={notes} onChange={e => setNotes(e.target.value)}
+              placeholder="e.g. CC assigned"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm resize-none focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
-        </div>
 
-        {/* Destination Account */}
-        <div>
-          <label className="block text-xs font-medium mb-1">Proceeds To</label>
-          <select
-            required
-            value={destAccountId}
-            onChange={e => setDestAccountId(e.target.value)}
-            className="appearance-none w-full rounded-md border border-border px-3 py-2 pl-2 pr-6 text-sm text-foreground"
-          >
-            <option value="">Select account…</option>
-            {eligibleAccounts.map(a => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
-        </div>
+          {error && <p className="text-sm text-down">{error}</p>}
 
-        {/* Notes */}
-        <div>
-          <label className="block text-xs font-medium mb-1">Notes <span className="text-muted-foreground font-normal">(optional)</span></label>
-          <textarea
-            rows={2}
-            value={notes} onChange={e => setNotes(e.target.value)}
-            placeholder="e.g. CC assigned"
-            className="w-full rounded-md border border-border px-3 py-2 text-sm resize-none focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
+          <div className="flex gap-2 pt-1">
+            <Button variant="secondary" onClick={onClose} className="flex-1">Cancel</Button>
+            <Button onClick={handleNext} disabled={loading} className="flex-1">
+              {loading ? "Calculating…" : "Preview Sale →"}
+            </Button>
+          </div>
         </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Lot breakdown table */}
+          <div className="overflow-x-auto rounded border border-border">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-muted/40 tp-table-header">
+                  <th className="py-2 px-3 text-left">Lot Date</th>
+                  <th className="py-2 px-3 text-right">Shares</th>
+                  <th className="py-2 px-3 text-right">Cost/Share</th>
+                  <th className="py-2 px-3 text-left">Term</th>
+                  <th className="py-2 px-3 text-right">Proceeds</th>
+                  <th className="py-2 px-3 text-right">Cost Basis</th>
+                  <th className="py-2 px-3 text-right">Gain / Loss</th>
+                </tr>
+              </thead>
+              <tbody>
+                {preview!.lotBreakdown.map((lot, i) => (
+                  <tr key={i} className="border-t border-border">
+                    <td className="py-2 px-3 tabular-nums font-mono">{formatDate(lot.acquiredDate)}</td>
+                    <td className="py-2 px-3 text-right tabular-nums font-mono">
+                      {lot.shares.toLocaleString(undefined, { maximumFractionDigits: 8 })}
+                    </td>
+                    <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.costPerShare)}</td>
+                    <td className="py-2 px-3">
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        lot.termType === "LONG"
+                          ? "bg-up-soft text-up-deep"
+                          : "bg-warn-soft text-warn-deep"
+                      }`}>
+                        {lot.termType === "LONG" ? "Long-term" : "Short-term"}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.proceeds)}</td>
+                    <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.costBasis)}</td>
+                    <td className={`py-2 px-3 text-right tabular-nums font-mono font-medium ${gainColor(lot.gain)}`}>
+                      {lot.gain >= 0 ? "+" : ""}{formatCurrency(lot.gain)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-        {error && <p className="text-sm text-down">{error}</p>}
+          {/* Summary */}
+          <div className="rounded border border-border bg-muted/20 p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-13">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Gross Proceeds</span>
+              <StatValue className="font-medium">{formatCurrency(preview!.grossProceeds)}</StatValue>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Fees</span>
+              <StatValue className="font-medium">{preview!.fees > 0 ? `(${formatCurrency(preview!.fees)})` : "—"}</StatValue>
+            </div>
+            <div className="flex justify-between border-t border-border pt-2 col-span-2">
+              <span className="font-medium">Net Proceeds</span>
+              <StatValue className="font-bold">{formatCurrency(preview!.netProceeds)}</StatValue>
+            </div>
+            {preview!.stShares > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Short-Term Gain</span>
+                <span className={`tabular-nums font-mono font-medium ${gainColor(preview!.stGain)}`}>
+                  {preview!.stGain >= 0 ? "+" : ""}{formatCurrency(preview!.stGain)}
+                </span>
+              </div>
+            )}
+            {preview!.ltShares > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Long-Term Gain</span>
+                <span className={`tabular-nums font-mono font-medium ${gainColor(preview!.ltGain)}`}>
+                  {preview!.ltGain >= 0 ? "+" : ""}{formatCurrency(preview!.ltGain)}
+                </span>
+              </div>
+            )}
+            <div className={`flex justify-between border-t border-border pt-2 ${preview!.stShares > 0 && preview!.ltShares > 0 ? "col-span-2" : ""}`}>
+              <span className="font-medium">Total Taxable Gain</span>
+              <span className={`tabular-nums font-mono font-bold ${gainColor(preview!.totalGain)}`}>
+                {preview!.totalGain >= 0 ? "+" : ""}{formatCurrency(preview!.totalGain)}
+              </span>
+            </div>
+          </div>
 
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={saving}>{saving ? "Confirming…" : "Confirm Sale"}</Button>
+          <p className="tp-caption">Option premium net of fees is included in proceeds and taxable gain.</p>
+
+          {error && <p className="text-sm text-down">{error}</p>}
+
+          <div className="flex gap-2 pt-1">
+            <Button variant="secondary" onClick={() => { setStep("input"); setError(""); }} className="flex-1">
+              ← Back
+            </Button>
+            <Button onClick={handleConfirm} disabled={saving} className="flex-1">
+              {saving ? "Recording…" : "Confirm Sale"}
+            </Button>
+          </div>
         </div>
-      </form>
+      )}
     </Modal>
   );
 }
