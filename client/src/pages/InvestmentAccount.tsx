@@ -3792,7 +3792,7 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
         {/* Sale Fees */}
         <div>
           <label className="block text-xs font-medium mb-1">
-            Sale Fees <span className="text-muted-foreground font-normal">(optional — broker/SEC transaction fees)</span>
+            Fees <span className="text-muted-foreground font-normal">(optional)</span>
           </label>
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
