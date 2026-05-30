@@ -111,7 +111,7 @@ function EditableCell({ value, onSave, type = "text", className = "" }: { value:
   }
 
   return (
-    <span onClick={() => { setEditValue(value); setEditing(true); }} className={`cursor-pointer border-b border-dotted border-transparent hover:border-gray-400 ${className}`}>
+    <span onClick={() => { setEditValue(value); setEditing(true); }} className={`cursor-pointer border-b border-dotted border-transparent hover:border-ink-4 ${className}`}>
       {type === "date" ? formatDate(value) : (value || <span className="text-muted-foreground italic">—</span>)}
     </span>
   );
@@ -234,7 +234,7 @@ function EditableTypeaheadCell({
           {label}
         </span>
       ) : (
-        <span onClick={startEditing} className="cursor-pointer border-b border-dotted border-transparent hover:border-gray-400">
+        <span onClick={startEditing} className="cursor-pointer border-b border-dotted border-transparent hover:border-ink-4">
           {label || <span className="text-muted-foreground italic">—</span>}
         </span>
       )}
@@ -346,7 +346,7 @@ function EditableCategoryCell({
           className="w-full rounded border border-primary px-1 py-0.5 text-sm focus:outline-none"
         />
       ) : (
-        <span onClick={startEditing} className="cursor-pointer border-b border-dotted border-transparent hover:border-gray-400">
+        <span onClick={startEditing} className="cursor-pointer border-b border-dotted border-transparent hover:border-ink-4">
           {label || <span className="text-muted-foreground italic">—</span>}
         </span>
       )}
@@ -430,7 +430,7 @@ function EditableAmountCell({ value, onSave, positive }: { value: string; onSave
   }
 
   return (
-    <span onClick={startEdit} className="cursor-pointer border-b border-dotted border-transparent hover:border-gray-400">
+    <span onClick={startEdit} className="cursor-pointer border-b border-dotted border-transparent hover:border-ink-4">
       {positive ? "+" : "-"}{formatCurrency(value)}
     </span>
   );
@@ -523,7 +523,7 @@ function EditableTaxStatusCell({ value, onSave }: { value: string | null; onSave
       <span onClick={startEditing} className="cursor-pointer">
         {value
           ? <TaxStatusBadge taxClassification={value} />
-          : <span className="border-b border-dotted border-transparent text-muted-foreground hover:border-gray-400">—</span>
+          : <span className="border-b border-dotted border-transparent text-muted-foreground hover:border-ink-4">—</span>
         }
       </span>
     </div>

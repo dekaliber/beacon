@@ -879,11 +879,11 @@ function ExpenseRow({
     expense.recurrenceRuleId ? "bg-row-recurring" :
     expense.isReimbursementExpected ? "bg-row-reimbursement" : "";
 
-  const mutedText = fullyOffset ? "text-gray-300" : "";
+  const mutedText = fullyOffset ? "text-ink-4" : "";
 
   if (isOffset) {
-    const gray = parentFullyOffset ? "text-gray-300" : "text-muted-foreground";
-    const grayDim = parentFullyOffset ? "text-gray-300/70" : "text-muted-foreground/70";
+    const gray = parentFullyOffset ? "text-ink-4" : "text-muted-foreground";
+    const grayDim = parentFullyOffset ? "text-ink-4/70" : "text-muted-foreground/70";
     return (
       <div className="flex items-start gap-2 py-2">
         <CornerDownRight className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${gray}`} />
@@ -917,13 +917,13 @@ function ExpenseRow({
           )}
           <p className={`truncate font-medium ${mutedText}`}>{expense.description}</p>
         </div>
-        <span className={`shrink-0 font-semibold ${fullyOffset ? "text-gray-300" : isNegative ? "text-up" : ""}`}>
+        <span className={`shrink-0 font-semibold ${fullyOffset ? "text-ink-4" : isNegative ? "text-up" : ""}`}>
           {isNegative
             ? `+${formatCurrency(Math.abs(parseFloat(expense.amount)))}`
             : formatCurrency(parseFloat(expense.amount))}
         </span>
       </div>
-      <p className={`mt-0.5 text-sm ${fullyOffset ? "text-gray-300" : "text-muted-foreground"}`}>
+      <p className={`mt-0.5 text-sm ${fullyOffset ? "text-ink-4" : "text-muted-foreground"}`}>
         {!isOffset && <>{formatDate(expense.date)} &middot; </>}
         {expense.vendor && <>{expense.vendor} &middot; </>}
         {expense.account.name}

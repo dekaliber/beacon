@@ -1631,7 +1631,7 @@ export function MobileInvestmentAccount() {
             className="h-8 w-8 shrink-0 rounded-md flex items-center justify-center"
             style={account.color ? { backgroundColor: account.color } : { backgroundColor: "#e2e2df" }}
           >
-            <LineChart className="h-4 w-4 text-gray-500" />
+            <LineChart className="h-4 w-4 text-ink-4" />
           </div>
           <div className="min-w-0">
             <h1 className="tp-card-title leading-tight truncate">{account.name}</h1>

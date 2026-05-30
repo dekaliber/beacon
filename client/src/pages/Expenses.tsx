@@ -805,7 +805,7 @@ function EditableCell({
   return (
     <span
       onClick={() => { setEditValue(value); setEditing(true); }}
-      className={`cursor-pointer border-b border-dotted border-transparent hover:border-gray-400 ${className}`}
+      className={`cursor-pointer border-b border-dotted border-transparent hover:border-ink-4 ${className}`}
     >
       {type === "date" ? formatDate(value) : value}
     </span>
@@ -897,7 +897,7 @@ function EditableVendorCell({
       ) : (
         <span
           onClick={startEditing}
-          className={`cursor-pointer border-b border-dotted border-transparent hover:border-gray-400 ${className}`}
+          className={`cursor-pointer border-b border-dotted border-transparent hover:border-ink-4 ${className}`}
         >
           {value || <span className="italic">—</span>}
         </span>
@@ -1032,7 +1032,7 @@ function EditableCategoryCell({
       ) : (
         <span
           onClick={startEditing}
-          className={`cursor-pointer border-b border-dotted border-transparent hover:border-gray-400 ${isUncategorized ? "text-down font-medium" : ""}`}
+          className={`cursor-pointer border-b border-dotted border-transparent hover:border-ink-4 ${isUncategorized ? "text-down font-medium" : ""}`}
         >
           {isUncategorized ? "[Uncategorized]" : label}
         </span>
@@ -1251,7 +1251,7 @@ function EditableAmountCell({ value, onSave, isOffset }: { value: string; onSave
   }
 
   return (
-    <span onClick={startEdit} className="cursor-pointer border-b border-dotted border-transparent hover:border-gray-400">
+    <span onClick={startEdit} className="cursor-pointer border-b border-dotted border-transparent hover:border-ink-4">
       {isNegative ? `+${formatCurrency(absValue)}` : formatCurrency(absValue)}
     </span>
   );
@@ -2574,7 +2574,7 @@ function OffsetRow({
   isFullyOffset?: boolean;
 }) {
   const upcomingClass = isUpcoming ? "italic opacity-60" : "";
-  const textClass = isFullyOffset ? "text-gray-300" : "text-muted-foreground";
+  const textClass = isFullyOffset ? "text-ink-4" : "text-muted-foreground";
   const isBeingDragged = dragState?.started && dragState?.sourceId === offset.id;
   const isDraggable = !isUpcoming;
 
@@ -2717,11 +2717,11 @@ function ExpenseRowWithOffsets({
             className="h-4 w-4 rounded accent-primary"
           />
         </td>
-        <td className={`w-[70px] py-2 pr-3 ${isFullyOffset ? "text-gray-300" : (groupMeta && !groupMeta.isPrimary) ? "text-muted-foreground" : ""}`}>
+        <td className={`w-[70px] py-2 pr-3 ${isFullyOffset ? "text-ink-4" : (groupMeta && !groupMeta.isPrimary) ? "text-muted-foreground" : ""}`}>
           <EditableCell value={expense.date} type="date" onSave={(v) => onInlineUpdate(expense.id, "date", v)} />
         </td>
         <td className="py-2 pr-3">
-          <EditableCell value={expense.description} onSave={(v) => onInlineUpdate(expense.id, "description", v)} className={`font-medium${isFullyOffset ? " text-gray-300" : ""}`} />
+          <EditableCell value={expense.description} onSave={(v) => onInlineUpdate(expense.id, "description", v)} className={`font-medium${isFullyOffset ? " text-ink-4" : ""}`} />
           {expense.tags.length > 0 && (
             <div className="mt-0.5 flex flex-wrap gap-1">
               {expense.tags.map(({ tag }) => (
@@ -2744,16 +2744,16 @@ function ExpenseRowWithOffsets({
                 <Repeat className="h-3.5 w-3.5 text-primary" />
               </button>
             )}
-            {expense.ignoreInBudget && <span title="Ignored in budget" className="inline-flex flex-shrink-0"><EyeOff className="h-3.5 w-3.5 text-gray-300" /></span>}
+            {expense.ignoreInBudget && <span title="Ignored in budget" className="inline-flex flex-shrink-0"><EyeOff className="h-3.5 w-3.5 text-ink-4" /></span>}
           </div>
         </td>
-        <td className={`w-[170px] py-2 pr-3${isFullyOffset ? " text-gray-300" : ""}`}>
-          <EditableVendorCell value={expense.vendor} vendors={vendors} onSave={(v) => onInlineUpdate(expense.id, "vendor", v)} className={isFullyOffset ? "text-gray-300" : undefined} />
+        <td className={`w-[170px] py-2 pr-3${isFullyOffset ? " text-ink-4" : ""}`}>
+          <EditableVendorCell value={expense.vendor} vendors={vendors} onSave={(v) => onInlineUpdate(expense.id, "vendor", v)} className={isFullyOffset ? "text-ink-4" : undefined} />
         </td>
-        <td className={`w-[190px] py-2 pr-3${isFullyOffset ? " text-gray-300" : ""}`}>
+        <td className={`w-[190px] py-2 pr-3${isFullyOffset ? " text-ink-4" : ""}`}>
           <EditableCategoryCell value={expense.categoryId} label={expense.category?.name ?? ""} categories={categories} isUncategorized={isUncategorized} onSave={(v) => onInlineUpdate(expense.id, "categoryId", v)} />
         </td>
-        <td className={`w-[195px] py-2 pr-3${isFullyOffset ? " text-gray-300" : ""}`}>
+        <td className={`w-[195px] py-2 pr-3${isFullyOffset ? " text-ink-4" : ""}`}>
           <EditableAccountCell value={expense.accountId} label={expense.account.name} color={expense.account.color} accounts={accounts} onSave={(v) => onInlineUpdate(expense.id, "accountId", v)} />
         </td>
         <td className="w-[30px] py-2 text-center">
@@ -2806,7 +2806,7 @@ function ExpenseRowWithOffsets({
             className={`py-2 px-4 text-sm text-center border-2 border-dashed rounded transition-colors ${
               dragState?.targetId === `__dz__${expense.id}`
                 ? "border-primary text-primary"
-                : "border-gray-300 text-muted-foreground"
+                : "border-ink-4 text-muted-foreground"
             }`}
           >
             Drop here to make independent

@@ -1137,7 +1137,7 @@ export function CashFlow() {
             className="h-8 w-8 flex-shrink-0 rounded-md flex items-center justify-center"
             style={account.color ? { backgroundColor: account.color } : { backgroundColor: "#e2e2df" }}
           >
-            <Landmark className="h-4 w-4 text-gray-500" />
+            <Landmark className="h-4 w-4 text-ink-4" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="tp-row-label truncate">{account.name}</p>

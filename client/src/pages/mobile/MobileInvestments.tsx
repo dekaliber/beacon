@@ -779,7 +779,7 @@ export function MobileInvestments() {
         className="h-9 w-9 flex-shrink-0 rounded-md flex items-center justify-center"
         style={account.color ? { backgroundColor: account.color } : { backgroundColor: "#e2e2df" }}
       >
-        <LineChart className="h-4 w-4 text-gray-500" />
+        <LineChart className="h-4 w-4 text-ink-4" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 min-w-0">

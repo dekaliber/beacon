@@ -2428,7 +2428,7 @@ function SellModal({
                 </div>
                 <div className="max-h-52 overflow-y-auto rounded border border-border">
                   <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-gray-100 z-10">
+                    <thead className="sticky top-0 bg-muted z-10">
                       <tr className="text-muted-foreground uppercase tracking-[1px] font-mono">
                         <th className="py-2 px-3 text-left font-medium">Acquired</th>
                         <th className="py-2 px-3 text-right font-medium">Available</th>
@@ -5751,9 +5751,9 @@ export function InvestmentAccount() {
             style={account.color ? { backgroundColor: account.color } : { backgroundColor: "#e2e2df" }}
           >
             {isBanking ? (
-              <Landmark className="h-4 w-4 text-gray-500" />
+              <Landmark className="h-4 w-4 text-ink-4" />
             ) : (
-              <LineChart className="h-4 w-4 text-gray-500" />
+              <LineChart className="h-4 w-4 text-ink-4" />
             )}
           </div>
           <div>

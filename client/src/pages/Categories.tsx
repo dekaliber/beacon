@@ -187,7 +187,7 @@ function CategoryList({ categories, expanded, icon: Icon, onToggleExpand, onAddC
 
               <span className="flex-1 font-medium">{cat.name}</span>
 
-              {cat.ignoreInBudget && <span title="Ignored in budget" className="inline-flex flex-shrink-0"><EyeOff className="h-4 w-4 text-gray-300" /></span>}
+              {cat.ignoreInBudget && <span title="Ignored in budget" className="inline-flex flex-shrink-0"><EyeOff className="h-4 w-4 text-ink-4" /></span>}
 
               {hasChildren && (
                 <span className="tp-caption">
@@ -217,7 +217,7 @@ function CategoryList({ categories, expanded, icon: Icon, onToggleExpand, onAddC
                 {cat.children!.map((child) => (
                   <div key={child.id} className="flex items-center gap-3 py-2 pl-12 pr-4 hover:bg-muted/50">
                     <span className="flex-1 text-sm">{child.name}</span>
-                    {child.ignoreInBudget && <span title="Ignored in budget" className="inline-flex flex-shrink-0"><EyeOff className="h-3.5 w-3.5 text-gray-300" /></span>}
+                    {child.ignoreInBudget && <span title="Ignored in budget" className="inline-flex flex-shrink-0"><EyeOff className="h-3.5 w-3.5 text-ink-4" /></span>}
                     <div className="flex gap-1">
                       <button
                         onClick={() => onEdit(child)}

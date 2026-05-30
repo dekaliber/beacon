@@ -155,7 +155,7 @@ export function Accounts() {
                 )}
                 {account.isHidden && (
                   <span title="Hidden" className="inline-flex flex-shrink-0">
-                    <EyeOff className="h-3.5 w-3.5 text-gray-300" />
+                    <EyeOff className="h-3.5 w-3.5 text-ink-4" />
                   </span>
                 )}
                 <button onClick={() => openEdit(account)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors">
