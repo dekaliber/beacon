@@ -3572,11 +3572,15 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
   const pos = pendingSale.optionsPosition;
   const defaultSaleDate = pendingSale.saleDate.split("T")[0];
   const defaultShares = Number(pendingSale.quantity);
-  const defaultPricePerShare = Number(pendingSale.pricePerShare);
+  // pricePerShare stored on the record is the composite (strike + premium net).
+  // We split it back so the user sees and edits just the strike (actual cash received),
+  // and the premium net is shown separately as context for the taxable calculation.
+  const strikePrice = Number(pos.strikePrice);
+  const premiumNetPerShare = Number(pendingSale.pricePerShare) - strikePrice;
 
   const [saleDate, setSaleDate] = useState(defaultSaleDate);
   const [shares, setShares] = useState(defaultShares.toString());
-  const [pricePerShare, setPricePerShare] = useState(defaultPricePerShare.toFixed(4).replace(/\.?0+$/, ""));
+  const [salePrice, setSalePrice] = useState(strikePrice.toFixed(4).replace(/\.?0+$/, ""));
   const hasSuggestedLots = pendingSale.suggestedLotIds.length > 0;
   const [selectionMode, setSelectionMode] = useState<"method" | "lots">(hasSuggestedLots ? "lots" : "method");
   const [method, setMethod] = useState<"FIFO" | "LIFO" | "MIN_TAX" | "MAX_GAIN">("FIFO");
@@ -3624,10 +3628,12 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
 
   const eligibleAccounts = accounts.filter(a => a.type !== "CREDIT_CARD");
   const sharesNum = parseFloat(shares.replace(/,/g, "")) || 0;
-  const priceNum = parseFloat(pricePerShare.replace(/,/g, "")) || 0;
+  const salePriceNum = parseFloat(salePrice.replace(/,/g, "")) || 0;
   const feesNum = parseFloat(fees.replace(/,/g, "")) || 0;
-  const grossProceeds = sharesNum * priceNum;
+  const grossProceeds = sharesNum * salePriceNum;
+  const optionPremiumNet = premiumNetPerShare * sharesNum;
   const netProceeds = grossProceeds - feesNum;
+  const taxableProceeds = netProceeds + optionPremiumNet;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -3635,8 +3641,8 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
     if (!destAccountId) { setError("Select an account to receive proceeds."); return; }
     const sharesVal = parseFloat(shares.replace(/,/g, ""));
     if (isNaN(sharesVal) || sharesVal <= 0) { setError("Enter a valid number of shares."); return; }
-    const priceVal = parseFloat(pricePerShare.replace(/,/g, ""));
-    if (isNaN(priceVal) || priceVal <= 0) { setError("Enter a valid price per share."); return; }
+    const salePriceVal = parseFloat(salePrice.replace(/,/g, ""));
+    if (isNaN(salePriceVal) || salePriceVal <= 0) { setError("Enter a valid sale price per share."); return; }
     if (selectionMode === "lots" && lotAllocations.length === 0) {
       setError("Specify shares for at least one lot."); return;
     }
@@ -3644,7 +3650,8 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
     setSaving(true);
     try {
       const feesVal = parseFloat(fees.replace(/,/g, "")) || 0;
-      const base = { saleDate, pricePerShare: priceVal, fees: feesVal, destinationAccountId: destAccountId, notes: notes || null };
+      // Send composite effective price (strike + premium net) for correct gain calculation
+      const base = { saleDate, pricePerShare: salePriceVal + premiumNetPerShare, fees: feesVal, destinationAccountId: destAccountId, notes: notes || null };
       await confirmPendingSale(pendingSale.id, selectionMode === "method"
         ? { ...base, costBasisMethod: method }
         : { ...base, lotAllocations }
@@ -3677,7 +3684,7 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
 
         <div className="rounded-md border border-warn-line bg-warn-soft px-3 py-2 text-xs text-warn-deep flex gap-2">
           <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-          <span>Price per share is pre-filled as strike + premium − fees (your tax-basis "amount realized"). Verify against your brokerage confirmation before confirming.</span>
+          <span>Verify all amounts against your brokerage confirmation before confirming.</span>
         </div>
 
         {/* Sale Date */}
@@ -3690,7 +3697,7 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
           />
         </div>
 
-        {/* Shares / Price per Share */}
+        {/* Shares / Strike Price */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium mb-1">Shares Sold</label>
@@ -3702,31 +3709,44 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
             />
           </div>
           <div>
-            <label className="block text-xs font-medium mb-1">Price Per Share</label>
+            <label className="block text-xs font-medium mb-1">Sale Price Per Share</label>
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
                 type="text" inputMode="decimal" required
                 placeholder="0.0000"
-                value={pricePerShare} onChange={e => setPricePerShare(e.target.value)}
+                value={salePrice} onChange={e => setSalePrice(e.target.value)}
                 className={dollarInputClass}
               />
             </div>
           </div>
         </div>
 
-        {/* Proceeds summary */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-between text-sm">
+        {/* Proceeds & taxable gain summary */}
+        <div className="rounded border border-border bg-muted/20 p-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+          <div className="flex justify-between">
             <span className="text-muted-foreground">Gross Proceeds</span>
-            <span className="font-medium">{formatCurrency(grossProceeds)}</span>
+            <StatValue className="font-medium">{formatCurrency(grossProceeds)}</StatValue>
           </div>
-          {feesNum > 0 && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Net Proceeds (after fees)</span>
-              <span className="font-semibold">{formatCurrency(netProceeds)}</span>
-            </div>
-          )}
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Fees</span>
+            <StatValue className="font-medium">{feesNum > 0 ? `(${formatCurrency(feesNum)})` : "—"}</StatValue>
+          </div>
+          <div className="flex justify-between border-t border-border pt-1.5 col-span-2">
+            <span className="font-medium">Net Proceeds</span>
+            <StatValue className="font-bold">{formatCurrency(netProceeds)}</StatValue>
+          </div>
+          <div className="flex justify-between border-t border-border pt-1.5">
+            <span className="text-muted-foreground">Option Premium (net)</span>
+            <StatValue className="font-medium text-up">+{formatCurrency(optionPremiumNet)}</StatValue>
+          </div>
+          <div className="flex justify-between border-t border-border pt-1.5">
+            <span className="font-medium">Taxable Proceeds</span>
+            <StatValue className="font-bold">{formatCurrency(taxableProceeds)}</StatValue>
+          </div>
+          <p className="col-span-2 text-xs text-muted-foreground mt-0.5">
+            ST/LT gain breakdown computed at confirmation based on lot cost basis.
+          </p>
         </div>
 
         {/* Lot Selection */}
