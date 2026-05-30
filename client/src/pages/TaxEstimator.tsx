@@ -1089,12 +1089,12 @@ export function TaxEstimatorPage() {
 
       {/* Stat strip */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="relative rounded-lg border border-border bg-card px-4 py-3 shadow-card before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-t-lg before:pointer-events-none before:bg-gradient-to-r before:from-transparent before:via-white/85 before:to-transparent">
-          <p className="tp-caption">Total Income (MAGI)</p>
+        <div className="relative rounded-lg border border-border bg-card p-6 shadow-card before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-t-lg before:pointer-events-none before:bg-gradient-to-r before:from-transparent before:via-white/85 before:to-transparent">
+          <p className="tp-eyebrow">Total Income (MAGI)</p>
           <DisplayStat as="p" className="mt-1 tp-stat">{formatCurrency(calc.magi)}</DisplayStat>
         </div>
-        <div className="relative rounded-lg border border-border bg-card px-4 py-3 shadow-card before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-t-lg before:pointer-events-none before:bg-gradient-to-r before:from-transparent before:via-white/85 before:to-transparent">
-          <p className="tp-caption flex items-center gap-1.5">
+        <div className="relative rounded-lg border border-border bg-card p-6 shadow-card before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-t-lg before:pointer-events-none before:bg-gradient-to-r before:from-transparent before:via-white/85 before:to-transparent">
+          <p className="tp-eyebrow flex items-center gap-1.5">
             Estimated Federal Tax
             {useTmt && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-soft text-violet-deep">TMT</span>}
           </p>
@@ -1113,8 +1113,8 @@ export function TaxEstimatorPage() {
             );
           })()}
         </div>
-        <div className="relative rounded-lg border border-border bg-card px-4 py-3 shadow-card before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-t-lg before:pointer-events-none before:bg-gradient-to-r before:from-transparent before:via-white/85 before:to-transparent">
-          <p className="tp-caption flex items-center gap-1.5">
+        <div className="relative rounded-lg border border-border bg-card p-6 shadow-card before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-t-lg before:pointer-events-none before:bg-gradient-to-r before:from-transparent before:via-white/85 before:to-transparent">
+          <p className="tp-eyebrow flex items-center gap-1.5">
             Estimated State Tax <span className="text-muted-foreground/60">(CA)</span>
             {useCaTmt && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-soft text-violet-deep">TMT</span>}
           </p>
@@ -1770,7 +1770,7 @@ export function TaxEstimatorPage() {
                 <button
                   type="button"
                   onClick={() => toggleSection(sectionKey)}
-                  className="flex w-full items-center gap-4 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
+                  className="flex w-full items-center gap-4 px-6 py-3 hover:bg-muted/40 transition-colors text-left"
                 >
                   <span className="flex-1 font-semibold">{section.categoryName}</span>
                   {(anyOrdinaryInSections || (anyCollectibleInSections && !showCollectibleSeparately)) && (
@@ -1801,7 +1801,7 @@ export function TaxEstimatorPage() {
                 {isExpanded && (
                   <div className="border-t border-border divide-y divide-border">
                     {section.groups.map((group) => (
-                      <div key={group.label} className="px-4 py-3">
+                      <div key={group.label} className="px-6 py-3">
                         {/* Group subheader */}
                         <div className="mb-2 flex items-center gap-2">
                           <SectionLabel as="span">
@@ -1978,7 +1978,7 @@ export function TaxEstimatorPage() {
                 <button
                   type="button"
                   onClick={() => toggleSection(managedKey)}
-                  className="flex w-full items-center gap-4 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
+                  className="flex w-full items-center gap-4 px-6 py-3 hover:bg-muted/40 transition-colors text-left"
                 >
                   <span className="flex-1 font-semibold">Managed Accounts</span>
                   {(anyOrdinaryInSections || (anyCollectibleInSections && !showCollectibleSeparately)) && (
@@ -2009,7 +2009,7 @@ export function TaxEstimatorPage() {
 
                 {isExpanded && (
                   <div className="border-t border-border">
-                    <div className="hidden md:block px-4 py-3">
+                    <div className="hidden md:block px-6 py-3">
                       <table className="w-full table-fixed text-13">
                         <colgroup>
                           <col />
@@ -2051,7 +2051,7 @@ export function TaxEstimatorPage() {
                     </div>
 
                     {/* Mobile list */}
-                    <div className="divide-y divide-border/30 px-4 md:hidden">
+                    <div className="divide-y divide-border/30 px-6 md:hidden">
                       {snapshots.map((snap) => {
                         const netST = (snap.shortTermGain ?? 0) - (snap.shortTermLoss ?? 0);
                         const netLT = (snap.longTermGain ?? 0) - (snap.longTermLoss ?? 0);
