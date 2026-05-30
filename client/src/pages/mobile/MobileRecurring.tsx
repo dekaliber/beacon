@@ -454,7 +454,7 @@ function RuleDetailSheet({
                 ["Started", formatDate(rule.startDate)],
                 ["Next", formatDate(rule.nextExpenseDate ?? rule.nextOccurrence)],
                 rule.endDate ? ["Ends", formatDate(rule.endDate)] : null,
-              ].filter(Boolean).map(([label, value]) => (
+              ].filter((x): x is [string, string] => x !== null).map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">{label}</span>
                   <span className="text-sm font-medium">{value}</span>

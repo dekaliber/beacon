@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { AreaChart, Area, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import {
-  ArrowLeft, LineChart, Plus, Trash2, Pencil, Check, X,
+  ArrowLeft, LineChart, Plus, Trash2, Pencil, X,
   TrendingUp, TrendingDown, Banknote, Clock, ChevronRight,
 } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
@@ -10,7 +10,7 @@ import {
   getInvestmentHoldings, getInvestmentActivity, getAccounts, updateAccount,
   createHolding, deleteHolding, createLot, updateLot, deleteLot,
   searchTickers, resolveTicker, getTickerPrice,
-  getManualInvestments, createManualInvestment, updateManualInvestment, deleteManualInvestment,
+  getManualInvestments, createManualInvestment, updateManualInvestment,
   getInvestmentGrowth, getPendingDividends, dismissPendingDividend, refreshPrices,
 } from "@/api";
 import { ApiError } from "@/api/client";
@@ -21,7 +21,7 @@ import { useDemo } from "@/context/DemoContext";
 import { scaleGrowthPoints, scaleHolding, scaleManuals } from "@/lib/demo";
 import type {
   InvestmentHolding, InvestmentLot, TickerSearchResult,
-  ManualInvestment, InvestmentActivity, GrowthPoint, PendingDividend,
+  ManualInvestment, InvestmentActivity, GrowthPoint,
 } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import { SectionLabel, StatValue, DisplayStat } from "@/components/Typography";
@@ -1177,7 +1177,6 @@ function AddInvestmentFullscreen({
         name: selected.name,
         type: selected.type,
         group: null,
-        managed,
       });
       for (const lot of lots) {
         const qty = parseFloat(lot.quantity.replace(/,/g, ""));

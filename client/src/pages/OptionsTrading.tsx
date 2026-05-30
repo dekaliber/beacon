@@ -16,7 +16,6 @@ import {
   rollOptionsPosition,
   editClosedPosition,
   deleteOptionsPosition,
-  createOptionsGroup,
   importOptionsPositions,
   getOptionQuote,
   getUnderlyingQuote,
@@ -27,7 +26,6 @@ import {
   getInvestmentAccounts,
   getOptionAssignedBatches,
   runOptionsScreener,
-  type AssignmentBatch,
   type OptionsPosition,
   type OptionsTicker,
   type OptionsPositionGroup,
@@ -72,8 +70,6 @@ const PAGE_LOAD_TIME = new Date().toISOString();
 const fmt = (n: number | null | undefined, decimals = 2, prefix = "") =>
   n == null ? "—" : `${prefix}${n.toFixed(decimals)}`;
 
-const fmtDollar = (n: number | null | undefined) =>
-  n == null ? "—" : `$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${n < 0 ? " loss" : ""}`;
 
 const fmtUSD = (n: number) =>
   n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -458,7 +454,7 @@ type TickerDropdownItem =
   | { kind: "existing"; id: string; symbol: string }
   | { kind: "new"; result: TickerSearchResult };
 
-function PositionModal({ tickers, groups, editing, onClose, onSaved, onDelete, onTickerCreated }: PositionModalProps) {
+function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerCreated }: PositionModalProps) {
   const [tickerQuery, setTickerQuery] = useState(editing?.ticker?.symbol ?? "");
   const [selectedExistingId, setSelectedExistingId] = useState<string | null>(editing?.tickerId ?? null);
   const [dropdownItems, setDropdownItems] = useState<TickerDropdownItem[]>([]);
@@ -491,7 +487,7 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onDelete, o
   const [deltaAtOpen, setDeltaAtOpen] = useState<number | null>(editing?.deltaAtOpen ?? null);
   const [deltaAtOpenCapturedAt, setDeltaAtOpenCapturedAt] = useState<string | null>(editing?.deltaAtOpenCapturedAt ?? null);
   const [notes, setNotes] = useState(editing?.notes ?? "");
-  const [groupId, setGroupId] = useState(editing?.groupId ?? "");
+  const [groupId] = useState(editing?.groupId ?? "");
   const [investmentAccountId, setInvestmentAccountId] = useState(editing?.investmentAccountId ?? "");
   const [selectedBatchKey, setSelectedBatchKey] = useState<string>(() => {
     if (editing?.assignedFromStrikePrice != null && editing?.assignedFromExpirationDate) {
@@ -524,12 +520,6 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onDelete, o
     [isCoveredCall, selectedTicker, investmentAccountId]
   );
   const hasAssignedBatches = assignedBatches && assignedBatches.length > 0;
-  const assignedFromBatch = useMemo(
-    () => selectedBatchKey && assignedBatches
-      ? assignedBatches.find((b) => `${parseFloat(b.strikePrice)}|${b.expirationDate}` === selectedBatchKey) ?? null
-      : null,
-    [selectedBatchKey, assignedBatches]
-  );
 
   const fetchPrice = useCallback(async (symbol: string) => {
     try {
@@ -554,7 +544,7 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onDelete, o
 
   // Auto-fetch option quote when ticker + type + strike + expiration are all set
   const [quoteFetching, setQuoteFetching] = useState(false);
-  const [quoteAutoFilled, setQuoteAutoFilled] = useState(false);
+  const [, setQuoteAutoFilled] = useState(false);
   const quoteDebounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
@@ -2264,7 +2254,6 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
   };
 
   const [refreshingAll, setRefreshingAll] = useState(false);
-  const LS_KEY = "options_last_fetched_at";
   const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(() => {
     try {
       const stored = localStorage.getItem(LS_LAST_FETCHED_KEY);
@@ -2420,7 +2409,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
     // Opaque equivalents of the tr's semi-transparent bg colors over the page base (#FAFCFE):
     //   bg-warn-soft/50 → #FFFDF5; bg-muted/10 → #FAFCFE; bg-muted/30 → #F5F8FC
     const stickyBg = isExpired ? "bg-[#FFFDF5]" : "bg-[#FAFCFE]";
-    const stickyTd = (leftPx: number, extra?: string, textOnly = false) =>
+    const stickyTd = (_leftPx: number, extra?: string, textOnly = false) =>
       cn(textOnly ? tdTextClass : tdClass, "sticky z-[2] group-hover:bg-[#F5F8FC]", stickyBg, extra);
 
     const primaryRow = (
@@ -3704,7 +3693,7 @@ function PerformanceCharts({
               stackId="a"
               maxBarSize={32}
               fill="var(--color-primary)"
-              shape={(props: Record<string, unknown>) => {
+              shape={(props: any) => {
                 const { x, y, width, height, pending } = props as {
                   x: number; y: number; width: number; height: number; pending: number;
                 };
@@ -3718,7 +3707,7 @@ function PerformanceCharts({
               dataKey="pending"
               stackId="a"
               maxBarSize={32}
-              shape={(props: Record<string, unknown>) => {
+              shape={(props: any) => {
                 const { x, y, width, height } = props as { x: number; y: number; width: number; height: number };
                 if (!height || height <= 0 || !width || width <= 0) return <g />;
                 const clipId = `pending-clip-${Math.round(x * 10)}`;

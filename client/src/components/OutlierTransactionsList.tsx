@@ -1,6 +1,6 @@
 import type { OutlierCategoryGroup } from "@/types";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
-import { StatValue, Caption } from "@/components/Typography";
+import { StatValue } from "@/components/Typography";
 
 function fmtAmount(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);

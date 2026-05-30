@@ -87,7 +87,7 @@ import type { SellPreviewResult } from "@/api";
 import { ApiError } from "@/api/client";
 import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/utils";
 import { useNotifications } from "@/context/NotificationContext";
-import { isPriceRefreshNeeded, formatQuantity } from "@/lib/priceUtils";
+import { isPriceRefreshNeeded } from "@/lib/priceUtils";
 import { useDemo } from "@/context/DemoContext";
 import { scaleGrowthPoints, scaleManuals, scaleHolding } from "@/lib/demo";
 import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity, GrowthPoint, GrowthEvent, PendingDividend, TaxClassification, Category, ConfirmedDividendInfo, PendingBuy, PendingSale } from "@/types";

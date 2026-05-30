@@ -1082,7 +1082,7 @@ function CategoryAvgMonthlyGrid({ year, completedMonths }: { year: number; compl
   const { data: trends } = useApi(() => getCategoryYearTrends(), []);
   if (!data || data.series.length === 0) return null;
 
-  const trendsMap = new Map(trends?.series.map((s: { categoryId: string }) => [s.categoryId, s]) ?? []);
+  const trendsMap = new Map(trends?.series.map((s: { categoryId: string; avgByYear: number[] }) => [s.categoryId, s]) ?? []);
   const items = data.series.map((s: { categoryId: string; name: string; color: string; values: number[] }) => ({
     categoryId: s.categoryId,
     name:       s.name,

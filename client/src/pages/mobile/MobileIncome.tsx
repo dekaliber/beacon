@@ -902,7 +902,7 @@ export function MobileIncome() {
   const [loadingIncome, setLoadingIncome] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
-  const [appliedSearch, setAppliedSearch] = useState("");
+  const [, setAppliedSearch] = useState("");
   const appliedSearchRef = useRef("");
   const [filterOpen, setFilterOpen] = useState(false);
   const [staged, setStaged] = useState<IncomeFilterState>(() => loadIncomeFilters());

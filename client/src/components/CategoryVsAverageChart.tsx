@@ -106,9 +106,6 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
                 const xCur       = xOf(c.currentAmount);
                 const xBase      = LABEL_W + CHART_PAD_L;
                 const deltaStr   = (isOver ? "+" : "−") + fmtCompact(Math.abs(c.delta));
-                const pctStr     = c.deltaPercent !== null
-                  ? ` (${isOver ? "+" : ""}${c.deltaPercent}%)`
-                  : "";
                 const isHovered  = hoveredIdx === i;
                 const label      = c.categoryName.length > 15
                   ? c.categoryName.slice(0, 14) + "…"
@@ -187,7 +184,6 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
                       onMouseEnter={() => setHoveredIdx(i)}
                       onMouseLeave={() => { setHoveredIdx(null); setMousePos(null); }}
                       onMouseMove={(e: MouseEvent<SVGRectElement>) => {
-                        const rect = (e.currentTarget as SVGRectElement).closest("svg")!.getBoundingClientRect();
                         const parentRect = containerRef.current!.getBoundingClientRect();
                         setMousePos({ x: e.clientX - parentRect.left, y: e.clientY - parentRect.top });
                       }}

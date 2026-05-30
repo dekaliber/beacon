@@ -419,10 +419,7 @@ function BudgetPanelCard({
   onToggleDiscretionary,
   budgetLabel = "Annual Budget",
   currentMonthName,
-  prevMonthName,
-  priorYearMonthName,
   today,
-  todayDay,
   monthlyTotals,
 }: PanelProps) {
   const [showModal, setShowModal] = useState(false);

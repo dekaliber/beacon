@@ -76,7 +76,7 @@ export function MobileAssetClasses() {
         }
       }
     } else {
-      const created = await createAssetClass({ ...data, parentId: modalState.parentId });
+      const created = await createAssetClass({ ...data, name: data.name!, parentId: modalState.parentId });
       if (modalState.parentId) {
         setExpandedIds((prev) => new Set([...prev, modalState.parentId!]));
       } else {

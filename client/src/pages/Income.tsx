@@ -27,7 +27,7 @@ type SortField = "date" | "category" | "account" | "amount";
 type SortState = { field: SortField; order: "asc" | "desc" } | null;
 
 // ── Currency input ──
-function CurrencyInput({ name, defaultValue, required, autoFocus, error, onValidChange }: { name: string; defaultValue?: string; required?: boolean; autoFocus?: boolean; error?: boolean; onValidChange?: () => void }) {
+function CurrencyInput({ name, defaultValue, autoFocus, error, onValidChange }: { name: string; defaultValue?: string; required?: boolean; autoFocus?: boolean; error?: boolean; onValidChange?: () => void }) {
   const [rawValue, setRawValue] = useState(() => {
     if (!defaultValue) return "";
     const num = parseFloat(defaultValue);
@@ -694,7 +694,7 @@ function CategoryTypeahead({
 
 // ── Item typeahead (modal, shared for account, category, etc.) ──
 function ItemTypeahead({
-  name, defaultValue, items, placeholder, required, triggerRef: externalTriggerRef, onTabFromSearch, error, onSelect,
+  name, defaultValue, items, placeholder, triggerRef: externalTriggerRef, onTabFromSearch, error, onSelect,
 }: {
   name: string;
   defaultValue?: string;

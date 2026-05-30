@@ -2,18 +2,17 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Cell, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList,
+  XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine,
   PieChart, Pie, LineChart, Line,
 } from "recharts";
 import { ChevronLeft, ChevronRight, TrendingUp, Landmark, CreditCard, Wallet } from "lucide-react";
-import { Card, CardHeader, CardTitle } from "@/components/Card";
+import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
-import { EmptyState } from "@/components/EmptyState";
 import { CategoryOutliersChart } from "@/components/CategoryOutliersChart";
 import { CategoryVsAverageChart } from "@/components/CategoryVsAverageChart";
 import { OutlierTransactionsList } from "@/components/OutlierTransactionsList";
 import { useApi } from "@/hooks/useApi";
-import { getDashboard, getFlatCategories, getCategoryOutliers, getCategoryAverages, getMtdChart, getOutlierTransactions, getDataRange, getNetWorth } from "@/api";
+import { getDashboard, getCategoryOutliers, getCategoryAverages, getMtdChart, getOutlierTransactions, getDataRange, getNetWorth } from "@/api";
 import { formatCurrency } from "@/lib/utils";
 import { formatNextUpdateTime } from "@/lib/priceUtils";
 import { usePriceRefresh } from "@/hooks/usePriceRefresh";
@@ -21,13 +20,8 @@ import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import { useDemo } from "@/context/DemoContext";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import { SectionLabel, StatValue, DisplayStat, Caption } from "@/components/Typography";
-import type { Category } from "@/types";
 
 type ChartView = "total" | "personal" | "joint";
-
-const FullWidthCursor = (props: any) => (
-  <rect x={0} y={props.y} width="100%" height={props.height} fill="#F8FAFC" style={{ pointerEvents: "none" }} />
-);
 
 export function Dashboard() {
   const now = new Date();
@@ -38,7 +32,6 @@ export function Dashboard() {
   const navigate = useNavigate();
 
   const { data, loading } = useApi(() => getDashboard(year, month), [year, month]);
-  const { data: allCategories } = useApi(() => getFlatCategories(), []);
   const { data: dashboardOutliers } = useApi(
     () => getCategoryOutliers(year, month, outlierComparison),
     [year, month, outlierComparison],
@@ -158,28 +151,6 @@ export function Dashboard() {
 
   const fmtWhole = (n: number) =>
     new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
-
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const goToExpenses = (opts: { categoryIds?: string[]; y: number; m: number }) => {
-    const lastDay = new Date(opts.y, opts.m, 0).getDate();
-    const cats: Category[] = allCategories ?? [];
-    const expandedIds = (opts.categoryIds ?? []).flatMap((id) => {
-      const children = cats.filter((c) => c.parentId === id).map((c) => c.id);
-      return children.length > 0 ? [id, ...children] : [id];
-    });
-    navigate("/expenses", {
-      state: {
-        tempFilters: {
-          categoryIds: expandedIds,
-          tagIds: [],
-          accountIds: [],
-          startDate: `${opts.y}-${pad(opts.m)}-01`,
-          endDate: `${opts.y}-${pad(opts.m)}-${pad(lastDay)}`,
-          datePreset: "Custom",
-        },
-      },
-    });
-  };
 
   const showPersonalJoint = personalSpent > 0 && jointSpent > 0;
 
