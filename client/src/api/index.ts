@@ -940,6 +940,7 @@ export const confirmPendingSale = (
   data: {
     saleDate: string;
     pricePerShare: number;
+    fees?: number;
     costBasisMethod?: string;
     lotAllocations?: { lotId: string; shares: number }[];
     destinationAccountId: string;

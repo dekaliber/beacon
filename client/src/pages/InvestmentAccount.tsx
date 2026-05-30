@@ -3577,9 +3577,11 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
   const [saleDate, setSaleDate] = useState(defaultSaleDate);
   const [shares, setShares] = useState(defaultShares.toString());
   const [pricePerShare, setPricePerShare] = useState(defaultPricePerShare.toFixed(4).replace(/\.?0+$/, ""));
-  const [selectionMode, setSelectionMode] = useState<"method" | "lots">("method");
+  const hasSuggestedLots = pendingSale.suggestedLotIds.length > 0;
+  const [selectionMode, setSelectionMode] = useState<"method" | "lots">(hasSuggestedLots ? "lots" : "method");
   const [method, setMethod] = useState<"FIFO" | "LIFO" | "MIN_TAX" | "MAX_GAIN">("FIFO");
   const [lotInputs, setLotInputs] = useState<Record<string, string>>({});
+  const [fees, setFees] = useState("");
   const [destAccountId, setDestAccountId] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -3599,6 +3601,22 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
       })
     : [];
 
+  // Once lots load, pre-fill suggested lot quantities (full lot quantity for each suggested lot)
+  const [suggestedApplied, setSuggestedApplied] = useState(false);
+  useEffect(() => {
+    if (suggestedApplied || !hasSuggestedLots || sortedLots.length === 0) return;
+    const inputs: Record<string, string> = {};
+    for (const lot of sortedLots) {
+      if (pendingSale.suggestedLotIds.includes(lot.id)) {
+        inputs[lot.id] = parseFloat(lot.quantity).toString();
+      }
+    }
+    if (Object.keys(inputs).length > 0) {
+      setLotInputs(inputs);
+      setSuggestedApplied(true);
+    }
+  }, [sortedLots, hasSuggestedLots, pendingSale.suggestedLotIds, suggestedApplied]);
+
   const lotAllocations = sortedLots
     .map(lot => ({ lotId: lot.id, shares: parseFloat((lotInputs[lot.id] || "0").replace(/,/g, "")) || 0 }))
     .filter(a => a.shares > 0);
@@ -3607,7 +3625,9 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
   const eligibleAccounts = accounts.filter(a => a.type !== "CREDIT_CARD");
   const sharesNum = parseFloat(shares.replace(/,/g, "")) || 0;
   const priceNum = parseFloat(pricePerShare.replace(/,/g, "")) || 0;
+  const feesNum = parseFloat(fees.replace(/,/g, "")) || 0;
   const grossProceeds = sharesNum * priceNum;
+  const netProceeds = grossProceeds - feesNum;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -3623,7 +3643,8 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
 
     setSaving(true);
     try {
-      const base = { saleDate, pricePerShare: priceVal, destinationAccountId: destAccountId, notes: notes || null };
+      const feesVal = parseFloat(fees.replace(/,/g, "")) || 0;
+      const base = { saleDate, pricePerShare: priceVal, fees: feesVal, destinationAccountId: destAccountId, notes: notes || null };
       await confirmPendingSale(pendingSale.id, selectionMode === "method"
         ? { ...base, costBasisMethod: method }
         : { ...base, lotAllocations }
@@ -3694,10 +3715,18 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
           </div>
         </div>
 
-        {/* Gross Proceeds */}
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Gross Proceeds</span>
-          <span className="font-semibold">{formatCurrency(grossProceeds)}</span>
+        {/* Proceeds summary */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Gross Proceeds</span>
+            <span className="font-medium">{formatCurrency(grossProceeds)}</span>
+          </div>
+          {feesNum > 0 && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Net Proceeds (after fees)</span>
+              <span className="font-semibold">{formatCurrency(netProceeds)}</span>
+            </div>
+          )}
         </div>
 
         {/* Lot Selection */}
@@ -3737,6 +3766,9 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
                   <div className="flex-1 text-xs">
                     <span className="font-medium">{lot.acquiredDate ? formatDate(lot.acquiredDate) : "Unknown date"}</span>
                     <span className="text-muted-foreground ml-2">{parseFloat(lot.quantity)} shares @ ${parseFloat(lot.costPerShare).toFixed(4)}</span>
+                    {pendingSale.suggestedLotIds.includes(lot.id) && (
+                      <span className="ml-1.5 text-[10px] font-medium text-primary bg-primary/10 px-1 py-0.5 rounded">assigned lot</span>
+                    )}
                   </div>
                   <input
                     type="text" inputMode="decimal"
@@ -3755,6 +3787,22 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
               )}
             </div>
           )}
+        </div>
+
+        {/* Sale Fees */}
+        <div>
+          <label className="block text-xs font-medium mb-1">
+            Sale Fees <span className="text-muted-foreground font-normal">(optional — broker/SEC transaction fees)</span>
+          </label>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+            <input
+              type="text" inputMode="decimal"
+              placeholder="0.00"
+              value={fees} onChange={e => setFees(e.target.value)}
+              className={dollarInputClass}
+            />
+          </div>
         </div>
 
         {/* Destination Account */}

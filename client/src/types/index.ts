@@ -800,6 +800,8 @@ export interface PendingSale {
   activityId: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Lot IDs pre-selected from the assigned CSP batch (empty if no batch linked). */
+  suggestedLotIds: string[];
   optionsPosition: {
     id: string;
     ticker: { symbol: string; id: string };
@@ -811,6 +813,8 @@ export interface PendingSale {
     feesOpen: string | null;
     feesClose: string | null;
     optionType: string;
+    assignedFromStrikePrice: string | null;
+    assignedFromExpirationDate: string | null; // YYYY-MM-DD
   };
 }
 

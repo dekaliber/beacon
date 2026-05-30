@@ -850,6 +850,7 @@ investmentRoutes.get("/holdings/:accountId", async (req, res) => {
           quantity: lot.quantity.toString(),
           costPerShare: lot.costPerShare.toString(),
           acquiredDate: lot.acquiredDate ? lot.acquiredDate.toISOString() : null,
+          fromOptionsPositionId: lot.fromOptionsPositionId ?? null,
         })),
         ...fields,
       };

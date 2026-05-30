@@ -18,11 +18,67 @@ pendingSaleRoutes.get("/:accountId", async (req, res) => {
 
   const pendingSales = await prisma.pendingSale.findMany({
     where: { accountId, userId, status: "PENDING" },
-    include: { optionsPosition: { include: { ticker: true } } },
+    include: {
+      optionsPosition: {
+        include: { ticker: true },
+      },
+    },
     orderBy: { createdAt: "asc" },
   });
 
-  res.json(pendingSales);
+  // For each pending sale whose covered call was written against a specific assigned
+  // lot batch, resolve the InvestmentLot IDs so the review modal can pre-select them.
+  const enriched = await Promise.all(
+    pendingSales.map(async (ps) => {
+      const pos = ps.optionsPosition;
+      const { assignedFromStrikePrice, assignedFromExpirationDate } = pos;
+
+      let suggestedLotIds: string[] = [];
+
+      if (assignedFromStrikePrice != null && assignedFromExpirationDate != null) {
+        // Find the CSP position(s) that created the underlying batch
+        const cspPositions = await prisma.optionsPosition.findMany({
+          where: {
+            userId,
+            optionType: "PUT",
+            outcome: "ASSIGNED",
+            isActive: true,
+            investmentAccountId: accountId,
+            ticker: { symbol: ps.ticker },
+            strikePrice: assignedFromStrikePrice,
+            expirationDate: assignedFromExpirationDate,
+          },
+          select: { id: true },
+        });
+        const cspIds = cspPositions.map((c) => c.id);
+
+        if (cspIds.length > 0) {
+          const lots = await prisma.investmentLot.findMany({
+            where: {
+              fromOptionsPositionId: { in: cspIds },
+              holding: { accountId, ticker: ps.ticker },
+            },
+            select: { id: true },
+          });
+          suggestedLotIds = lots.map((l) => l.id);
+        }
+      }
+
+      return {
+        ...ps,
+        optionsPosition: {
+          ...pos,
+          assignedFromStrikePrice: pos.assignedFromStrikePrice?.toString() ?? null,
+          assignedFromExpirationDate: pos.assignedFromExpirationDate
+            ? pos.assignedFromExpirationDate.toISOString().split("T")[0]
+            : null,
+        },
+        suggestedLotIds,
+      };
+    })
+  );
+
+  res.json(enriched);
 });
 
 // ── Confirm ────────────────────────────────────────────────────────────────────
@@ -30,6 +86,7 @@ pendingSaleRoutes.get("/:accountId", async (req, res) => {
 const confirmSchema = z.object({
   saleDate: z.string(), // YYYY-MM-DD
   pricePerShare: z.coerce.number().positive(),
+  fees: z.coerce.number().nonnegative().default(0),
   // Either costBasisMethod OR lotAllocations must be provided
   costBasisMethod: z.enum(["FIFO", "LIFO", "MIN_TAX", "MAX_GAIN"]).optional(),
   lotAllocations: z.array(z.object({
@@ -54,7 +111,7 @@ pendingSaleRoutes.post("/:id/confirm", async (req, res) => {
   });
   if (!pendingSale) return res.status(404).json({ error: "Pending sale not found" });
 
-  const { saleDate: saleDateStr, pricePerShare, costBasisMethod, lotAllocations, destinationAccountId, notes } = parsed.data;
+  const { saleDate: saleDateStr, pricePerShare, fees: saleFees, costBasisMethod, lotAllocations, destinationAccountId, notes } = parsed.data;
   const saleDate = new Date(saleDateStr + "T20:00:00.000Z");
   const sharesToSell = Number(pendingSale.quantity);
 
@@ -136,6 +193,7 @@ pendingSaleRoutes.post("/:id/confirm", async (req, res) => {
     }
 
     // 3. Create InvestmentActivity (SALE)
+    const feesStored = saleFees > 0 ? Math.round(saleFees * 100) / 100 : null;
     const activity = await tx.investmentActivity.create({
       data: {
         accountId: holding.accountId,
@@ -146,6 +204,7 @@ pendingSaleRoutes.post("/:id/confirm", async (req, res) => {
         shares: sharesToSell,
         pricePerShare,
         amount: grossProceeds,
+        fees: feesStored,
         costBasis: Math.round(calc.totalCostBasis * 100) / 100,
         shortTermGain: stGain,
         longTermGain: ltGain,
@@ -155,14 +214,19 @@ pendingSaleRoutes.post("/:id/confirm", async (req, res) => {
     });
 
     // 4. Create Income record for taxable accounts.
-    // taxableAmount = totalGain (already includes the option premium since pricePerShare
-    // was pre-filled as strike + premiumPerShare). The premium's own income record
-    // has taxableAmount = 0 so there is no double-counting.
+    // amount = strike × shares − saleFees (actual cash received at assignment minus
+    // broker/SEC transaction fees — the premium was already recorded as a separate
+    // "Options Premium" income entry, so using the full "amount realized" here would
+    // double-count it in cash-flow reports).
+    // taxableAmount = totalGain, which IS computed from the full amount realized
+    // (strike + premium − optionFees/share) via pricePerShare, so the capital gain
+    // is correctly stated even though the income amount only shows strike proceeds.
+    const saleProceeds = Math.round((Number(pendingSale.optionsPosition.strikePrice) * sharesToSell - saleFees) * 100) / 100;
     let income = null;
     if (!holding.account.isTaxAdvantaged) {
       income = await tx.income.create({
         data: {
-          amount: netProceeds,
+          amount: saleProceeds,
           subtype: "CAPITAL_GAIN",
           taxClassification: "CAPITAL_GAIN",
           taxableAmount: totalGain,

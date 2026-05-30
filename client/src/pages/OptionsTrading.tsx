@@ -959,7 +959,7 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onDelete, o
               <span className="tp-caption">Price as of {priceAtOpenLabel}</span>
             )}
             {priceAtOpenStatus === "error" && (
-              <span className="text-xs text-destructive">Price fetch failed</span>
+              <span className="text-xs text-down">Price fetch failed</span>
             )}
           </div>
           <div className="relative">
@@ -1010,7 +1010,7 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onDelete, o
           />
         </div>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="text-sm text-down">{error}</p>}
 
         <div className="flex items-center justify-between pt-2">
           <div>
@@ -1019,7 +1019,7 @@ function PositionModal({ tickers, groups, editing, onClose, onSaved, onDelete, o
                 type="button"
                 onClick={handleDeleteClick}
                 disabled={deleting}
-                className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-down hover:bg-down/10 transition-colors"
               >
                 <Trash2 className="h-4 w-4" />
                 {deleting ? "Deleting…" : confirmDelete ? "Confirm Delete" : "Delete"}
@@ -1264,21 +1264,31 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
             </div>
             {(() => {
               const eligible = (investmentAccounts ?? []).filter((a) => a.type === "INVESTMENT" && !a.isManaged);
+              const isCall = position.optionType === "CALL";
+              const lotLocked = isCall && position.assignedFromStrikePrice != null;
+              const accountLabel = isCall ? "(where shares will be sold)" : "(where shares will be purchased)";
               return eligible.length > 0 ? (
                 <div>
                   <label className="block text-xs font-medium mb-1">
-                    Investment Account <span className="text-muted-foreground font-normal">(where shares will be purchased)</span>
+                    Investment Account <span className="text-muted-foreground font-normal">{accountLabel}</span>
                   </label>
-                  <select
-                    value={investmentAccountId}
-                    onChange={(e) => setInvestmentAccountId(e.target.value)}
-                    className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
-                  >
-                    <option value="">None</option>
-                    {eligible.map((a) => (
-                      <option key={a.id} value={a.id}>{a.name}</option>
-                    ))}
-                  </select>
+                  {lotLocked ? (
+                    <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-foreground">
+                      {eligible.find((a) => a.id === investmentAccountId)?.name ?? "—"}
+                      <span className="ml-2 text-xs text-muted-foreground">(linked via assigned lot)</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={investmentAccountId}
+                      onChange={(e) => setInvestmentAccountId(e.target.value)}
+                      className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
+                    >
+                      <option value="">None</option>
+                      {eligible.map((a) => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               ) : null;
             })()}
@@ -1400,7 +1410,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
           </>
         )}
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="text-sm text-down">{error}</p>}
 
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
@@ -1607,21 +1617,31 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
             </div>
             {(() => {
               const eligible = (investmentAccounts ?? []).filter((a) => a.type === "INVESTMENT" && !a.isManaged);
+              const isCall = position.optionType === "CALL";
+              const lotLocked = isCall && position.assignedFromStrikePrice != null;
+              const accountLabel = isCall ? "(where shares will be sold)" : "(where shares will be purchased)";
               return eligible.length > 0 ? (
                 <div>
                   <label className="block text-xs font-medium mb-1">
-                    Investment Account <span className="text-muted-foreground font-normal">(where shares will be purchased)</span>
+                    Investment Account <span className="text-muted-foreground font-normal">{accountLabel}</span>
                   </label>
-                  <select
-                    value={investmentAccountId}
-                    onChange={(e) => setInvestmentAccountId(e.target.value)}
-                    className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
-                  >
-                    <option value="">None</option>
-                    {eligible.map((a) => (
-                      <option key={a.id} value={a.id}>{a.name}</option>
-                    ))}
-                  </select>
+                  {lotLocked ? (
+                    <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-foreground">
+                      {eligible.find((a) => a.id === investmentAccountId)?.name ?? "—"}
+                      <span className="ml-2 text-xs text-muted-foreground">(linked via assigned lot)</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={investmentAccountId}
+                      onChange={(e) => setInvestmentAccountId(e.target.value)}
+                      className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
+                    >
+                      <option value="">None</option>
+                      {eligible.map((a) => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               ) : null;
             })()}
@@ -1658,7 +1678,7 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
           </div>
         </div>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="text-sm text-down">{error}</p>}
 
         <div className="flex items-center justify-between pt-2">
           <button
@@ -1833,7 +1853,7 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
                   {runningBasisRows.map((row) => (
                     <tr key={row.id} className="border-t border-border">
                       <td className="px-3 py-1.5 tabular-nums font-mono">{row.effectiveDate}</td>
-                      <td className={cn("px-3 py-1.5 text-right tabular-nums font-mono", Number(row.delta) >= 0 ? "text-green-600" : "text-red-600")}>
+                      <td className={cn("px-3 py-1.5 text-right tabular-nums font-mono", Number(row.delta) >= 0 ? "text-up" : "text-down")}>
                         {Number(row.delta) >= 0 ? "+" : ""}${Math.abs(Number(row.delta)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="px-3 py-1.5 text-right tabular-nums font-mono">
@@ -1844,7 +1864,7 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
                         <button
                           type="button"
                           onClick={() => handleDeleteAdjustment(row.id)}
-                          className="text-muted-foreground hover:text-destructive transition-colors"
+                          className="text-muted-foreground hover:text-down transition-colors"
                           aria-label="Remove"
                         >×</button>
                       </td>
@@ -1886,7 +1906,7 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
                   className="w-full rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
-              {adjustError && <p className="text-xs text-destructive">{adjustError}</p>}
+              {adjustError && <p className="text-xs text-down">{adjustError}</p>}
               <div className="flex gap-2">
                 <Button type="button" size="sm" disabled={adjustSaving} onClick={handleAddAdjustment}>{adjustSaving ? "Saving…" : "Add"}</Button>
                 <Button type="button" variant="secondary" size="sm" onClick={() => { setShowAdjustForm(false); setAdjustError(""); }}>Cancel</Button>
@@ -1945,7 +1965,7 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
             <p className="tp-caption mt-1.5">Pre-selected as the destination account for premium income when closing a position.</p>
           </div>
         )}
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="text-sm text-down">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
           <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save Settings"}</Button>
@@ -2073,7 +2093,7 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
           </div>
         </div>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="text-sm text-down">{error}</p>}
 
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
@@ -2371,13 +2391,13 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
     const ctd = "px-2 pb-2 text-xs font-mono tabular-nums whitespace-nowrap text-muted-foreground";
 
     // Opaque equivalents of the tr's semi-transparent bg colors over the page base (#FAFCFE):
-    //   bg-amber-50/50 → #FFFDF5; bg-muted/10 → #FAFCFE; bg-muted/30 → #F5F8FC
+    //   bg-warn-soft/50 → #FFFDF5; bg-muted/10 → #FAFCFE; bg-muted/30 → #F5F8FC
     const stickyBg = isExpired ? "bg-[#FFFDF5]" : "bg-[#FAFCFE]";
     const stickyTd = (leftPx: number, extra?: string, textOnly = false) =>
       cn(textOnly ? tdTextClass : tdClass, "sticky z-[2] group-hover:bg-[#F5F8FC]", stickyBg, extra);
 
     const primaryRow = (
-      <tr key={p.id} className={cn("group", hasChain ? "" : "border-b border-border", "hover:bg-muted/30", isGrouped && "bg-muted/10", isExpired && "bg-amber-50/50", isDraftRow && "italic opacity-60")}>
+      <tr key={p.id} className={cn("group", hasChain ? "" : "border-b border-border", "hover:bg-muted/30", isGrouped && "bg-muted/10", isExpired && "bg-warn-soft/50", isDraftRow && "italic opacity-60")}>
         {/* ── Group 1: Position (always visible, frozen) ── */}
         <td style={{ left: 0 }}   className={stickyTd(0, isGrouped ? "pl-8 pr-2" : "pl-4 pr-2", true)}>
           <div className="flex items-center gap-1.5">
@@ -2388,7 +2408,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
         <td style={{ left: 80 }}  className={stickyTd(80, undefined, true)}>
           <span className={cn(
             "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-            p.optionType === "CALL" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"
+            p.optionType === "CALL" ? "bg-blue-100 text-blue-700" : "bg-violet-soft text-violet-deep"
           )}>
             {p.optionType === "CALL" ? "CC" : "CSP"}
           </span>
@@ -2424,7 +2444,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
             </td>
             <td className={tdClass}>
               {c.annReturnAtExpiry != null
-                ? <span className={cn(c.annReturnAtExpiry >= 0 ? "text-green-600" : "text-red-600")}>{fmtPct(c.annReturnAtExpiry)}</span>
+                ? <span className={cn(c.annReturnAtExpiry >= 0 ? "text-up" : "text-down")}>{fmtPct(c.annReturnAtExpiry)}</span>
                 : "—"}
             </td>
           </>
@@ -2444,14 +2464,14 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
             <td className={tdClass}>${fmtUSD(c.breakeven)}</td>
             <td className={tdClass}>
               {c.pctOtmAtOpen != null
-                ? <span className={cn((p.optionType === "CALL" ? c.pctOtmAtOpen >= 0 : c.pctOtmAtOpen <= 0) ? "text-green-600" : "text-red-600")}>{fmtPct(c.pctOtmAtOpen)}</span>
+                ? <span className={cn((p.optionType === "CALL" ? c.pctOtmAtOpen >= 0 : c.pctOtmAtOpen <= 0) ? "text-up" : "text-down")}>{fmtPct(c.pctOtmAtOpen)}</span>
                 : "—"}
             </td>
           </>
         ) : (
           <td className={cn(tdClass, "border-l border-border/50")}>
             {c.pctOtmAtOpen != null
-              ? <span className={cn((p.optionType === "CALL" ? c.pctOtmAtOpen >= 0 : c.pctOtmAtOpen <= 0) ? "text-green-600" : "text-red-600")}>{fmtPct(c.pctOtmAtOpen)}</span>
+              ? <span className={cn((p.optionType === "CALL" ? c.pctOtmAtOpen >= 0 : c.pctOtmAtOpen <= 0) ? "text-up" : "text-down")}>{fmtPct(c.pctOtmAtOpen)}</span>
               : "—"}
           </td>
         )}
@@ -2492,7 +2512,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
                     title={quoteErrors.get(p.id) ? `Error: ${quoteErrors.get(p.id)}` : undefined}
                   >
                     {p.currentPremiumPerShare != null
-                      ? <span className={quoteErrors.get(p.id) ? "text-red-500" : ""}>${fmtUSD(p.currentPremiumPerShare)}</span>
+                      ? <span className={quoteErrors.get(p.id) ? "text-down" : ""}>${fmtUSD(p.currentPremiumPerShare)}</span>
                       : <span className="text-muted-foreground">{quoteErrors.get(p.id) ? "err" : "—"}</span>}
                   </span>
                 )}
@@ -2514,24 +2534,24 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
                 const deteriorated = isOtm && c.pctOtmAtOpen != null && (
                   p.optionType === "CALL" ? pctOtmNow < c.pctOtmAtOpen : pctOtmNow > c.pctOtmAtOpen
                 );
-                return <span className={cn(deteriorated ? "text-amber-500" : isOtm ? "text-green-600" : "text-red-600")}>{fmtPct(pctOtmNow)}</span>;
+                return <span className={cn(deteriorated ? "text-warn" : isOtm ? "text-up" : "text-down")}>{fmtPct(pctOtmNow)}</span>;
               })() : <span className="text-muted-foreground">—</span>}
             </td>
             <td className={tdClass}>
               {curAnnRet != null
-                ? <span className={cn(curAnnRet >= 0 ? "text-green-600" : "text-red-600")}>{fmtPctLive(curAnnRet)}</span>
+                ? <span className={cn(curAnnRet >= 0 ? "text-up" : "text-down")}>{fmtPctLive(curAnnRet)}</span>
                 : <span className="text-muted-foreground">—</span>}
             </td>
             <td className={tdClass}>
               {livePnl != null
-                ? <span className={cn("font-medium", livePnl >= 0 ? "text-green-600" : "text-red-600")}>
+                ? <span className={cn("font-medium", livePnl >= 0 ? "text-up" : "text-down")}>
                     {livePnl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(livePnl))}
                   </span>
                 : <span className="text-muted-foreground">—</span>}
             </td>
             <td className={tdClass}>
               {livePnl != null && c.totalPremiumNet !== 0
-                ? <span className={cn("font-medium", livePnl >= 0 ? "text-green-600" : "text-red-600")}>
+                ? <span className={cn("font-medium", livePnl >= 0 ? "text-up" : "text-down")}>
                     {fmtPct(livePnl / c.totalPremiumNet * 100)}
                   </span>
                 : <span className="text-muted-foreground">—</span>}
@@ -2540,7 +2560,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
         ) : (
           <td className={cn(tdClass, "border-l border-border/50")}>
             {livePnl != null
-              ? <span className={cn("font-medium", livePnl >= 0 ? "text-green-600" : "text-red-600")}>
+              ? <span className={cn("font-medium", livePnl >= 0 ? "text-up" : "text-down")}>
                   {livePnl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(livePnl))}
                 </span>
               : <span className="text-muted-foreground">—</span>}
@@ -2555,7 +2575,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
                 <PlayCircle className="h-3.5 w-3.5" />
               </button>
             ) : (
-              <button onClick={() => onClose(p)} className={cn("p-1.5 rounded transition-colors", isExpired ? "text-amber-500 hover:text-amber-600 hover:bg-amber-100/60" : "text-muted-foreground/40 hover:text-primary hover:bg-primary/10")} title="Close position">
+              <button onClick={() => onClose(p)} className={cn("p-1.5 rounded transition-colors", isExpired ? "text-warn hover:text-warn hover:bg-warn-soft/60" : "text-muted-foreground/40 hover:text-primary hover:bg-primary/10")} title="Close position">
                 <CircleCheck className="h-3.5 w-3.5" />
               </button>
             )}
@@ -2568,7 +2588,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
     );
 
     const chainRow = hasChain ? (
-      <tr key={`${p.id}-chain`} className={cn("group", "border-b border-border", isGrouped && "bg-muted/10", isExpired && "bg-amber-50/50")}>
+      <tr key={`${p.id}-chain`} className={cn("group", "border-b border-border", isGrouped && "bg-muted/10", isExpired && "bg-warn-soft/50")}>
         {/* Label — frozen */}
         <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] group-hover:bg-[#F5F8FC]", stickyBg, isGrouped ? "pl-8 pr-2" : "pl-4 pr-2", "font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-[10px]")}>roll</td>
         <td style={{ left: 80 }}  className={cn(ctd, "sticky z-[2] group-hover:bg-[#F5F8FC]", stickyBg)} />
@@ -2597,7 +2617,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
           <>
             <td className={cn(ctd, "border-l border-border/50")}>
               {chainNet != null && (
-                <span className={cn(chainNet >= 0 ? "text-green-600" : "text-red-600")}>
+                <span className={cn(chainNet >= 0 ? "text-up" : "text-down")}>
                   {chainNet >= 0 ? "+" : "−"}${fmtUSD(Math.abs(chainNet))}
                 </span>
               )}
@@ -2605,7 +2625,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
             <td className={ctd} />
             <td className={ctd}>
               {chainAnnRetAtExpiry != null && (
-                <span className={cn(chainAnnRetAtExpiry >= 0 ? "text-green-600" : "text-red-600")}>
+                <span className={cn(chainAnnRetAtExpiry >= 0 ? "text-up" : "text-down")}>
                   {fmtPct(chainAnnRetAtExpiry)}
                 </span>
               )}
@@ -2614,7 +2634,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
         ) : (
           <td className={cn(ctd, "border-l border-border/50")}>
             {chainNet != null && (
-              <span className={cn(chainNet >= 0 ? "text-green-600" : "text-red-600")}>
+              <span className={cn(chainNet >= 0 ? "text-up" : "text-down")}>
                 {chainNet >= 0 ? "+" : "−"}${fmtUSD(Math.abs(chainNet))}
               </span>
             )}
@@ -2647,21 +2667,21 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
             <td className={ctd} />
             <td className={ctd}>
               {chainCurAnnRet != null && (
-                <span className={cn("font-medium", chainCurAnnRet >= 0 ? "text-green-600" : "text-red-600")}>
+                <span className={cn("font-medium", chainCurAnnRet >= 0 ? "text-up" : "text-down")}>
                   {fmtPctLive(chainCurAnnRet)}
                 </span>
               )}
             </td>
             <td className={ctd}>
               {chainLivePnl != null && (
-                <span className={cn("font-medium", chainLivePnl >= 0 ? "text-green-600" : "text-red-600")}>
+                <span className={cn("font-medium", chainLivePnl >= 0 ? "text-up" : "text-down")}>
                   {chainLivePnl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(chainLivePnl))}
                 </span>
               )}
             </td>
             <td className={ctd}>
               {chainLivePnl != null && chainNet != null && chainNet !== 0 && (
-                <span className={cn("font-medium", chainLivePnl >= 0 ? "text-green-600" : "text-red-600")}>
+                <span className={cn("font-medium", chainLivePnl >= 0 ? "text-up" : "text-down")}>
                   {fmtPct(chainLivePnl / chainNet * 100)}
                 </span>
               )}
@@ -2670,7 +2690,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
         ) : (
           <td className={cn(ctd, "border-l border-border/50")}>
             {chainLivePnl != null && (
-              <span className={cn("font-medium", chainLivePnl >= 0 ? "text-green-600" : "text-red-600")}>
+              <span className={cn("font-medium", chainLivePnl >= 0 ? "text-up" : "text-down")}>
                 {chainLivePnl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(chainLivePnl))}
               </span>
             )}
@@ -3233,7 +3253,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                   </div>
                 </td>
                 <td colSpan={15} className="py-1.5 pr-4 text-right">
-                  <StatValue className={cn("text-xs font-semibold", weekPnl >= 0 ? "text-green-600" : "text-red-600")}>
+                  <StatValue className={cn("text-xs font-semibold", weekPnl >= 0 ? "text-up" : "text-down")}>
                     {weekPnl >= 0 ? "+" : "−"}${Math.abs(weekPnl).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </StatValue>
                 </td>
@@ -3257,7 +3277,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                 <td style={{ left: 80 }}  className={cn(tdText, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC]")}>
                   <span className={cn(
                     "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                    p.optionType === "CALL" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"
+                    p.optionType === "CALL" ? "bg-blue-100 text-blue-700" : "bg-violet-soft text-violet-deep"
                   )}>
                     {p.optionType === "CALL" ? "CC" : "CSP"}
                   </span>
@@ -3287,7 +3307,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                     <td className={td}>${fmtUSD(c.totalFees)}</td>
                     <td className={td}>
                       {c.pnl != null ? (
-                        <span className={cn("font-medium", c.pnl >= 0 ? "text-green-600" : "text-red-600")}>
+                        <span className={cn("font-medium", c.pnl >= 0 ? "text-up" : "text-down")}>
                           {c.pnl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(c.pnl))}
                         </span>
                       ) : "—"}
@@ -3296,7 +3316,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                 ) : (
                   <td className={cn(td, "border-l border-border/50")}>
                     {c.pnl != null ? (
-                      <span className={cn("font-medium", c.pnl >= 0 ? "text-green-600" : "text-red-600")}>
+                      <span className={cn("font-medium", c.pnl >= 0 ? "text-up" : "text-down")}>
                         {c.pnl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(c.pnl))}
                       </span>
                     ) : "—"}
@@ -3305,7 +3325,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                 {/* Always-visible trailing columns */}
                 <td className={td}>
                   {c.closedAnnReturn != null ? (
-                    <span className={cn(c.closedAnnReturn >= 0 ? "text-green-600" : "text-red-600")}>
+                    <span className={cn(c.closedAnnReturn >= 0 ? "text-up" : "text-down")}>
                       {fmtPct(c.closedAnnReturn)}
                     </span>
                   ) : "—"}
@@ -3313,8 +3333,8 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                 <td className={tdText}>
                   <span className={cn(
                     "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                    p.outcome === "EXPIRED_WORTHLESS" ? "bg-green-100 text-green-700" :
-                    p.outcome === "ASSIGNED" ? "bg-amber-100 text-amber-700" :
+                    p.outcome === "EXPIRED_WORTHLESS" ? "bg-up-soft text-up-deep" :
+                    p.outcome === "ASSIGNED" ? "bg-warn-soft text-warn-deep" :
                     p.outcome === "ROLLED" ? "bg-blue-100 text-blue-700" :
                     "bg-muted text-muted-foreground"
                   )}>
@@ -3332,7 +3352,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                     </button>
                     <button
                       onClick={() => setConfirmDelete(p)}
-                      className="p-1.5 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      className="p-1.5 rounded text-muted-foreground/40 hover:text-down hover:bg-down/10 transition-colors"
                       title="Delete"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -3371,14 +3391,14 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                     <td className={ctd} />
                     <td className={ctd}>${fmtUSD(cs.totalFees)}</td>
                     <td className={ctd}>
-                      <span className={cn("font-medium", cs.chainPnl >= 0 ? "text-green-600" : "text-red-600")}>
+                      <span className={cn("font-medium", cs.chainPnl >= 0 ? "text-up" : "text-down")}>
                         {cs.chainPnl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(cs.chainPnl))}
                       </span>
                     </td>
                   </>
                 ) : (
                   <td className={cn(ctd, "border-l border-border/50")}>
-                    <span className={cn("font-medium", cs.chainPnl >= 0 ? "text-green-600" : "text-red-600")}>
+                    <span className={cn("font-medium", cs.chainPnl >= 0 ? "text-up" : "text-down")}>
                       {cs.chainPnl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(cs.chainPnl))}
                     </span>
                   </td>
@@ -3386,7 +3406,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                 {/* Ann. Return */}
                 <td className={ctd}>
                   {cs.chainAnnReturn != null ? (
-                    <span className={cn("font-medium", cs.chainAnnReturn >= 0 ? "text-green-600" : "text-red-600")}>
+                    <span className={cn("font-medium", cs.chainAnnReturn >= 0 ? "text-up" : "text-down")}>
                       {fmtPct(cs.chainAnnReturn)}
                     </span>
                   ) : "—"}
@@ -3732,7 +3752,7 @@ function PerformanceCharts({
           </div>
         </div>
         {delta != null && (
-          <p className={cn("text-xs font-medium mb-2", delta >= 0 ? "text-green-600" : "text-red-600")}>
+          <p className={cn("text-xs font-medium mb-2", delta >= 0 ? "text-up" : "text-down")}>
             {delta >= 0 ? "Ahead" : "Behind"} of target by ${fmtUSD(Math.abs(delta))}
           </p>
         )}
@@ -3831,7 +3851,7 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
         <td className={tdCls}>{m.contractCount}</td>
         <td className={tdCls}>
           {m.winRate != null ? (
-            <span className={m.winRate >= 50 ? "text-green-600" : "text-red-600"}>{fmtRate(m.winRate)}</span>
+            <span className={m.winRate >= 50 ? "text-up" : "text-down"}>{fmtRate(m.winRate)}</span>
           ) : "—"}
         </td>
         <td className={tdCls}>{fmtRate(m.assignmentRate)}</td>
@@ -3842,28 +3862,28 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
         </td>
         <td className={tdCls}>
           {m.ccPremium !== 0 ? (
-            <span className={m.ccPremium >= 0 ? "text-green-600" : "text-red-600"}>
+            <span className={m.ccPremium >= 0 ? "text-up" : "text-down"}>
               {m.ccPremium >= 0 ? "" : "−"}${fmtUSD(Math.abs(m.ccPremium))}
             </span>
           ) : <span className="text-muted-foreground">—</span>}
         </td>
         <td className={tdCls}>
           {m.cspPremium !== 0 ? (
-            <span className={m.cspPremium >= 0 ? "text-green-600" : "text-red-600"}>
+            <span className={m.cspPremium >= 0 ? "text-up" : "text-down"}>
               {m.cspPremium >= 0 ? "" : "−"}${fmtUSD(Math.abs(m.cspPremium))}
             </span>
           ) : <span className="text-muted-foreground">—</span>}
         </td>
         <td className={tdCls}>
           {m.closedCount > 0 ? (
-            <span className={m.totalPremium >= 0 ? "text-green-600" : "text-red-600"}>
+            <span className={m.totalPremium >= 0 ? "text-up" : "text-down"}>
               {m.totalPremium >= 0 ? "" : "−"}${fmtUSD(Math.abs(m.totalPremium))}
             </span>
           ) : "—"}
         </td>
         <td className={tdCls}>
           {m.weightedArr != null ? (
-            <span className={m.weightedArr >= 0 ? "text-green-600" : "text-red-600"}>{fmtPct(m.weightedArr)}</span>
+            <span className={m.weightedArr >= 0 ? "text-up" : "text-down"}>{fmtPct(m.weightedArr)}</span>
           ) : "—"}
         </td>
       </>
@@ -4148,7 +4168,7 @@ function SummaryCards({
         <SectionLabel>Premium This Week</SectionLabel>
         <div className="flex items-end mt-1">
           <div className="flex-1 min-w-0">
-            <p className="tp-stat truncate" style={{ color: premiumThisWeek >= 0 ? "var(--color-success)" : "var(--color-destructive)" }}>
+            <p className="tp-stat truncate" style={{ color: premiumThisWeek >= 0 ? "var(--color-up)" : "var(--color-down)" }}>
               {premiumThisWeek !== 0 ? `$${fmtUSD(premiumThisWeek)}` : "$0.00"}
             </p>
             <p className="tp-caption mt-0.5">realized</p>
@@ -4166,7 +4186,7 @@ function SummaryCards({
       {/* Cumulative Premium */}
       <Card className="p-6">
         <SectionLabel>Cumulative Premium</SectionLabel>
-        <p className="tp-stat mt-1 truncate" style={{ color: cumulativePremium >= 0 ? "var(--color-success)" : "var(--color-destructive)" }}>
+        <p className="tp-stat mt-1 truncate" style={{ color: cumulativePremium >= 0 ? "var(--color-up)" : "var(--color-down)" }}>
           {`$${fmtUSD(cumulativePremium)}`}
         </p>
         <p className="tp-caption mt-0.5 truncate">
@@ -4177,7 +4197,7 @@ function SummaryCards({
       {/* Ann. Rate of Return */}
       <Card className="p-6">
         <SectionLabel>Ann. Rate of Return</SectionLabel>
-        <p className="tp-stat mt-1 truncate" style={{ color: annReturn != null ? (annReturn >= (settings?.targetReturn ?? 0) * 100 ? "var(--color-success)" : "var(--color-warning)") : undefined }}>
+        <p className="tp-stat mt-1 truncate" style={{ color: annReturn != null ? (annReturn >= (settings?.targetReturn ?? 0) * 100 ? "var(--color-up)" : "var(--color-warn)") : undefined }}>
           {annReturn != null ? fmtPct(annReturn) : "—"}
         </p>
         <p className="tp-caption mt-0.5 truncate">
@@ -4321,7 +4341,7 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
                 {params.tickers.map((sym) => (
                   <span key={sym} className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">
                     {sym}
-                    <button type="button" onClick={() => removeTicker(sym)} className="hover:text-destructive transition-colors">
+                    <button type="button" onClick={() => removeTicker(sym)} className="hover:text-down transition-colors">
                       <X className="h-3 w-3" />
                     </button>
                   </span>
@@ -4465,7 +4485,7 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
 
           {/* Results */}
           {error && (
-            <div className="mx-4 mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <div className="mx-4 mb-4 rounded-md border border-down/30 bg-down/10 px-3 py-2 text-sm text-down">
               {error}
             </div>
           )}
@@ -4529,7 +4549,7 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
                           <td className="px-2 py-2">
                             <span className={cn(
                               "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                              r.optionType === "PUT" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
+                              r.optionType === "PUT" ? "bg-violet-soft text-violet-deep" : "bg-blue-100 text-blue-700"
                             )}>
                               {r.optionType}
                             </span>
@@ -4540,10 +4560,10 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
                           <td className="px-2 py-2 text-right tabular-nums font-mono text-muted-foreground">
                             {r.underlyingPrice != null ? `$${r.underlyingPrice.toFixed(2)}` : "—"}
                           </td>
-                          <td className={cn("px-2 py-2 text-right tabular-nums font-mono", pctToStrike != null && pctToStrike < 0 ? "text-green-600" : pctToStrike != null && pctToStrike > 0 ? "text-red-600" : "")}>
+                          <td className={cn("px-2 py-2 text-right tabular-nums font-mono", pctToStrike != null && pctToStrike < 0 ? "text-up" : pctToStrike != null && pctToStrike > 0 ? "text-down" : "")}>
                             {pctToStrike != null ? `${pctToStrike >= 0 ? "+" : ""}${pctToStrike.toFixed(1)}%` : "—"}
                           </td>
-                          <td className={cn("px-2 py-2 text-right tabular-nums font-mono", r.delta != null && Math.abs(r.delta) > 0.5 ? "text-amber-600" : "")}>
+                          <td className={cn("px-2 py-2 text-right tabular-nums font-mono", r.delta != null && Math.abs(r.delta) > 0.5 ? "text-warn" : "")}>
                             {r.delta != null ? r.delta.toFixed(3) : "—"}
                           </td>
                           <td className="px-2 py-2 text-right tabular-nums font-mono text-muted-foreground">
@@ -4555,7 +4575,7 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
                           <td className="px-2 py-2 text-right tabular-nums font-mono text-muted-foreground">
                             {r.bid != null ? `$${r.bid.toFixed(2)}` : "—"} / {r.ask != null ? `$${r.ask.toFixed(2)}` : "—"}
                           </td>
-                          <td className={cn("px-2 py-2 text-right tabular-nums font-mono font-medium", annReturn != null ? "text-green-600" : "")}>
+                          <td className={cn("px-2 py-2 text-right tabular-nums font-mono font-medium", annReturn != null ? "text-up" : "")}>
                             {annReturn != null ? `${annReturn.toFixed(1)}%` : "—"}
                           </td>
                           <td className="px-2 py-2 text-right tabular-nums font-mono text-muted-foreground">
@@ -4585,7 +4605,7 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
                               className={cn(
                                 "p-1.5 rounded transition-colors disabled:cursor-not-allowed",
                                 addedRows.has(i)
-                                  ? "text-green-600 cursor-default"
+                                  ? "text-up cursor-default"
                                   : addingRow === i
                                   ? "text-muted-foreground/40"
                                   : "text-muted-foreground/40 hover:text-primary hover:bg-primary/10"
@@ -5148,8 +5168,8 @@ function ImportOptionsModal({ open, onClose, onComplete }: {
                 onClick={() => setShowErrorsOnly((v) => !v)}
                 className={`flex items-center gap-1.5 rounded px-2 py-0.5 text-xs transition-colors ${
                   showErrorsOnly
-                    ? "bg-destructive/15 text-destructive font-medium"
-                    : "text-destructive hover:bg-destructive/10"
+                    ? "bg-down/15 text-down font-medium"
+                    : "text-down hover:bg-down/10"
                 }`}
               >
                 <AlertCircle className="h-3 w-3" />
@@ -5182,7 +5202,7 @@ function ImportOptionsModal({ open, onClose, onComplete }: {
                 {visibleRows.map((row) => {
                   const i = rows.indexOf(row);
                   return (
-                    <tr key={i} className={`border-b border-border ${row.errors.length > 0 ? "bg-destructive/5" : ""}`}>
+                    <tr key={i} className={`border-b border-border ${row.errors.length > 0 ? "bg-down/5" : ""}`}>
                       <td className="px-2 py-1.5 text-muted-foreground">{i + 1}</td>
                       <td className="px-2 py-1.5 font-medium">{row.ticker || "—"}</td>
                       <td className="px-2 py-1.5">{row.optionType}</td>
@@ -5197,11 +5217,11 @@ function ImportOptionsModal({ open, onClose, onComplete }: {
                       <td className="px-2 py-1.5 max-w-[120px] truncate text-muted-foreground">{row.notes || "—"}</td>
                       <td className="px-2 py-1.5">
                         {row.errors.length > 0 ? (
-                          <span className="text-destructive" title={row.errors.join("; ")}>
+                          <span className="text-down" title={row.errors.join("; ")}>
                             <AlertCircle className="inline h-3 w-3" /> {row.errors[0]}
                           </span>
                         ) : (
-                          <span className="text-green-600"><Check className="inline h-3 w-3" /></span>
+                          <span className="text-up"><Check className="inline h-3 w-3" /></span>
                         )}
                       </td>
                     </tr>
@@ -5232,13 +5252,13 @@ function ImportOptionsModal({ open, onClose, onComplete }: {
       {step === "result" && result && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-4">
-            <CheckCircle2 className="h-6 w-6 text-green-600 shrink-0" />
+            <CheckCircle2 className="h-6 w-6 text-up shrink-0" />
             <div>
               <p className="text-sm font-medium">
                 {result.imported} position{result.imported !== 1 ? "s" : ""} imported successfully
               </p>
               {result.errors.length > 0 && (
-                <p className="text-xs text-destructive mt-1">
+                <p className="text-xs text-down mt-1">
                   {result.errors.length} row{result.errors.length !== 1 ? "s" : ""} failed on server
                 </p>
               )}
@@ -5246,7 +5266,7 @@ function ImportOptionsModal({ open, onClose, onComplete }: {
           </div>
 
           {result.errors.length > 0 && (
-            <div className="max-h-[150px] overflow-auto rounded-md border border-border p-2 text-xs text-destructive">
+            <div className="max-h-[150px] overflow-auto rounded-md border border-border p-2 text-xs text-down">
               {result.errors.map((e, i) => (
                 <div key={i}>Row {e.row}: {e.message}</div>
               ))}
