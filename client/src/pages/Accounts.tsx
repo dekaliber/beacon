@@ -106,12 +106,12 @@ export function Accounts() {
                 />
                 <span className="font-medium text-sm">{account.name}</span>
                 {account.isManaged && (
-                  <SectionLabel as="span" className="rounded-full bg-blue-600 text-white text-[10px] px-1.5 py-0.5">
+                  <SectionLabel as="span" className="rounded-full bg-blue text-white text-[10px] px-1.5 py-0.5">
                     Managed
                   </SectionLabel>
                 )}
                 {account.isTaxAdvantaged && (
-                  <SectionLabel as="span" className="rounded-full bg-emerald-600 text-white text-[10px] px-1.5 py-0.5">
+                  <SectionLabel as="span" className="rounded-full bg-up text-white text-[10px] px-1.5 py-0.5">
                     {account.taxAdvantageType === "TRADITIONAL" ? "Traditional"
                       : account.taxAdvantageType === "ROTH" ? "Roth"
                       : account.taxAdvantageType === "HSA" ? "HSA"
@@ -201,7 +201,7 @@ export function Accounts() {
             className={cn(
               "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
               isDemoMode
-                ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                ? "bg-warn-soft text-warn-deep hover:bg-warn-soft"
                 : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             )}
           >
@@ -670,7 +670,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
                 type="button"
                 onClick={handleDeleteClick}
                 disabled={deleting}
-                className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-down hover:bg-down/10 transition-colors"
               >
                 <Trash2 className="h-4 w-4" />
                 {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}

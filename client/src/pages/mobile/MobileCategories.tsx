@@ -341,8 +341,8 @@ function MobileCategoryModal({
             )}?
           </p>
           {usageInfo.count > 0 ? (
-            <div className="space-y-3 rounded-md border border-amber-200 bg-amber-50 p-3">
-              <p className="text-sm text-amber-800">
+            <div className="space-y-3 rounded-md border border-warn-line bg-warn-soft p-3">
+              <p className="text-sm text-warn-deep">
                 {usageInfo.count} {recordLabel} use this category. Reassign them or leave uncategorized.
               </p>
               <div className="relative">
@@ -386,7 +386,7 @@ function MobileCategoryModal({
                 await onDelete!(reassignTo || undefined);
                 setDeleting(false);
               }}
-              className="flex-1 rounded-md bg-destructive py-2.5 text-sm font-medium text-destructive-foreground disabled:opacity-50 transition-opacity"
+              className="flex-1 rounded-md bg-down py-2.5 text-sm font-medium text-white disabled:opacity-50 transition-opacity"
             >
               {deleting ? "Deleting…" : "Delete"}
             </button>
@@ -482,7 +482,7 @@ function MobileCategoryModal({
               type="button"
               disabled={fetchingUsage}
               onClick={handleDeleteClick}
-              className="rounded-md border border-border p-2.5 text-muted-foreground hover:border-destructive hover:text-destructive transition-colors disabled:opacity-50"
+              className="rounded-md border border-border p-2.5 text-muted-foreground hover:border-down hover:text-down transition-colors disabled:opacity-50"
               aria-label="Delete category"
             >
               <Trash2 className="h-4 w-4" />

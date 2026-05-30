@@ -695,7 +695,7 @@ export function TaxEstimatorPage() {
     if (bucket === "exempt" || bucket === "return_of_capital")
       return <RateBadge label="Non-taxable" className="bg-muted text-muted-foreground" />;
     if (bucket === "qualified_dividend")
-      return <RateBadge label={`${fmtPct(calc.marginalPrefRate)} capital gains rate`} className="bg-emerald-50 text-emerald-700" />;
+      return <RateBadge label={`${fmtPct(calc.marginalPrefRate)} capital gains rate`} className="bg-up-soft text-up-deep" />;
     if (bucket === "capital_gain") {
       const hasSTCG = (groupSTCG ?? 0) !== 0;
       const hasLTCG = (groupLTCG ?? 0) !== 0;
@@ -711,15 +711,15 @@ export function TaxEstimatorPage() {
                 : hasSTCG                      ? "short-term (ordinary)"
                 :                                "ordinary rate"
               }`}
-              className="bg-amber-50 text-amber-700"
+              className="bg-warn-soft text-warn-deep"
             />
           )}
-          {hasLTCG && <RateBadge label={`${fmtPct(calc.marginalPrefRate)} long-term (capital gains)`} className="bg-emerald-50 text-emerald-700" />}
-          {hasCollectible && showCollectibleSeparately && <RateBadge label={`${fmtPct(calc.collectibleRate)} collectible (28% max)`} className="bg-orange-50 text-orange-700" />}
+          {hasLTCG && <RateBadge label={`${fmtPct(calc.marginalPrefRate)} long-term (capital gains)`} className="bg-up-soft text-up-deep" />}
+          {hasCollectible && showCollectibleSeparately && <RateBadge label={`${fmtPct(calc.collectibleRate)} collectible (28% max)`} className="bg-orange-soft text-orange-deep" />}
         </span>
       );
     }
-    return <RateBadge label={`${fmtPct(calc.marginalOrdRate)} marginal ordinary rate`} className="bg-amber-50 text-amber-700" />;
+    return <RateBadge label={`${fmtPct(calc.marginalOrdRate)} marginal ordinary rate`} className="bg-warn-soft text-warn-deep" />;
   };
 
   if (!taxData) return <BeaconLoader />;
@@ -863,7 +863,7 @@ export function TaxEstimatorPage() {
                     const balance = suggested[i] - paid;
                     const isPast = today > q.dueDate;
                     return (
-                      <tr key={q.label} className={isPast && balance > 0.005 ? "text-amber-700" : ""}>
+                      <tr key={q.label} className={isPast && balance > 0.005 ? "text-warn-deep" : ""}>
                         <td className="py-2.5 font-medium">{q.label}</td>
                         <td className="py-2.5 text-muted-foreground">{q.period}</td>
                         <td className={`py-2.5 ${isPast ? "text-muted-foreground line-through" : ""}`}>{q.dueLabel}</td>
@@ -884,7 +884,7 @@ export function TaxEstimatorPage() {
                             />
                           </div>
                         </td>
-                        <td className={`py-2.5 text-right tabular-nums font-mono font-medium ${balance < -0.005 ? "text-emerald-600" : balance > 0.005 && isPast ? "text-amber-600" : ""}`}>
+                        <td className={`py-2.5 text-right tabular-nums font-mono font-medium ${balance < -0.005 ? "text-up" : balance > 0.005 && isPast ? "text-warn" : ""}`}>
                           {balance < -0.005
                             ? <span className="inline-flex items-center justify-end gap-1" title="Quarter satisfied — overpayment reduces final balance"><Check className="h-3 w-3" />{formatCurrency(0)}</span>
                             : formatCurrency(Math.max(0, balance))}
@@ -924,7 +924,7 @@ export function TaxEstimatorPage() {
               </div>
 
               {/* Safe harbor status */}
-              <div className={`flex items-start gap-2 rounded-md px-3 py-2.5 text-xs ${onTrack ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+              <div className={`flex items-start gap-2 rounded-md px-3 py-2.5 text-xs ${onTrack ? "bg-up-soft text-up-deep" : "bg-warn-soft text-warn-deep"}`}>
                 <span className="mt-0.5 shrink-0">{onTrack ? "✓" : "!"}</span>
                 <span>
                   {onTrack
@@ -989,7 +989,7 @@ export function TaxEstimatorPage() {
                     const balance = suggested - paid;
                     const isPast = q.dueDate ? today > q.dueDate : false;
                     return (
-                      <tr key={q.label} className={!q.noDue && isPast && balance > 0.005 ? "text-amber-700" : q.noDue ? "text-muted-foreground" : ""}>
+                      <tr key={q.label} className={!q.noDue && isPast && balance > 0.005 ? "text-warn-deep" : q.noDue ? "text-muted-foreground" : ""}>
                         <td className="py-2.5 font-medium">{q.label}</td>
                         <td className="py-2.5 text-muted-foreground">{q.period}</td>
                         <td className={`py-2.5 ${!q.noDue && isPast ? "text-muted-foreground line-through" : ""}`}>
@@ -1018,7 +1018,7 @@ export function TaxEstimatorPage() {
                             </div>
                           )}
                         </td>
-                        <td className={`py-2.5 text-right tabular-nums font-mono font-medium ${!q.noDue && balance < -0.005 ? "text-emerald-600" : !q.noDue && balance > 0.005 && isPast ? "text-amber-600" : ""}`}>
+                        <td className={`py-2.5 text-right tabular-nums font-mono font-medium ${!q.noDue && balance < -0.005 ? "text-up" : !q.noDue && balance > 0.005 && isPast ? "text-warn" : ""}`}>
                           {q.noDue ? (
                             <span className="text-muted-foreground">—</span>
                           ) : balance < -0.005 ? (
@@ -1064,7 +1064,7 @@ export function TaxEstimatorPage() {
               </div>
 
               {/* Safe harbor status */}
-              <div className={`flex items-start gap-2 rounded-md px-3 py-2.5 text-xs ${caOnTrack ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+              <div className={`flex items-start gap-2 rounded-md px-3 py-2.5 text-xs ${caOnTrack ? "bg-up-soft text-up-deep" : "bg-warn-soft text-warn-deep"}`}>
                 <span className="mt-0.5 shrink-0">{caOnTrack ? "✓" : "!"}</span>
                 <span>
                   {caOnTrack
@@ -1096,7 +1096,7 @@ export function TaxEstimatorPage() {
         <div className="relative rounded-lg border border-border bg-card px-4 py-3 shadow-card before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-t-lg before:pointer-events-none before:bg-gradient-to-r before:from-transparent before:via-white/85 before:to-transparent">
           <p className="tp-caption flex items-center gap-1.5">
             Estimated Federal Tax
-            {useTmt && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-100 text-violet-700">TMT</span>}
+            {useTmt && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-soft text-violet-deep">TMT</span>}
           </p>
           <DisplayStat as="p" className="mt-1 tp-stat">{formatCurrency(effectiveFederalTax)}</DisplayStat>
           {(withheldNum > 0 || totalQPaid > 0) && (() => {
@@ -1105,7 +1105,7 @@ export function TaxEstimatorPage() {
               ? "after withholding & payments"
               : totalQPaid > 0 ? "after est. payments" : "after withholding";
             return (
-              <p className={`mt-1 text-xs font-medium tabular-nums font-mono ${netOwed >= 0 ? "text-amber-600" : "text-emerald-600"}`}>
+              <p className={`mt-1 text-xs font-medium tabular-nums font-mono ${netOwed >= 0 ? "text-warn" : "text-up"}`}>
                 {netOwed >= 0
                   ? `${formatCurrency(netOwed)} owed ${suffix}`
                   : `${formatCurrency(Math.abs(netOwed))} refund ${suffix}`}
@@ -1116,7 +1116,7 @@ export function TaxEstimatorPage() {
         <div className="relative rounded-lg border border-border bg-card px-4 py-3 shadow-card before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-t-lg before:pointer-events-none before:bg-gradient-to-r before:from-transparent before:via-white/85 before:to-transparent">
           <p className="tp-caption flex items-center gap-1.5">
             Estimated State Tax <span className="text-muted-foreground/60">(CA)</span>
-            {useCaTmt && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-100 text-violet-700">TMT</span>}
+            {useCaTmt && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-soft text-violet-deep">TMT</span>}
           </p>
           <DisplayStat as="p" className="mt-1 tp-stat">{formatCurrency(effectiveCaTax)}</DisplayStat>
           {(caWithheldNum > 0 || totalCAQPaid > 0) && (() => {
@@ -1125,7 +1125,7 @@ export function TaxEstimatorPage() {
               ? "after withholding & payments"
               : totalCAQPaid > 0 ? "after est. payments" : "after withholding";
             return (
-              <p className={`mt-1 text-xs font-medium tabular-nums font-mono ${netOwed >= 0 ? "text-amber-600" : "text-emerald-600"}`}>
+              <p className={`mt-1 text-xs font-medium tabular-nums font-mono ${netOwed >= 0 ? "text-warn" : "text-up"}`}>
                 {netOwed >= 0
                   ? `${formatCurrency(netOwed)} owed ${suffix}`
                   : `${formatCurrency(Math.abs(netOwed))} refund ${suffix}`}
@@ -1150,13 +1150,13 @@ export function TaxEstimatorPage() {
               <div className="flex gap-1">
                 <div className="flex shrink-0 items-center justify-center w-5">
                   <SectionLabel as="span"
-                    className="text-[10px] text-amber-500 select-none"
+                    className="text-[10px] text-warn select-none"
                     style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
                   >
                     Ordinary
                   </SectionLabel>
                 </div>
-                <div className="flex-1 border-l-2 border-amber-300 pl-3">
+                <div className="flex-1 border-l-2 border-warn-line pl-3">
                   {calc.ordinaryFromApp !== 0 && (
                     <div className="flex items-baseline gap-1.5 py-1.5">
                       <span className="shrink-0">Ordinary Income</span>
@@ -1171,7 +1171,7 @@ export function TaxEstimatorPage() {
                         {calc.rawSTCG < 0 && <span className="ml-1 tp-caption">(loss)</span>}
                       </span>
                       <span className="flex-1 h-0.5 mb-0.5" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize: "5px 100%", backgroundRepeat: "repeat-x" }} />
-                      <span className={`shrink-0 tabular-nums font-mono ${calc.rawSTCG < 0 ? "text-destructive" : ""}`}>
+                      <span className={`shrink-0 tabular-nums font-mono ${calc.rawSTCG < 0 ? "text-down" : ""}`}>
                         {calc.rawSTCG < 0 ? "-" : ""}{formatCurrency(Math.abs(calc.rawSTCG))}
                       </span>
                     </div>
@@ -1184,7 +1184,7 @@ export function TaxEstimatorPage() {
                         {calc.rawCollectibleLTCG < 0 && <span className="ml-1 tp-caption">(loss)</span>}
                       </span>
                       <span className="flex-1 h-0.5 mb-0.5" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize: "5px 100%", backgroundRepeat: "repeat-x" }} />
-                      <span className={`shrink-0 tabular-nums font-mono ${calc.rawCollectibleLTCG < 0 ? "text-destructive" : ""}`}>
+                      <span className={`shrink-0 tabular-nums font-mono ${calc.rawCollectibleLTCG < 0 ? "text-down" : ""}`}>
                         {calc.rawCollectibleLTCG < 0 ? "-" : ""}{formatCurrency(Math.abs(calc.rawCollectibleLTCG))}
                       </span>
                     </div>
@@ -1214,13 +1214,13 @@ export function TaxEstimatorPage() {
               <div className="flex gap-1">
                 <div className="flex shrink-0 items-center justify-center w-5">
                   <SectionLabel as="span"
-                    className="text-[10px] text-emerald-600 select-none"
+                    className="text-[10px] text-up select-none"
                     style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
                   >
                     LT
                   </SectionLabel>
                 </div>
-                <div className="flex-1 border-l-2 border-emerald-300 pl-3">
+                <div className="flex-1 border-l-2 border-up-line pl-3">
                   {calc.qualDivFromApp !== 0 && (
                     <div className="flex items-baseline gap-1.5 py-1.5">
                       <span className="shrink-0">Qualified Dividends</span>
@@ -1235,7 +1235,7 @@ export function TaxEstimatorPage() {
                         {calc.rawLTCG < 0 && <span className="ml-1 tp-caption">(loss)</span>}
                       </span>
                       <span className="flex-1 h-0.5 mb-0.5" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize: "5px 100%", backgroundRepeat: "repeat-x" }} />
-                      <span className={`shrink-0 tabular-nums font-mono ${calc.rawLTCG < 0 ? "text-destructive" : ""}`}>
+                      <span className={`shrink-0 tabular-nums font-mono ${calc.rawLTCG < 0 ? "text-down" : ""}`}>
                         {calc.rawLTCG < 0 ? "-" : ""}{formatCurrency(Math.abs(calc.rawLTCG))}
                       </span>
                     </div>
@@ -1253,7 +1253,7 @@ export function TaxEstimatorPage() {
                         </button>
                       </span>
                       <span className="flex-1 h-0.5 mb-0.5" style={{ backgroundImage: "radial-gradient(circle, rgba(0,0,0,0.15) 1px, transparent 1px)", backgroundSize: "5px 100%", backgroundRepeat: "repeat-x" }} />
-                      <span className={`shrink-0 tabular-nums font-mono ${otherLTCGNum < 0 ? "text-destructive" : ""}`}>
+                      <span className={`shrink-0 tabular-nums font-mono ${otherLTCGNum < 0 ? "text-down" : ""}`}>
                         {otherLTCGNum < 0 ? "-" : ""}{formatCurrency(Math.abs(otherLTCGNum))}
                       </span>
                     </div>
@@ -1267,13 +1267,13 @@ export function TaxEstimatorPage() {
               <div className="flex gap-1">
                 <div className="flex shrink-0 items-center justify-center w-5">
                   <SectionLabel as="span"
-                    className="text-[10px] text-slate-400 select-none"
+                    className="text-[10px] text-slate select-none"
                     style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
                   >
                     $0
                   </SectionLabel>
                 </div>
-                <div className="flex-1 border-l-2 border-slate-200 pl-3 text-muted-foreground">
+                <div className="flex-1 border-l-2 border-slate-soft pl-3 text-muted-foreground">
                   {calc.exemptFromApp !== 0 && (
                     <div className="flex items-baseline gap-1.5 py-1.5">
                       <span className="shrink-0">Tax-Exempt Income</span>
@@ -1324,17 +1324,17 @@ export function TaxEstimatorPage() {
                 <div className="flex justify-between text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     {deductionLabel}
-                    {isCa && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-sky-100 text-sky-700">CA</span>}
-                    {(isCaTmt || isFedTmt) && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-100 text-violet-700">TMT</span>}
+                    {isCa && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-sky-soft text-sky-deep">CA</span>}
+                    {(isCaTmt || isFedTmt) && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-soft text-violet-deep">TMT</span>}
                     {isPhaseOut && <span className="text-xs italic">(partially phased out)</span>}
                   </span>
-                  <span className="text-destructive">-{formatCurrency(deductionAmt)}</span>
+                  <span className="text-down">-{formatCurrency(deductionAmt)}</span>
                 </div>
                 <div className="flex justify-between font-semibold">
                   <span className="flex items-center gap-1.5">
                     {totalLabel}
-                    {isCa && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-sky-100 text-sky-700">CA</span>}
-                    {(isCaTmt || isFedTmt) && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-100 text-violet-700">TMT</span>}
+                    {isCa && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-sky-soft text-sky-deep">CA</span>}
+                    {(isCaTmt || isFedTmt) && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-soft text-violet-deep">TMT</span>}
                   </span>
                   <span>{formatCurrency(totalAmt)}</span>
                 </div>
@@ -1343,7 +1343,7 @@ export function TaxEstimatorPage() {
           })()}
 
           {calc.hasCapLoss && (
-            <p className="mt-3 text-xs text-amber-600">
+            <p className="mt-3 text-xs text-warn">
               Capital loss of {formatCurrency(Math.abs(calc.stcgOrdinaryContrib + calc.ltcgContrib - calc.rawSTCG - calc.rawLTCG - otherLTCGNum) + Math.max(0, -calc.rawCollectibleLTCG))} exceeds gains.
               Up to {formatCurrency(3000)} is deductible against ordinary income this year; excess carries forward.
             </p>
@@ -1375,9 +1375,9 @@ export function TaxEstimatorPage() {
               <button
                 type="button"
                 onClick={() => setUseTmt((v) => { const next = !v; updateTaxAssumptions(year, { useTmt: next }); return next; })}
-                className={`ml-auto flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${useTmt ? "border-violet-300 bg-violet-50 text-violet-700" : "border-border text-muted-foreground hover:border-violet-300 hover:text-violet-700"}`}
+                className={`ml-auto flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${useTmt ? "border-violet-soft bg-violet-soft text-violet-deep" : "border-border text-muted-foreground hover:border-violet-soft hover:text-violet-deep"}`}
               >
-                <span className={`inline-block h-3.5 w-6 rounded-full transition-colors ${useTmt ? "bg-violet-500" : "bg-muted-foreground/30"}`}>
+                <span className={`inline-block h-3.5 w-6 rounded-full transition-colors ${useTmt ? "bg-violet" : "bg-muted-foreground/30"}`}>
                   <span className={`block h-3 w-3 translate-y-[1px] rounded-full bg-white shadow transition-transform ${useTmt ? "translate-x-[13px]" : "translate-x-[1px]"}`} />
                 </span>
                 Use TMT
@@ -1387,9 +1387,9 @@ export function TaxEstimatorPage() {
               <button
                 type="button"
                 onClick={() => setUseCaTmt((v) => { const next = !v; updateTaxAssumptions(year, { useCaTmt: next }); return next; })}
-                className={`ml-auto flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${useCaTmt ? "border-violet-300 bg-violet-50 text-violet-700" : "border-border text-muted-foreground hover:border-violet-300 hover:text-violet-700"}`}
+                className={`ml-auto flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${useCaTmt ? "border-violet-soft bg-violet-soft text-violet-deep" : "border-border text-muted-foreground hover:border-violet-soft hover:text-violet-deep"}`}
               >
-                <span className={`inline-block h-3.5 w-6 rounded-full transition-colors ${useCaTmt ? "bg-violet-500" : "bg-muted-foreground/30"}`}>
+                <span className={`inline-block h-3.5 w-6 rounded-full transition-colors ${useCaTmt ? "bg-violet" : "bg-muted-foreground/30"}`}>
                   <span className={`block h-3 w-3 translate-y-[1px] rounded-full bg-white shadow transition-transform ${useCaTmt ? "translate-x-[13px]" : "translate-x-[1px]"}`} />
                 </span>
                 Use TMT
@@ -1409,7 +1409,7 @@ export function TaxEstimatorPage() {
               <tr>
                 <td className="py-2">
                   <div className="flex items-center gap-2">
-                    <Briefcase className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                    <Briefcase className="h-3.5 w-3.5 shrink-0 text-warn" />
                     Ordinary Income Tax
                   </div>
                   <div className="ml-[1.375rem] tp-caption">{formatCurrency(calc.taxableOrdinary)} taxable</div>
@@ -1423,7 +1423,7 @@ export function TaxEstimatorPage() {
                 <tr>
                   <td className="py-2">
                     <div className="flex items-center gap-2">
-                      <TrendingUp className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                      <TrendingUp className="h-3.5 w-3.5 shrink-0 text-up" />
                       Capital Gains / Qualified Dividends Tax
                     </div>
                     <div className="ml-[1.375rem] tp-caption">{formatCurrency(calc.taxablePreferential)} taxable</div>
@@ -1438,7 +1438,7 @@ export function TaxEstimatorPage() {
                 <tr>
                   <td className="py-2">
                     <div className="flex items-center gap-2">
-                      <TrendingUp className="h-3.5 w-3.5 shrink-0 text-orange-400" />
+                      <TrendingUp className="h-3.5 w-3.5 shrink-0 text-orange-deep" />
                       Collectible Gains Tax
                     </div>
                     <div className="ml-[1.375rem] tp-caption">{formatCurrency(calc.collectibleContrib)} taxable</div>
@@ -1453,7 +1453,7 @@ export function TaxEstimatorPage() {
                 <tr>
                   <td className="py-2">
                     <div className="flex items-center gap-1.5">
-                      <Activity className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+                      <Activity className="h-3.5 w-3.5 shrink-0 text-blue" />
                       Net Investment Income Tax
                       <span className="group relative">
                         <span className="flex h-3.5 w-3.5 cursor-default items-center justify-center rounded-full border border-muted-foreground/40 text-[9px] font-bold leading-none text-muted-foreground">
@@ -1499,7 +1499,7 @@ export function TaxEstimatorPage() {
                   <tr>
                     <td className="py-2">
                       <div className="flex items-center gap-2">
-                        <Briefcase className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                        <Briefcase className="h-3.5 w-3.5 shrink-0 text-warn" />
                         Ordinary AMT Income Tax
                       </div>
                       <div className="ml-[1.375rem] tp-caption">{formatCurrency(amtCalc.amtiOrdinary)} taxable</div>
@@ -1512,7 +1512,7 @@ export function TaxEstimatorPage() {
                   <tr>
                     <td className="py-2">
                       <div className="flex items-center gap-2">
-                        <TrendingUp className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                        <TrendingUp className="h-3.5 w-3.5 shrink-0 text-up" />
                         Capital Gains / Qualified Dividends Tax
                       </div>
                       <div className="ml-[1.375rem] tp-caption">{formatCurrency(amtCalc.amtiPreferential)} taxable</div>
@@ -1525,7 +1525,7 @@ export function TaxEstimatorPage() {
                   <tr>
                     <td className="py-2">
                       <div className="flex items-center gap-2">
-                        <TrendingUp className="h-3.5 w-3.5 shrink-0 text-orange-400" />
+                        <TrendingUp className="h-3.5 w-3.5 shrink-0 text-orange-deep" />
                         Collectible Gains Tax
                       </div>
                       <div className="ml-[1.375rem] tp-caption">{formatCurrency(amtCalc.amtiCollectible)} taxable</div>
@@ -1538,7 +1538,7 @@ export function TaxEstimatorPage() {
                   <tr>
                     <td className="py-2">
                       <div className="flex items-center gap-1.5">
-                        <Activity className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+                        <Activity className="h-3.5 w-3.5 shrink-0 text-blue" />
                         Net Investment Income Tax
                         <span className="group relative">
                           <span className="flex h-3.5 w-3.5 cursor-default items-center justify-center rounded-full border border-muted-foreground/40 text-[9px] font-bold leading-none text-muted-foreground">
@@ -1571,7 +1571,7 @@ export function TaxEstimatorPage() {
               </tbody>
             </table>
             {/* Comparison note */}
-            <div className={`mt-3 rounded-md px-3 py-2.5 text-xs ${amtCalc.potentialCredit > 0 ? "bg-violet-50 text-violet-700" : "bg-amber-50 text-amber-700"}`}>
+            <div className={`mt-3 rounded-md px-3 py-2.5 text-xs ${amtCalc.potentialCredit > 0 ? "bg-violet-soft text-violet-deep" : "bg-warn-soft text-warn-deep"}`}>
               {amtCalc.potentialCredit > 0
                 ? <>TMT income tax ({formatCurrency(amtCalc.tmt)}) is <span className="font-semibold">{formatCurrency(amtCalc.potentialCredit)}</span> less than regular income tax ({formatCurrency(calc.totalTax - calc.niitTax)}). With sufficient prior-year AMT credits, your federal liability could be reduced to <span className="font-semibold">{formatCurrency(amtCalc.tmtTotal)}</span>{calc.niitTax > 0 ? <> ({formatCurrency(amtCalc.tmt)} TMT + {formatCurrency(calc.niitTax)} NIIT)</> : ""}.</>
                 : <>TMT income tax ({formatCurrency(amtCalc.tmt)}) exceeds regular income tax ({formatCurrency(calc.totalTax - calc.niitTax)}) by <span className="font-semibold">{formatCurrency(amtCalc.amtSurcharge)}</span>. AMT applies this year — prior-year credits cannot be used.</>}
@@ -1584,13 +1584,13 @@ export function TaxEstimatorPage() {
                 {withheldNum > 0 && (
                   <div className="flex justify-between text-muted-foreground">
                     <span>Less: Tax Withheld</span>
-                    <span className="text-destructive">-{formatCurrency(withheldNum)}</span>
+                    <span className="text-down">-{formatCurrency(withheldNum)}</span>
                   </div>
                 )}
                 {totalQPaid > 0 && (
                   <div className="flex justify-between text-muted-foreground">
                     <span>Less: Estimated Payments</span>
-                    <span className="text-destructive">-{formatCurrency(totalQPaid)}</span>
+                    <span className="text-down">-{formatCurrency(totalQPaid)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-semibold">
@@ -1626,7 +1626,7 @@ export function TaxEstimatorPage() {
                 <tr>
                   <td className="py-2">
                     <div className="flex items-center gap-2">
-                      <Briefcase className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                      <Briefcase className="h-3.5 w-3.5 shrink-0 text-warn" />
                       CA Income Tax
                     </div>
                     <div className="ml-[1.375rem] tp-caption">{formatCurrency(caCalc.caTaxable)} taxable</div>
@@ -1640,7 +1640,7 @@ export function TaxEstimatorPage() {
                   <tr>
                     <td className="py-2">
                       <div className="flex items-center gap-2">
-                        <Activity className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+                        <Activity className="h-3.5 w-3.5 shrink-0 text-blue" />
                         Mental Health Services Tax
                       </div>
                       <div className="ml-[1.375rem] tp-caption">{formatCurrency(caCalc.caMhstBase)} above $1M threshold</div>
@@ -1672,7 +1672,7 @@ export function TaxEstimatorPage() {
                   <tr>
                     <td className="py-2">
                       <div className="flex items-center gap-2">
-                        <Briefcase className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                        <Briefcase className="h-3.5 w-3.5 shrink-0 text-warn" />
                         CA AMT Income Tax
                       </div>
                       <div className="ml-[1.375rem] tp-caption">
@@ -1692,7 +1692,7 @@ export function TaxEstimatorPage() {
                 </tbody>
               </table>
               {/* Comparison note */}
-              <div className={`mt-3 rounded-md px-3 py-2.5 text-xs ${caTmtCalc.potentialCredit > 0 ? "bg-violet-50 text-violet-700" : "bg-amber-50 text-amber-700"}`}>
+              <div className={`mt-3 rounded-md px-3 py-2.5 text-xs ${caTmtCalc.potentialCredit > 0 ? "bg-violet-soft text-violet-deep" : "bg-warn-soft text-warn-deep"}`}>
                 {caTmtCalc.potentialCredit > 0
                   ? <>CA TMT is <span className="font-semibold">{formatCurrency(caTmtCalc.potentialCredit)}</span> less than your regular CA tax of {formatCurrency(caCalc.caTotalTax)}. With sufficient prior-year CA AMT credits, your state liability could be reduced to <span className="font-semibold">{formatCurrency(caTmtCalc.caTmt)}</span>.</>
                   : <>CA TMT ({formatCurrency(caTmtCalc.caTmt)}) exceeds regular CA tax ({formatCurrency(caCalc.caTotalTax)}) by <span className="font-semibold">{formatCurrency(caTmtCalc.amtSurcharge)}</span>. CA AMT applies this year — prior-year CA AMT credits cannot be used.</>}
@@ -1705,13 +1705,13 @@ export function TaxEstimatorPage() {
                   {caWithheldNum > 0 && (
                     <div className="flex justify-between text-muted-foreground">
                       <span>Less: CA Tax Withheld</span>
-                      <span className="text-destructive">-{formatCurrency(caWithheldNum)}</span>
+                      <span className="text-down">-{formatCurrency(caWithheldNum)}</span>
                     </div>
                   )}
                   {totalCAQPaid > 0 && (
                     <div className="flex justify-between text-muted-foreground">
                       <span>Less: Estimated Payments</span>
-                      <span className="text-destructive">-{formatCurrency(totalCAQPaid)}</span>
+                      <span className="text-down">-{formatCurrency(totalCAQPaid)}</span>
                     </div>
                   )}
                   <div className="flex justify-between font-semibold">
@@ -1855,7 +1855,7 @@ export function TaxEstimatorPage() {
                                       <span className="flex items-center gap-1.5 flex-wrap">
                                         {inc.source ?? <span className="text-muted-foreground italic">—</span>}
                                         {(split?.collectibleLtcg ?? 0) !== 0 && (
-                                          <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700">collectible</span>
+                                          <span className="rounded border border-warn-line bg-warn-soft px-1.5 py-0.5 text-xs font-medium text-warn-deep">collectible</span>
                                         )}
                                       </span>
                                     </td>
@@ -1863,19 +1863,19 @@ export function TaxEstimatorPage() {
                                     <td className="py-1.5 text-right font-mono tabular-nums">{formatCurrency(inc.amount)}</td>
                                     {group.bucket === "capital_gain" && (
                                       <>
-                                        <td className={`py-1.5 text-right font-mono tabular-nums ${split!.stcg < 0 ? "text-destructive" : ""}`}>
+                                        <td className={`py-1.5 text-right font-mono tabular-nums ${split!.stcg < 0 ? "text-down" : ""}`}>
                                           {split!.stcg !== 0
                                             ? (split!.stcg < 0 ? "-" : "") + formatCurrency(Math.abs(split!.stcg))
                                             : <span className="text-muted-foreground">—</span>}
                                         </td>
-                                        <td className={`py-1.5 text-right font-mono tabular-nums ${split!.ltcg < 0 ? "text-destructive" : ""}`}>
+                                        <td className={`py-1.5 text-right font-mono tabular-nums ${split!.ltcg < 0 ? "text-down" : ""}`}>
                                           {split!.ltcg !== 0
                                             ? (split!.ltcg < 0 ? "-" : "") + formatCurrency(Math.abs(split!.ltcg))
                                             : <span className="text-muted-foreground">—</span>}
                                         </td>
                                       </>
                                     )}
-                                    <td className={`py-1.5 text-right font-medium font-mono tabular-nums ${taxable < 0 ? "text-destructive" : taxable === 0 && group.bucket !== "capital_gain" ? "text-muted-foreground" : ""}`}>
+                                    <td className={`py-1.5 text-right font-medium font-mono tabular-nums ${taxable < 0 ? "text-down" : taxable === 0 && group.bucket !== "capital_gain" ? "text-muted-foreground" : ""}`}>
                                       {taxable === 0 && (group.bucket === "exempt" || group.bucket === "return_of_capital")
                                         ? "—"
                                         : (taxable < 0 ? "-" : "") + formatCurrency(Math.abs(taxable))}
@@ -1902,7 +1902,7 @@ export function TaxEstimatorPage() {
                                   <p className="flex items-center gap-1.5 text-13 font-medium">
                                     {inc.source ?? <span className="italic text-muted-foreground">No source</span>}
                                     {(split?.collectibleLtcg ?? 0) !== 0 && (
-                                      <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700">collectible</span>
+                                      <span className="rounded border border-warn-line bg-warn-soft px-1.5 py-0.5 text-xs font-medium text-warn-deep">collectible</span>
                                     )}
                                   </p>
                                   <p className="tp-caption">{formatDate(inc.date)} · {inc.account.name}</p>
@@ -1940,17 +1940,17 @@ export function TaxEstimatorPage() {
                             ) : group.bucket === "capital_gain" ? (
                               <span>
                                 {group.stcgTotal !== 0 && (
-                                  <span className={`mr-3 ${(group.stcgTotal ?? 0) < 0 ? "text-destructive" : ""}`}>
+                                  <span className={`mr-3 ${(group.stcgTotal ?? 0) < 0 ? "text-down" : ""}`}>
                                     ST: {formatCurrency(group.stcgTotal ?? 0)}
                                   </span>
                                 )}
                                 {group.ltcgTotal !== 0 && (
-                                  <span className={`${(group.collectibleLtcgTotal ?? 0) !== 0 ? "mr-3" : ""} ${(group.ltcgTotal ?? 0) < 0 ? "text-destructive" : ""}`}>
+                                  <span className={`${(group.collectibleLtcgTotal ?? 0) !== 0 ? "mr-3" : ""} ${(group.ltcgTotal ?? 0) < 0 ? "text-down" : ""}`}>
                                     LT: {formatCurrency(group.ltcgTotal ?? 0)}
                                   </span>
                                 )}
                                 {(group.collectibleLtcgTotal ?? 0) !== 0 && (
-                                  <span className={(group.collectibleLtcgTotal ?? 0) < 0 ? "text-destructive" : ""}>
+                                  <span className={(group.collectibleLtcgTotal ?? 0) < 0 ? "text-down" : ""}>
                                     Collectible: {formatCurrency(group.collectibleLtcgTotal ?? 0)}
                                   </span>
                                 )}
@@ -1984,7 +1984,7 @@ export function TaxEstimatorPage() {
                   {(anyOrdinaryInSections || (anyCollectibleInSections && !showCollectibleSeparately)) && (
                     <span className="w-[220px] shrink-0 text-right text-sm text-muted-foreground tabular-nums font-mono">
                       {snapshotNetST !== 0 && (
-                        <span className={snapshotNetST < 0 ? "text-destructive" : ""}>
+                        <span className={snapshotNetST < 0 ? "text-down" : ""}>
                           {snapshotNetST < 0 ? "-" : ""}{formatCurrency(Math.abs(snapshotNetST))}{" "}
                           <span className="text-xs">@ {fmtPct(calc.marginalOrdRate)} ordinary</span>
                         </span>
@@ -1997,7 +1997,7 @@ export function TaxEstimatorPage() {
                   {anyPreferentialInSections && (
                     <span className="w-[280px] shrink-0 text-right text-sm text-muted-foreground tabular-nums font-mono">
                       {snapshotNetLT !== 0 && (
-                        <span className={snapshotNetLT < 0 ? "text-destructive" : ""}>
+                        <span className={snapshotNetLT < 0 ? "text-down" : ""}>
                           {snapshotNetLT < 0 ? "-" : ""}{formatCurrency(Math.abs(snapshotNetLT))}{" "}
                           <span className="text-xs">@ {fmtPct(calc.marginalPrefRate)} LT capital gains</span>
                         </span>
@@ -2037,10 +2037,10 @@ export function TaxEstimatorPage() {
                                     {snap.account.name}
                                   </span>
                                 </td>
-                                <td className={`py-1.5 text-right tabular-nums font-mono ${netST < 0 ? "text-destructive" : netST === 0 ? "text-muted-foreground" : ""}`}>
+                                <td className={`py-1.5 text-right tabular-nums font-mono ${netST < 0 ? "text-down" : netST === 0 ? "text-muted-foreground" : ""}`}>
                                   {netST === 0 ? "—" : (netST < 0 ? "-" : "") + formatCurrency(Math.abs(netST))}
                                 </td>
-                                <td className={`py-1.5 text-right tabular-nums font-mono ${netLT < 0 ? "text-destructive" : netLT === 0 ? "text-muted-foreground" : ""}`}>
+                                <td className={`py-1.5 text-right tabular-nums font-mono ${netLT < 0 ? "text-down" : netLT === 0 ? "text-muted-foreground" : ""}`}>
                                   {netLT === 0 ? "—" : (netLT < 0 ? "-" : "") + formatCurrency(Math.abs(netLT))}
                                 </td>
                               </tr>
@@ -2064,8 +2064,8 @@ export function TaxEstimatorPage() {
                               {snap.account.name}
                             </div>
                             <div className="text-right text-13">
-                              {netST !== 0 && <p className={`tabular-nums font-mono ${netST < 0 ? "text-destructive" : ""}`}>ST: {netST < 0 ? "-" : ""}{formatCurrency(Math.abs(netST))}</p>}
-                              {netLT !== 0 && <p className={`tabular-nums font-mono ${netLT < 0 ? "text-destructive" : ""}`}>LT: {netLT < 0 ? "-" : ""}{formatCurrency(Math.abs(netLT))}</p>}
+                              {netST !== 0 && <p className={`tabular-nums font-mono ${netST < 0 ? "text-down" : ""}`}>ST: {netST < 0 ? "-" : ""}{formatCurrency(Math.abs(netST))}</p>}
+                              {netLT !== 0 && <p className={`tabular-nums font-mono ${netLT < 0 ? "text-down" : ""}`}>LT: {netLT < 0 ? "-" : ""}{formatCurrency(Math.abs(netLT))}</p>}
                               {netST === 0 && netLT === 0 && <p className="text-muted-foreground">—</p>}
                             </div>
                           </div>

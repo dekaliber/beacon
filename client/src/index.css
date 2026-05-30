@@ -23,13 +23,60 @@
   --color-ink-4: oklch(0.70 0.010 265); /* muted / disabled */
   --color-ink-5: oklch(0.86 0.008 265); /* hairlines, icon tints */
 
-  /* ── Semantic ────────────────────────────────────────────────────────── */
+  /* ── Status trio — up / down / warn (replaces destructive/success/warning) */
   --color-up:        oklch(0.62 0.13 158); /* positive delta, under-budget */
-  --color-up-soft:   color-mix(in oklab, oklch(0.62 0.13 158) 14%, transparent);
+  --color-up-deep:   oklch(0.46 0.11 158); /* pill / badge text on up-soft */
+  --color-up-soft:   color-mix(in oklab, var(--color-up) 14%, transparent);
+  --color-up-line:   color-mix(in oklab, var(--color-up) 22%, transparent);
   --color-down:      oklch(0.60 0.18 25);  /* negative delta, over-budget */
-  --color-down-soft: color-mix(in oklab, oklch(0.60 0.18 25) 14%, transparent);
+  --color-down-deep: oklch(0.47 0.17 25);  /* pill / badge text on down-soft */
+  --color-down-soft: color-mix(in oklab, var(--color-down) 14%, transparent);
+  --color-down-line: color-mix(in oklab, var(--color-down) 22%, transparent);
   --color-warn:      oklch(0.72 0.13 75);  /* reimbursement, soft alert */
-  --color-warn-soft: color-mix(in oklab, oklch(0.72 0.13 75) 16%, transparent);
+  --color-warn-deep: oklch(0.46 0.10 75);  /* pill / badge text on warn-soft */
+  --color-warn-soft: color-mix(in oklab, var(--color-warn) 16%, transparent);
+  --color-warn-line: color-mix(in oklab, var(--color-warn) 24%, transparent);
+
+  /* ── Categorical hues — §04 tags, tax classes, txn types ─────────────── */
+  --color-blue:        oklch(0.58 0.15 252);
+  --color-blue-deep:   oklch(0.45 0.15 252);
+  --color-blue-soft:   color-mix(in oklab, var(--color-blue) 14%, transparent);
+  --color-violet:      oklch(0.55 0.17 300);
+  --color-violet-deep: oklch(0.44 0.16 300);
+  --color-violet-soft: color-mix(in oklab, var(--color-violet) 14%, transparent);
+  --color-sky:         oklch(0.64 0.12 233);
+  --color-sky-deep:    oklch(0.47 0.11 233);
+  --color-sky-soft:    color-mix(in oklab, var(--color-sky) 16%, transparent);
+  --color-teal:        oklch(0.64 0.10 192);
+  --color-teal-deep:   oklch(0.45 0.09 192);
+  --color-teal-soft:   color-mix(in oklab, var(--color-teal) 16%, transparent);
+  --color-orange:      oklch(0.66 0.15 55);
+  --color-orange-deep: oklch(0.50 0.13 55);
+  --color-orange-soft: color-mix(in oklab, var(--color-orange) 15%, transparent);
+  --color-rose:        oklch(0.62 0.17 12);
+  --color-rose-deep:   oklch(0.48 0.16 12);
+  --color-rose-soft:   color-mix(in oklab, var(--color-rose) 14%, transparent);
+  /* Hue aliases — green/red/amber fold into status trio; slate into ink */
+  --color-green:       var(--color-up);
+  --color-green-deep:  var(--color-up-deep);
+  --color-green-soft:  var(--color-up-soft);
+  --color-red:         var(--color-down);
+  --color-red-deep:    var(--color-down-deep);
+  --color-red-soft:    var(--color-down-soft);
+  --color-amber:       var(--color-warn);
+  --color-amber-deep:  var(--color-warn-deep);
+  --color-amber-soft:  var(--color-warn-soft);
+  --color-slate:       var(--color-ink-3);
+  --color-slate-deep:  var(--color-ink-2);
+  --color-slate-soft:  color-mix(in oklab, var(--color-ink) 5%, transparent);
+
+  /* ── Row tints — §07; brighten on hover ──────────────────────────────── */
+  --color-row-recurring:           color-mix(in oklab, var(--color-primary) 7%, transparent);
+  --color-row-recurring-hover:     color-mix(in oklab, var(--color-primary) 11%, transparent);
+  --color-row-reimbursement:       color-mix(in oklab, var(--color-warn) 9%, transparent);
+  --color-row-reimbursement-hover: color-mix(in oklab, var(--color-warn) 14%, transparent);
+  --color-row-uncategorized:       color-mix(in oklab, var(--color-down) 7%, transparent);
+  --color-row-uncategorized-hover: color-mix(in oklab, var(--color-down) 11%, transparent);
 
   /* ── Brand / UI ──────────────────────────────────────────────────────── */
   --color-primary:          oklch(0.56 0.16 268);
@@ -42,15 +89,12 @@
   --color-muted-foreground: oklch(0.52 0.012 265); /* = ink-3 */
   --color-accent: #F1F5F9;
   --color-accent-foreground: #0F172A;
-  --color-destructive: #EF4444;
   --color-border: oklch(0.16 0.020 265 / 0.07);
   --color-ring: oklch(0.56 0.16 268);
   --color-background: oklch(0.985 0.006 260);
   --color-foreground: oklch(0.16 0.020 265); /* = ink */
   --color-card: oklch(1 0 0 / 0.62);
   --color-card-foreground: oklch(0.16 0.020 265);
-  --color-success: #10B981;
-  --color-warning: #F59E0B;
 
   /* ── Mesh gradient stops ─────────────────────────────────── */
 

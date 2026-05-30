@@ -46,6 +46,7 @@ function displayAmount(amount: string): string {
 
 // ── Upcoming strip ────────────────────────────────────────────────────────────
 
+// Decorative vendor-avatar palette (not §04 tags) — raw shades; revisit in §06 swatches.
 const VENDOR_COLORS = [
   "bg-blue-500", "bg-violet-500", "bg-orange-500", "bg-teal-500",
   "bg-pink-500", "bg-indigo-500", "bg-amber-500", "bg-cyan-500",
@@ -103,11 +104,11 @@ function UpcomingStrip({ expenses }: { expenses: UpcomingExpenseItem[] }) {
               key={key}
               className="flex min-w-[64px] flex-1 flex-col border-r border-border last:border-r-0"
             >
-              <div className={`px-1 py-2 text-center ${isToday ? "text-red-500" : "text-muted-foreground"}`}>
+              <div className={`px-1 py-2 text-center ${isToday ? "text-down" : "text-muted-foreground"}`}>
                 <SectionLabel as="div" className="text-[10px]">
                   {isToday ? "Today" : DAY_NAMES[day.getDay()]}
                 </SectionLabel>
-                <div className={`tp-panel-title leading-tight ${isToday ? "text-red-500" : ""}`}>
+                <div className={`tp-panel-title leading-tight ${isToday ? "text-down" : ""}`}>
                   {day.getDate()}
                 </div>
               </div>
@@ -141,7 +142,7 @@ function UpcomingStrip({ expenses }: { expenses: UpcomingExpenseItem[] }) {
                       </span>
                     )}
                     {credits.length > 0 && (
-                      <span className="rounded bg-muted px-1 py-0.5 text-[9px] font-medium text-green-600 whitespace-nowrap">
+                      <span className="rounded bg-muted px-1 py-0.5 text-[9px] font-medium text-up whitespace-nowrap">
                         +{formatCurrency(creditTotal)}
                       </span>
                     )}
@@ -255,7 +256,7 @@ function AnnualCostTooltip({ active, payload }: { active?: boolean; payload?: { 
         {d.items.map((item, i) => (
           <div key={i} className="flex items-start justify-between gap-2">
             <span className="truncate text-muted-foreground" style={{ maxWidth: 110 }}>{item.description}</span>
-            <span className={`shrink-0 font-medium ${item.isCredit ? "text-green-600" : ""}`}>
+            <span className={`shrink-0 font-medium ${item.isCredit ? "text-up" : ""}`}>
               {formatCurrency(item.annualized)}
             </span>
           </div>
@@ -435,7 +436,7 @@ function RuleDetailSheet({
                 <p className="mt-0.5 text-sm text-muted-foreground">{formatFrequency(rule.frequency, rule.interval)}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className={`text-lg font-bold ${parseFloat(rule.amount) < 0 ? "text-green-600" : ""}`}>
+                <span className={`text-lg font-bold ${parseFloat(rule.amount) < 0 ? "text-up" : ""}`}>
                   {displayAmount(rule.amount)}
                 </span>
                 <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-accent" aria-label="Close">
@@ -579,7 +580,7 @@ function EditRuleModal({
       {/* Scrollable form */}
       <div className="flex-1 overflow-y-auto overscroll-contain">
         <div className="space-y-4 p-4">
-          {error && <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
+          {error && <div className="rounded-md bg-down/10 px-3 py-2 text-sm text-down">{error}</div>}
 
           <div>
             <label className="mb-1.5 block text-sm font-medium">Description</label>
@@ -635,7 +636,7 @@ function EditRuleModal({
             </label>
             <input type="date" value={form.endDate} onChange={(e) => set({ endDate: e.target.value })} className={inputCls} />
             {endDateIsRetroactive && (
-              <p className="mt-1.5 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <p className="mt-1.5 rounded-md bg-warn-soft px-3 py-2 text-xs text-warn-deep">
                 This end date is in the past. Any recorded expenses in this series after{" "}
                 <span className="font-medium">{form.endDate}</span> will be permanently deleted.
               </p>
@@ -651,7 +652,7 @@ function EditRuleModal({
             type="button"
             onClick={() => { if (rule) { onClose(); setTimeout(() => onDeleteClick(rule), 200); } }}
             disabled={saving}
-            className="flex items-center gap-1.5 rounded-md px-3 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-md px-3 py-2.5 text-sm font-medium text-down hover:bg-down/10 transition-colors disabled:opacity-50"
           >
             <Trash2 className="h-4 w-4" />
             Delete
@@ -714,7 +715,7 @@ function ConfirmSheet({
               disabled={loading}
               className={cn(
                 "flex flex-1 items-center justify-center gap-1.5 rounded-md py-2.5 text-sm font-medium transition-colors disabled:opacity-50",
-                destructive ? "bg-destructive/10 text-destructive hover:bg-destructive/20" : "bg-primary text-primary-foreground hover:opacity-90"
+                destructive ? "bg-down/10 text-down hover:bg-down/20" : "bg-primary text-primary-foreground hover:opacity-90"
               )}
             >
               {confirmIcon}
@@ -787,7 +788,7 @@ function DeleteRuleSheet({
                       <div key={e.id} className="flex items-center gap-2 px-3 py-1.5">
                         <span className="shrink-0 text-muted-foreground">{formatDate(e.date)}</span>
                         <span className="flex-1 truncate">{e.description}</span>
-                        <span className={`shrink-0 font-medium${parseFloat(e.amount) < 0 ? " text-green-600" : ""}`}>{displayAmount(e.amount)}</span>
+                        <span className={`shrink-0 font-medium${parseFloat(e.amount) < 0 ? " text-up" : ""}`}>{displayAmount(e.amount)}</span>
                       </div>
                     ))}
                   </div>
@@ -797,14 +798,14 @@ function DeleteRuleSheet({
                 <div>
                   <p className="mb-1.5 text-xs font-medium text-foreground">
                     Upcoming instances ({futureExpenses.length}) —{" "}
-                    <span className="font-normal text-destructive">will be permanently deleted</span>
+                    <span className="font-normal text-down">will be permanently deleted</span>
                   </p>
                   <div className="max-h-28 overflow-y-auto rounded-md border border-border divide-y divide-border text-xs">
                     {futureExpenses.map((e) => (
                       <div key={e.id} className="flex items-center gap-2 px-3 py-1.5">
                         <span className="shrink-0 text-muted-foreground">{formatDate(e.date)}</span>
                         <span className="flex-1 truncate">{e.description}</span>
-                        <span className={`shrink-0 font-medium${parseFloat(e.amount) < 0 ? " text-green-600" : ""}`}>{displayAmount(e.amount)}</span>
+                        <span className={`shrink-0 font-medium${parseFloat(e.amount) < 0 ? " text-up" : ""}`}>{displayAmount(e.amount)}</span>
                       </div>
                     ))}
                   </div>
@@ -825,7 +826,7 @@ function DeleteRuleSheet({
             <button
               onClick={onDelete}
               disabled={loading || linkedExpenses === "loading"}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-destructive/10 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-down/10 py-2.5 text-sm font-medium text-down hover:bg-down/20 transition-colors disabled:opacity-50"
             >
               <Trash2 className="h-3.5 w-3.5" />
               {loading ? "Deleting…" : "Confirm Delete"}
@@ -1234,7 +1235,7 @@ export function MobileRecurring() {
                           onClick={() => setDetailRule(rule)}
                           className={cn(
                             "flex cursor-pointer items-center gap-3 px-4 py-3 active:bg-accent transition-colors",
-                            rule.id === highlightId && "bg-amber-50"
+                            rule.id === highlightId && "bg-warn-soft"
                           )}
                         >
                           <div className="min-w-0 flex-1">
@@ -1245,7 +1246,7 @@ export function MobileRecurring() {
                               {" · next "}{formatDate(rule.nextExpenseDate ?? rule.nextOccurrence)}
                             </p>
                           </div>
-                          <span className={`shrink-0 font-semibold text-sm ${parseFloat(rule.amount) < 0 ? "text-green-600" : ""}`}>
+                          <span className={`shrink-0 font-semibold text-sm ${parseFloat(rule.amount) < 0 ? "text-up" : ""}`}>
                             {displayAmount(rule.amount)}
                           </span>
                         </div>
@@ -1291,7 +1292,7 @@ export function MobileRecurring() {
                               {rule.endDate ? ` · ended ${formatDate(rule.endDate)}` : ""}
                             </p>
                           </div>
-                          <span className={`shrink-0 font-semibold text-sm ${parseFloat(rule.amount) < 0 ? "text-green-600" : ""}`}>
+                          <span className={`shrink-0 font-semibold text-sm ${parseFloat(rule.amount) < 0 ? "text-up" : ""}`}>
                             {displayAmount(rule.amount)}
                           </span>
                         </div>

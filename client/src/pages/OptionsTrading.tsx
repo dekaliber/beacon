@@ -2435,7 +2435,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
         <td style={{ left: 80 }}  className={stickyTd(80, undefined, true)}>
           <span className={cn(
             "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-            p.optionType === "CALL" ? "bg-blue-100 text-blue-700" : "bg-violet-soft text-violet-deep"
+            p.optionType === "CALL" ? "bg-blue-soft text-blue-deep" : "bg-violet-soft text-violet-deep"
           )}>
             {p.optionType === "CALL" ? "CC" : "CSP"}
           </span>
@@ -3304,7 +3304,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                 <td style={{ left: 80 }}  className={cn(tdText, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC]")}>
                   <span className={cn(
                     "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                    p.optionType === "CALL" ? "bg-blue-100 text-blue-700" : "bg-violet-soft text-violet-deep"
+                    p.optionType === "CALL" ? "bg-blue-soft text-blue-deep" : "bg-violet-soft text-violet-deep"
                   )}>
                     {p.optionType === "CALL" ? "CC" : "CSP"}
                   </span>
@@ -3362,7 +3362,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                     "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
                     p.outcome === "EXPIRED_WORTHLESS" ? "bg-up-soft text-up-deep" :
                     p.outcome === "ASSIGNED" ? "bg-warn-soft text-warn-deep" :
-                    p.outcome === "ROLLED" ? "bg-blue-100 text-blue-700" :
+                    p.outcome === "ROLLED" ? "bg-blue-soft text-blue-deep" :
                     "bg-muted text-muted-foreground"
                   )}>
                     {p.outcome ? outcomeLabel[p.outcome] : "—"}
@@ -4576,7 +4576,7 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
                           <td className="px-2 py-2">
                             <span className={cn(
                               "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                              r.optionType === "PUT" ? "bg-violet-soft text-violet-deep" : "bg-blue-100 text-blue-700"
+                              r.optionType === "PUT" ? "bg-violet-soft text-violet-deep" : "bg-blue-soft text-blue-deep"
                             )}>
                               {r.optionType}
                             </span>

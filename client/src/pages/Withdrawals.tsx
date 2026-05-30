@@ -49,13 +49,13 @@ const TYPE_LABELS: Record<WithdrawalType, string> = {
 };
 
 const TYPE_COLORS: Record<WithdrawalType, string> = {
-  dividend: "bg-violet-100 text-violet-700",
-  interest: "bg-sky-100 text-sky-700",
-  cap_gains_dist: "bg-blue-100 text-blue-700",
-  sale_proceeds: "bg-amber-100 text-amber-700",
-  return_of_capital: "bg-orange-100 text-orange-700",
-  transfer: "bg-emerald-100 text-emerald-700",
-  reinvestment: "bg-rose-100 text-rose-700",
+  dividend: "bg-violet-soft text-violet-deep",
+  interest: "bg-sky-soft text-sky-deep",
+  cap_gains_dist: "bg-blue-soft text-blue-deep",
+  sale_proceeds: "bg-warn-soft text-warn-deep",
+  return_of_capital: "bg-orange-soft text-orange-deep",
+  transfer: "bg-up-soft text-up-deep",
+  reinvestment: "bg-rose-soft text-rose-deep",
 };
 
 // ── Rate calculation ──────────────────────────────────────────────────────────
@@ -434,7 +434,7 @@ function TransferModal({
 
         {/* Managed account notice */}
         {managedInvestmentAccount && (
-          <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+          <div className="rounded-md bg-warn-soft border border-warn-line px-3 py-2 text-sm text-warn-deep">
             Since <strong>{managedInvestmentAccount.name}</strong> is a managed account, its balance
             won't be adjusted automatically. Update it manually once the transfer is complete.
           </div>
@@ -442,13 +442,13 @@ function TransferModal({
 
         {/* Future transfer notice */}
         {!isPastOrToday && !editingTransferId && (
-          <div className="rounded-md bg-sky-50 border border-sky-200 px-3 py-2 text-sm text-sky-800">
+          <div className="rounded-md bg-sky-soft border border-sky-soft px-3 py-2 text-sm text-sky-deep">
             This is a future transfer. Account balances will be updated automatically when the
             date arrives.
           </div>
         )}
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="text-sm text-down">{error}</p>}
 
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
@@ -525,7 +525,7 @@ function WithdrawalRow({
             ? "text-muted-foreground"
             : parseFloat(event.amount) > 0 && event.type !== "reinvestment"
             ? "text-foreground"
-            : "text-green-600"
+            : "text-up"
         }>
           {event.type === "reinvestment" ? "−" : ""}{formatCurrency(event.amount)}
         </span>
@@ -554,7 +554,7 @@ function WithdrawalRow({
             </button>
             <button
               onClick={() => onDelete(event)}
-              className="rounded p-1 hover:bg-accent text-muted-foreground hover:text-destructive"
+              className="rounded p-1 hover:bg-accent text-muted-foreground hover:text-down"
               title="Delete transfer"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -819,7 +819,7 @@ export function WithdrawalsPage() {
               </DisplayStat>
               {targetRate !== null && effectiveDenominator > 0 && ytdRate !== null && (
                 <span className={`text-sm font-medium tabular-nums font-mono ${
-                  ytdRate <= targetRate ? "text-green-600" : "text-red-500"
+                  ytdRate <= targetRate ? "text-up" : "text-down"
                 }`}>
                   {ytdRate <= targetRate
                     ? `▼ ${((targetRate - ytdRate) * 100).toFixed(2)}% under target`

@@ -211,12 +211,12 @@ export function MobileSecurities() {
                 );
               })}
               {instrument.isCollectible && (
-                <span className="rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 whitespace-nowrap">
+                <span className="rounded bg-warn-soft border border-warn-line px-1.5 py-0.5 text-[10px] font-medium text-warn-deep whitespace-nowrap">
                   28% max
                 </span>
               )}
               {!isComplete && (
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warn" />
               )}
             </div>
           )}
@@ -460,16 +460,16 @@ function EditOverlay({ instrument, allInstruments, assetClasses, onClose, onSave
             <div className={cn(
               "flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium mt-3",
               total > 100.01
-                ? "bg-destructive/10 text-destructive"
+                ? "bg-down/10 text-down"
                 : total >= 99.9
-                ? "bg-green-50 text-green-700"
+                ? "bg-up-soft text-up-deep"
                 : "bg-muted text-muted-foreground",
             )}>
               <span>Total</span>
               <span>{total.toFixed(1)}%</span>
             </div>
             {total > 100.01 && (
-              <p className="mt-1 text-xs text-destructive">Total exceeds 100%. Please adjust the weights.</p>
+              <p className="mt-1 text-xs text-down">Total exceeds 100%. Please adjust the weights.</p>
             )}
           </div>
 
@@ -526,7 +526,7 @@ function EditOverlay({ instrument, allInstruments, assetClasses, onClose, onSave
                       {t.ticker}
                       <button
                         onClick={() => setToRemove((prev) => new Set([...prev, t.ticker]))}
-                        className="ml-0.5 rounded hover:text-destructive"
+                        className="ml-0.5 rounded hover:text-down"
                       >
                         <X className="h-3 w-3" />
                       </button>

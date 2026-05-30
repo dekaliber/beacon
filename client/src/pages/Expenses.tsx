@@ -1032,7 +1032,7 @@ function EditableCategoryCell({
       ) : (
         <span
           onClick={startEditing}
-          className={`cursor-pointer border-b border-dotted border-transparent hover:border-gray-400 ${isUncategorized ? "text-red-500 font-medium" : ""}`}
+          className={`cursor-pointer border-b border-dotted border-transparent hover:border-gray-400 ${isUncategorized ? "text-down font-medium" : ""}`}
         >
           {isUncategorized ? "[Uncategorized]" : label}
         </span>
@@ -2087,7 +2087,7 @@ export function Expenses() {
             >
               <AlertTriangle className="h-4 w-4" />
               Show Uncategorized
-              <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+              <span className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-down text-xs font-bold text-white">
                 {uncategorizedCount}
               </span>
             </Button>
@@ -2283,11 +2283,11 @@ export function Expenses() {
                             <p className="truncate font-medium">{expense.description}</p>
                             <p className="text-sm text-muted-foreground">
                               {expense.vendor && <>{expense.vendor} &middot; </>}
-                              {expense.category?.name ?? <span className="text-red-500">[Uncategorized]</span>} &middot; {formatDate(expense.date)}
+                              {expense.category?.name ?? <span className="text-down">[Uncategorized]</span>} &middot; {formatDate(expense.date)}
                             </p>
                           </div>
                           <div className="ml-4 flex items-center gap-2">
-                            <span className={`font-semibold ${parseFloat(expense.amount) < 0 ? "text-green-600" : ""}`}>{formatCurrency(expense.amount)}</span>
+                            <span className={`font-semibold ${parseFloat(expense.amount) < 0 ? "text-up" : ""}`}>{formatCurrency(expense.amount)}</span>
                             <button onClick={() => openEdit(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"><Pencil className="h-4 w-4" /></button>
                           </div>
                         </div>
@@ -2377,21 +2377,21 @@ export function Expenses() {
                 <div
                   key={expense.id}
                   className={`flex items-center justify-between py-3 ${
-                    !expense.categoryId ? "bg-red-50/50" : expense.recurrenceRuleId ? "bg-blue-50/50" : expense.isReimbursementExpected ? "bg-amber-50/50" : ""
+                    !expense.categoryId ? "bg-row-uncategorized" : expense.recurrenceRuleId ? "bg-row-recurring" : expense.isReimbursementExpected ? "bg-row-reimbursement" : ""
                   }`}
                 >
                   <div className="min-w-0 flex-1 flex items-start gap-2">
-                    {expense.isReimbursementExpected && <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" />}
+                    {expense.isReimbursementExpected && <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-warn" />}
                     <div className="min-w-0">
                       <p className="truncate font-medium">{expense.description}</p>
                       <p className="text-sm text-muted-foreground">
                         {expense.vendor && <>{expense.vendor} &middot; </>}
-                        {expense.category?.name ?? <span className="text-red-500">[Uncategorized]</span>} &middot; {formatDate(expense.date)}
+                        {expense.category?.name ?? <span className="text-down">[Uncategorized]</span>} &middot; {formatDate(expense.date)}
                       </p>
                     </div>
                   </div>
                   <div className="ml-4 flex items-center gap-2">
-                    <span className={`font-semibold ${parseFloat(expense.amount) < 0 ? "text-green-600" : ""}`}>
+                    <span className={`font-semibold ${parseFloat(expense.amount) < 0 ? "text-up" : ""}`}>
                       {parseFloat(expense.amount) < 0
                         ? `+${formatCurrency(Math.abs(parseFloat(expense.amount)))}`
                         : formatCurrency(parseFloat(expense.amount))}
@@ -2549,7 +2549,7 @@ export function Expenses() {
         >
           <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="font-medium">{dragSource.vendor}</span>
-          <span className="text-green-600 font-semibold">
+          <span className="text-up font-semibold">
             +{formatCurrency(Math.abs(parseFloat(dragSource.amount)))}
           </span>
         </div>
@@ -2624,7 +2624,7 @@ function OffsetRow({
           {offset.account.isJoint ? "J" : "P"}
         </span>
       </td>
-      <td className="w-[90px] py-2 text-right font-semibold font-mono tabular-nums text-green-600">
+      <td className="w-[90px] py-2 text-right font-semibold font-mono tabular-nums text-up">
         <EditableAmountCell value={offset.amount} onSave={(v) => onInlineUpdate(offset.id, "amount", v)} isOffset />
       </td>
       <td className="w-[60px] py-2 text-right">
@@ -2672,25 +2672,25 @@ function ExpenseRowWithOffsets({
   const showOffsetDropZone = dragState?.started && dragState?.sourceType === "offset" && dragState?.sourceParentId === expense.id;
 
   const rowBg = isUncategorized
-    ? "bg-red-50/50 hover:bg-red-50"
+    ? "bg-row-uncategorized hover:bg-row-uncategorized-hover"
     : isRecurring
-    ? "bg-blue-50/50 hover:bg-blue-50"
+    ? "bg-row-recurring hover:bg-row-recurring-hover"
     : expense.isReimbursementExpected && !isFullyReimbursed
-    ? "bg-amber-50/50 hover:bg-amber-50"
+    ? "bg-row-reimbursement hover:bg-row-reimbursement-hover"
     : "hover:bg-muted/50";
 
   const upcomingClass = isUpcoming ? "italic opacity-60" : "";
-  const dragTargetClass = isDragTarget ? "ring-2 ring-blue-400 ring-inset bg-blue-50/60" : "";
+  const dragTargetClass = isDragTarget ? "ring-2 ring-primary ring-inset bg-primary/10" : "";
   const dragGhostClass = isBeingDragged ? "opacity-40" : "";
   const dragCursorClass = isNegativeStandalone ? "cursor-grab" : "";
 
   // Determine reimbursement status icon
   const StatusIcon = () => {
     if (isFullyReimbursed) {
-      return <span title="Fully reimbursed" className="inline-flex flex-shrink-0"><CheckCircle2 className="h-4 w-4 text-green-500" /></span>;
+      return <span title="Fully reimbursed" className="inline-flex flex-shrink-0"><CheckCircle2 className="h-4 w-4 text-up" /></span>;
     }
     if (expense.isReimbursementExpected) {
-      return <span title={expense.reimbursementNote ?? "Reimbursement expected"} className="inline-flex flex-shrink-0"><AlertCircle className="h-4 w-4 text-amber-500" /></span>;
+      return <span title={expense.reimbursementNote ?? "Reimbursement expected"} className="inline-flex flex-shrink-0"><AlertCircle className="h-4 w-4 text-warn" /></span>;
     }
     return null;
   };
@@ -2738,10 +2738,10 @@ function ExpenseRowWithOffsets({
             {isRecurring && (
               <button
                 title="View recurring rule"
-                className="inline-flex flex-shrink-0 rounded hover:bg-blue-100 transition-colors p-0.5 -m-0.5"
+                className="inline-flex flex-shrink-0 rounded hover:bg-primary/10 transition-colors p-0.5 -m-0.5"
                 onClick={(e) => { e.stopPropagation(); navigate(`/recurring?highlight=${expense.recurrenceRuleId}`); }}
               >
-                <Repeat className="h-3.5 w-3.5 text-blue-500" />
+                <Repeat className="h-3.5 w-3.5 text-primary" />
               </button>
             )}
             {expense.ignoreInBudget && <span title="Ignored in budget" className="inline-flex flex-shrink-0"><EyeOff className="h-3.5 w-3.5 text-gray-300" /></span>}
@@ -2761,7 +2761,7 @@ function ExpenseRowWithOffsets({
             {expense.account.isJoint ? "J" : "P"}
           </span>
         </td>
-        <td className={`w-[90px] py-2 text-right font-semibold font-mono tabular-nums ${parseFloat(expense.amount) < 0 ? "text-green-600" : ""}`}>
+        <td className={`w-[90px] py-2 text-right font-semibold font-mono tabular-nums ${parseFloat(expense.amount) < 0 ? "text-up" : ""}`}>
           <EditableAmountCell value={expense.amount} onSave={(v) => onInlineUpdate(expense.id, "amount", v)} />
         </td>
         <td className="w-[60px] py-2 text-right">
@@ -2797,7 +2797,7 @@ function ExpenseRowWithOffsets({
           data-dropzone={expense.id}
           className={`transition-colors ${
             dragState?.targetId === `__dz__${expense.id}`
-              ? "bg-blue-50"
+              ? "bg-primary/10"
               : ""
           }`}
         >
@@ -2805,7 +2805,7 @@ function ExpenseRowWithOffsets({
             colSpan={9}
             className={`py-2 px-4 text-sm text-center border-2 border-dashed rounded transition-colors ${
               dragState?.targetId === `__dz__${expense.id}`
-                ? "border-blue-400 text-blue-600"
+                ? "border-primary text-primary"
                 : "border-gray-300 text-muted-foreground"
             }`}
           >
@@ -3054,8 +3054,8 @@ function ImportModal({
                 onClick={() => setShowErrorsOnly((v) => !v)}
                 className={`flex items-center gap-1.5 rounded px-2 py-0.5 text-xs transition-colors ${
                   showErrorsOnly
-                    ? "bg-destructive/15 text-destructive font-medium"
-                    : "text-destructive hover:bg-destructive/10"
+                    ? "bg-down/15 text-down font-medium"
+                    : "text-down hover:bg-down/10"
                 }`}
               >
                 <AlertCircle className="h-3 w-3" />
@@ -3083,23 +3083,23 @@ function ImportModal({
                 {visibleRows.map((row) => {
                   const i = rows.indexOf(row);
                   return (
-                  <tr key={i} className={`border-b border-border ${row.errors.length > 0 ? "bg-destructive/5" : ""}`}>
+                  <tr key={i} className={`border-b border-border ${row.errors.length > 0 ? "bg-down/5" : ""}`}>
                     <td className="px-2 py-1.5 text-muted-foreground">{i + 1}</td>
                     <td className="px-2 py-1.5">{row.date}</td>
                     <td className="px-2 py-1.5 max-w-[150px] truncate">{row.description}</td>
                     <td className="px-2 py-1.5 max-w-[120px] truncate">{row.vendor}</td>
                     <td className="px-2 py-1.5 max-w-[120px] truncate">{row.categoryName || "—"}</td>
                     <td className="px-2 py-1.5 max-w-[100px] truncate">{row.accountName}</td>
-                    <td className={`px-2 py-1.5 text-right font-medium font-mono tabular-nums ${row.amount < 0 ? "text-green-600" : ""}`}>
+                    <td className={`px-2 py-1.5 text-right font-medium font-mono tabular-nums ${row.amount < 0 ? "text-up" : ""}`}>
                       {row.amount === 0 ? "—" : row.amount < 0 ? `+${formatCurrency(Math.abs(row.amount))}` : formatCurrency(row.amount)}
                     </td>
                     <td className="px-2 py-1.5">
                       {row.errors.length > 0 ? (
-                        <span className="text-destructive" title={row.errors.join("; ")}>
+                        <span className="text-down" title={row.errors.join("; ")}>
                           <AlertCircle className="inline h-3 w-3" /> {row.errors[0]}
                         </span>
                       ) : (
-                        <span className="text-green-600"><Check className="inline h-3 w-3" /></span>
+                        <span className="text-up"><Check className="inline h-3 w-3" /></span>
                       )}
                     </td>
                   </tr>
@@ -3130,13 +3130,13 @@ function ImportModal({
       {step === "result" && result && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-4">
-            <CheckCircle2 className="h-6 w-6 text-green-600 shrink-0" />
+            <CheckCircle2 className="h-6 w-6 text-up shrink-0" />
             <div>
               <p className="text-sm font-medium">
                 {result.imported} expense{result.imported !== 1 ? "s" : ""} imported successfully
               </p>
               {result.errors.length > 0 && (
-                <p className="text-xs text-destructive mt-1">
+                <p className="text-xs text-down mt-1">
                   {result.errors.length} row{result.errors.length !== 1 ? "s" : ""} failed on server
                 </p>
               )}
@@ -3144,7 +3144,7 @@ function ImportModal({
           </div>
 
           {result.errors.length > 0 && (
-            <div className="max-h-[150px] overflow-auto rounded-md border border-border p-2 text-xs text-destructive">
+            <div className="max-h-[150px] overflow-auto rounded-md border border-border p-2 text-xs text-down">
               {result.errors.map((e, i) => (
                 <div key={i}>Row {e.row}: {e.message}</div>
               ))}
@@ -3607,7 +3607,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
                   type="button"
                   onClick={handleDeleteClick}
                   disabled={deleting}
-                  className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                  className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-down hover:bg-down/10 transition-colors"
                 >
                   <Trash2 className="h-4 w-4" />
                   {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}

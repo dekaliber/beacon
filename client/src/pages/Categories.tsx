@@ -380,7 +380,7 @@ function CategoryModal({ open, onClose, onSave, onDelete, category, parentId, ki
                     await onDelete(reassignTo || undefined);
                     setDeleting(false);
                   }}
-                  className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-down hover:bg-down/10 transition-colors disabled:opacity-50"
                 >
                   {deleting ? "Deleting..." : "Confirm Delete"}
                 </button>
@@ -395,7 +395,7 @@ function CategoryModal({ open, onClose, onSave, onDelete, category, parentId, ki
                     setFetchingUsage(false);
                     setConfirmDelete(true);
                   }}
-                  className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                  className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-down hover:bg-down/10 transition-colors"
                 >
                   <Trash2 className="h-4 w-4" />
                   {fetchingUsage ? "..." : "Delete"}
@@ -419,8 +419,8 @@ function CategoryModal({ open, onClose, onSave, onDelete, category, parentId, ki
           const children = eligible.filter((c) => c.parentId);
           const recordLabel = kind === "INCOME" ? "income records" : "expenses";
           return (
-            <div className="space-y-3 rounded-md border border-amber-200 bg-amber-50 p-3">
-              <p className="text-sm text-amber-800">
+            <div className="space-y-3 rounded-md border border-warn-line bg-warn-soft p-3">
+              <p className="text-sm text-warn-deep">
                 {usageInfo.count} {recordLabel} use this category. Reassign them or leave uncategorized.
               </p>
               <div className="relative">

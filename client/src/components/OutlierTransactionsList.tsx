@@ -40,7 +40,7 @@ export function OutlierTransactionsList({ categories }: OutlierTransactionsListP
                 <span className="flex items-center gap-1.5 tp-fineprint">
                   <StatValue className="font-medium text-ink">{fmtAmount(cat.currentMonthTotal)}</StatValue>
                   <span>vs {fmtAmount(cat.historicalAvgMonthly)} avg</span>
-                  <StatValue className="font-medium text-destructive">+{excessPct}%</StatValue>
+                  <StatValue className="font-medium text-down">+{excessPct}%</StatValue>
                 </span>
               </div>
 

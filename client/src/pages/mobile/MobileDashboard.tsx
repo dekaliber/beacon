@@ -240,7 +240,7 @@ export function MobileDashboard() {
                   <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
                   <SectionLabel>Credit Cards</SectionLabel>
                 </div>
-                <StatValue as="p" className="text-sm font-semibold text-destructive">−{formatCurrency(scaledNetWorth.creditCardDebt)}</StatValue>
+                <StatValue as="p" className="text-sm font-semibold text-down">−{formatCurrency(scaledNetWorth.creditCardDebt)}</StatValue>
               </div>
             </div>
           </Card>
@@ -296,7 +296,7 @@ export function MobileDashboard() {
                   {" in "}{prevMonthName}{isCurrentMonth ? ` 1–${daysElapsed}` : ""}
                 </p>
                 <p className="mt-0.5 text-xs font-medium">
-                  <span className={`font-mono ${momDelta! > 0 ? "text-destructive" : "text-success"}`}>
+                  <span className={`font-mono ${momDelta! > 0 ? "text-down" : "text-up"}`}>
                     {momDelta! > 0 ? "+" : "–"}{fmtWhole(Math.abs(momDelta!))}
                   </span>{" "}
                   <span className="tp-fineprint">
@@ -312,7 +312,7 @@ export function MobileDashboard() {
         <Card>
           <div className="flex items-start gap-3">
             <svg
-              className={`mt-0.5 h-9 w-9 shrink-0 ${isOverBudget ? "text-destructive" : "text-success"}`}
+              className={`mt-0.5 h-9 w-9 shrink-0 ${isOverBudget ? "text-down" : "text-up"}`}
               viewBox="0 0 36 36"
             >
               <rect x="0" y="0" width="36" height="36" rx="8" fill="currentColor" fillOpacity="0.1" />
@@ -333,13 +333,13 @@ export function MobileDashboard() {
             <div className="min-w-0 flex-1">
               <p className="text-sm text-muted-foreground">Budget Used</p>
               {budgetPct !== null ? (
-                <DisplayStat as="p" className={`tp-kpi-l ${isOverBudget ? "text-destructive" : ""}`}>{budgetPct}%</DisplayStat>
+                <DisplayStat as="p" className={`tp-kpi-l ${isOverBudget ? "text-down" : ""}`}>{budgetPct}%</DisplayStat>
               ) : (
                 <p className="text-sm text-muted-foreground">No budget set</p>
               )}
               {budgetRemaining !== null && (
-                <p className={`mt-0.5 text-xs font-mono ${budgetRemaining < 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                  <span className={`font-medium font-mono ${budgetRemaining < 0 ? "text-destructive" : "text-foreground"}`}>
+                <p className={`mt-0.5 text-xs font-mono ${budgetRemaining < 0 ? "text-down" : "text-muted-foreground"}`}>
+                  <span className={`font-medium font-mono ${budgetRemaining < 0 ? "text-down" : "text-foreground"}`}>
                     {fmtWhole(Math.abs(budgetRemaining))}
                   </span>{" "}
                   {budgetRemaining < 0 ? "over budget" : "remaining"}
@@ -361,10 +361,10 @@ export function MobileDashboard() {
                         Personal
                       </span>
                       <span className="text-muted-foreground">
-                        <span className={`font-medium font-mono ${over ? "text-destructive" : "text-foreground"}`}>{fmtWhole(personalSpent)}</span>
+                        <span className={`font-medium font-mono ${over ? "text-down" : "text-foreground"}`}>{fmtWhole(personalSpent)}</span>
                         {" / "}{fmtWhole(personalBudget)}
                         {personalRemaining !== null && (
-                          <span className={over ? " text-destructive" : ""}>
+                          <span className={over ? " text-down" : ""}>
                             {" "}({over ? "+" : "−"}{fmtWhole(Math.abs(personalRemaining!))})
                           </span>
                         )}
@@ -375,7 +375,7 @@ export function MobileDashboard() {
                         className="h-full rounded-full transition-all"
                         style={{
                           width: `${pct}%`,
-                          backgroundColor: over ? "var(--color-destructive)" : "var(--color-success)",
+                          backgroundColor: over ? "var(--color-down)" : "var(--color-up)",
                         }}
                       />
                     </div>
@@ -393,10 +393,10 @@ export function MobileDashboard() {
                         Joint
                       </span>
                       <span className="text-muted-foreground">
-                        <span className={`font-medium font-mono ${over ? "text-destructive" : "text-foreground"}`}>{fmtWhole(jointSpent)}</span>
+                        <span className={`font-medium font-mono ${over ? "text-down" : "text-foreground"}`}>{fmtWhole(jointSpent)}</span>
                         {" / "}{fmtWhole(jointBudget)}
                         {jointRemaining !== null && (
-                          <span className={over ? " text-destructive" : ""}>
+                          <span className={over ? " text-down" : ""}>
                             {" "}({over ? "+" : "−"}{fmtWhole(Math.abs(jointRemaining!))})
                           </span>
                         )}
@@ -407,7 +407,7 @@ export function MobileDashboard() {
                         className="h-full rounded-full transition-all"
                         style={{
                           width: `${pct}%`,
-                          backgroundColor: over ? "var(--color-destructive)" : "var(--color-success)",
+                          backgroundColor: over ? "var(--color-down)" : "var(--color-up)",
                         }}
                       />
                     </div>
@@ -489,7 +489,7 @@ export function MobileDashboard() {
                   {mtdChart.monthlyBudget[chartView] > 0 && (
                     <ReferenceLine
                       y={mtdChart.monthlyBudget[chartView]}
-                      stroke="var(--color-destructive)"
+                      stroke="var(--color-down)"
                       strokeWidth={1}
                       strokeDasharray="3 3"
                       strokeOpacity={0.5}
@@ -606,7 +606,7 @@ export function MobileDashboard() {
               <tbody>
                 {dashboardOutliers.outliers.map((o, i) => {
                   const increase = o.delta > 0;
-                  const deltaColor = increase ? "text-destructive" : "text-success";
+                  const deltaColor = increase ? "text-down" : "text-up";
                   const deltaSign = increase ? "+" : "−";
                   return (
                     <tr

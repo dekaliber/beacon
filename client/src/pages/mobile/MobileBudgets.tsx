@@ -202,7 +202,7 @@ function PaceBar({ normalizedYTD, budget, pctElapsed }: { normalizedYTD: number;
       <div className="relative h-3 overflow-hidden rounded-full bg-secondary">
         <div
           className={`h-full rounded-full transition-all ${
-            overBudget ? "bg-destructive" : overPace ? "bg-warning" : "bg-success"
+            overBudget ? "bg-down" : overPace ? "bg-warn" : "bg-up"
           }`}
           style={{ width: `${spentPct}%` }}
         />
@@ -539,7 +539,7 @@ function BudgetPanelSection({
               }
               valueClass={
                 paceVariance != null
-                  ? paceVariance > 0 ? "text-destructive" : "text-success"
+                  ? paceVariance > 0 ? "text-down" : "text-up"
                   : undefined
               }
               sub={
@@ -567,8 +567,8 @@ function BudgetPanelSection({
               valueClass={
                 panel.effectiveAnnualBudget > 0 && (completedMonthCount > 0 || isCurrentYear)
                   ? panel.mtdTotal > panel.effectiveAnnualBudget / 12
-                    ? "text-destructive"
-                    : "text-success"
+                    ? "text-down"
+                    : "text-up"
                   : undefined
               }
               sub={isCurrentYear && daysLeft > 0 ? `${daysLeft} days remaining` : "month complete"}
@@ -579,7 +579,7 @@ function BudgetPanelSection({
               plain
               label="Remaining spend target"
               value={remainingDaily !== null ? fmt(remainingDaily) : "—"}
-              valueClass={remainingDaily !== null && remainingDaily < 0 ? "text-destructive" : undefined}
+              valueClass={remainingDaily !== null && remainingDaily < 0 ? "text-down" : undefined}
               sub={daysLeft > 0 ? "per day" : isCurrentYear ? "month complete" : undefined}
             />
           </div>
@@ -636,7 +636,7 @@ function BudgetPanelSection({
               value={fmt(panel.projectedAnnual)}
               valueClass={
                 panel.effectiveAnnualBudget > 0 && panel.projectedAnnual > panel.effectiveAnnualBudget
-                  ? "text-destructive"
+                  ? "text-down"
                   : undefined
               }
               sub={
@@ -724,7 +724,7 @@ function BudgetPanelSection({
             <div className="relative h-2 rounded-full bg-secondary">
               <div className="absolute top-0 h-full rounded-full bg-primary/20" style={{ left: `${lowPct}%`, width: `${highPct - lowPct}%` }} />
               <div className="absolute top-0 h-full w-0.5 rounded-full bg-primary" style={{ left: `${centerPct}%` }} />
-              <div className="absolute top-0 h-full w-0.5 rounded-full bg-destructive/60" style={{ left: `${budgetPct}%` }} />
+              <div className="absolute top-0 h-full w-0.5 rounded-full bg-down/60" style={{ left: `${budgetPct}%` }} />
             </div>
             <div className="relative mt-1 h-4">
               <span
@@ -776,8 +776,8 @@ function BudgetPanelSection({
         <div
           className={`flex-shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${
             isOverPace
-              ? "bg-destructive/10 text-destructive"
-              : "bg-success/10 text-success"
+              ? "bg-down/10 text-down"
+              : "bg-up/10 text-up"
           }`}
         >
           {pctLabel(displayPctAboveBelow)} {isOverPace ? "over" : "under"} budget
@@ -849,7 +849,7 @@ function SplitSection({ personal, joint }: { personal: BudgetPanel; joint: Budge
         </div>
         <DisplayStat as="p" className="tp-stat leading-tight">{fmt(ytd)}</DisplayStat>
         <div className="space-y-0.5 text-xs font-mono">
-          <p className={overTarget ? "text-destructive font-medium" : underTarget ? "text-success font-medium" : "text-muted-foreground"}>
+          <p className={overTarget ? "text-down font-medium" : underTarget ? "text-up font-medium" : "text-muted-foreground"}>
             {Math.round(actualPct * 100)}% of actual spend
           </p>
           {targetPct != null && (
@@ -941,7 +941,7 @@ function MonthlyTrendSection({ monthlyTotals, monthlyBudget }: { monthlyTotals: 
           <Bar dataKey="personalSpent" name="Personal" stackId="a" fill={PERSONAL_COLOR} />
           <Bar dataKey="jointSpent" name="Joint" stackId="a" fill={JOINT_COLOR} radius={[3, 3, 0, 0]} />
           {monthlyBudget != null && monthlyBudget > 0 && (
-            <ReferenceLine y={monthlyBudget} stroke="var(--color-destructive)" strokeWidth={1} strokeDasharray="3 3" strokeOpacity={0.5} />
+            <ReferenceLine y={monthlyBudget} stroke="var(--color-down)" strokeWidth={1} strokeDasharray="3 3" strokeOpacity={0.5} />
           )}
         </BarChart>
       </ResponsiveContainer>
@@ -957,7 +957,7 @@ function MonthlyTrendSection({ monthlyTotals, monthlyBudget }: { monthlyTotals: 
         {monthlyBudget != null && monthlyBudget > 0 && (
           <div className="flex items-center gap-1.5">
             <svg width={16} height={8}>
-              <line x1="0" y1="4" x2="16" y2="4" stroke="var(--color-destructive)" strokeWidth="1" strokeDasharray="3 3" strokeOpacity="0.5" />
+              <line x1="0" y1="4" x2="16" y2="4" stroke="var(--color-down)" strokeWidth="1" strokeDasharray="3 3" strokeOpacity="0.5" />
             </svg>
             <span className="tp-caption">Monthly budget</span>
           </div>
@@ -1011,7 +1011,7 @@ function CategoryPacingTable({ outliers, year }: { outliers: CategoryOutliersDat
           {visibleItems.map((item: CategoryOutlier, i: number) => {
             const pct   = item.previousAmount > 0 ? item.currentAmount / item.previousAmount - 1 : null;
             const over  = pct !== null && pct > 0;
-            const changeColor = over ? "text-destructive" : item.currentAmount > 0 ? "text-success" : "text-muted-foreground";
+            const changeColor = over ? "text-down" : item.currentAmount > 0 ? "text-up" : "text-muted-foreground";
             return (
               <tr
                 key={item.categoryId ?? `__cat${i}__`}
@@ -1066,7 +1066,7 @@ function YoYBadge({ avgByYear, years, year }: { avgByYear: number[]; years: numb
 
   return (
     <div className={`w-20 flex flex-col items-center rounded-md p-2 ${
-      up ? "bg-destructive/10 text-destructive" : "bg-success/10 text-success"
+      up ? "bg-down/10 text-down" : "bg-up/10 text-up"
     }`}>
       <div className="flex items-center gap-1">
         <Icon className="h-3.5 w-3.5 shrink-0" />

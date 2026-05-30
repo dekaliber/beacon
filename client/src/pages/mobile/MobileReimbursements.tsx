@@ -48,12 +48,12 @@ export function MobileReimbursements() {
         </div>
 
         {expenses.length > 0 && (
-          <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-            <span className="flex items-center gap-2 text-sm font-medium text-amber-800">
+          <div className="flex items-center justify-between rounded-xl border border-warn-line bg-warn-soft px-4 py-3">
+            <span className="flex items-center gap-2 text-sm font-medium text-warn-deep">
               <AlertCircle className="h-4 w-4" />
               {expenses.length} pending
             </span>
-            <StatValue className="text-sm font-semibold text-amber-800">
+            <StatValue className="text-sm font-semibold text-warn-deep">
               {formatCurrency(total)}
             </StatValue>
           </div>
@@ -71,7 +71,7 @@ export function MobileReimbursements() {
           <div className="overflow-hidden rounded-xl border border-border divide-y divide-border">
             {expenses.map((expense) => (
               <div key={expense.id} className="flex items-start gap-3 px-4 py-3">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warn" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{expense.description}</p>
                   <p className="tp-caption">
@@ -84,7 +84,7 @@ export function MobileReimbursements() {
                   )}
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
-                  <StatValue className="text-sm font-semibold text-destructive">
+                  <StatValue className="text-sm font-semibold text-down">
                     -{formatCurrency(expense.amount)}
                   </StatValue>
                   <button
@@ -139,7 +139,7 @@ export function MobileReimbursements() {
             <button
               type="button"
               onClick={confirmResolve}
-              className="flex-1 rounded-md bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors"
+              className="flex-1 rounded-md bg-up py-3 text-sm font-semibold text-white hover:bg-up transition-colors"
             >
               Confirm
             </button>

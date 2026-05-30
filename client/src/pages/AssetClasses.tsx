@@ -146,8 +146,8 @@ export function AssetClassesPage() {
           className={cn(
             "flex items-center gap-3 rounded-lg border px-4 py-3 text-sm",
             Math.abs(leafTotal - 100) < 0.1
-              ? "border-green-200 bg-green-50 text-green-800"
-              : "border-amber-200 bg-amber-50 text-amber-800"
+              ? "border-up-line bg-up-soft text-up-deep"
+              : "border-warn-line bg-warn-soft text-warn-deep"
           )}
         >
           <Target className="h-4 w-4 shrink-0" />
@@ -458,7 +458,7 @@ function AssetClassModal({ open, onClose, onSave, onDelete, editing, isChild }: 
                   setDeleting(false);
                 }}
                 disabled={deleting}
-                className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-down hover:bg-down/10 transition-colors"
               >
                 <Trash2 className="h-4 w-4" />
                 {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}

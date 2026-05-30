@@ -118,7 +118,7 @@ function GainText({ value, pct, size = "sm" }: { value: number | null; pct?: num
   const Icon = positive ? TrendingUp : TrendingDown;
   const sizeClass = size === "base" ? "text-base font-semibold" : "text-sm font-medium";
   return (
-    <span className={`inline-flex items-center gap-1 tabular-nums font-mono ${positive ? "text-green-600" : "text-red-500"} ${sizeClass}`}>
+    <span className={`inline-flex items-center gap-1 tabular-nums font-mono ${positive ? "text-up" : "text-down"} ${sizeClass}`}>
       <Icon className="h-3.5 w-3.5 shrink-0" />
       {formatCurrency(Math.abs(value))}
       {pct != null && <span className="text-xs opacity-70">({Math.abs(pct).toFixed(2)}%)</span>}
@@ -219,7 +219,7 @@ function MobileGrowthChart({ accountId }: { accountId: string }) {
           ))}
         </div>
         {periodGain != null && (
-          <span className={`text-13 font-semibold tabular-nums font-mono ${periodGain >= 0 ? "text-green-600" : "text-red-500"}`}>
+          <span className={`text-13 font-semibold tabular-nums font-mono ${periodGain >= 0 ? "text-up" : "text-down"}`}>
             {periodGain >= 0 ? "+" : "−"}{formatCurrency(Math.abs(periodGain))}
             {periodGainPct != null && (
               <span className="text-xs ml-1 opacity-70">({Math.abs(periodGainPct).toFixed(2)}%)</span>
@@ -377,7 +377,7 @@ function CashEditSheet({
             <button
               type="button"
               onClick={() => onSaved(null).then(onClose)}
-              className="w-full text-center tp-caption hover:text-destructive"
+              className="w-full text-center tp-caption hover:text-down"
             >
               Clear cash balance
             </button>
@@ -526,7 +526,7 @@ function LotEditScreen({
           </div>
         )}
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="text-sm text-down">{error}</p>}
       </div>
 
       <div className="shrink-0 border-t border-border p-4 flex gap-3">
@@ -771,7 +771,7 @@ function HoldingDetailSheet({
                                   setDeletingLotId(isDeletingThis ? null : lot.id);
                                   setLotDeleteError(null);
                                 }}
-                                className="rounded p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                className="rounded p-1.5 text-muted-foreground hover:text-down hover:bg-down/10 transition-colors"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -780,10 +780,10 @@ function HoldingDetailSheet({
 
                           {/* Lot delete confirmation */}
                           {isDeletingThis && (
-                            <div className="mt-2 rounded-md bg-destructive/10 px-3 py-2.5 space-y-2">
+                            <div className="mt-2 rounded-md bg-down/10 px-3 py-2.5 space-y-2">
                               {lotDeleteError ? (
                                 <>
-                                  <p className="text-xs text-destructive">{lotDeleteError}</p>
+                                  <p className="text-xs text-down">{lotDeleteError}</p>
                                   <div className="flex gap-2">
                                     <button
                                       type="button"
@@ -795,7 +795,7 @@ function HoldingDetailSheet({
                                     <button
                                       type="button"
                                       onClick={() => handleDeleteLot(lot.id, true)}
-                                      className="flex-1 rounded bg-destructive py-1.5 text-xs font-medium text-destructive-foreground"
+                                      className="flex-1 rounded bg-down py-1.5 text-xs font-medium text-white"
                                     >
                                       Delete Anyway
                                     </button>
@@ -815,7 +815,7 @@ function HoldingDetailSheet({
                                     <button
                                       type="button"
                                       onClick={() => handleDeleteLot(lot.id)}
-                                      className="flex-1 rounded bg-destructive py-1.5 text-xs font-medium text-destructive-foreground"
+                                      className="flex-1 rounded bg-down py-1.5 text-xs font-medium text-white"
                                     >
                                       Delete
                                     </button>
@@ -846,14 +846,14 @@ function HoldingDetailSheet({
                   <button
                     type="button"
                     onClick={() => setConfirmDeleteHolding(true)}
-                    className="w-full rounded-md border border-destructive/30 py-2.5 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                    className="w-full rounded-md border border-down/30 py-2.5 text-sm font-medium text-down hover:bg-down/10 transition-colors"
                   >
                     Delete holding
                   </button>
                 ) : (
-                  <div className="rounded-md bg-destructive/10 px-3 py-3 space-y-2">
+                  <div className="rounded-md bg-down/10 px-3 py-3 space-y-2">
                     {holdingDeleteError && (
-                      <p className="text-xs text-destructive">{holdingDeleteError}</p>
+                      <p className="text-xs text-down">{holdingDeleteError}</p>
                     )}
                     <p className="text-xs font-medium">
                       {holdingDeleteError ? "Delete anyway? This will orphan sale history." : `Delete ${holding.ticker} and all its lots?`}
@@ -870,7 +870,7 @@ function HoldingDetailSheet({
                         type="button"
                         disabled={deletingHolding}
                         onClick={() => handleDeleteHolding(!!holdingDeleteError)}
-                        className="flex-1 rounded bg-destructive py-2 text-sm font-medium text-destructive-foreground disabled:opacity-50"
+                        className="flex-1 rounded bg-down py-2 text-sm font-medium text-white disabled:opacity-50"
                       >
                         {deletingHolding ? "Deleting…" : "Delete"}
                       </button>
@@ -916,10 +916,10 @@ function ActivityDetailSheet({
   const gain = a ? (a.shortTermGain ?? 0) + (a.longTermGain ?? 0) : 0;
 
   const badgeClass = isSale
-    ? "bg-blue-100 text-blue-700"
+    ? "bg-blue-soft text-blue-deep"
     : isPurchase
-    ? "bg-green-100 text-green-700"
-    : "bg-violet-100 text-violet-700";
+    ? "bg-up-soft text-up-deep"
+    : "bg-violet-soft text-violet-deep";
   const badgeLabel = isSale ? "Sale" : isPurchase ? "Purchase" : "Dividend";
 
   return (
@@ -1243,7 +1243,7 @@ function AddInvestmentFullscreen({
                     <button
                       type="button"
                       onClick={() => setLots((prev) => prev.filter((_, idx) => idx !== i))}
-                      className="text-muted-foreground hover:text-destructive"
+                      className="text-muted-foreground hover:text-down"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -1313,7 +1313,7 @@ function AddInvestmentFullscreen({
               </button>
             )}
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="text-sm text-down">{error}</p>}
           </>
         )}
       </div>
@@ -1461,7 +1461,7 @@ function AddManualFullscreen({
           </div>
         )}
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="text-sm text-down">{error}</p>}
       </div>
 
       <div className="shrink-0 border-t border-border p-4 flex gap-3">
@@ -1714,7 +1714,7 @@ export function MobileInvestmentAccount() {
             >
               {tab}
               {tab === "activity" && hasActivityNotification && (
-                <span className="absolute top-1.5 right-1 h-1.5 w-1.5 rounded-full bg-red-500" />
+                <span className="absolute top-1.5 right-1 h-1.5 w-1.5 rounded-full bg-down" />
               )}
             </button>
           ))}
@@ -1825,12 +1825,12 @@ export function MobileInvestmentAccount() {
             {pendingDividends && pendingDividends.length > 0 && (
               <div className="rounded-xl border border-border overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30">
-                  <Clock className="h-4 w-4 text-violet-500" />
+                  <Clock className="h-4 w-4 text-violet-deep" />
                   <span className="text-sm font-semibold">Pending Dividends</span>
-                  <span className="ml-1 inline-flex items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[10px] font-semibold px-1.5 py-0.5">
+                  <span className="ml-1 inline-flex items-center justify-center rounded-full bg-violet-soft text-violet-deep text-[10px] font-semibold px-1.5 py-0.5">
                     {pendingDividends.length}
                   </span>
-                  <StatValue className="ml-auto text-sm font-semibold text-violet-600">
+                  <StatValue className="ml-auto text-sm font-semibold text-violet-deep">
                     {formatCurrency(pendingDividends.reduce((s, pd) => s + parseFloat(pd.estimatedTotal), 0))}
                   </StatValue>
                 </div>
@@ -1879,10 +1879,10 @@ export function MobileInvestmentAccount() {
                   {(["PURCHASE", "SALE", "DIVIDEND"] as const).filter((t) => presentTypes.has(t)).map((type) => {
                     const active = selectedTypes.has(type);
                     const cls = type === "PURCHASE"
-                      ? active ? "bg-green-100 text-green-700 border-green-300" : "border-border text-muted-foreground"
+                      ? active ? "bg-up-soft text-up-deep border-up-line" : "border-border text-muted-foreground"
                       : type === "SALE"
-                      ? active ? "bg-blue-100 text-blue-700 border-blue-300" : "border-border text-muted-foreground"
-                      : active ? "bg-violet-100 text-violet-700 border-violet-300" : "border-border text-muted-foreground";
+                      ? active ? "bg-blue-soft text-blue-deep border-blue-soft" : "border-border text-muted-foreground"
+                      : active ? "bg-violet-soft text-violet-deep border-violet-soft" : "border-border text-muted-foreground";
                     return (
                       <button
                         key={type}
@@ -1928,10 +1928,10 @@ export function MobileInvestmentAccount() {
                 const isPurchase = a.type === "PURCHASE";
                 const isSale = a.type === "SALE";
                 const badgeClass = isSale
-                  ? "bg-blue-100 text-blue-700"
+                  ? "bg-blue-soft text-blue-deep"
                   : isPurchase
-                  ? "bg-green-100 text-green-700"
-                  : "bg-violet-100 text-violet-700";
+                  ? "bg-up-soft text-up-deep"
+                  : "bg-violet-soft text-violet-deep";
                 const badgeLabel = isSale ? "Sale" : isPurchase ? "Purchase" : "Dividend";
                 const gain = (a.shortTermGain ?? 0) + (a.longTermGain ?? 0);
 

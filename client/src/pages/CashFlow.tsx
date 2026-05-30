@@ -274,7 +274,7 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
           <button
             onClick={handleSave}
             disabled={saving}
-            className="rounded p-0.5 hover:bg-accent text-green-600"
+            className="rounded p-0.5 hover:bg-accent text-up"
             title="Save"
           >
             <Check className="h-3.5 w-3.5" />
@@ -326,13 +326,13 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved, variant = "warning"
 
   if (!open) {
     return (
-      <tr className={cn("border-b border-dashed", variant === "warning" ? "border-red-200" : "border-border")}>
+      <tr className={cn("border-b border-dashed", variant === "warning" ? "border-down-line" : "border-border")}>
         <td colSpan={5} className="py-1.5 pl-4">
           <button
             onClick={() => { setDate(defaultDate); setOpen(true); }}
             className={cn(
               "flex items-center gap-1.5 tp-caption transition-colors",
-              variant === "warning" ? "hover:text-red-600" : "hover:text-foreground",
+              variant === "warning" ? "hover:text-down" : "hover:text-foreground",
             )}
           >
             <PlusCircle className="h-3.5 w-3.5" />
@@ -344,7 +344,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved, variant = "warning"
   }
 
   return (
-    <tr className={cn("border-b border-dashed", variant === "warning" ? "border-red-300 bg-red-50/50" : "border-border bg-muted/20")}>
+    <tr className={cn("border-b border-dashed", variant === "warning" ? "border-down-line bg-down-soft/50" : "border-border bg-muted/20")}>
       <td className="py-2 pl-4 pr-4">
         <input
           type="date"
@@ -383,7 +383,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved, variant = "warning"
           <button
             onClick={handleSave}
             disabled={saving || !amount || parseFloat(amount) <= 0}
-            className="rounded p-0.5 hover:bg-accent text-green-600 disabled:opacity-40"
+            className="rounded p-0.5 hover:bg-accent text-up disabled:opacity-40"
             title="Save"
           >
             <Check className="h-3.5 w-3.5" />
@@ -444,15 +444,15 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
 
   if (!editing) {
     return (
-      <tr className="group border-b border-border/50 bg-amber-50/50 hover:bg-amber-50 transition-colors last:border-b-0">
+      <tr className="group border-b border-border/50 bg-warn-soft/50 hover:bg-warn-soft transition-colors last:border-b-0">
         <td className="py-2 pl-4 pr-4 tp-fineprint whitespace-nowrap">{fmtDate(event.date)}</td>
         <td className="py-2 pr-4">
           <div className="flex items-center gap-2">
-            <span className="text-green-600 shrink-0">{eventIcon(event.type)}</span>
+            <span className="text-up shrink-0">{eventIcon(event.type)}</span>
             <span className="font-medium">{event.description}</span>
           </div>
         </td>
-        <td className="py-2 pr-2 text-right tabular-nums font-mono font-medium text-green-600">
+        <td className="py-2 pr-2 text-right tabular-nums font-mono font-medium text-up">
           +{formatCurrency(event.amount)}
         </td>
         <td className="py-2 pr-4">
@@ -467,7 +467,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
             <button
               onClick={handleDelete}
               disabled={saving}
-              className="rounded p-1.5 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
+              className="rounded p-1.5 text-muted-foreground/40 hover:text-down hover:bg-down/10 transition-colors disabled:opacity-40"
               title="Delete"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -476,7 +476,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
         </td>
         <td className={cn(
           "py-2 pr-4 text-right tabular-nums font-mono font-semibold",
-          event.runningBalance < 0 ? "text-red-600" : "text-foreground",
+          event.runningBalance < 0 ? "text-down" : "text-foreground",
         )}>
           {formatCurrency(event.runningBalance)}
         </td>
@@ -485,7 +485,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
   }
 
   return (
-    <tr className="border-b border-border/50 bg-amber-50 last:border-b-0">
+    <tr className="border-b border-border/50 bg-warn-soft last:border-b-0">
       <td className="py-2 pl-4 pr-4">
         <input
           type="date"
@@ -523,7 +523,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="rounded p-0.5 hover:bg-accent text-green-600 disabled:opacity-40"
+            className="rounded p-0.5 hover:bg-accent text-up disabled:opacity-40"
             title="Save"
           >
             <Check className="h-3.5 w-3.5" />
@@ -538,7 +538,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
       </td>
       <td className={cn(
         "py-2 pr-4 text-right tabular-nums font-mono font-semibold",
-        event.runningBalance < 0 ? "text-red-600" : "text-foreground",
+        event.runningBalance < 0 ? "text-down" : "text-foreground",
       )}>
         {formatCurrency(event.runningBalance)}
       </td>
@@ -658,7 +658,7 @@ function StatementDetailPanel({ event, rowMidY, onClose }: StatementDetailPanelP
                     {fmtShort(exp.date.slice(0, 10))}
                   </td>
                   <td className="py-1.5 pr-2 max-w-[90px] truncate">{exp.vendor}</td>
-                  <td className="py-1.5 text-right tabular-nums font-mono text-red-500">
+                  <td className="py-1.5 text-right tabular-nums font-mono text-down">
                     {formatCurrency(Math.abs(parseFloat(exp.amount)))}
                   </td>
                 </tr>
@@ -727,7 +727,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                     <td className="py-2 pl-4 pr-4 tp-fineprint whitespace-nowrap">{fmtDate(event.date)}</td>
                     <td className="py-2 pr-4">
                       <div className="flex items-center gap-2">
-                        <span className={cn("shrink-0", event.amount > 0 ? "text-green-600" : "text-red-500")}>
+                        <span className={cn("shrink-0", event.amount > 0 ? "text-up" : "text-down")}>
                           {eventIcon(event.type)}
                         </span>
                         <span className="font-medium">{event.description}</span>
@@ -738,7 +738,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                           </span>
                         )}
                         {event.confidence === "KNOWN" && event.type !== "CC_PAYMENT" && (
-                          <SectionLabel as="span" className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px]">
+                          <SectionLabel as="span" className="rounded-full bg-up-soft text-up-deep px-1.5 py-0.5 text-[10px]">
                             Confirmed
                           </SectionLabel>
                         )}
@@ -748,7 +748,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                           </SectionLabel>
                         )}
                         {event.overrideId && (
-                          <SectionLabel as="span" className="rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px]">
+                          <SectionLabel as="span" className="rounded-full bg-up-soft text-up-deep px-1.5 py-0.5 text-[10px]">
                             Confirmed
                           </SectionLabel>
                         )}
@@ -759,7 +759,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                         event={event}
                         accountId={event.relatedAccountId ?? accountId}
                         onSaved={onRefetch}
-                        amountClassName={event.amount > 0 ? "text-green-600" : "text-red-500"}
+                        amountClassName={event.amount > 0 ? "text-up" : "text-down"}
                         onDetailClick={onCCPaymentClick ? (rowMidY) => onCCPaymentClick(event, rowMidY) : undefined}
                         isDetailOpen={event.id === selectedCCPaymentId}
                       />
@@ -767,7 +767,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                       <>
                         <td className={cn(
                           "py-2 pr-2 text-right tabular-nums font-mono font-medium",
-                          event.amount > 0 ? "text-green-600" : "text-red-500",
+                          event.amount > 0 ? "text-up" : "text-down",
                         )}>
                           {event.amount > 0 ? "+" : event.amount === 0 ? "-" : ""}
                           {formatCurrency(event.amount)}
@@ -787,7 +787,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                                 {event.confidence === "PROJECTED" && (
                                   <button
                                     onClick={async () => { await confirmTransfer(event.transferId!); onRefetch(); }}
-                                    className="rounded p-1.5 text-muted-foreground/40 hover:text-green-600 hover:bg-accent transition-colors"
+                                    className="rounded p-1.5 text-muted-foreground/40 hover:text-up hover:bg-accent transition-colors"
                                     title="Confirm transfer"
                                   >
                                     <SquareCheckBig className="h-3.5 w-3.5" />
@@ -801,7 +801,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                     )}
                     <td className={cn(
                       "py-2 pr-4 text-right tabular-nums font-mono font-semibold",
-                      event.runningBalance < 0 ? "text-red-600" : "text-foreground",
+                      event.runningBalance < 0 ? "text-down" : "text-foreground",
                     )}>
                       {formatCurrency(event.runningBalance)}
                     </td>
@@ -857,14 +857,14 @@ function AccountPanel({ projection, windowEnd, onRefetch, selectedCCPaymentId, o
             </SectionLabel>
             <p className={cn(
               "tp-kpi-l tabular-nums font-display",
-              projection.endBalance < 0 ? "text-red-600" : "text-foreground"
+              projection.endBalance < 0 ? "text-down" : "text-foreground"
             )}>
               {formatCurrency(projection.endBalance)}
             </p>
           </div>
         </div>
         {firstNegativeDate && (
-          <div className="flex items-center gap-1.5 text-sm text-red-600">
+          <div className="flex items-center gap-1.5 text-sm text-down">
             <TrendingDown className="h-4 w-4 shrink-0" />
             <span>
               Projected shortfall of {formatCurrency(shortfall)} starting {fmtDate(firstNegativeDate)}
@@ -973,7 +973,7 @@ function EditTransferModal({
             type="button"
             onClick={() => { onClose(); onDelete(target!.transferId); }}
             disabled={saving}
-            className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-down hover:bg-down/10 transition-colors disabled:opacity-50"
           >
             <Trash2 className="h-4 w-4" />
             Delete
@@ -1042,7 +1042,7 @@ function EditBalanceModal({
             </p>
           )}
         </div>
-        <div className="flex items-start gap-2 rounded-md bg-blue-50 px-3 py-2.5 text-xs text-blue-800">
+        <div className="flex items-start gap-2 rounded-md bg-blue-soft px-3 py-2.5 text-xs text-blue-deep">
           <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
           <p>
             Confirmed transactions on or before this date are assumed to be
@@ -1185,7 +1185,7 @@ export function CashFlow() {
       >
         <span>{p.accountName}</span>
         {hasNegative && (
-          <AlertTriangle className="h-3 w-3 text-red-500 shrink-0" aria-label="Projected negative balance" />
+          <AlertTriangle className="h-3 w-3 text-down shrink-0" aria-label="Projected negative balance" />
         )}
       </button>
     );

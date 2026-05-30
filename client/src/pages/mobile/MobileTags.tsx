@@ -50,7 +50,7 @@ function ExpenseRow({ exp }: { exp: Expense }) {
 
 function OrphanedRow({ offset }: { offset: OrphanedOffset }) {
   return (
-    <div className="flex items-center gap-2 py-2 pl-11 pr-4 text-amber-600">
+    <div className="flex items-center gap-2 py-2 pl-11 pr-4 text-warn">
       <CornerDownRight className="h-3 w-3 shrink-0 opacity-60" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 truncate">
@@ -371,7 +371,7 @@ function MobileTagModal({
               await onDelete!(tag!.id);
               setDeleting(false);
             }}
-            className="flex-1 rounded-md bg-destructive py-2.5 text-sm font-medium text-destructive-foreground disabled:opacity-50 transition-opacity"
+            className="flex-1 rounded-md bg-down py-2.5 text-sm font-medium text-white disabled:opacity-50 transition-opacity"
           >
             {deleting ? "Deleting…" : "Delete"}
           </button>
@@ -442,7 +442,7 @@ function MobileTagModal({
           <button
             type="button"
             onClick={() => setConfirmDelete(true)}
-            className="rounded-md border border-border p-2.5 text-muted-foreground hover:border-destructive hover:text-destructive transition-colors"
+            className="rounded-md border border-border p-2.5 text-muted-foreground hover:border-down hover:text-down transition-colors"
             aria-label="Delete tag"
           >
             <Trash2 className="h-4 w-4" />

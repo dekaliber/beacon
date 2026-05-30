@@ -215,7 +215,7 @@ export function BulkEditModal({
                 }
               />
               {tagMode === "replace" && tagIds.length === 0 && (
-                <p className="text-xs text-amber-600">
+                <p className="text-xs text-warn">
                   All tags will be removed from the selected expenses.
                 </p>
               )}
@@ -225,7 +225,7 @@ export function BulkEditModal({
 
         {/* Recurring notice */}
         {recurringCount > 0 && (
-          <div className="flex items-start gap-2 rounded-md bg-blue-50 px-3 py-2.5 text-sm text-blue-800">
+          <div className="flex items-start gap-2 rounded-md bg-blue-soft px-3 py-2.5 text-sm text-blue-deep">
             <Repeat className="mt-0.5 h-4 w-4 flex-shrink-0" />
             <p>
               {recurringCount === 1 ? "1 selected expense is" : `${recurringCount} selected expenses are`} recurring.{" "}
@@ -235,7 +235,7 @@ export function BulkEditModal({
           </div>
         )}
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p className="text-sm text-down">{error}</p>}
 
         <div className="flex justify-end gap-3 pt-1">
           <Button variant="secondary" onClick={onClose} disabled={loading}>

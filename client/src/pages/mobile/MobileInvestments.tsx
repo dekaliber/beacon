@@ -69,7 +69,7 @@ function GainBadge({
   const positive = value >= 0;
   const Icon = positive ? TrendingUp : TrendingDown;
   return (
-    <span className={`inline-flex items-center gap-1 text-sm font-medium ${positive ? "text-green-600" : "text-red-500"} ${className}`}>
+    <span className={`inline-flex items-center gap-1 text-sm font-medium ${positive ? "text-up" : "text-down"} ${className}`}>
       <Icon className="h-3.5 w-3.5" />
       {formatCurrency(Math.abs(value))}
       {pct != null && <span className="text-xs opacity-70">({Math.abs(pct).toFixed(2)}%)</span>}
@@ -102,7 +102,7 @@ function DeviationBadge({ delta }: { delta: number }) {
   const isClose = Math.abs(delta) < 0.5;
   const over = delta > 0;
   return (
-    <span className={`text-xs font-medium tabular-nums font-mono ${isClose ? "text-green-600" : over ? "text-amber-600" : "text-blue-600"}`}>
+    <span className={`text-xs font-medium tabular-nums font-mono ${isClose ? "text-up" : over ? "text-warn" : "text-blue"}`}>
       {over ? "+" : ""}{delta.toFixed(1)}%
     </span>
   );
@@ -256,7 +256,7 @@ function WithdrawalSheet({
           <div className="relative flex items-end gap-0" style={{ height: "130px" }}>
             {targetLinePct != null && (
               <div
-                className="absolute inset-x-0 border-t border-dashed border-destructive opacity-50 pointer-events-none z-10"
+                className="absolute inset-x-0 border-t border-dashed border-down opacity-50 pointer-events-none z-10"
                 style={{ bottom: `${13 + targetLinePct * 104}px` }}
               />
             )}
@@ -515,11 +515,11 @@ function RebalanceModal({
                         <StatValue className="text-muted-foreground">{item.actualPct.toFixed(1)}%</StatValue>
                         <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
                         <span className={`tabular-nums font-mono font-medium ${
-                          delta == null ? "text-muted-foreground" : Math.abs(delta) < 0.5 ? "text-green-600" : delta > 0 ? "text-amber-600" : "text-blue-600"
+                          delta == null ? "text-muted-foreground" : Math.abs(delta) < 0.5 ? "text-up" : delta > 0 ? "text-warn" : "text-blue"
                         }`}>{newPct.toFixed(1)}%</span>
                         {delta != null && (
                           <span className={`tabular-nums font-mono ${
-                            Math.abs(delta) < 0.5 ? "text-green-600" : delta > 0 ? "text-amber-600" : "text-blue-600"
+                            Math.abs(delta) < 0.5 ? "text-up" : delta > 0 ? "text-warn" : "text-blue"
                           }`}>
                             ({delta >= 0 ? "+" : ""}{delta.toFixed(1)}%)
                           </span>
@@ -598,9 +598,9 @@ function RebalanceModal({
                   const isBuy = adj > 1;
                   const isSell = adj < -1;
                   const deltaColor = delta == null ? "text-muted-foreground"
-                    : Math.abs(delta) < tolerancePct ? "text-green-600"
-                    : delta > 0 ? "text-amber-600"
-                    : "text-blue-600";
+                    : Math.abs(delta) < tolerancePct ? "text-up"
+                    : delta > 0 ? "text-warn"
+                    : "text-blue";
                   const color = itemColor(item, idx);
                   return (
                     <div key={item.id} className="py-3">
@@ -608,7 +608,7 @@ function RebalanceModal({
                         <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: color }} />
                         <span className="text-sm font-medium flex-1 truncate">{item.name}</span>
                         <span className={`text-13 font-semibold tabular-nums font-mono ${
-                          isBuy ? "text-blue-600" : isSell ? "text-amber-600" : "text-muted-foreground"
+                          isBuy ? "text-blue" : isSell ? "text-warn" : "text-muted-foreground"
                         }`}>
                           {isBuy ? `+${formatCurrency(adj)}` : isSell ? `−${formatCurrency(Math.abs(adj))}` : "—"}
                         </span>
@@ -638,7 +638,7 @@ function RebalanceModal({
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Net cash deployed</span>
             <span className={`text-13 font-semibold tabular-nums font-mono ${
-              manualDelta > 0 ? "text-green-600" : manualDelta < 0 ? "text-red-500" : "text-muted-foreground"
+              manualDelta > 0 ? "text-up" : manualDelta < 0 ? "text-down" : "text-muted-foreground"
             }`}>
               {manualDelta >= 0 ? "+" : "−"}{formatCurrency(Math.abs(manualDelta))}
             </span>
@@ -649,19 +649,19 @@ function RebalanceModal({
             {rebalanceMode === "buy-only" ? (
               <>
                 <span className="text-sm text-muted-foreground">Total cash to deploy</span>
-                <StatValue className="text-sm font-semibold text-blue-600">
+                <StatValue className="text-sm font-semibold text-blue">
                   {autoNetCash > 1 ? `+${formatCurrency(autoNetCash)}` : formatCurrency(0)}
                 </StatValue>
               </>
             ) : autoNetCash > 1 ? (
               <>
                 <span className="text-sm text-muted-foreground">Net cash to deploy</span>
-                <StatValue className="text-sm font-semibold text-blue-600">+{formatCurrency(autoNetCash)}</StatValue>
+                <StatValue className="text-sm font-semibold text-blue">+{formatCurrency(autoNetCash)}</StatValue>
               </>
             ) : autoNetCash < -1 ? (
               <>
                 <span className="text-sm text-muted-foreground">Net cash proceeds</span>
-                <StatValue className="text-sm font-semibold text-amber-600">−{formatCurrency(Math.abs(autoNetCash))}</StatValue>
+                <StatValue className="text-sm font-semibold text-warn">−{formatCurrency(Math.abs(autoNetCash))}</StatValue>
               </>
             ) : (
               <>
@@ -785,7 +785,7 @@ export function MobileInvestments() {
         <div className="flex items-center gap-2 min-w-0">
           <p className="tp-row-label truncate">{account.name}</p>
           {pendingDividendAccountIds.has(account.id) && (
-            <span className="shrink-0 inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700 whitespace-nowrap">
+            <span className="shrink-0 inline-flex items-center rounded-full bg-violet-soft px-2 py-0.5 text-[10px] font-semibold text-violet-deep whitespace-nowrap">
               Pending
             </span>
           )}
@@ -914,7 +914,7 @@ export function MobileInvestments() {
               </div>
 
               {targetRate !== null && ytdRate !== null && effectiveDenominator > 0 && (
-                <p className={`text-xs font-medium tabular-nums font-mono mb-1.5 ${ytdRate <= targetRate ? "text-green-600" : "text-red-500"}`}>
+                <p className={`text-xs font-medium tabular-nums font-mono mb-1.5 ${ytdRate <= targetRate ? "text-up" : "text-down"}`}>
                   {ytdRate <= targetRate
                     ? `▼ ${((targetRate - ytdRate) * 100).toFixed(2)}% under target`
                     : `▲ ${((ytdRate - targetRate) * 100).toFixed(2)}% over target`}
@@ -1036,7 +1036,7 @@ export function MobileInvestments() {
                               </span>
                               {deltaDollars != null && Math.abs(deltaDollars) >= 1 && (
                                 <span className={`text-xs tabular-nums font-mono ${
-                                  deltaDollars > 0 ? "text-amber-600" : "text-blue-600"
+                                  deltaDollars > 0 ? "text-warn" : "text-blue"
                                 }`}>
                                   {deltaDollars >= 0 ? "+" : "−"}{formatCurrency(Math.abs(deltaDollars))}
                                 </span>

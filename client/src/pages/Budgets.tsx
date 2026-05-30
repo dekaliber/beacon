@@ -176,7 +176,7 @@ function PaceBar({ normalizedYTD, budget, pctElapsed }: PaceBarProps) {
       <div className="relative h-3 overflow-hidden rounded-full bg-secondary">
         <div
           className={`h-full rounded-full transition-all ${
-            overBudget ? "bg-destructive" : overPace ? "bg-warning" : "bg-success"
+            overBudget ? "bg-down" : overPace ? "bg-warn" : "bg-up"
           }`}
           style={{ width: `${spentPct}%` }}
         />
@@ -520,7 +520,7 @@ function BudgetPanelCard({
           }
           valueClass={
             paceVariance != null
-              ? paceVariance > 0 ? "text-destructive" : "text-success"
+              ? paceVariance > 0 ? "text-down" : "text-up"
               : undefined
           }
           sub={
@@ -551,8 +551,8 @@ function BudgetPanelCard({
           valueClass={
             panel.effectiveAnnualBudget > 0 && (completedMonthCount > 0 || isCurrentYear)
               ? panel.mtdTotal > panel.effectiveAnnualBudget / 12
-                ? "text-destructive"
-                : "text-success"
+                ? "text-down"
+                : "text-up"
               : undefined
           }
           sub={isCurrentYear && daysLeft > 0 ? `${daysLeft} days remaining` : "month complete"}
@@ -560,7 +560,7 @@ function BudgetPanelCard({
         <Metric
           label="Remaining spend target"
           value={remainingDaily !== null ? fmt(remainingDaily) : "—"}
-          valueClass={remainingDaily !== null && remainingDaily < 0 ? "text-destructive" : undefined}
+          valueClass={remainingDaily !== null && remainingDaily < 0 ? "text-down" : undefined}
           sub={daysLeft > 0 ? "per day" : isCurrentYear ? "month complete" : undefined}
         />
       </div>
@@ -615,7 +615,7 @@ function BudgetPanelCard({
             <p className="tp-caption">Annual projection</p>
             <p className={`mt-0.5 text-lg font-bold leading-tight ${
               panel.effectiveAnnualBudget > 0 && panel.projectedAnnual > panel.effectiveAnnualBudget
-                ? "text-destructive"
+                ? "text-down"
                 : ""
             }`}>
               {fmt(panel.projectedAnnual)}
@@ -675,7 +675,7 @@ function BudgetPanelCard({
                     style={{ left: `${centerPct}%` }}
                   />
                   <div
-                    className="absolute top-0 h-full w-0.5 rounded-full bg-destructive/60"
+                    className="absolute top-0 h-full w-0.5 rounded-full bg-down/60"
                     style={{ left: `${budgetPct}%` }}
                   />
                 </div>
@@ -828,7 +828,7 @@ function CategoryPacingCard({ outliers, year }: CategoryPacingCardProps) {
         </div>
         <div className="relative h-3 flex-1 overflow-hidden rounded-full bg-secondary">
           <div
-            className={`absolute top-0 h-full rounded-full ${over ? "bg-destructive/70" : "bg-success/70"}`}
+            className={`absolute top-0 h-full rounded-full ${over ? "bg-down/70" : "bg-up/70"}`}
             style={{ width: `${barPct}%` }}
           />
           {item.previousAmount > 0 && (
@@ -844,7 +844,7 @@ function CategoryPacingCard({ outliers, year }: CategoryPacingCardProps) {
         <div className="w-20 shrink-0 text-right tp-numeric text-ink-3">
           {item.previousAmount > 0 ? formatCurrency(item.previousAmount) : "—"}
         </div>
-        <div className={`w-12 shrink-0 text-right tp-numeric font-medium ${over ? "text-destructive" : item.currentAmount > 0 ? "text-success" : "text-ink-3"}`}>
+        <div className={`w-12 shrink-0 text-right tp-numeric font-medium ${over ? "text-down" : item.currentAmount > 0 ? "text-up" : "text-ink-3"}`}>
           {pct !== null
             ? `${over ? "+" : ""}${Math.round(pct * 100)}%`
             : item.previousAmount === 0 ? "new" : "—"
@@ -881,11 +881,11 @@ function CategoryPacingCard({ outliers, year }: CategoryPacingCardProps) {
         )}
         <div className="flex items-center gap-4 border-t border-border pt-2 tp-caption">
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-success/70" />
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-up/70" />
             Under prior year pace
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-destructive/70" />
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-down/70" />
             Over prior year pace
           </span>
           <span className="flex items-center gap-1.5">
@@ -950,7 +950,7 @@ function MonthlyTrendCard({ monthlyTotals, monthlyBudget }: MonthlyTrendCardProp
           {monthlyBudget != null && monthlyBudget > 0 && (
             <ReferenceLine
               y={monthlyBudget}
-              stroke="var(--color-destructive)"
+              stroke="var(--color-down)"
               strokeWidth={1}
               strokeDasharray="3 3"
               strokeOpacity={0.5}
@@ -970,7 +970,7 @@ function MonthlyTrendCard({ monthlyTotals, monthlyBudget }: MonthlyTrendCardProp
         {monthlyBudget != null && monthlyBudget > 0 && (
           <div className="flex items-center gap-1.5">
             <svg width={16} height={8}>
-              <line x1="0" y1="4" x2="16" y2="4" stroke="var(--color-destructive)" strokeWidth="1" strokeDasharray="3 3" strokeOpacity="0.5" />
+              <line x1="0" y1="4" x2="16" y2="4" stroke="var(--color-down)" strokeWidth="1" strokeDasharray="3 3" strokeOpacity="0.5" />
             </svg>
             <span className="tp-caption">Monthly budget</span>
           </div>
@@ -1016,7 +1016,7 @@ function SplitCard({ personal, joint }: SplitCardProps) {
         </div>
         <DisplayStat as="p" className="tp-stat leading-tight">{fmt(ytd)}</DisplayStat>
         <div className="space-y-0.5 text-xs font-mono">
-          <p className={overTarget ? "text-destructive font-medium" : underTarget ? "text-success font-medium" : "text-muted-foreground"}>
+          <p className={overTarget ? "text-down font-medium" : underTarget ? "text-up font-medium" : "text-muted-foreground"}>
             {Math.round(actualPct * 100)}% of actual spend
           </p>
           {targetPct != null && (

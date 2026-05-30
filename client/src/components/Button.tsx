@@ -40,8 +40,8 @@ const variants: Record<string, string> = {
 
   // Gradient red with red glow shadow
   destructive:
-    "text-white bg-gradient-to-b from-destructive to-destructive/70 " +
-    "border-destructive/60 " +
+    "text-white bg-gradient-to-b from-down to-down/70 " +
+    "border-down/60 " +
     "shadow-[0_1px_0_rgba(255,255,255,.25)_inset,0_6px_18px_-8px_rgba(226,82,57,.55),0_2px_4px_rgba(15,20,40,.08)] " +
     "hover:brightness-105 active:brightness-95",
 };

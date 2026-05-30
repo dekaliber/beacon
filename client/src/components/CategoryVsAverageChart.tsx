@@ -59,8 +59,8 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
   const xOf = (v: number) =>
     LABEL_W + CHART_PAD_L + (Math.max(0, Math.min(v, maxVal)) / maxVal) * innerW;
 
-  const colorUp    = "var(--color-destructive)";
-  const colorDown  = "var(--color-success)";
+  const colorUp    = "var(--color-down)";
+  const colorDown  = "var(--color-up)";
   const colorMuted = "var(--color-muted-foreground)";
 
   const fmtAmt = (n: number) =>

@@ -74,8 +74,8 @@ export function SpendingVelocitySparkline({ data, height = 72 }: SpendingVelocit
             <>
               <defs>
                 <linearGradient id="velGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={isOverBudget ? "var(--color-destructive)" : "var(--color-primary)"} stopOpacity={0.18} />
-                  <stop offset="100%" stopColor={isOverBudget ? "var(--color-destructive)" : "var(--color-primary)"} stopOpacity={0.02} />
+                  <stop offset="0%" stopColor={isOverBudget ? "var(--color-down)" : "var(--color-primary)"} stopOpacity={0.18} />
+                  <stop offset="100%" stopColor={isOverBudget ? "var(--color-down)" : "var(--color-primary)"} stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               <polygon
@@ -89,7 +89,7 @@ export function SpendingVelocitySparkline({ data, height = 72 }: SpendingVelocit
               <polyline
                 points={actualPoints.join(" ")}
                 fill="none"
-                stroke={isOverBudget ? "var(--color-destructive)" : "var(--color-primary)"}
+                stroke={isOverBudget ? "var(--color-down)" : "var(--color-primary)"}
                 strokeWidth={1.5}
                 strokeLinecap="round"
                 strokeLinejoin="round"

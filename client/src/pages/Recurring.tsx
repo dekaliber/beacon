@@ -62,6 +62,7 @@ function displayAmount(amount: string): string {
 
 // ── Upcoming strip ────────────────────────────────────────────────────────────
 
+// Decorative vendor-avatar palette (not §04 tags) — raw shades; revisit in §06 swatches.
 const VENDOR_COLORS = [
   "bg-blue-500",
   "bg-violet-500",
@@ -122,7 +123,7 @@ function VendorBubble({ item }: { item: UpcomingExpenseItem }) {
           style={{ left: pos.x, top: pos.y - 8, transform: "translate(-50%, -100%)" }}
         >
           <p className="whitespace-nowrap text-xs font-medium text-card-foreground">{label}</p>
-          <p className={`whitespace-nowrap text-xs ${amt < 0 ? "text-green-600" : "text-muted-foreground"}`}>
+          <p className={`whitespace-nowrap text-xs ${amt < 0 ? "text-up" : "text-muted-foreground"}`}>
             {amtStr}
           </p>
         </div>,
@@ -190,11 +191,11 @@ function UpcomingStrip({ expenses }: { expenses: UpcomingExpenseItem[] }) {
               className="flex min-w-[72px] flex-1 flex-col border-r border-border last:border-r-0"
             >
               {/* Day header */}
-              <div className={`px-1 py-2 text-center ${isToday ? "text-red-500" : "text-muted-foreground"}`}>
+              <div className={`px-1 py-2 text-center ${isToday ? "text-down" : "text-muted-foreground"}`}>
                 <SectionLabel as="div" className="text-[11px]">
                   {isToday ? "Today" : DAY_NAMES[day.getDay()]}
                 </SectionLabel>
-                <div className={`tp-card-title leading-tight ${isToday ? "text-red-500" : ""}`}>
+                <div className={`tp-card-title leading-tight ${isToday ? "text-down" : ""}`}>
                   {day.getDate()}
                 </div>
               </div>
@@ -210,7 +211,7 @@ function UpcomingStrip({ expenses }: { expenses: UpcomingExpenseItem[] }) {
                       </span>
                     )}
                     {credits.length > 0 && (
-                      <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-green-600 whitespace-nowrap">
+                      <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-up whitespace-nowrap">
                         +{formatCurrency(creditTotal)}
                       </span>
                     )}
@@ -375,7 +376,7 @@ function AnnualCostTooltip({ active, payload }: { active?: boolean; payload?: { 
                 <span className="tp-caption/70">* {item.proratedNote}</span>
               )}
             </div>
-            <span className={`shrink-0 font-medium ${item.isCredit ? "text-green-600" : ""}`}>
+            <span className={`shrink-0 font-medium ${item.isCredit ? "text-up" : ""}`}>
               {formatCurrency(item.annualized)}
             </span>
           </div>
@@ -584,7 +585,7 @@ function RuleTable({
           <tr
             key={rule.id}
             ref={rule.id === highlightId ? highlightRowRef : undefined}
-            className={`${dimmed ? "opacity-60" : ""} ${rule.id === highlightId ? `transition-colors duration-1000${highlightFading ? "" : " bg-amber-100"}` : ""}`}
+            className={`${dimmed ? "opacity-60" : ""} ${rule.id === highlightId ? `transition-colors duration-1000${highlightFading ? "" : " bg-warn-soft"}` : ""}`}
           >
             <td className="py-3 pr-4">
               <p className="font-medium">{rule.description}</p>
@@ -606,7 +607,7 @@ function RuleTable({
             <td className="py-3 pr-4 truncate text-muted-foreground">
               {accountMap.get(rule.accountId) ?? "—"}
             </td>
-            <td className={`py-3 pr-3 text-right font-medium font-mono tabular-nums${parseFloat(rule.amount) < 0 ? " text-green-600" : ""}`}>
+            <td className={`py-3 pr-3 text-right font-medium font-mono tabular-nums${parseFloat(rule.amount) < 0 ? " text-up" : ""}`}>
               {displayAmount(rule.amount)}
             </td>
             <td className="py-3">
@@ -633,7 +634,7 @@ function RuleTable({
                   {onDelete && (
                     <button
                       onClick={() => onDelete(rule)}
-                      className="rounded p-1.5 text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      className="rounded p-1.5 text-muted-foreground/40 hover:text-down hover:bg-down/10 transition-colors"
                       title="Permanently delete recurring transaction"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -1451,7 +1452,7 @@ export function Recurring() {
                 <button
                   onClick={handleDeleteConfirm}
                   disabled={actionLoading || linkedExpenses === "loading"}
-                  className="flex items-center justify-center gap-1.5 rounded-md bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                  className="flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-sm font-medium text-down hover:bg-down/20 transition-colors disabled:opacity-50"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   {actionLoading ? "Deleting…" : "Confirm Delete"}
@@ -1487,7 +1488,7 @@ export function Recurring() {
                             <span className="w-16 shrink-0 text-muted-foreground">{formatDate(e.date)}</span>
                             <span className="flex-1 truncate">{e.description}</span>
                             <span className="w-24 shrink-0 truncate text-muted-foreground">{e.account.name}</span>
-                            <span className={`shrink-0 font-medium${parseFloat(e.amount) < 0 ? " text-green-600" : ""}`}>{displayAmount(e.amount)}</span>
+                            <span className={`shrink-0 font-medium${parseFloat(e.amount) < 0 ? " text-up" : ""}`}>{displayAmount(e.amount)}</span>
                           </div>
                         ))}
                       </div>
@@ -1505,7 +1506,7 @@ export function Recurring() {
                             <span className="w-16 shrink-0 text-muted-foreground">{formatDate(e.date)}</span>
                             <span className="flex-1 truncate">{e.description}</span>
                             <span className="w-24 shrink-0 truncate text-muted-foreground">{e.account.name}</span>
-                            <span className={`shrink-0 font-medium${parseFloat(e.amount) < 0 ? " text-green-600" : ""}`}>{displayAmount(e.amount)}</span>
+                            <span className={`shrink-0 font-medium${parseFloat(e.amount) < 0 ? " text-up" : ""}`}>{displayAmount(e.amount)}</span>
                           </div>
                         ))}
                       </div>
@@ -1615,7 +1616,7 @@ export function Recurring() {
               className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
             {endDateIsRetroactive && (
-              <p className="mt-1.5 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <p className="mt-1.5 rounded-md bg-warn-soft px-3 py-2 text-xs text-warn-deep">
                 This end date is in the past. Any recorded expenses in this series after{" "}
                 <span className="font-medium">{editForm.endDate}</span> will be permanently
                 deleted.
@@ -1623,7 +1624,7 @@ export function Recurring() {
             )}
           </div>
 
-          {editError && <p className="text-xs text-destructive">{editError}</p>}
+          {editError && <p className="text-xs text-down">{editError}</p>}
 
           {/* Footer: Delete (left) · Cancel + Save (right) */}
           <div className="flex items-center justify-between gap-2 pt-1">
@@ -1631,7 +1632,7 @@ export function Recurring() {
               type="button"
               onClick={handleEditDeleteClick}
               disabled={saving}
-              className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-down hover:bg-down/10 transition-colors disabled:opacity-50"
             >
               <Trash2 className="h-4 w-4" />
               Delete

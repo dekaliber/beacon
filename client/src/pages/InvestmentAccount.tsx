@@ -4346,7 +4346,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
                   const colorClass = type === "PURCHASE"
                     ? active ? "bg-up-soft text-up-deep border-up-line" : "border-border text-muted-foreground hover:border-up-line hover:text-up-deep"
                     : type === "SALE"
-                    ? active ? "bg-blue-100 text-blue-700 border-blue-300" : "border-border text-muted-foreground hover:border-blue-300 hover:text-blue-700"
+                    ? active ? "bg-blue-soft text-blue-deep border-blue-soft" : "border-border text-muted-foreground hover:border-blue-soft hover:text-blue-deep"
                     : type === "TRANSFER"
                     ? active ? "bg-warn-soft text-warn-deep border-warn-line" : "border-border text-muted-foreground hover:border-warn-line hover:text-warn-deep"
                     : active ? "bg-violet-soft text-violet-deep border-violet-soft" : "border-border text-muted-foreground hover:border-violet-soft hover:text-violet-deep";
@@ -4399,7 +4399,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
                   const isTransfer = a.type === "TRANSFER";
 
                   const badgeClass = isSale
-                    ? "bg-blue-100 text-blue-700"
+                    ? "bg-blue-soft text-blue-deep"
                     : isPurchase
                     ? "bg-up-soft text-up-deep"
                     : isTransfer
@@ -5457,12 +5457,12 @@ function GrowthChart({ accountId, isManaged, onImportClick, onDayGain }: { accou
   const legend = (
     <div className="flex items-center gap-4 mt-2 tp-caption">
       <span className="flex items-center gap-1.5">
-        <span className="inline-block w-6 h-0.5 bg-indigo-600" />
+        <span className="inline-block w-6 h-0.5 bg-primary" />
         Market value
       </span>
       {hasCostBasis && (
         <span className="flex items-center gap-1.5">
-          <span className="inline-block w-6 border-t border-dashed border-slate-400" />
+          <span className="inline-block w-6 border-t border-dashed border-slate-soft" />
           Cost basis
         </span>
       )}

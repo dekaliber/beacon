@@ -238,7 +238,7 @@ export function Dashboard() {
                 <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
                 <SectionLabel>Credit Cards</SectionLabel>
               </div>
-              <DisplayStat as="p" className="tp-stat text-destructive">−{formatCurrency(scaledNetWorth.creditCardDebt)}</DisplayStat>
+              <DisplayStat as="p" className="tp-stat text-down">−{formatCurrency(scaledNetWorth.creditCardDebt)}</DisplayStat>
             </div>
           </div>
         </Card>
@@ -291,7 +291,7 @@ export function Dashboard() {
                       {" in "}{prevMonthName}{isCurrentMonth ? ` 1–${daysElapsed}` : ""}
                     </Caption>
                     <p className="mt-0.5 text-xs font-medium">
-                      <StatValue className={momDelta! > 0 ? "text-destructive" : "text-success"}>
+                      <StatValue className={momDelta! > 0 ? "text-down" : "text-up"}>
                         {momDelta! > 0 ? "+" : "–"}{fmtWhole(Math.abs(momDelta!))}
                       </StatValue>{" "}
                       <Caption as="span">
@@ -342,7 +342,7 @@ export function Dashboard() {
         {/* Card 2: Budget used % + remaining + Personal/Joint breakdown */}
         <Card>
           <div className="flex items-start gap-3">
-            <svg className={`mt-0.5 h-9 w-9 shrink-0 ${isOverBudget ? "text-destructive" : "text-success"}`} viewBox="0 0 36 36">
+            <svg className={`mt-0.5 h-9 w-9 shrink-0 ${isOverBudget ? "text-down" : "text-up"}`} viewBox="0 0 36 36">
               <rect x="0" y="0" width="36" height="36" rx="8" fill="currentColor" fillOpacity="0.1" />
               <circle cx="18" cy="18" r="11" fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth="5"
                 transform="rotate(-90 18 18)" />
@@ -355,13 +355,13 @@ export function Dashboard() {
             <div className="min-w-0 flex-1">
               <SectionLabel>Budget Used</SectionLabel>
               {budgetPct !== null ? (
-                <DisplayStat as="p" className={`tp-kpi-l ${isOverBudget ? "text-destructive" : ""}`}>{budgetPct}%</DisplayStat>
+                <DisplayStat as="p" className={`tp-kpi-l ${isOverBudget ? "text-down" : ""}`}>{budgetPct}%</DisplayStat>
               ) : (
                 <p className="tp-caption">No budget set</p>
               )}
               {budgetRemaining !== null && (
-                <Caption className={`mt-0.5 ${budgetRemaining < 0 ? "text-destructive" : ""}`}>
-                  <StatValue className={`font-medium ${budgetRemaining < 0 ? "text-destructive" : "text-foreground"}`}>
+                <Caption className={`mt-0.5 ${budgetRemaining < 0 ? "text-down" : ""}`}>
+                  <StatValue className={`font-medium ${budgetRemaining < 0 ? "text-down" : "text-foreground"}`}>
                     {fmtWhole(Math.abs(budgetRemaining))}
                   </StatValue>
                   {" "}{budgetRemaining < 0 ? "over budget" : "remaining"}
@@ -384,15 +384,15 @@ export function Dashboard() {
                         Personal
                       </span>
                       <span>
-                        <StatValue className={`font-medium ${over ? "text-destructive" : "text-ink"}`}>{fmtWhole(personalSpent)}</StatValue>
+                        <StatValue className={`font-medium ${over ? "text-down" : "text-ink"}`}>{fmtWhole(personalSpent)}</StatValue>
                         {" / "}{fmtWhole(personalBudget)}
                         {personalRemaining !== null && (
-                          <span className={over ? " text-destructive" : ""}>{" "}({over ? "+" : "−"}{fmtWhole(Math.abs(personalRemaining!))})</span>
+                          <span className={over ? " text-down" : ""}>{" "}({over ? "+" : "−"}{fmtWhole(Math.abs(personalRemaining!))})</span>
                         )}
                       </span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
-                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: over ? "var(--color-destructive)" : "var(--color-success)" }} />
+                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: over ? "var(--color-down)" : "var(--color-up)" }} />
                     </div>
                   </div>
                 );
@@ -408,15 +408,15 @@ export function Dashboard() {
                         Joint
                       </span>
                       <span>
-                        <StatValue className={`font-medium ${over ? "text-destructive" : "text-ink"}`}>{fmtWhole(jointSpent)}</StatValue>
+                        <StatValue className={`font-medium ${over ? "text-down" : "text-ink"}`}>{fmtWhole(jointSpent)}</StatValue>
                         {" / "}{fmtWhole(jointBudget)}
                         {jointRemaining !== null && (
-                          <span className={over ? " text-destructive" : ""}>{" "}({over ? "+" : "−"}{fmtWhole(Math.abs(jointRemaining!))})</span>
+                          <span className={over ? " text-down" : ""}>{" "}({over ? "+" : "−"}{fmtWhole(Math.abs(jointRemaining!))})</span>
                         )}
                       </span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
-                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: over ? "var(--color-destructive)" : "var(--color-success)" }} />
+                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: over ? "var(--color-down)" : "var(--color-up)" }} />
                     </div>
                   </div>
                 );
@@ -498,7 +498,7 @@ export function Dashboard() {
                   {mtdChart.monthlyBudget[chartView] > 0 && (
                     <ReferenceLine
                       y={mtdChart.monthlyBudget[chartView]}
-                      stroke="var(--color-destructive)"
+                      stroke="var(--color-down)"
                       strokeWidth={1}
                       strokeDasharray="3 3"
                       strokeOpacity={0.5}

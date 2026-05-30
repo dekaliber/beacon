@@ -18,17 +18,17 @@ const DIVIDEND_TYPE_LABELS: Record<string, string> = {
 };
 
 const DIVIDEND_TYPE_CLASSES: Record<string, string> = {
-  QUALIFIED: "bg-emerald-100 text-emerald-700",
-  ORDINARY: "bg-slate-100 text-slate-600",
-  TAX_EXEMPT: "bg-teal-100 text-teal-700",
-  RETURN_OF_CAPITAL: "bg-amber-100 text-amber-700",
-  CAPITAL_GAIN: "bg-blue-100 text-blue-700",
+  QUALIFIED: "bg-up-soft text-up-deep",
+  ORDINARY: "bg-slate-soft text-slate-deep",
+  TAX_EXEMPT: "bg-teal-soft text-teal-deep",
+  RETURN_OF_CAPITAL: "bg-warn-soft text-warn-deep",
+  CAPITAL_GAIN: "bg-blue-soft text-blue-deep",
 };
 
 function TaxStatusBadge({ taxClassification }: { taxClassification: string | null }) {
   if (!taxClassification) return null;
   return (
-    <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${DIVIDEND_TYPE_CLASSES[taxClassification] ?? "bg-slate-100 text-slate-600"}`}>
+    <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${DIVIDEND_TYPE_CLASSES[taxClassification] ?? "bg-slate-soft text-slate-deep"}`}>
       {DIVIDEND_TYPE_LABELS[taxClassification] ?? taxClassification}
     </span>
   );
@@ -259,7 +259,7 @@ function MobileIncomeModal({
       <form id="mobile-income-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto overscroll-contain">
         <div className="space-y-5 p-4">
           {error && (
-            <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <div className="rounded-md bg-down/10 px-3 py-2 text-sm text-down">
               {error}
             </div>
           )}
@@ -402,7 +402,7 @@ function MobileIncomeModal({
                     setConfirmDelete(false);
                   }
                 }}
-                className="rounded-md bg-destructive px-3 py-2.5 text-sm font-medium text-destructive-foreground disabled:opacity-50 transition-colors"
+                className="rounded-md bg-down px-3 py-2.5 text-sm font-medium text-white disabled:opacity-50 transition-colors"
               >
                 {deleting ? "Deleting…" : "Confirm?"}
               </button>
@@ -414,7 +414,7 @@ function MobileIncomeModal({
                 className={`rounded-md border border-border p-2.5 transition-colors ${
                   isActivityLinked
                     ? "cursor-not-allowed opacity-40 text-muted-foreground"
-                    : "text-muted-foreground hover:border-destructive hover:text-destructive"
+                    : "text-muted-foreground hover:border-down hover:text-down"
                 }`}
                 aria-label="Delete income"
               >
@@ -469,13 +469,13 @@ function IncomeRow({
             {primaryText}{secondaryText}
           </p>
           {income.subtype === "DIVIDEND" && (
-            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700">Dividend</span>
+            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-violet-soft text-violet-deep">Dividend</span>
           )}
           {income.subtype === "CAPITAL_GAIN" && (
-            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700">Sale</span>
+            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-blue-soft text-blue-deep">Sale</span>
           )}
         </div>
-        <span className={`shrink-0 font-semibold ${!upcoming && income.isCashReceived ? "text-green-600" : "text-muted-foreground"}`}>
+        <span className={`shrink-0 font-semibold ${!upcoming && income.isCashReceived ? "text-up" : "text-muted-foreground"}`}>
           +{formatCurrency(income.amount)}
         </span>
       </div>

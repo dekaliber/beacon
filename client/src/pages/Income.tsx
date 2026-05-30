@@ -76,7 +76,7 @@ function CurrencyInput({ name, defaultValue, required, autoFocus, error, onValid
           onPaste={handlePaste}
           onBlur={handleBlur}
           autoFocus={autoFocus}
-          className={`w-full rounded-md border pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-1 ${error ? "border-destructive focus:border-destructive focus:ring-destructive/30" : "border-border focus:border-primary focus:ring-primary"}`}
+          className={`w-full rounded-md border pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-1 ${error ? "border-down focus:border-down focus:ring-down/30" : "border-border focus:border-primary focus:ring-primary"}`}
           placeholder="0.00"
           inputMode="text"
         />
@@ -445,11 +445,11 @@ const DIVIDEND_TYPE_LABELS: Record<string, string> = {
   CAPITAL_GAIN: "Capital Gain",
 };
 const DIVIDEND_TYPE_CLASSES: Record<string, string> = {
-  QUALIFIED: "bg-emerald-100 text-emerald-700",
-  ORDINARY: "bg-slate-100 text-slate-600",
-  TAX_EXEMPT: "bg-teal-100 text-teal-700",
-  RETURN_OF_CAPITAL: "bg-amber-100 text-amber-700",
-  CAPITAL_GAIN: "bg-blue-100 text-blue-700",
+  QUALIFIED: "bg-up-soft text-up-deep",
+  ORDINARY: "bg-slate-soft text-slate-deep",
+  TAX_EXEMPT: "bg-teal-soft text-teal-deep",
+  RETURN_OF_CAPITAL: "bg-warn-soft text-warn-deep",
+  CAPITAL_GAIN: "bg-blue-soft text-blue-deep",
 };
 const DIVIDEND_TYPE_OPTIONS = [
   { value: "", label: "Not specified" },
@@ -463,7 +463,7 @@ const DIVIDEND_TYPE_OPTIONS = [
 function TaxStatusBadge({ taxClassification }: { taxClassification: string | null }) {
   if (!taxClassification) return null;
   return (
-    <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${DIVIDEND_TYPE_CLASSES[taxClassification] ?? "bg-slate-100 text-slate-600"}`}>
+    <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${DIVIDEND_TYPE_CLASSES[taxClassification] ?? "bg-slate-soft text-slate-deep"}`}>
       {DIVIDEND_TYPE_LABELS[taxClassification] ?? taxClassification}
     </span>
   );
@@ -799,7 +799,7 @@ function ItemTypeahead({
           }
           setOpen((o) => !o);
         }}
-        className={`w-full rounded-md border px-3 py-2 text-left text-[13px] focus:outline-none focus:ring-1 ${error ? "border-destructive focus:border-destructive focus:ring-destructive/30" : "border-border focus:border-primary focus:ring-primary"}`}
+        className={`w-full rounded-md border px-3 py-2 text-left text-[13px] focus:outline-none focus:ring-1 ${error ? "border-down focus:border-down focus:ring-down/30" : "border-border focus:border-primary focus:ring-primary"}`}
       >
         {selectedLabel || <span className="text-muted-foreground">{placeholder ?? "Select..."}</span>}
       </button>
@@ -1452,7 +1452,7 @@ export function IncomePage() {
                         {income.account.isJoint ? "J" : "P"}
                       </span>
                     </td>
-                    <td className="w-[90px] py-2 text-right font-semibold font-mono tabular-nums text-green-600">
+                    <td className="w-[90px] py-2 text-right font-semibold font-mono tabular-nums text-up">
                       <EditableAmountCell
                         value={income.amount}
                         positive
@@ -1478,7 +1478,7 @@ export function IncomePage() {
                   <p className="text-sm text-muted-foreground">{income.account.name} &middot; {formatDate(income.date)}</p>
                 </div>
                 <div className="ml-4 flex items-center gap-2">
-                  <span className="font-semibold text-green-600">+{formatCurrency(income.amount)}</span>
+                  <span className="font-semibold text-up">+{formatCurrency(income.amount)}</span>
                   <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"><Pencil className="h-4 w-4" /></button>
                 </div>
               </div>
@@ -1537,10 +1537,10 @@ export function IncomePage() {
                         <div className="flex items-center gap-1.5">
                           <EditableCell value={income.source ?? ""} onSave={(v) => handleInlineUpdate(income.id, "source", v)} className="tp-row-label" />
                           {income.subtype === "DIVIDEND" && (
-                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700">Dividend</span>
+                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-violet-soft text-violet-deep">Dividend</span>
                           )}
                           {income.subtype === "CAPITAL_GAIN" && (
-                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700">Sale</span>
+                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-blue-soft text-blue-deep">Sale</span>
                           )}
                         </div>
                       </td>
@@ -1569,7 +1569,7 @@ export function IncomePage() {
                           {income.account.isJoint ? "J" : "P"}
                         </span>
                       </td>
-                      <td className={`w-[90px] py-2 text-right font-semibold font-mono tabular-nums ${!income.isCashReceived ? "text-muted-foreground" : "text-green-600"}`}>
+                      <td className={`w-[90px] py-2 text-right font-semibold font-mono tabular-nums ${!income.isCashReceived ? "text-muted-foreground" : "text-up"}`}>
                         <EditableAmountCell
                           value={income.amount}
                           positive
@@ -1594,10 +1594,10 @@ export function IncomePage() {
                     <div className="flex items-center gap-1.5 truncate">
                       <p className={`truncate font-medium ${!income.isCashReceived ? "text-muted-foreground" : ""}`}>{income.category?.name ?? "—"}{income.source ? ` · ${income.source}` : ""}</p>
                       {income.subtype === "DIVIDEND" && (
-                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-violet-100 text-violet-700">Dividend</span>
+                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-violet-soft text-violet-deep">Dividend</span>
                       )}
                       {income.subtype === "CAPITAL_GAIN" && (
-                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700">Sale</span>
+                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-blue-soft text-blue-deep">Sale</span>
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -1606,7 +1606,7 @@ export function IncomePage() {
                     </div>
                   </div>
                   <div className="ml-2 flex items-center gap-2">
-                    <span className={`font-semibold ${!income.isCashReceived ? "text-muted-foreground" : "text-green-600"}`}>+{formatCurrency(income.amount)}</span>
+                    <span className={`font-semibold ${!income.isCashReceived ? "text-muted-foreground" : "text-up"}`}>+{formatCurrency(income.amount)}</span>
                     <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"><Pencil className="h-4 w-4" /></button>
                   </div>
                 </div>
@@ -1771,7 +1771,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
             error={!!errors.amount}
             onValidChange={() => setErrors((e) => ({ ...e, amount: undefined }))}
           />
-          {errors.amount && <p className="mt-1 text-xs text-destructive">{errors.amount}</p>}
+          {errors.amount && <p className="mt-1 text-xs text-down">{errors.amount}</p>}
         </div>
 
         <div>
@@ -1816,7 +1816,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
             error={!!errors.accountId}
             onSelect={() => setErrors((e) => ({ ...e, accountId: undefined }))}
           />
-          {errors.accountId && <p className="mt-1 text-xs text-destructive">{errors.accountId}</p>}
+          {errors.accountId && <p className="mt-1 text-xs text-down">{errors.accountId}</p>}
         </div>
 
         {/* Collapsible optional section */}
@@ -1862,7 +1862,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
                 onClick={handleDeleteClick}
                 disabled={deleting}
                 title={isActivityLinked ? "This transaction was generated by an investment activity and cannot be manually deleted" : undefined}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${isActivityLinked ? "opacity-40 cursor-not-allowed text-destructive" : "text-destructive hover:bg-destructive/10"}`}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${isActivityLinked ? "opacity-40 cursor-not-allowed text-down" : "text-down hover:bg-down/10"}`}
               >
                 <Trash2 className="h-4 w-4" />
                 {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}
@@ -2099,7 +2099,7 @@ function ImportModal({
               {validRows.length} of {rows.length} rows valid
             </p>
             {rows.length > validRows.length && (
-              <p className="text-xs text-destructive">
+              <p className="text-xs text-down">
                 {rows.length - validRows.length} row{rows.length - validRows.length !== 1 ? "s" : ""} with errors
               </p>
             )}
@@ -2120,22 +2120,22 @@ function ImportModal({
               </thead>
               <tbody>
                 {rows.map((row, i) => (
-                  <tr key={i} className={`border-b border-border ${row.errors.length > 0 ? "bg-destructive/5" : ""}`}>
+                  <tr key={i} className={`border-b border-border ${row.errors.length > 0 ? "bg-down/5" : ""}`}>
                     <td className="px-2 py-1.5 text-muted-foreground">{i + 1}</td>
                     <td className="px-2 py-1.5">{row.date}</td>
                     <td className="px-2 py-1.5 max-w-[120px] truncate">{row.source || "—"}</td>
                     <td className="px-2 py-1.5">{row.categoryId ? (categories.find((c) => c.id === row.categoryId)?.name ?? row.categoryName) : row.categoryName}</td>
                     <td className="px-2 py-1.5 max-w-[100px] truncate">{row.accountName}</td>
-                    <td className="px-2 py-1.5 text-right font-medium font-mono tabular-nums text-green-600">
+                    <td className="px-2 py-1.5 text-right font-medium font-mono tabular-nums text-up">
                       {row.amount === 0 ? "—" : `+${formatCurrency(row.amount)}`}
                     </td>
                     <td className="px-2 py-1.5">
                       {row.errors.length > 0 ? (
-                        <span className="text-destructive" title={row.errors.join("; ")}>
+                        <span className="text-down" title={row.errors.join("; ")}>
                           <AlertCircle className="inline h-3 w-3" /> {row.errors[0]}
                         </span>
                       ) : (
-                        <span className="text-green-600"><Check className="inline h-3 w-3" /></span>
+                        <span className="text-up"><Check className="inline h-3 w-3" /></span>
                       )}
                     </td>
                   </tr>
@@ -2165,13 +2165,13 @@ function ImportModal({
       {step === "result" && result && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-4">
-            <CheckCircle2 className="h-6 w-6 text-green-600 shrink-0" />
+            <CheckCircle2 className="h-6 w-6 text-up shrink-0" />
             <div>
               <p className="text-sm font-medium">
                 {result.imported} income{result.imported !== 1 ? "s" : ""} imported successfully
               </p>
               {result.errors.length > 0 && (
-                <p className="text-xs text-destructive mt-1">
+                <p className="text-xs text-down mt-1">
                   {result.errors.length} row{result.errors.length !== 1 ? "s" : ""} failed on server
                 </p>
               )}
@@ -2179,7 +2179,7 @@ function ImportModal({
           </div>
 
           {result.errors.length > 0 && (
-            <div className="max-h-[150px] overflow-auto rounded-md border border-border p-2 text-xs text-destructive">
+            <div className="max-h-[150px] overflow-auto rounded-md border border-border p-2 text-xs text-down">
               {result.errors.map((e, i) => (
                 <div key={i}>Row {e.row}: {e.message}</div>
               ))}

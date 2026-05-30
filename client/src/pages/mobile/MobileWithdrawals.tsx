@@ -47,13 +47,13 @@ const TYPE_LABELS: Record<WithdrawalType, string> = {
 };
 
 const TYPE_COLORS: Record<WithdrawalType, string> = {
-  dividend: "bg-violet-100 text-violet-700",
-  interest: "bg-sky-100 text-sky-700",
-  cap_gains_dist: "bg-blue-100 text-blue-700",
-  sale_proceeds: "bg-amber-100 text-amber-700",
-  return_of_capital: "bg-orange-100 text-orange-700",
-  transfer: "bg-emerald-100 text-emerald-700",
-  reinvestment: "bg-rose-100 text-rose-700",
+  dividend: "bg-violet-soft text-violet-deep",
+  interest: "bg-sky-soft text-sky-deep",
+  cap_gains_dist: "bg-blue-soft text-blue-deep",
+  sale_proceeds: "bg-warn-soft text-warn-deep",
+  return_of_capital: "bg-orange-soft text-orange-deep",
+  transfer: "bg-up-soft text-up-deep",
+  reinvestment: "bg-rose-soft text-rose-deep",
 };
 
 function annualizedRate(total: number, months: number, denominator: number): number | null {
@@ -294,7 +294,7 @@ function MonthDetailSheet({
                     <TypeBadge type={event.type} />
                     <span className={cn(
                       "text-sm font-semibold tabular-nums font-mono",
-                      amount < 0 ? "text-green-600" : "text-foreground",
+                      amount < 0 ? "text-up" : "text-foreground",
                     )}>
                       {amount < 0 ? "−" : ""}{formatCurrency(Math.abs(amount))}
                     </span>
@@ -337,7 +337,7 @@ function MonthDetailSheet({
                       </button>
                       <button
                         onClick={() => { onClose(); setTimeout(() => onDelete(event), 200); }}
-                        className="flex items-center gap-1 text-xs text-destructive/70 hover:text-destructive"
+                        className="flex items-center gap-1 text-xs text-down/70 hover:text-down"
                       >
                         <Trash2 className="h-3 w-3" />
                         Delete
@@ -507,7 +507,7 @@ function TransferFullscreen({
           {/* From */}
           <div>
             <label className="mb-1.5 block text-sm font-medium">
-              From Account <span className="text-destructive">*</span>
+              From Account <span className="text-down">*</span>
             </label>
             <select value={form.fromAccountId} onChange={set("fromAccountId")} required className={inputClass}>
               <option value="">Select account…</option>
@@ -527,7 +527,7 @@ function TransferFullscreen({
           {/* To */}
           <div>
             <label className="mb-1.5 block text-sm font-medium">
-              To Account <span className="text-destructive">*</span>
+              To Account <span className="text-down">*</span>
             </label>
             <select value={form.toAccountId} onChange={set("toAccountId")} required className={inputClass}>
               <option value="">Select account…</option>
@@ -548,7 +548,7 @@ function TransferFullscreen({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1.5 block text-sm font-medium">
-                Amount <span className="text-destructive">*</span>
+                Amount <span className="text-down">*</span>
               </label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
@@ -565,7 +565,7 @@ function TransferFullscreen({
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium">
-                Date <span className="text-destructive">*</span>
+                Date <span className="text-down">*</span>
               </label>
               <input
                 type="date"
@@ -602,19 +602,19 @@ function TransferFullscreen({
 
           {/* Notices */}
           {managedInvestmentAccount && (
-            <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
+            <div className="rounded-md bg-warn-soft border border-warn-line px-3 py-2.5 text-sm text-warn-deep">
               <strong>{managedInvestmentAccount.name}</strong> is a managed account — its balance
               won't be adjusted automatically. Update it manually once complete.
             </div>
           )}
           {!isPastOrToday && !editingTransferId && (
-            <div className="rounded-md bg-sky-50 border border-sky-200 px-3 py-2.5 text-sm text-sky-800">
+            <div className="rounded-md bg-sky-soft border border-sky-soft px-3 py-2.5 text-sm text-sky-deep">
               This is a future transfer. Account balances will be updated automatically when the
               date arrives.
             </div>
           )}
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <p className="text-sm text-down">{error}</p>}
         </form>
       </div>
     </div>
@@ -811,8 +811,8 @@ export function MobileWithdrawals() {
           <div className={cn(
             "rounded-lg px-3 py-2 text-sm font-medium",
             ytdRate <= targetRate
-              ? "bg-green-50 text-green-700"
-              : "bg-red-50 text-red-600",
+              ? "bg-up-soft text-up-deep"
+              : "bg-down-soft text-down",
           )}>
             {ytdRate <= targetRate
               ? `▼ ${((targetRate - ytdRate) * 100).toFixed(2)}% under target (${(targetRate * 100).toFixed(2)}%)`

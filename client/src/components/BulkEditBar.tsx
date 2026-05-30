@@ -47,11 +47,11 @@ type ActivePopover = "description" | "category" | "taxStatus" | "tags" | null;
 
 const TAX_STATUS_OPTIONS: { value: string; label: string; className: string }[] = [
   { value: "", label: "Not specified (clear)", className: "" },
-  { value: "CAPITAL_GAIN", label: "Capital Gain", className: "bg-blue-100 text-blue-700" },
-  { value: "ORDINARY", label: "Ordinary", className: "bg-slate-100 text-slate-600" },
-  { value: "QUALIFIED", label: "Qualified", className: "bg-emerald-100 text-emerald-700" },
-  { value: "RETURN_OF_CAPITAL", label: "Return of Capital", className: "bg-amber-100 text-amber-700" },
-  { value: "TAX_EXEMPT", label: "Tax-Exempt", className: "bg-teal-100 text-teal-700" },
+  { value: "CAPITAL_GAIN", label: "Capital Gain", className: "bg-blue-soft text-blue-deep" },
+  { value: "ORDINARY", label: "Ordinary", className: "bg-slate-soft text-slate-deep" },
+  { value: "QUALIFIED", label: "Qualified", className: "bg-up-soft text-up-deep" },
+  { value: "RETURN_OF_CAPITAL", label: "Return of Capital", className: "bg-warn-soft text-warn-deep" },
+  { value: "TAX_EXEMPT", label: "Tax-Exempt", className: "bg-teal-soft text-teal-deep" },
 ];
 
 export function BulkEditBar({
@@ -325,7 +325,7 @@ export function BulkEditBar({
               // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus
             />
-            {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+            {error && <p className="mt-1 text-xs text-down">{error}</p>}
             <button
               type="button"
               disabled={!description.trim() || loading}
@@ -390,7 +390,7 @@ export function BulkEditBar({
                 ))
               )}
             </div>
-            {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+            {error && <p className="mt-1 text-xs text-down">{error}</p>}
             <button
               type="button"
               disabled={categoryId === undefined || loading}
@@ -430,7 +430,7 @@ export function BulkEditBar({
                   </button>
                 ))}
               </div>
-              {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+              {error && <p className="mt-1 text-xs text-down">{error}</p>}
               <button
                 type="button"
                 disabled={taxStatusValue === undefined || loading}
@@ -500,9 +500,9 @@ export function BulkEditBar({
               )}
             </div>
             {tagIds.length === 0 && (
-              <p className="mt-1 text-xs text-amber-600">All tags will be removed from the selected expenses.</p>
+              <p className="mt-1 text-xs text-warn">All tags will be removed from the selected expenses.</p>
             )}
-            {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+            {error && <p className="mt-1 text-xs text-down">{error}</p>}
             <button
               type="button"
               disabled={loading}
@@ -601,7 +601,7 @@ export function BulkEditBar({
               type="button"
               onClick={handleDelete}
               disabled={deleteLoading}
-              className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-50"
+              className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-sm font-medium text-down hover:bg-down/20 transition-colors disabled:opacity-50"
             >
               <Trash2 className="h-3.5 w-3.5" />
               {deleteLoading ? "Deleting..." : "Confirm Delete"}

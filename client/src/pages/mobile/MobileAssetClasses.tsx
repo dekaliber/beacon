@@ -117,8 +117,8 @@ export function MobileAssetClasses() {
           <div className={cn(
             "flex items-center gap-3 rounded-lg border px-4 py-3 text-sm",
             Math.abs(leafTotal - 100) < 0.1
-              ? "border-green-200 bg-green-50 text-green-800"
-              : "border-amber-200 bg-amber-50 text-amber-800"
+              ? "border-up-line bg-up-soft text-up-deep"
+              : "border-warn-line bg-warn-soft text-warn-deep"
           )}>
             <Target className="h-4 w-4 shrink-0" />
             <span>
@@ -413,7 +413,7 @@ function MobileAssetClassModal({
                   await onDelete!(editing!.id);
                   setDeleting(false);
                 }}
-                className="rounded-md bg-destructive px-3 py-2.5 text-sm font-medium text-destructive-foreground disabled:opacity-50 transition-colors"
+                className="rounded-md bg-down px-3 py-2.5 text-sm font-medium text-white disabled:opacity-50 transition-colors"
               >
                 {deleting ? "Deleting…" : "Confirm?"}
               </button>
@@ -421,7 +421,7 @@ function MobileAssetClassModal({
               <button
                 type="button"
                 onClick={() => setConfirmDelete(true)}
-                className="rounded-md border border-border p-2.5 text-muted-foreground hover:border-destructive hover:text-destructive transition-colors"
+                className="rounded-md border border-border p-2.5 text-muted-foreground hover:border-down hover:text-down transition-colors"
                 aria-label="Delete asset class"
               >
                 <Trash2 className="h-4 w-4" />

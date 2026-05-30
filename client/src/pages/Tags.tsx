@@ -261,7 +261,7 @@ export function TagsPage() {
                                               {formatDate(offset.date.slice(0, 10))}
                                             </td>
                                             <td className="py-1 pr-2">
-                                              <span className="flex items-center gap-1 truncate text-amber-600">
+                                              <span className="flex items-center gap-1 truncate text-warn">
                                                 <CornerDownRight className="h-3 w-3 flex-shrink-0 opacity-60" />
                                                 <span className="truncate">{offset.vendor || offset.description}</span>
                                                 <AlertTriangle
@@ -278,7 +278,7 @@ export function TagsPage() {
                                                 {offset.account.isJoint ? "J" : "P"}
                                               </span>
                                             </td>
-                                            <td className="py-1 text-right tabular-nums font-mono text-amber-600">
+                                            <td className="py-1 text-right tabular-nums font-mono text-warn">
                                               {formatCurrency(parseFloat(offset.amount))}
                                             </td>
                                           </tr>
@@ -420,7 +420,7 @@ function TagModal({ open, onClose, onSave, onDelete, tag }: TagModalProps) {
                 type="button"
                 onClick={handleDeleteClick}
                 disabled={deleting}
-                className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-down hover:bg-down/10 transition-colors"
               >
                 <Trash2 className="h-4 w-4" />
                 {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}

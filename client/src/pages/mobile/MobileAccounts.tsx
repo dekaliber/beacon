@@ -51,12 +51,12 @@ function AccountRow({ account, allAccounts, onTap }: { account: Account; allAcco
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-sm font-medium leading-snug">{account.name}</span>
           {account.isManaged && (
-            <SectionLabel as="span" className="rounded-full bg-blue-600 text-white text-[10px] px-1.5 py-0.5">
+            <SectionLabel as="span" className="rounded-full bg-blue text-white text-[10px] px-1.5 py-0.5">
               Managed
             </SectionLabel>
           )}
           {account.isTaxAdvantaged && (
-            <SectionLabel as="span" className="rounded-full bg-emerald-600 text-white text-[10px] px-1.5 py-0.5">
+            <SectionLabel as="span" className="rounded-full bg-up text-white text-[10px] px-1.5 py-0.5">
               {account.taxAdvantageType === "TRADITIONAL" ? "Traditional"
                 : account.taxAdvantageType === "ROTH" ? "Roth"
                 : account.taxAdvantageType === "HSA" ? "HSA"
@@ -192,7 +192,7 @@ export function MobileAccounts() {
               className={cn(
                 "flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isDemoMode
-                  ? "bg-amber-100 text-amber-700"
+                  ? "bg-warn-soft text-warn-deep"
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               )}
             >
@@ -698,7 +698,7 @@ function MobileAccountModal({
                 type="button"
                 disabled={deleting}
                 onClick={handleDeleteClick}
-                className="rounded-md bg-destructive px-3 py-2.5 text-sm font-medium text-destructive-foreground disabled:opacity-50 transition-colors"
+                className="rounded-md bg-down px-3 py-2.5 text-sm font-medium text-white disabled:opacity-50 transition-colors"
               >
                 {deleting ? "Deleting…" : "Confirm?"}
               </button>
@@ -706,7 +706,7 @@ function MobileAccountModal({
               <button
                 type="button"
                 onClick={() => setConfirmDelete(true)}
-                className="rounded-md border border-border p-2.5 text-muted-foreground hover:border-destructive hover:text-destructive transition-colors"
+                className="rounded-md border border-border p-2.5 text-muted-foreground hover:border-down hover:text-down transition-colors"
                 aria-label="Delete account"
               >
                 <Trash2 className="h-4 w-4" />

@@ -75,8 +75,8 @@ export function CategoryOutliersChart({ data, compact = false, header }: Categor
   const prevColX  = chartAreaRight + CUR_W + PREV_W  - 4;
   const deltaColX = width - 4;
 
-  const colorUp    = "var(--color-destructive)";
-  const colorDown  = "var(--color-success)";
+  const colorUp    = "var(--color-down)";
+  const colorDown  = "var(--color-up)";
   const colorMuted = "var(--color-muted-foreground)";
   const colorCard  = "var(--color-card)";
 

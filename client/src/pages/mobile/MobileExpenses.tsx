@@ -495,7 +495,7 @@ function MobileExpenseModal({
       <form id="mobile-expense-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto overscroll-contain">
         <div className="space-y-5 p-4">
           {error && (
-            <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <div className="rounded-md bg-down/10 px-3 py-2 text-sm text-down">
               {error}
             </div>
           )}
@@ -778,7 +778,7 @@ function MobileExpenseModal({
                     setConfirmDelete(false);
                   }
                 }}
-                className="rounded-md bg-destructive px-3 py-2.5 text-sm font-medium text-destructive-foreground disabled:opacity-50 transition-colors"
+                className="rounded-md bg-down px-3 py-2.5 text-sm font-medium text-white disabled:opacity-50 transition-colors"
               >
                 {deleting ? "Deleting…" : "Confirm?"}
               </button>
@@ -786,7 +786,7 @@ function MobileExpenseModal({
               <button
                 type="button"
                 onClick={() => setConfirmDelete(true)}
-                className="rounded-md border border-border p-2.5 text-muted-foreground hover:border-destructive hover:text-destructive transition-colors"
+                className="rounded-md border border-border p-2.5 text-muted-foreground hover:border-down hover:text-down transition-colors"
                 aria-label="Delete expense"
               >
                 <Trash2 className="h-4 w-4" />
@@ -875,9 +875,9 @@ function ExpenseRow({
   const isNegative = parseFloat(expense.amount) < 0;
 
   const rowBg = upcoming || isOffset || fullyOffset ? "" :
-    !expense.categoryId ? "bg-red-50/50" :
-    expense.recurrenceRuleId ? "bg-blue-50/50" :
-    expense.isReimbursementExpected ? "bg-amber-50/50" : "";
+    !expense.categoryId ? "bg-row-uncategorized" :
+    expense.recurrenceRuleId ? "bg-row-recurring" :
+    expense.isReimbursementExpected ? "bg-row-reimbursement" : "";
 
   const mutedText = fullyOffset ? "text-gray-300" : "";
 
@@ -895,7 +895,7 @@ function ExpenseRow({
               {expense.account.name}
             </p>
           </div>
-          <span className={`shrink-0 text-xs font-medium ${parentFullyOffset ? gray : isNegative ? "text-green-600" : gray}`}>
+          <span className={`shrink-0 text-xs font-medium ${parentFullyOffset ? gray : isNegative ? "text-up" : gray}`}>
             {isNegative
               ? `+${formatCurrency(Math.abs(parseFloat(expense.amount)))}`
               : formatCurrency(parseFloat(expense.amount))}
@@ -913,11 +913,11 @@ function ExpenseRow({
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-start gap-1.5">
           {!upcoming && expense.isReimbursementExpected && (
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warn" />
           )}
           <p className={`truncate font-medium ${mutedText}`}>{expense.description}</p>
         </div>
-        <span className={`shrink-0 font-semibold ${fullyOffset ? "text-gray-300" : isNegative ? "text-green-600" : ""}`}>
+        <span className={`shrink-0 font-semibold ${fullyOffset ? "text-gray-300" : isNegative ? "text-up" : ""}`}>
           {isNegative
             ? `+${formatCurrency(Math.abs(parseFloat(expense.amount)))}`
             : formatCurrency(parseFloat(expense.amount))}

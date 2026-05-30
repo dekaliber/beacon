@@ -216,7 +216,7 @@ function EditBalanceSheet({
             )}
           </div>
 
-          <div className="flex items-start gap-2 rounded-md bg-blue-50 px-3 py-2.5 text-xs text-blue-800">
+          <div className="flex items-start gap-2 rounded-md bg-blue-soft px-3 py-2.5 text-xs text-blue-deep">
             <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
             <p>
               Confirmed transactions on or before this date are assumed to be
@@ -394,7 +394,7 @@ function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved,
                       setConfirmDelete(false);
                     }
                   }}
-                  className="rounded-md bg-destructive px-3 py-2.5 text-sm font-medium text-destructive-foreground disabled:opacity-50 transition-colors"
+                  className="rounded-md bg-down px-3 py-2.5 text-sm font-medium text-white disabled:opacity-50 transition-colors"
                 >
                   {deleting ? "Deleting…" : "Confirm?"}
                 </button>
@@ -402,7 +402,7 @@ function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved,
                 <button
                   type="button"
                   onClick={() => setConfirmDelete(true)}
-                  className="rounded-md border border-border p-2.5 text-muted-foreground hover:border-destructive hover:text-destructive transition-colors"
+                  className="rounded-md border border-border p-2.5 text-muted-foreground hover:border-down hover:text-down transition-colors"
                   aria-label="Delete cash injection"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -540,7 +540,7 @@ function CCPaymentSheet({
             <div className="flex items-center justify-between mb-1">
               <label className="text-sm font-medium">Payment Amount</label>
               {isConfirmed ? (
-                <SectionLabel as="span" className="rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px]">
+                <SectionLabel as="span" className="rounded-full bg-up-soft text-up-deep px-2 py-0.5 text-[10px]">
                   Confirmed
                 </SectionLabel>
               ) : (
@@ -593,7 +593,7 @@ function CCPaymentSheet({
                       {fmtMD(exp.date.slice(0, 10))}
                     </span>
                     <span className="flex-1 truncate">{exp.vendor}</span>
-                    <StatValue className="text-red-500 shrink-0">
+                    <StatValue className="text-down shrink-0">
                       {formatCurrency(Math.abs(parseFloat(exp.amount)))}
                     </StatValue>
                   </div>
@@ -726,7 +726,7 @@ function MobileEventsLedger({
                   onClick: () => isCCPayment ? onCCPaymentTap?.(event) : onInjectionTap?.(event),
                   className: cn(
                     "w-full text-left border-b border-border/50 py-2.5 active:bg-muted/40 transition-colors",
-                    isInjection && "bg-amber-50/50 active:bg-amber-100/60",
+                    isInjection && "bg-warn-soft/50 active:bg-warn-soft/60",
                   ),
                 }
               : {
@@ -736,14 +736,14 @@ function MobileEventsLedger({
             {/* Line 1: icon + description + amount + chevron for CC_PAYMENT */}
             <div className="flex items-start justify-between gap-3">
               <div className="flex min-w-0 flex-1 items-start gap-1.5">
-                <span className={cn("mt-0.5 shrink-0", event.amount > 0 ? "text-green-600" : "text-red-500")}>
+                <span className={cn("mt-0.5 shrink-0", event.amount > 0 ? "text-up" : "text-down")}>
                   {eventIcon(event.type)}
                 </span>
                 <p className="truncate font-medium">{event.description}</p>
               </div>
               <span className={cn(
                 "shrink-0 tabular-nums font-mono font-medium",
-                event.amount > 0 ? "text-green-600" : "text-red-500",
+                event.amount > 0 ? "text-up" : "text-down",
               )}>
                 {event.amount > 0 ? "+" : ""}{formatCurrency(event.amount)}
               </span>
@@ -757,7 +757,7 @@ function MobileEventsLedger({
                   <> · {event.type === "TRANSFER_IN" ? "from " : event.type === "TRANSFER_OUT" ? "to " : ""}{event.relatedAccountName}</>
                 )}
                 {event.confidence === "KNOWN" && event.type !== "CC_PAYMENT" && (
-                  <SectionLabel as="span" className="ml-1.5 rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px]">
+                  <SectionLabel as="span" className="ml-1.5 rounded-full bg-up-soft text-up-deep px-1.5 py-0.5 text-[10px]">
                     Confirmed
                   </SectionLabel>
                 )}
@@ -767,14 +767,14 @@ function MobileEventsLedger({
                   </SectionLabel>
                 )}
                 {event.overrideId && (
-                  <SectionLabel as="span" className="ml-1.5 rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-[10px]">
+                  <SectionLabel as="span" className="ml-1.5 rounded-full bg-up-soft text-up-deep px-1.5 py-0.5 text-[10px]">
                     Confirmed
                   </SectionLabel>
                 )}
               </p>
               <span className={cn(
                 "shrink-0 text-sm tabular-nums font-mono font-semibold",
-                event.runningBalance < 0 ? "text-red-600" : "text-muted-foreground",
+                event.runningBalance < 0 ? "text-down" : "text-muted-foreground",
               )}>
                 {formatCurrency(event.runningBalance)}
               </span>
@@ -833,7 +833,7 @@ function ProjectionSection({
             <SectionLabel className="mb-0.5">{fmtDate(windowEnd)}</SectionLabel>
             <p className={cn(
               "tp-kpi-l tabular-nums font-display",
-              projection.endBalance < 0 ? "text-red-600" : "text-foreground"
+              projection.endBalance < 0 ? "text-down" : "text-foreground"
             )}>
               {formatCurrency(projection.endBalance)}
             </p>
@@ -848,18 +848,18 @@ function ProjectionSection({
       {firstNegativeDate && (
         <Card className="px-4 py-3">
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 flex-shrink-0 rounded-md bg-red-100 flex items-center justify-center">
-              <AlertTriangle className="h-4 w-4 text-red-600" />
+            <div className="h-8 w-8 flex-shrink-0 rounded-md bg-down-soft flex items-center justify-center">
+              <AlertTriangle className="h-4 w-4 text-down" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm text-red-600">Projected shortfall</p>
+              <p className="font-medium text-sm text-down">Projected shortfall</p>
               <p className="tp-caption">
                 {formatCurrency(shortfall)} starting {fmtDate(firstNegativeDate)}
               </p>
             </div>
             <button
               onClick={() => onAddInjection(firstNegativeDate)}
-              className="flex shrink-0 items-center gap-1 rounded-md bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+              className="flex shrink-0 items-center gap-1 rounded-md bg-down-soft px-2.5 py-1.5 text-xs font-medium text-down hover:bg-down-soft transition-colors"
             >
               <PlusCircle className="h-3.5 w-3.5" />
               Add injection
@@ -908,7 +908,7 @@ function TabButton({
     >
       <span>{p.accountName}</span>
       {p.minBalance < 0 && (
-        <AlertTriangle className="h-3 w-3 text-red-500 shrink-0" aria-label="Projected negative balance" />
+        <AlertTriangle className="h-3 w-3 text-down shrink-0" aria-label="Projected negative balance" />
       )}
     </button>
   );
