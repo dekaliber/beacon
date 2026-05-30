@@ -1349,7 +1349,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
             />
           </div>
           {isAssigned && position.optionType === "CALL" && (
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1.5 text-xs text-muted-foreground">
               For option contract fees only. Any brokerage or SEC fees on the share sale can be entered when reviewing the pending sale.
             </p>
           )}
