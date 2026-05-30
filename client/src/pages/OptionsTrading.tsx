@@ -1088,6 +1088,28 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
   const isAssigned = outcome === "ASSIGNED";
   const isRolled = outcome === "ROLLED";
 
+  // On mount: if the option has already expired, fetch the closing price on the
+  // expiration date and default to ASSIGNED when the contract finished in-the-money.
+  // For a CALL: ITM when price > strike. For a PUT: ITM when price < strike.
+  // The existing isAssigned effects cascade from this and fill in the other fields.
+  useEffect(() => {
+    // Option expiry is treated as 4 pm ET = 20:00 UTC on the expiration date.
+    const expiryUtc = new Date(expirationDateStr + "T20:00:00.000Z");
+    if (Date.now() <= expiryUtc.getTime()) return; // not yet expired
+
+    let cancelled = false;
+    getTickerPrice(position.ticker.symbol, expirationDateStr)
+      .then((r) => {
+        if (cancelled) return;
+        const price = r.price;
+        const strike = position.strikePrice;
+        const itm = position.optionType === "CALL" ? price > strike : price < strike;
+        if (itm) setOutcome("ASSIGNED");
+      })
+      .catch(() => {}); // fall back silently to EXPIRED_WORTHLESS
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // When switching to ASSIGNED, default closedAt to expiration date at 4pm ET
   // and pre-fill contracts assigned to the full position size
   useEffect(() => {
