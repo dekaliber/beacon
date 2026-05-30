@@ -2572,14 +2572,14 @@ function SellModal({
           <div className="overflow-x-auto rounded border border-border">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-muted/40 tp-table-header">
-                  <th className="py-2 px-3 text-left">Lot Date</th>
-                  <th className="py-2 px-3 text-right">Shares</th>
-                  <th className="py-2 px-3 text-right">Cost/Share</th>
-                  <th className="py-2 px-3 text-left">Term</th>
-                  <th className="py-2 px-3 text-right">Proceeds</th>
-                  <th className="py-2 px-3 text-right">Cost Basis</th>
-                  <th className="py-2 px-3 text-right">Gain / Loss</th>
+                <tr className="bg-muted/40">
+                  <th className="py-2 px-3 text-left tp-table-header">Lot Date</th>
+                  <th className="py-2 px-3 text-right tp-table-header">Shares</th>
+                  <th className="py-2 px-3 text-right tp-table-header">Cost/Share</th>
+                  <th className="py-2 px-3 text-left tp-table-header">Term</th>
+                  <th className="py-2 px-3 text-right tp-table-header">Proceeds</th>
+                  <th className="py-2 px-3 text-right tp-table-header">Cost Basis</th>
+                  <th className="py-2 px-3 text-right tp-table-header">Gain / Loss</th>
                 </tr>
               </thead>
               <tbody>
@@ -2691,11 +2691,11 @@ function SellModal({
             <div className="overflow-x-auto rounded border border-border">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-muted/40 tp-table-header">
-                    <th className="py-2 px-3 text-left">Lot Date</th>
-                    <th className="py-2 px-3 text-right">Shares</th>
-                    <th className="py-2 px-3 text-right">Cost/Share</th>
-                    <th className="py-2 px-3 text-right">Cost Basis</th>
+                  <tr className="bg-muted/40">
+                    <th className="py-2 px-3 text-left tp-table-header">Lot Date</th>
+                    <th className="py-2 px-3 text-right tp-table-header">Shares</th>
+                    <th className="py-2 px-3 text-right tp-table-header">Cost/Share</th>
+                    <th className="py-2 px-3 text-right tp-table-header">Cost Basis</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3902,14 +3902,14 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
               <div className="overflow-x-auto rounded border border-border">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-muted/40 tp-table-header">
-                      <th className="py-2 px-3 text-left">Lot Date</th>
-                      <th className="py-2 px-3 text-right">Shares</th>
-                      <th className="py-2 px-3 text-right">Cost/Share</th>
-                      <th className="py-2 px-3 text-left">Term</th>
-                      <th className="py-2 px-3 text-right">Proceeds</th>
-                      <th className="py-2 px-3 text-right">Cost Basis</th>
-                      <th className="py-2 px-3 text-right">Gain / Loss</th>
+                    <tr className="bg-muted/40">
+                      <th className="py-2 px-3 text-left tp-table-header">Lot Date</th>
+                      <th className="py-2 px-3 text-right tp-table-header">Shares</th>
+                      <th className="py-2 px-3 text-right tp-table-header">Cost/Share</th>
+                      <th className="py-2 px-3 text-left tp-table-header">Term</th>
+                      <th className="py-2 px-3 text-right tp-table-header">Proceeds</th>
+                      <th className="py-2 px-3 text-right tp-table-header">Cost Basis</th>
+                      <th className="py-2 px-3 text-right tp-table-header">Gain / Loss</th>
                     </tr>
                   </thead>
                   <tbody>
