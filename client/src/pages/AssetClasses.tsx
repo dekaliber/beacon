@@ -284,7 +284,7 @@ function AssetClassRow({
       <div className="flex flex-1 items-center gap-2 min-w-0">
         <span className={cn("truncate", isChild ? "text-sm" : "font-medium")}>{assetClass.name}</span>
         {assetClass.isSystem && (
-          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-10 font-medium text-muted-foreground">
             built-in
           </span>
         )}

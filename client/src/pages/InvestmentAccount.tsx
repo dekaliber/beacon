@@ -1239,19 +1239,19 @@ function HoldingRow({
               <td colSpan={8} className="py-3 pl-4 pr-4">
                 <div className="flex flex-wrap items-start gap-6 text-sm">
                   <div>
-                    <SectionLabel className="text-[11px] mb-0.5">Total Shares</SectionLabel>
+                    <SectionLabel className="text-11 mb-0.5">Total Shares</SectionLabel>
                     <StatValue as="p" className="font-medium">
                       {holding.totalQuantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}
                     </StatValue>
                   </div>
                   <div>
-                    <SectionLabel className="text-[11px] mb-0.5">Avg Cost / Share</SectionLabel>
+                    <SectionLabel className="text-11 mb-0.5">Avg Cost / Share</SectionLabel>
                     <StatValue as="p" className="font-medium">
                       {holding.totalQuantity > 0 ? formatCurrency(holding.totalCost / holding.totalQuantity) : "—"}
                     </StatValue>
                   </div>
                   <div>
-                    <SectionLabel className="text-[11px] mb-0.5">Group</SectionLabel>
+                    <SectionLabel className="text-11 mb-0.5">Group</SectionLabel>
                     <p className="font-medium">
                       {holding.group ?? <span className="italic text-muted-foreground text-xs">None set</span>}
                     </p>
@@ -1287,7 +1287,7 @@ function HoldingRow({
           ) : (
             <>
               {/* Lot sub-header: "Purchase Date" spans Symbol+Name so it never wraps */}
-              <tr className="bg-muted/20 text-[11px] text-muted-foreground uppercase tracking-[1px] font-mono">
+              <tr className="bg-muted/20 text-11 text-muted-foreground uppercase tracking-[1px] font-mono">
                 <th colSpan={2} className="py-1.5 pl-4 pr-2 text-left font-medium whitespace-nowrap">
                   Purchase Date
                 </th>
@@ -2591,7 +2591,7 @@ function SellModal({
                     </td>
                     <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.costPerShare)}</td>
                     <td className="py-2 px-3">
-                      <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-10 font-medium ${
                         lot.termType === "LONG"
                           ? "bg-up-soft text-up-deep"
                           : "bg-warn-soft text-warn-deep"
@@ -3816,7 +3816,7 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
                       <span className="font-medium">{lot.acquiredDate ? formatDate(lot.acquiredDate) : "Unknown date"}</span>
                       <span className="text-muted-foreground ml-2">{parseFloat(lot.quantity)} shares @ ${parseFloat(lot.costPerShare).toFixed(4)}</span>
                       {pendingSale.suggestedLotIds.includes(lot.id) && (
-                        <span className="ml-1.5 text-[10px] font-medium text-primary bg-primary/10 px-1 py-0.5 rounded">assigned lot</span>
+                        <span className="ml-1.5 text-10 font-medium text-primary bg-primary/10 px-1 py-0.5 rounded">assigned lot</span>
                       )}
                     </div>
                     <input
@@ -3921,7 +3921,7 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
                         </td>
                         <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.costPerShare)}</td>
                         <td className="py-2 px-3">
-                          <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-10 font-medium ${
                             lot.termType === "LONG" ? "bg-up-soft text-up-deep" : "bg-warn-soft text-warn-deep"
                           }`}>
                             {lot.termType === "LONG" ? "Long-term" : "Short-term"}
@@ -4112,7 +4112,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
           <div className="px-4 py-3 border-b border-border flex items-center gap-2">
             <Clock className="h-4 w-4 text-warn" />
             <h3 className="font-semibold text-sm">Pending Buys</h3>
-            <span className="ml-1 inline-flex items-center justify-center rounded-full bg-warn-soft text-warn-deep text-[10px] font-semibold px-1.5 py-0.5">
+            <span className="ml-1 inline-flex items-center justify-center rounded-full bg-warn-soft text-warn-deep text-10 font-semibold px-1.5 py-0.5">
               {pendingBuys!.length}
             </span>
             <span className="ml-auto text-sm font-semibold text-warn">
@@ -4175,7 +4175,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
           <div className="px-4 py-3 border-b border-border flex items-center gap-2">
             <Clock className="h-4 w-4 text-down" />
             <h3 className="font-semibold text-sm">Pending Sales</h3>
-            <span className="ml-1 inline-flex items-center justify-center rounded-full bg-down-soft text-down text-[10px] font-semibold px-1.5 py-0.5">
+            <span className="ml-1 inline-flex items-center justify-center rounded-full bg-down-soft text-down text-10 font-semibold px-1.5 py-0.5">
               {pendingSales!.length}
             </span>
             <span className="ml-auto text-sm font-semibold text-down">
@@ -4238,7 +4238,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
           <div className="px-4 py-3 border-b border-border flex items-center gap-2">
             <Clock className="h-4 w-4 text-violet-deep" />
             <h3 className="font-semibold text-sm">Pending Dividends</h3>
-            <span className="ml-1 inline-flex items-center justify-center rounded-full bg-violet-soft text-violet-deep text-[10px] font-semibold px-1.5 py-0.5">
+            <span className="ml-1 inline-flex items-center justify-center rounded-full bg-violet-soft text-violet-deep text-10 font-semibold px-1.5 py-0.5">
               {pendingDividends!.length}
             </span>
             <span className="ml-auto text-sm font-semibold text-violet-deep">
@@ -4318,7 +4318,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
               {/* Holding filter — only shown when multiple tickers are present */}
               {uniqueTickers.length > 1 && (
                 <div className="flex items-center gap-2 flex-wrap">
-                  <SectionLabel as="span" className="text-[11px] shrink-0 pr-1">Symbol</SectionLabel>
+                  <SectionLabel as="span" className="text-11 shrink-0 pr-1">Symbol</SectionLabel>
                   {uniqueTickers.map((ticker) => {
                     const active = selectedTickers.has(ticker);
                     return (
@@ -4340,7 +4340,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
 
               {/* Type filter */}
               <div className="flex items-center gap-2 flex-wrap">
-                <SectionLabel as="span" className="text-[11px] shrink-0 pr-1">Type</SectionLabel>
+                <SectionLabel as="span" className="text-11 shrink-0 pr-1">Type</SectionLabel>
                 {(["PURCHASE", "SALE", "DIVIDEND", "TRANSFER"] as const).filter(t => presentTypes.has(t)).map((type) => {
                   const active = selectedTypes.has(type);
                   const colorClass = type === "PURCHASE"
@@ -4368,7 +4368,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
           <div className="overflow-x-auto">
             <table className="w-full text-13" style={{ tableLayout: "fixed", minWidth: "900px" }}>
               <thead>
-                <tr className="text-[11px] text-muted-foreground uppercase tracking-[1px] font-mono bg-muted/30 border-b border-border">
+                <tr className="text-11 text-muted-foreground uppercase tracking-[1px] font-mono bg-muted/30 border-b border-border">
                   <th style={{ width: "110px" }} className="py-2 pl-4 pr-2 text-left font-medium">Date</th>
                   <th style={{ width: "90px" }} className="py-2 px-2 text-left font-medium">Type</th>
                   <th style={{ width: "80px" }} className="py-2 px-2 text-left font-medium">Symbol</th>
@@ -4411,7 +4411,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
                     <tr key={a.id} className="border-b border-border hover:bg-muted/20 group">
                       <td className="py-3 pl-4 pr-2 tabular-nums font-mono">{formatDate(a.date)}</td>
                       <td className="py-3 px-2">
-                        <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${badgeClass}`}>
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-10 font-medium ${badgeClass}`}>
                           {badgeLabel}
                         </span>
                       </td>
@@ -4626,7 +4626,7 @@ function RealizedGainSnapshotPanel({
           <div className="space-y-3">
             <table className="w-full max-w-sm text-13">
               <thead>
-                <tr className="text-[11px] text-muted-foreground uppercase tracking-[1px] font-mono">
+                <tr className="text-11 text-muted-foreground uppercase tracking-[1px] font-mono">
                   <th className="text-left font-medium pb-1.5 pr-8" />
                   <th className="text-right font-medium pb-1.5 pr-6">Long-Term</th>
                   <th className="text-right font-medium pb-1.5">Short-Term</th>
@@ -5079,7 +5079,7 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
                 const shares = parsed.netShares[ticker] ?? 0;
                 return (
                   <div key={ticker} className="flex items-baseline justify-between gap-2">
-                    <span className="font-mono text-[11px] text-foreground">{ticker}</span>
+                    <span className="font-mono text-11 text-foreground">{ticker}</span>
                     <StatValue className="text-muted-foreground">
                       {shares.toLocaleString(undefined, { maximumFractionDigits: 8 })} sh
                     </StatValue>
@@ -5380,7 +5380,7 @@ function GrowthChart({ accountId, isManaged, onImportClick, onDayGain }: { accou
             )}
           </div>
           {points[0] && (
-            <div className="text-[11px] font-normal text-muted-foreground">since {formatDate(points[0].date)}</div>
+            <div className="text-11 font-normal text-muted-foreground">since {formatDate(points[0].date)}</div>
           )}
         </div>
       )}
@@ -5818,7 +5818,7 @@ export function InvestmentAccount() {
                     </div>
                   </div>
                   {priceDate && (
-                    <p className="text-[11px] text-muted-foreground pt-3 border-t border-border mt-3">
+                    <p className="text-11 text-muted-foreground pt-3 border-t border-border mt-3">
                       Prices as of {formatDate(priceDate)} at 4:00 PM {easternTZAbbr(priceDate)}
                     </p>
                   )}
@@ -5882,7 +5882,7 @@ export function InvestmentAccount() {
                   <div>
                     <DisplayStat as="p" className="tp-stat">{formatCurrency(cashBalance)}</DisplayStat>
                     {account.cashBalanceUpdatedAt && (
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                      <p className="text-11 text-muted-foreground mt-0.5">
                         Updated {new Date(account.cashBalanceUpdatedAt).toLocaleDateString("en-US", {
                           month: "short", day: "numeric", year: "numeric",
                         })}
@@ -6038,7 +6038,7 @@ export function InvestmentAccount() {
               <div className="overflow-x-auto">
                 <table className="w-full" style={{ tableLayout: "fixed", minWidth: "1080px" }}>
                   <thead>
-                    <tr className="text-[11px] text-muted-foreground uppercase tracking-[1px] font-mono bg-muted/30 border-b border-border">
+                    <tr className="text-11 text-muted-foreground uppercase tracking-[1px] font-mono bg-muted/30 border-b border-border">
                       <th
                         style={{ width: "80px" }}
                         className="py-2 pl-4 pr-2 text-left font-medium"

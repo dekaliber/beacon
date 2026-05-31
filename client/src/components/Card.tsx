@@ -25,6 +25,14 @@ export function Card({ className, children }: CardProps) {
   );
 }
 
+export function FlatCard({ className, children }: CardProps) {
+  return (
+    <div className={cn("rounded-xl border border-border bg-card", className)}>
+      {children}
+    </div>
+  );
+}
+
 export function CardHeader({ className, children }: CardProps) {
   return <div className={cn("mb-4", className)}>{children}</div>;
 }

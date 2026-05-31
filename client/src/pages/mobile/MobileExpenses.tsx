@@ -148,12 +148,12 @@ function CategoryPicker({ categories, initialId = "", externalId }: { categories
       <button
         type="button"
         onClick={handleOpen}
-        className="flex w-full items-center justify-between rounded-md border border-border px-3 py-2.5 text-sm"
+        className="relative w-full rounded-md border border-border bg-[rgba(255,255,255,0.78)] py-2.5 pl-3 pr-8 text-left text-13 text-foreground"
       >
-        <span className={selectedLabel ? "text-foreground" : "text-muted-foreground"}>
+        <span className="text-foreground">
           {selectedLabel ?? "No category"}
         </span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       </button>
 
       {open && (
@@ -276,10 +276,10 @@ function TagPicker({
       <button
         type="button"
         onClick={() => { setOpen(true); setTimeout(() => searchRef.current?.focus(), 50); }}
-        className="flex w-full min-h-[42px] items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+        className="relative flex w-full min-h-[42px] items-center rounded-md border border-border bg-[rgba(255,255,255,0.78)] py-2 pl-3 pr-8 text-13 text-foreground"
       >
         {selectedTags.length === 0 ? (
-          <span className="text-muted-foreground">No tags</span>
+          <span className="text-foreground">No tags</span>
         ) : (
           <div className="flex flex-wrap gap-1">
             {selectedTags.map((t) => (
@@ -293,7 +293,7 @@ function TagPicker({
             ))}
           </div>
         )}
-        <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
+        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       </button>
 
       {open && (
@@ -1371,7 +1371,7 @@ function MobileFilterSheet({
             <button
               type="button"
               onClick={() => { onReset(); onClose(); }}
-              className="flex-1 rounded-md border border-border py-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent"
+              className="flex-1 rounded-md border border-border py-2.5 text-13 font-medium text-muted-foreground transition-colors hover:bg-accent"
             >
               Reset to defaults
             </button>

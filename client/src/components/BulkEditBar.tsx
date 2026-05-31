@@ -280,7 +280,7 @@ export function BulkEditBar({
     <>
     <div
       ref={barRef}
-      className="fixed top-[96px] left-1/2 z-40 -translate-x-1/2 inline-flex items-stretch rounded-full bg-gradient-to-b from-primary to-primary-deep text-white text-[13px] font-normal select-none backdrop-blur-[20px] shadow-[0_1px_0_rgba(255,255,255,.25)_inset,0_14px_34px_-16px_rgba(20,30,80,.35),0_4px_10px_-2px_rgba(15,20,40,.18)]"
+      className="fixed top-[96px] left-1/2 z-40 -translate-x-1/2 inline-flex items-stretch rounded-full bg-gradient-to-b from-primary to-primary-deep text-white text-13 font-normal select-none backdrop-blur-[20px] shadow-[0_1px_0_rgba(255,255,255,.25)_inset,0_14px_34px_-16px_rgba(20,30,80,.35),0_4px_10px_-2px_rgba(15,20,40,.18)]"
     >
       {/* Count */}
       <span className="flex items-center px-[16px] py-[10px] whitespace-nowrap">
@@ -424,7 +424,7 @@ export function BulkEditBar({
                     }`}
                   >
                     {opt.value
-                      ? <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${opt.className}`}>{opt.label}</span>
+                      ? <span className={`inline-block rounded-full px-1.5 py-0.5 text-10 font-medium ${opt.className}`}>{opt.label}</span>
                       : <span className="italic text-muted-foreground">{opt.label}</span>
                     }
                   </button>

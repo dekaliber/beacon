@@ -713,7 +713,7 @@ function BudgetPanelSection({
             </div>
             <div className="relative h-4">
               <span
-                className="absolute -translate-x-1/2 whitespace-nowrap text-[10px] text-muted-foreground"
+                className="absolute -translate-x-1/2 whitespace-nowrap text-10 text-muted-foreground"
                 style={{ left: `${centerPct}%` }}
               >
                 <span className="font-medium text-foreground">{fmtK(projectionLow)}</span>
@@ -728,7 +728,7 @@ function BudgetPanelSection({
             </div>
             <div className="relative mt-1 h-4">
               <span
-                className="absolute -translate-x-1/2 whitespace-nowrap text-[10px] text-muted-foreground"
+                className="absolute -translate-x-1/2 whitespace-nowrap text-10 text-muted-foreground"
                 style={{ left: `${budgetPct}%` }}
               >
                 Budget {fmtK(panel.effectiveAnnualBudget)}

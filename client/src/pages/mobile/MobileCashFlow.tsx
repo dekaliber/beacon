@@ -10,7 +10,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { AlertTriangle, TrendingDown, Landmark, Pencil, Info, X, TrendingUp, CreditCard, ArrowDownLeft, ArrowUpRight, Sparkles, Wallet, PlusCircle, Trash2 } from "lucide-react";
-import { Card } from "@/components/Card";
+import { FlatCard } from "@/components/Card";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import { useApi } from "@/hooks/useApi";
 import { getCashFlow, getInvestmentAccounts, updateAccount, createBalanceAdjustment, updateBalanceAdjustment, deleteBalanceAdjustment, upsertStatementOverride, getExpenses } from "@/api";
@@ -540,11 +540,11 @@ function CCPaymentSheet({
             <div className="flex items-center justify-between mb-1">
               <label className="text-sm font-medium">Payment Amount</label>
               {isConfirmed ? (
-                <SectionLabel as="span" className="rounded-full bg-up-soft text-up-deep px-2 py-0.5 text-[10px]">
+                <SectionLabel as="span" className="rounded-full bg-up-soft text-up-deep px-2 py-0.5 text-10">
                   Confirmed
                 </SectionLabel>
               ) : (
-                <SectionLabel as="span" className="rounded-full bg-muted px-2 py-0.5 text-[10px]">
+                <SectionLabel as="span" className="rounded-full bg-muted px-2 py-0.5 text-10">
                   Estimated
                 </SectionLabel>
               )}
@@ -639,7 +639,7 @@ function BankingTile({
   onEdit: () => void;
 }) {
   return (
-    <Card className="px-4 py-3 mt-4">
+    <FlatCard className="px-4 py-3 mt-4">
       <div className="flex items-center gap-3">
         <div
           className="h-8 w-8 flex-shrink-0 rounded-md flex items-center justify-center"
@@ -665,7 +665,7 @@ function BankingTile({
           <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
         </button>
       </div>
-    </Card>
+    </FlatCard>
   );
 }
 
@@ -757,17 +757,17 @@ function MobileEventsLedger({
                   <> · {event.type === "TRANSFER_IN" ? "from " : event.type === "TRANSFER_OUT" ? "to " : ""}{event.relatedAccountName}</>
                 )}
                 {event.confidence === "KNOWN" && event.type !== "CC_PAYMENT" && (
-                  <SectionLabel as="span" className="ml-1.5 rounded-full bg-up-soft text-up-deep px-1.5 py-0.5 text-[10px]">
+                  <SectionLabel as="span" className="ml-1.5 rounded-full bg-up-soft text-up-deep px-1.5 py-0.5 text-10">
                     Confirmed
                   </SectionLabel>
                 )}
                 {event.type === "CC_PAYMENT" && !event.overrideId && (
-                  <SectionLabel as="span" className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">
+                  <SectionLabel as="span" className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-10">
                     Estimated
                   </SectionLabel>
                 )}
                 {event.overrideId && (
-                  <SectionLabel as="span" className="ml-1.5 rounded-full bg-up-soft text-up-deep px-1.5 py-0.5 text-[10px]">
+                  <SectionLabel as="span" className="ml-1.5 rounded-full bg-up-soft text-up-deep px-1.5 py-0.5 text-10">
                     Confirmed
                   </SectionLabel>
                 )}
@@ -846,7 +846,7 @@ function ProjectionSection({
 
       {/* Shortfall card */}
       {firstNegativeDate && (
-        <Card className="px-4 py-3">
+        <FlatCard className="px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 flex-shrink-0 rounded-md bg-down-soft flex items-center justify-center">
               <AlertTriangle className="h-4 w-4 text-down" />
@@ -865,7 +865,7 @@ function ProjectionSection({
               Add injection
             </button>
           </div>
-        </Card>
+        </FlatCard>
       )}
 
       {/* Banking tile */}

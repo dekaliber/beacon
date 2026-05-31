@@ -464,7 +464,7 @@ const DIVIDEND_TYPE_OPTIONS = [
 function TaxStatusBadge({ taxClassification }: { taxClassification: string | null }) {
   if (!taxClassification) return null;
   return (
-    <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${DIVIDEND_TYPE_CLASSES[taxClassification] ?? "bg-slate-soft text-slate-deep"}`}>
+    <span className={`inline-block rounded-full px-1.5 py-0.5 text-10 font-medium ${DIVIDEND_TYPE_CLASSES[taxClassification] ?? "bg-slate-soft text-slate-deep"}`}>
       {DIVIDEND_TYPE_LABELS[taxClassification] ?? taxClassification}
     </span>
   );
@@ -652,7 +652,7 @@ function CategoryTypeahead({
           }
           setOpen((o) => !o);
         }}
-        className="w-full relative rounded-md border border-border bg-[rgba(255,255,255,0.78)] shadow-[var(--shadow-input)] px-3 py-2 pr-7 text-left text-[13px] text-foreground hover:border-primary/30 focus:border-primary/30 focus:outline-none transition-[border-color] duration-[120ms]"
+        className="w-full relative rounded-md border border-border bg-[rgba(255,255,255,0.78)] shadow-[var(--shadow-input)] px-3 py-2 pr-7 text-left text-13 text-foreground hover:border-primary/30 focus:border-primary/30 focus:outline-none transition-[border-color] duration-[120ms]"
       >
         {selectedLabel || <span className="text-muted-foreground">Select category</span>}
         <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
@@ -666,20 +666,20 @@ function CategoryTypeahead({
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Type to filter..."
-              className="w-full rounded border border-border px-2 py-1 text-[13px] focus:outline-none"
+              className="w-full rounded border border-border px-2 py-1 text-13 focus:outline-none"
               autoFocus
             />
           </div>
           <div className="max-h-48 overflow-auto">
             {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-[13px] text-muted-foreground">No matches</p>
+              <p className="px-3 py-2 text-13 text-muted-foreground">No matches</p>
             ) : (
               filtered.map((o, i) => (
                 <button
                   key={o.id}
                   type="button"
                   tabIndex={-1}
-                  className={`block w-full px-3 py-1.5 text-left text-[13px] ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  className={`block w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
                   onMouseDown={() => selectItem(o.id)}
                 >
                   {o.parentLabel && <span className="text-muted-foreground">{o.parentLabel} &gt; </span>}
@@ -1210,7 +1210,7 @@ export function IncomePage() {
             <div>
               <label className="mb-1 block text-xs invisible select-none" aria-hidden="true">x</label>
               <div className="flex h-8 items-center gap-3">
-                <button onClick={resetFilters} className="text-[13px] text-muted-foreground hover:text-foreground hover:underline">
+                <button onClick={resetFilters} className="text-13 text-muted-foreground hover:text-foreground hover:underline">
                   Reset to defaults
                 </button>
                 <Button size="sm" onClick={applyFilters}>Apply</Button>
@@ -1303,7 +1303,7 @@ export function IncomePage() {
                       />
                     </td>
                     <td className="w-[30px] py-2 text-center">
-                      <span className="inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: income.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
+                      <span className="inline-flex h-5 w-5 items-center justify-center rounded text-10 font-bold text-white" style={{ backgroundColor: income.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
                         {income.account.isJoint ? "J" : "P"}
                       </span>
                     </td>
@@ -1392,10 +1392,10 @@ export function IncomePage() {
                         <div className="flex items-center gap-1.5">
                           <EditableCell value={income.source ?? ""} onSave={(v) => handleInlineUpdate(income.id, "source", v)} className="tp-row-label" />
                           {income.subtype === "DIVIDEND" && (
-                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-violet-soft text-violet-deep">Dividend</span>
+                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-10 font-medium bg-violet-soft text-violet-deep">Dividend</span>
                           )}
                           {income.subtype === "CAPITAL_GAIN" && (
-                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-blue-soft text-blue-deep">Sale</span>
+                            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-10 font-medium bg-blue-soft text-blue-deep">Sale</span>
                           )}
                         </div>
                       </td>
@@ -1420,7 +1420,7 @@ export function IncomePage() {
                         />
                       </td>
                       <td className="w-[30px] py-2 text-center">
-                        <span className="inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: income.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
+                        <span className="inline-flex h-5 w-5 items-center justify-center rounded text-10 font-bold text-white" style={{ backgroundColor: income.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
                           {income.account.isJoint ? "J" : "P"}
                         </span>
                       </td>
@@ -1449,10 +1449,10 @@ export function IncomePage() {
                     <div className="flex items-center gap-1.5 truncate">
                       <p className={`truncate font-medium ${!income.isCashReceived ? "text-muted-foreground" : ""}`}>{income.category?.name ?? "—"}{income.source ? ` · ${income.source}` : ""}</p>
                       {income.subtype === "DIVIDEND" && (
-                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-violet-soft text-violet-deep">Dividend</span>
+                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-10 font-medium bg-violet-soft text-violet-deep">Dividend</span>
                       )}
                       {income.subtype === "CAPITAL_GAIN" && (
-                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-blue-soft text-blue-deep">Sale</span>
+                        <span className="shrink-0 rounded-full px-1.5 py-0.5 text-10 font-medium bg-blue-soft text-blue-deep">Sale</span>
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 text-sm text-muted-foreground">

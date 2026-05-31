@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
-import { AlertTriangle, ArrowLeft, Link2, Pencil, Layers, X, Plus } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Link2, Pencil, Layers, X, Plus, CircleQuestionMark } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
@@ -533,9 +533,7 @@ function EditModal({ open, instrument, allInstruments, assetClasses, onClose, on
             <span className="flex items-center gap-1.5 text-sm">
               Taxed as collectible
               <span className="group relative">
-                <span className="flex h-3.5 w-3.5 cursor-default items-center justify-center rounded-full border border-muted-foreground/40 text-[9px] font-bold leading-none text-muted-foreground">
-                  ?
-                </span>
+                <CircleQuestionMark className="h-3.5 w-3.5 cursor-default text-muted-foreground/60" />
                 <span className="pointer-events-none invisible absolute bottom-full left-1/2 mb-2 w-64 -translate-x-1/2 rounded-md border border-border bg-background px-3 py-2 tp-caption opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100">
                   Long-term gains taxed at the lesser of 28% or your ordinary income rate. Applies to grantor-trust gold and silver ETFs (e.g. GLD, IAU, SLV).
                 </span>

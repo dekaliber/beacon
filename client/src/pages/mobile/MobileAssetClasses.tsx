@@ -320,7 +320,7 @@ function MobileAssetClassModal({
         <div className="flex items-center gap-2">
           <h2 className="tp-panel-title">{title}</h2>
           {editing?.isSystem && (
-            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            <span className="rounded bg-muted px-1.5 py-0.5 text-10 font-medium text-muted-foreground">
               built-in
             </span>
           )}

@@ -107,7 +107,7 @@ function VendorBubble({ item }: { item: UpcomingExpenseItem }) {
   return (
     <>
       <div
-        className={`h-7 w-7 cursor-default rounded-full flex items-center justify-center text-[11px] font-bold text-white ring-2 ring-background ${vendorColor(label)}`}
+        className={`h-7 w-7 cursor-default rounded-full flex items-center justify-center text-11 font-bold text-white ring-2 ring-background ${vendorColor(label)}`}
         onMouseEnter={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
           setPos({ x: r.left + r.width / 2, y: r.top });
@@ -142,7 +142,7 @@ function VendorBubbles({ items }: { items: UpcomingExpenseItem[] }) {
       <div className="flex -space-x-2">
         {visible.map((e, i) => <VendorBubble key={i} item={e} />)}
         {overflow > 0 && (
-          <div className="h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-semibold bg-muted text-muted-foreground ring-2 ring-background">
+          <div className="h-7 w-7 rounded-full flex items-center justify-center text-10 font-semibold bg-muted text-muted-foreground ring-2 ring-background">
             +{overflow}
           </div>
         )}
@@ -192,7 +192,7 @@ function UpcomingStrip({ expenses }: { expenses: UpcomingExpenseItem[] }) {
             >
               {/* Day header */}
               <div className={`px-1 py-2 text-center ${isToday ? "text-down" : "text-muted-foreground"}`}>
-                <SectionLabel as="div" className="text-[11px]">
+                <SectionLabel as="div" className="text-11">
                   {isToday ? "Today" : DAY_NAMES[day.getDay()]}
                 </SectionLabel>
                 <div className={`tp-card-title leading-tight ${isToday ? "text-down" : ""}`}>
@@ -206,12 +206,12 @@ function UpcomingStrip({ expenses }: { expenses: UpcomingExpenseItem[] }) {
                   <>
                     <VendorBubbles items={dayExpenses} />
                     {debits.length > 0 && (
-                      <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-foreground whitespace-nowrap">
+                      <span className="rounded-md bg-muted px-1.5 py-0.5 text-11 font-medium text-foreground whitespace-nowrap">
                         {formatCurrency(debitTotal)}
                       </span>
                     )}
                     {credits.length > 0 && (
-                      <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-up whitespace-nowrap">
+                      <span className="rounded-md bg-muted px-1.5 py-0.5 text-11 font-medium text-up whitespace-nowrap">
                         +{formatCurrency(creditTotal)}
                       </span>
                     )}

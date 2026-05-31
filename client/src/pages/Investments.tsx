@@ -1029,7 +1029,7 @@ function WithdrawalRateCard({
                 <div
                   key={m.month}
                   className="flex-1 flex flex-col items-center"
-                  style={{ gap: "4px" }}
+                  style={{ gap: "5px" }}
                 >
                   {/* Bar area */}
                   <div className="w-full flex items-end justify-center" style={{ height: "104px" }}>
@@ -1059,7 +1059,7 @@ function WithdrawalRateCard({
                   </div>
                   {/* Month label */}
                   <span
-                    className={`text-[9px] leading-none tabular-nums font-mono text-center w-full ${
+                    className={`text-10 leading-none text-center w-full ${
                       m.isFuture ? "text-muted-foreground/40" : "text-muted-foreground"
                     }`}
                   >
@@ -1219,7 +1219,7 @@ if (!displayAccounts) return <BeaconLoader />;
             <div className="flex items-center gap-2 min-w-0">
               <p className="tp-row-label truncate">{account.name}</p>
               {pendingDividendAccountIds.has(account.id) && (
-                <span className="shrink-0 inline-flex items-center rounded-full bg-violet-soft px-2 py-0.5 text-[10px] font-semibold text-violet-deep whitespace-nowrap">
+                <span className="shrink-0 inline-flex items-center rounded-full bg-violet-soft px-2 py-0.5 text-10 font-semibold text-violet-deep whitespace-nowrap">
                   Pending dividends
                 </span>
               )}

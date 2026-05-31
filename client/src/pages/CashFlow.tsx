@@ -738,17 +738,17 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                           </span>
                         )}
                         {event.confidence === "KNOWN" && event.type !== "CC_PAYMENT" && (
-                          <SectionLabel as="span" className="rounded-full bg-up-soft text-up-deep px-1.5 py-0.5 text-[10px]">
+                          <SectionLabel as="span" className="rounded-full bg-up-soft text-up-deep px-1.5 py-0.5 text-10">
                             Confirmed
                           </SectionLabel>
                         )}
                         {event.type === "CC_PAYMENT" && !event.overrideId && (
-                          <SectionLabel as="span" className="rounded-full bg-muted px-1.5 py-0.5 text-[10px]">
+                          <SectionLabel as="span" className="rounded-full bg-muted px-1.5 py-0.5 text-10">
                             Estimated
                           </SectionLabel>
                         )}
                         {event.overrideId && (
-                          <SectionLabel as="span" className="rounded-full bg-up-soft text-up-deep px-1.5 py-0.5 text-[10px]">
+                          <SectionLabel as="span" className="rounded-full bg-up-soft text-up-deep px-1.5 py-0.5 text-10">
                             Confirmed
                           </SectionLabel>
                         )}
@@ -1222,7 +1222,7 @@ export function CashFlow() {
           <div className="border-b border-border">
             <div className="flex items-center gap-0 overflow-x-auto">
               {personal.length > 0 && joint.length > 0 && (
-                <SectionLabel as="span" className="mr-2 text-[10px] px-1">
+                <SectionLabel as="span" className="mr-2 text-10 px-1">
                   Personal
                 </SectionLabel>
               )}
@@ -1230,7 +1230,7 @@ export function CashFlow() {
               {joint.length > 0 && (
                 <>
                   <span className="mx-3 text-border">|</span>
-                  <SectionLabel as="span" className="mr-2 text-[10px] px-1">
+                  <SectionLabel as="span" className="mr-2 text-10 px-1">
                     Joint
                   </SectionLabel>
                   {joint.map((p) => <TabButton key={p.accountId} p={p} />)}

@@ -1674,7 +1674,7 @@ export function MobileInvestmentAccount() {
               </div>
             </div>
             {priceDate && (
-              <p className="text-[10px] text-muted-foreground leading-tight">
+              <p className="text-10 text-muted-foreground leading-tight">
                 Prices as of {formatDate(priceDate)} · 4:00 PM {easternTZAbbr(priceDate)}
               </p>
             )}
@@ -1685,7 +1685,7 @@ export function MobileInvestmentAccount() {
         <button
           type="button"
           onClick={() => setCashSheetOpen(true)}
-          className="flex w-full items-center justify-between rounded-xl border border-border px-4 py-3 text-sm"
+          className="flex w-full items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-sm"
         >
           <div className="flex items-center gap-2 text-muted-foreground">
             <Banknote className="h-4 w-4" />
@@ -1752,7 +1752,7 @@ export function MobileInvestmentAccount() {
                 key={holding.id}
                 type="button"
                 onClick={() => setSelectedHolding(holding)}
-                className="flex w-full items-center gap-3 rounded-xl border border-border px-4 py-3 text-left hover:bg-accent/50 transition-colors active:opacity-60"
+                className="flex w-full items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-left hover:bg-accent/50 transition-colors active:opacity-60"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -1779,7 +1779,7 @@ export function MobileInvestmentAccount() {
                 key={m.id}
                 type="button"
                 onClick={() => { setEditingManual(m); setAddManualOpen(true); }}
-                className="flex w-full items-center gap-3 rounded-xl border border-border px-4 py-3 text-left hover:bg-accent/50 transition-colors active:opacity-60"
+                className="flex w-full items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-left hover:bg-accent/50 transition-colors active:opacity-60"
               >
                 <div className="flex-1 min-w-0">
                   <p className="tp-row-label truncate">{m.name}</p>
@@ -1826,7 +1826,7 @@ export function MobileInvestmentAccount() {
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30">
                   <Clock className="h-4 w-4 text-violet-deep" />
                   <span className="text-sm font-semibold">Pending Dividends</span>
-                  <span className="ml-1 inline-flex items-center justify-center rounded-full bg-violet-soft text-violet-deep text-[10px] font-semibold px-1.5 py-0.5">
+                  <span className="ml-1 inline-flex items-center justify-center rounded-full bg-violet-soft text-violet-deep text-10 font-semibold px-1.5 py-0.5">
                     {pendingDividends.length}
                   </span>
                   <StatValue className="ml-auto text-sm font-semibold text-violet-deep">
@@ -1943,7 +1943,7 @@ export function MobileInvestmentAccount() {
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium shrink-0 ${badgeClass}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-10 font-medium shrink-0 ${badgeClass}`}>
                           {badgeLabel}
                         </span>
                         <span className="font-mono font-bold text-xs">{a.ticker}</span>

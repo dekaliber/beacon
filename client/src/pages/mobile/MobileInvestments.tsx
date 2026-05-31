@@ -21,6 +21,7 @@ import type {
   WithdrawalSummary, InvestmentSettings,
 } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { Card } from "@/components/Card";
 import { SectionLabel, StatValue, DisplayStat } from "@/components/Typography";
 
 type AllocationFilter = "all" | "taxable" | "tax-advantaged";
@@ -267,7 +268,7 @@ function WithdrawalSheet({
                 <div
                   key={m.month}
                   className="flex-1 flex flex-col items-center cursor-pointer"
-                  style={{ gap: "4px" }}
+                  style={{ gap: "5px" }}
                   onClick={() => setSelectedMonth(isSelected ? null : m.month)}
                 >
                   <div className="w-full flex items-end justify-center" style={{ height: "104px" }}>
@@ -282,7 +283,7 @@ function WithdrawalSheet({
                       style={{ height: heightPct > 0 ? `${heightPct}%` : m.isFuture ? "3px" : "2px" }}
                     />
                   </div>
-                  <span className={`text-[9px] leading-none tabular-nums font-mono text-center w-full ${
+                  <span className={`text-10 leading-none text-center w-full ${
                     isSelected ? "text-foreground font-semibold" : m.isFuture ? "text-muted-foreground/40" : "text-muted-foreground"
                   }`}>
                     {m.label}
@@ -785,7 +786,7 @@ export function MobileInvestments() {
         <div className="flex items-center gap-2 min-w-0">
           <p className="tp-row-label truncate">{account.name}</p>
           {pendingDividendAccountIds.has(account.id) && (
-            <span className="shrink-0 inline-flex items-center rounded-full bg-violet-soft px-2 py-0.5 text-[10px] font-semibold text-violet-deep whitespace-nowrap">
+            <span className="shrink-0 inline-flex items-center rounded-full bg-violet-soft px-2 py-0.5 text-10 font-semibold text-violet-deep whitespace-nowrap">
               Pending
             </span>
           )}
@@ -839,7 +840,7 @@ export function MobileInvestments() {
         {displayAccounts.length > 0 && (
           <>
             {/* Portfolio Summary */}
-            <div className="rounded-xl border border-border p-4 space-y-4">
+            <Card className="rounded-xl p-4 space-y-4">
               <div>
                 <SectionLabel>Total Portfolio</SectionLabel>
                 <DisplayStat as="p" className="tp-kpi-l mt-0.5">{formatCurrency(totalPortfolioValue)}</DisplayStat>
@@ -878,11 +879,11 @@ export function MobileInvestments() {
                   <ChevronRight className="h-4 w-4" />
                 </button>
               )}
-            </div>
+            </Card>
 
             {/* Investment Accounts */}
             {investmentAccounts.length > 0 && (
-              <div className="rounded-xl border border-border px-4 divide-y divide-border">
+              <Card className="rounded-xl px-4 py-0 divide-y divide-border">
                 <div className="flex items-center gap-2 py-3">
                   <LineChart className="h-4 w-4 text-muted-foreground" />
                   <SectionLabel as="span" className="text-sm">
@@ -890,11 +891,11 @@ export function MobileInvestments() {
                   </SectionLabel>
                 </div>
                 {investmentAccounts.map(renderAccountCard)}
-              </div>
+              </Card>
             )}
 
             {/* Withdrawal Rate */}
-            <div className="rounded-xl border border-border p-4">
+            <Card className="rounded-xl p-4">
               <div className="flex items-center gap-2 mb-3">
                 <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
                 <SectionLabel as="span" className="text-sm">
@@ -935,11 +936,11 @@ export function MobileInvestments() {
                 <span>View monthly history</span>
                 <ChevronRight className="h-4 w-4" />
               </button>
-            </div>
+            </Card>
 
             {/* Asset Allocation */}
             {displayAllocation && (
-              <div className="rounded-xl border border-border p-4">
+              <Card className="rounded-xl p-4">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
@@ -1063,7 +1064,7 @@ export function MobileInvestments() {
                     </div>
                   </>
                 )}
-              </div>
+              </Card>
             )}
           </>
         )}

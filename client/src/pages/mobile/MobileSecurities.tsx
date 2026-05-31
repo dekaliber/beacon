@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Link2, Layers, X, Plus } from "lucide-react";
+import { AlertTriangle, Link2, Layers, X, Plus, CircleQuestionMark } from "lucide-react";
 import { Button } from "@/components/Button";
 import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
@@ -187,7 +187,7 @@ export function MobileSecurities() {
                 return (
                   <span
                     key={acct.id}
-                    className="rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
+                    className="rounded-full px-2 py-0.5 text-10 font-medium text-white"
                     style={{ backgroundColor: acct.color ?? "#e2e8f0" }}
                   >
                     {label}
@@ -204,14 +204,14 @@ export function MobileSecurities() {
                 return (
                   <StatValue
                     key={w.assetClassId}
-                    className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground font-medium whitespace-nowrap"
+                    className="rounded bg-muted px-1.5 py-0.5 text-10 text-muted-foreground font-medium whitespace-nowrap"
                   >
                     {abbrev} {pct}%
                   </StatValue>
                 );
               })}
               {instrument.isCollectible && (
-                <span className="rounded bg-warn-soft border border-warn-line px-1.5 py-0.5 text-[10px] font-medium text-warn-deep whitespace-nowrap">
+                <span className="rounded bg-warn-soft border border-warn-line px-1.5 py-0.5 text-10 font-medium text-warn-deep whitespace-nowrap">
                   28% max
                 </span>
               )}
@@ -249,7 +249,7 @@ export function MobileSecurities() {
         <h1 className="tp-page-title">Securities</h1>
 
         {instruments.length > 0 ? (
-          <div className="rounded-b-xl rounded-tr-xl border border-border overflow-hidden">
+          <div className="rounded-b-xl rounded-tr-xl border border-border bg-card overflow-hidden">
             {groups.map(({ slug, ac, instruments: groupInsts }, idx) =>
               renderSection(slug, ac, groupInsts, idx === 0),
             )}
@@ -500,9 +500,7 @@ function EditOverlay({ instrument, allInstruments, assetClasses, onClose, onSave
               <span className="flex items-center gap-1.5 text-sm">
                 Taxed as collectible
                 <span className="group relative">
-                  <span className="flex h-3.5 w-3.5 cursor-default items-center justify-center rounded-full border border-muted-foreground/40 text-[9px] font-bold leading-none text-muted-foreground">
-                    ?
-                  </span>
+                  <CircleQuestionMark className="h-3.5 w-3.5 cursor-default text-muted-foreground/60" />
                   <span className="pointer-events-none invisible absolute bottom-full left-1/2 mb-2 w-64 -translate-x-1/2 rounded-md border border-border bg-background px-3 py-2 tp-caption opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100">
                     Long-term gains taxed at the lesser of 28% or your ordinary income rate. Applies to grantor-trust gold and silver ETFs (e.g. GLD, IAU, SLV).
                   </span>

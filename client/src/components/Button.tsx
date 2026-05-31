@@ -9,7 +9,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 // Base: frosted glass surface (maps to design's default .btn)
 const base =
   "inline-flex items-center justify-center gap-[6px] rounded-md font-normal whitespace-nowrap " +
-  "h-9 px-[14px] text-[13px] " +
+  "h-9 px-[14px] text-13 " +
   "border border-border bg-white/[.62] text-foreground " +
   "backdrop-blur-[14px] backdrop-saturate-[130%] shadow-soft " +
   "transition-[background-color,transform,filter] duration-[120ms] " +

@@ -189,7 +189,7 @@ export function MultiSelectDropdown({
       <button
         type="button"
         onClick={handleOpen}
-        className={`relative flex items-center rounded-[6px] border pl-2 pr-6 py-2 text-[13px] bg-white/[.78] [box-shadow:var(--shadow-input)] transition-[border-color] duration-[120ms] outline-none ${
+        className={`relative flex items-center rounded-[6px] border pl-2 pr-6 py-2 text-13 bg-white/[.78] [box-shadow:var(--shadow-input)] transition-[border-color] duration-[120ms] outline-none ${
           isActive
             ? "border-primary text-primary hover:border-primary"
             : "border-[var(--color-border)] text-foreground hover:border-[color-mix(in_oklab,var(--color-primary)_30%,oklch(0.16_0.020_265_/_0.12))]"

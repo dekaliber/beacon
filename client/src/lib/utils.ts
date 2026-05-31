@@ -1,5 +1,15 @@
 import { type ClassValue, clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { extendTailwindMerge } from "tailwind-merge";
+
+// Register custom font-size tokens so tailwind-merge doesn't confuse them
+// with text-color utilities when both appear in the same cn() call.
+const twMerge = extendTailwindMerge({
+  extend: {
+    classGroups: {
+      "font-size": ["text-10", "text-11", "text-13", "text-15", "text-17", "text-19", "text-32", "text-42"],
+    },
+  },
+});
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

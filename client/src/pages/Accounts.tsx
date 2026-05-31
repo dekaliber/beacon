@@ -106,18 +106,18 @@ export function Accounts() {
                 />
                 <span className="font-medium text-sm">{account.name}</span>
                 {account.isManaged && (
-                  <SectionLabel as="span" className="rounded-full bg-blue text-white text-[10px] px-1.5 py-0.5">
+                  <span className="inline-block rounded-full bg-blue-soft text-blue-deep text-10 font-medium px-2 py-0.5">
                     Managed
-                  </SectionLabel>
+                  </span>
                 )}
                 {account.isTaxAdvantaged && (
-                  <SectionLabel as="span" className="rounded-full bg-up text-white text-[10px] px-1.5 py-0.5">
+                  <span className="inline-block rounded-full bg-up-soft text-up-deep text-10 font-medium px-2 py-0.5">
                     {account.taxAdvantageType === "TRADITIONAL" ? "Traditional"
                       : account.taxAdvantageType === "ROTH" ? "Roth"
                       : account.taxAdvantageType === "HSA" ? "HSA"
                       : account.taxAdvantageType === "PLAN_529" ? "529"
                       : "Tax-Advantaged"}
-                  </SectionLabel>
+                  </span>
                 )}
               </div>
               <div className="flex items-center gap-3">
@@ -177,7 +177,7 @@ export function Accounts() {
     return (
       <div key={ownership} className="space-y-4">
         <div className="flex items-center gap-2">
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded text-10 font-bold text-white" style={{ backgroundColor: isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
             {isJoint ? "J" : "P"}
           </span>
           <SectionLabel as="span" className="text-sm">{ownership}</SectionLabel>

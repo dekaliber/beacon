@@ -28,7 +28,7 @@ const DIVIDEND_TYPE_CLASSES: Record<string, string> = {
 function TaxStatusBadge({ taxClassification }: { taxClassification: string | null }) {
   if (!taxClassification) return null;
   return (
-    <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${DIVIDEND_TYPE_CLASSES[taxClassification] ?? "bg-slate-soft text-slate-deep"}`}>
+    <span className={`inline-block rounded-full px-1.5 py-0.5 text-10 font-medium ${DIVIDEND_TYPE_CLASSES[taxClassification] ?? "bg-slate-soft text-slate-deep"}`}>
       {DIVIDEND_TYPE_LABELS[taxClassification] ?? taxClassification}
     </span>
   );
@@ -104,12 +104,12 @@ function CategoryPicker({ categories, initialId = "" }: { categories: Category[]
       <button
         type="button"
         onClick={handleOpen}
-        className="flex w-full items-center justify-between rounded-md border border-border px-3 py-2.5 text-sm"
+        className="relative w-full rounded-md border border-border bg-[rgba(255,255,255,0.78)] py-2.5 pl-3 pr-8 text-left text-13 text-foreground"
       >
-        <span className={selectedLabel ? "text-foreground" : "text-muted-foreground"}>
+        <span className="text-foreground">
           {selectedLabel ?? "No category"}
         </span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       </button>
 
       {open && (
@@ -469,10 +469,10 @@ function IncomeRow({
             {primaryText}{secondaryText}
           </p>
           {income.subtype === "DIVIDEND" && (
-            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-violet-soft text-violet-deep">Dividend</span>
+            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-10 font-medium bg-violet-soft text-violet-deep">Dividend</span>
           )}
           {income.subtype === "CAPITAL_GAIN" && (
-            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-blue-soft text-blue-deep">Sale</span>
+            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-10 font-medium bg-blue-soft text-blue-deep">Sale</span>
           )}
         </div>
         <span className={`shrink-0 font-semibold ${!upcoming && income.isCashReceived ? "text-up" : "text-muted-foreground"}`}>
@@ -869,7 +869,7 @@ function MobileIncomeFilterSheet({
             <button
               type="button"
               onClick={() => { onReset(); onClose(); }}
-              className="flex-1 rounded-md border border-border py-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent"
+              className="flex-1 rounded-md border border-border py-2.5 text-13 font-medium text-muted-foreground transition-colors hover:bg-accent"
             >
               Reset to defaults
             </button>

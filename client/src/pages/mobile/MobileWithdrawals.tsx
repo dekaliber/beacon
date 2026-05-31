@@ -30,6 +30,7 @@ import { useDemo } from "@/context/DemoContext";
 import { cn } from "@/lib/utils";
 import type { WithdrawalEvent, WithdrawalType, InvestmentSettings } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { Card, FlatCard } from "@/components/Card";
 import { SectionLabel, StatValue, DisplayStat } from "@/components/Typography";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -87,7 +88,7 @@ function useBodyScrollLock(active: boolean) {
 function TypeBadge({ type }: { type: WithdrawalType }) {
   return (
     <span className={cn(
-      "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap",
+      "inline-flex items-center rounded-full px-2 py-0.5 text-10 font-semibold whitespace-nowrap",
       TYPE_COLORS[type],
     )}>
       {TYPE_LABELS[type]}
@@ -325,7 +326,7 @@ function MonthDetailSheet({
 
                   {/* Actions */}
                   {isIncome ? (
-                    <p className="text-[11px] text-muted-foreground/70 italic">Recorded in Income</p>
+                    <p className="text-11 text-muted-foreground/70 italic">Recorded in Income</p>
                   ) : (
                     <div className="flex items-center gap-3 pt-0.5">
                       <button
@@ -789,7 +790,7 @@ export function MobileWithdrawals() {
       </div>
 
       {/* Summary card */}
-      <div className="rounded-xl border border-border p-4 space-y-3">
+      <Card className="rounded-xl p-4 space-y-3">
         <div className="flex items-start justify-between gap-4">
           <div>
             <SectionLabel className="mb-0.5">
@@ -828,7 +829,7 @@ export function MobileWithdrawals() {
             Configure withdrawal rate settings
           </button>
         )}
-      </div>
+      </Card>
 
       {/* Month list */}
       {events === undefined ? (
@@ -849,7 +850,7 @@ export function MobileWithdrawals() {
           </Button>
         </div>
       ) : (
-        <div className="rounded-xl border border-border divide-y divide-border overflow-hidden">
+        <FlatCard className="divide-y divide-border overflow-hidden">
           {/* Add transfer row */}
           <button
             type="button"
@@ -899,7 +900,7 @@ export function MobileWithdrawals() {
               </button>
             );
           })}
-        </div>
+        </FlatCard>
       )}
 
     </div>

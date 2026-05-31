@@ -242,7 +242,7 @@ export function UserMenu() {
     <div className="relative ml-2" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center justify-center w-[34px] h-[34px] rounded-[6px] text-white text-[13px] font-medium transition-opacity hover:opacity-90"
+        className="flex items-center justify-center w-[34px] h-[34px] rounded-[6px] text-white text-13 font-medium transition-opacity hover:opacity-90"
         style={{
           background: "linear-gradient(135deg, var(--color-primary) 0%, oklch(0.55 0.14 320) 100%)",
           boxShadow: "0 1px 0 rgba(255,255,255,.5) inset, 0 0 0 1px rgba(15,20,40,.12), 0 4px 10px -2px color-mix(in oklab, var(--color-primary) 35%, transparent)",

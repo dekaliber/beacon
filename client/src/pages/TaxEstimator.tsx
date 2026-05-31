@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, CalendarCheck2, Check, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Settings, Layers, Landmark, Briefcase, TrendingUp, Activity } from "lucide-react";
+import { ArrowLeft, CalendarCheck2, Check, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Settings, Layers, Landmark, Briefcase, TrendingUp, Activity, CircleQuestionMark } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
@@ -1096,7 +1096,7 @@ export function TaxEstimatorPage() {
         <div className="relative rounded-lg border border-border bg-card p-6 shadow-card before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-t-lg before:pointer-events-none before:bg-gradient-to-r before:from-transparent before:via-white/85 before:to-transparent">
           <p className="tp-eyebrow flex items-center gap-1.5">
             Estimated Federal Tax
-            {useTmt && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-soft text-violet-deep">TMT</span>}
+            {useTmt && <span className="rounded px-1.5 py-0.5 text-10 font-semibold bg-violet-soft text-violet-deep">TMT</span>}
           </p>
           <DisplayStat as="p" className="mt-1 tp-stat">{formatCurrency(effectiveFederalTax)}</DisplayStat>
           {(withheldNum > 0 || totalQPaid > 0) && (() => {
@@ -1116,7 +1116,7 @@ export function TaxEstimatorPage() {
         <div className="relative rounded-lg border border-border bg-card p-6 shadow-card before:content-[''] before:absolute before:inset-x-0 before:top-0 before:h-px before:rounded-t-lg before:pointer-events-none before:bg-gradient-to-r before:from-transparent before:via-white/85 before:to-transparent">
           <p className="tp-eyebrow flex items-center gap-1.5">
             Estimated State Tax <span className="text-muted-foreground/60">(CA)</span>
-            {useCaTmt && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-soft text-violet-deep">TMT</span>}
+            {useCaTmt && <span className="rounded px-1.5 py-0.5 text-10 font-semibold bg-violet-soft text-violet-deep">TMT</span>}
           </p>
           <DisplayStat as="p" className="mt-1 tp-stat">{formatCurrency(effectiveCaTax)}</DisplayStat>
           {(caWithheldNum > 0 || totalCAQPaid > 0) && (() => {
@@ -1150,7 +1150,7 @@ export function TaxEstimatorPage() {
               <div className="flex gap-1">
                 <div className="flex shrink-0 items-center justify-center w-5">
                   <SectionLabel as="span"
-                    className="text-[10px] text-warn select-none"
+                    className="text-10 text-warn select-none"
                     style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
                   >
                     Ordinary
@@ -1214,7 +1214,7 @@ export function TaxEstimatorPage() {
               <div className="flex gap-1">
                 <div className="flex shrink-0 items-center justify-center w-5">
                   <SectionLabel as="span"
-                    className="text-[10px] text-up select-none"
+                    className="text-10 text-up select-none"
                     style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
                   >
                     LT
@@ -1267,7 +1267,7 @@ export function TaxEstimatorPage() {
               <div className="flex gap-1">
                 <div className="flex shrink-0 items-center justify-center w-5">
                   <SectionLabel as="span"
-                    className="text-[10px] text-slate select-none"
+                    className="text-10 text-slate select-none"
                     style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
                   >
                     $0
@@ -1324,8 +1324,8 @@ export function TaxEstimatorPage() {
                 <div className="flex justify-between text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     {deductionLabel}
-                    {isCa && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-sky-soft text-sky-deep">CA</span>}
-                    {(isCaTmt || isFedTmt) && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-soft text-violet-deep">TMT</span>}
+                    {isCa && <span className="rounded px-1.5 py-0.5 text-10 font-semibold bg-sky-soft text-sky-deep">CA</span>}
+                    {(isCaTmt || isFedTmt) && <span className="rounded px-1.5 py-0.5 text-10 font-semibold bg-violet-soft text-violet-deep">TMT</span>}
                     {isPhaseOut && <span className="text-xs italic">(partially phased out)</span>}
                   </span>
                   <span className="text-down">-{formatCurrency(deductionAmt)}</span>
@@ -1333,8 +1333,8 @@ export function TaxEstimatorPage() {
                 <div className="flex justify-between font-semibold">
                   <span className="flex items-center gap-1.5">
                     {totalLabel}
-                    {isCa && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-sky-soft text-sky-deep">CA</span>}
-                    {(isCaTmt || isFedTmt) && <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-soft text-violet-deep">TMT</span>}
+                    {isCa && <span className="rounded px-1.5 py-0.5 text-10 font-semibold bg-sky-soft text-sky-deep">CA</span>}
+                    {(isCaTmt || isFedTmt) && <span className="rounded px-1.5 py-0.5 text-10 font-semibold bg-violet-soft text-violet-deep">TMT</span>}
                   </span>
                   <span>{formatCurrency(totalAmt)}</span>
                 </div>
@@ -1456,9 +1456,7 @@ export function TaxEstimatorPage() {
                       <Activity className="h-3.5 w-3.5 shrink-0 text-blue" />
                       Net Investment Income Tax
                       <span className="group relative">
-                        <span className="flex h-3.5 w-3.5 cursor-default items-center justify-center rounded-full border border-muted-foreground/40 text-[9px] font-bold leading-none text-muted-foreground">
-                          ?
-                        </span>
+                        <CircleQuestionMark className="h-3.5 w-3.5 cursor-default text-muted-foreground/60" />
                         <span className="pointer-events-none invisible absolute bottom-full left-1/2 mb-2 w-64 -translate-x-1/2 rounded-md border border-border bg-background px-3 py-2 tp-caption opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100">
                           <span className="block"><span className="font-medium text-foreground">MAGI:</span> {formatCurrency(calc.magi)}</span>
                           <span className="mt-1.5 block">

@@ -219,7 +219,7 @@ export function TagsPage() {
                                               </td>
                                               <td className="py-1.5">
                                                 <span
-                                                  className="inline-flex h-3.5 w-3.5 items-center justify-center rounded text-[8px] font-bold text-white"
+                                                  className="inline-flex h-3.5 w-3.5 items-center justify-center rounded text-[9px] font-bold text-white"
                                                   style={{ backgroundColor: exp.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}
                                                 >
                                                   {exp.account.isJoint ? "J" : "P"}
@@ -240,7 +240,7 @@ export function TagsPage() {
                                                 </td>
                                                 <td className="py-1">
                                                   <span
-                                                    className="inline-flex h-3.5 w-3.5 items-center justify-center rounded text-[8px] font-bold text-white"
+                                                    className="inline-flex h-3.5 w-3.5 items-center justify-center rounded text-[9px] font-bold text-white"
                                                     style={{ backgroundColor: offset.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}
                                                   >
                                                     {offset.account.isJoint ? "J" : "P"}
@@ -272,7 +272,7 @@ export function TagsPage() {
                                             </td>
                                             <td className="py-1">
                                               <span
-                                                className="inline-flex h-3.5 w-3.5 items-center justify-center rounded text-[8px] font-bold text-white"
+                                                className="inline-flex h-3.5 w-3.5 items-center justify-center rounded text-[9px] font-bold text-white"
                                                 style={{ backgroundColor: offset.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}
                                               >
                                                 {offset.account.isJoint ? "J" : "P"}

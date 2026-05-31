@@ -120,7 +120,7 @@ export function ItemTypeahead({
           }
           setOpen((o) => !o);
         }}
-        className={`w-full relative rounded-md border bg-[rgba(255,255,255,0.78)] shadow-[var(--shadow-input)] px-3 py-2 pr-7 text-left text-[13px] text-foreground hover:border-primary/30 focus:outline-none transition-[border-color] duration-[120ms] ${error ? "border-down focus:border-down" : "border-border focus:border-primary/30"}`}
+        className={`w-full relative rounded-md border bg-[rgba(255,255,255,0.78)] shadow-[var(--shadow-input)] px-3 py-2 pr-7 text-left text-13 text-foreground hover:border-primary/30 focus:outline-none transition-[border-color] duration-[120ms] ${error ? "border-down focus:border-down" : "border-border focus:border-primary/30"}`}
       >
         {selectedLabel || <span className="text-muted-foreground">{placeholder ?? "Select..."}</span>}
         <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
@@ -134,20 +134,20 @@ export function ItemTypeahead({
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Type to filter..."
-              className="w-full rounded border border-border px-2 py-1 text-[13px] focus:outline-none"
+              className="w-full rounded border border-border px-2 py-1 text-13 focus:outline-none"
               autoFocus
             />
           </div>
           <div className="max-h-48 overflow-auto">
             {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-[13px] text-muted-foreground">No matches</p>
+              <p className="px-3 py-2 text-13 text-muted-foreground">No matches</p>
             ) : (
               filtered.map((item, i) => (
                 <button
                   key={item.id}
                   type="button"
                   tabIndex={-1}
-                  className={`block w-full px-3 py-1.5 text-left text-[13px] ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  className={`block w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
                   onMouseDown={() => selectItem(item.id)}
                 >
                   {item.name}

@@ -251,7 +251,7 @@ function MonthCalendar({
     cells.push(
       <div
         key={day}
-        className={`relative flex items-center justify-center rounded text-[11px] aspect-square ${
+        className={`relative flex items-center justify-center rounded text-11 aspect-square ${
           isDayFuture ? "text-muted-foreground/40" : "text-foreground"
         } ${hasExpenses ? "cursor-default" : ""}`}
         style={bg ? { backgroundColor: bg } : undefined}
@@ -313,7 +313,7 @@ function MonthCalendar({
         {/* Day-of-week headers */}
         <div className="grid grid-cols-7 gap-0.5 mb-0.5">
           {DAY_LABELS.map((d) => (
-            <div key={d} className="text-center text-[10px] text-muted-foreground font-medium">
+            <div key={d} className="text-center text-10 text-muted-foreground font-medium">
               {d}
             </div>
           ))}

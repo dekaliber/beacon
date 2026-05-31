@@ -255,7 +255,7 @@ function VendorAutocomplete({
           setOpen(true);
         }}
         onKeyDown={handleKeyDown}
-        className={`w-full rounded-md border px-3 py-2 text-[13px] focus:outline-none focus:ring-1 ${error ? "border-down focus:border-down focus:ring-down/30" : "border-border focus:border-primary focus:ring-primary"}`}
+        className={`w-full rounded-md border px-3 py-2 text-13 focus:outline-none focus:ring-1 ${error ? "border-down focus:border-down focus:ring-down/30" : "border-border focus:border-primary focus:ring-primary"}`}
         placeholder="e.g. Amazon, Whole Foods, Netflix"
         autoComplete="off"
       />
@@ -266,7 +266,7 @@ function VendorAutocomplete({
               key={v}
               type="button"
               tabIndex={-1}
-              className={`block w-full px-3 py-1.5 text-left text-[13px] ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+              className={`block w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
               onMouseDown={() => selectItem(v)}
             >
               {v}
@@ -403,7 +403,7 @@ function CategoryTypeahead({
           }
           setOpen((o) => !o);
         }}
-        className={`w-full relative rounded-md border bg-[rgba(255,255,255,0.78)] shadow-[var(--shadow-input)] px-3 py-2 pr-7 text-left text-[13px] text-foreground hover:border-primary/30 focus:outline-none transition-[border-color] duration-[120ms] ${error ? "border-down focus:border-down" : "border-border focus:border-primary/30"}`}
+        className={`w-full relative rounded-md border bg-[rgba(255,255,255,0.78)] shadow-[var(--shadow-input)] px-3 py-2 pr-7 text-left text-13 text-foreground hover:border-primary/30 focus:outline-none transition-[border-color] duration-[120ms] ${error ? "border-down focus:border-down" : "border-border focus:border-primary/30"}`}
       >
         {selectedLabel || <span className="text-muted-foreground">Select category</span>}
         <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
@@ -417,20 +417,20 @@ function CategoryTypeahead({
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Type to filter..."
-              className="w-full rounded border border-border px-2 py-1 text-[13px] focus:outline-none"
+              className="w-full rounded border border-border px-2 py-1 text-13 focus:outline-none"
               autoFocus
             />
           </div>
           <div className="max-h-48 overflow-auto">
             {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-[13px] text-muted-foreground">No matches</p>
+              <p className="px-3 py-2 text-13 text-muted-foreground">No matches</p>
             ) : (
               filtered.map((o, i) => (
                 <button
                   key={o.id}
                   type="button"
                   tabIndex={-1}
-                  className={`block w-full px-3 py-1.5 text-left text-[13px] ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  className={`block w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
                   onMouseDown={() => selectItem(o.id)}
                 >
                   {o.parentLabel && <span className="text-muted-foreground">{o.parentLabel} &gt; </span>}
@@ -561,7 +561,7 @@ function TagTypeahead({
           }
           setOpen((o) => !o);
         }}
-        className="w-full relative rounded-md border border-border bg-[rgba(255,255,255,0.78)] shadow-[var(--shadow-input)] px-3 py-2 pr-7 text-left text-[13px] text-foreground hover:border-primary/30 focus:border-primary/30 focus:outline-none transition-[border-color] duration-[120ms] min-h-[38px]"
+        className="w-full relative rounded-md border border-border bg-[rgba(255,255,255,0.78)] shadow-[var(--shadow-input)] px-3 py-2 pr-7 text-left text-13 text-foreground hover:border-primary/30 focus:border-primary/30 focus:outline-none transition-[border-color] duration-[120ms] min-h-[38px]"
       >
         {selectedTags.length === 0 ? (
           <span className="text-muted-foreground">Select tags</span>
@@ -589,7 +589,7 @@ function TagTypeahead({
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Type to filter or create..."
-              className="w-full rounded border border-border px-2 py-1 text-[13px] focus:outline-none"
+              className="w-full rounded border border-border px-2 py-1 text-13 focus:outline-none"
               autoFocus
             />
           </div>
@@ -598,21 +598,21 @@ function TagTypeahead({
               <button
                 type="button"
                 tabIndex={-1}
-                className={`block w-full px-3 py-1.5 text-left text-[13px] ${focusIdx === 0 ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                className={`block w-full px-3 py-1.5 text-left text-13 ${focusIdx === 0 ? "bg-primary/10" : "hover:bg-muted/50"}`}
                 onMouseDown={handleCreate}
                 disabled={creating}
               >
                 {creating ? "Creating..." : `Create tag: "${search.trim()}"`}
               </button>
             ) : filtered.length === 0 ? (
-              <p className="px-3 py-2 text-[13px] text-muted-foreground">No tags yet</p>
+              <p className="px-3 py-2 text-13 text-muted-foreground">No tags yet</p>
             ) : (
               filtered.map((t, i) => (
                 <button
                   key={t.id}
                   type="button"
                   tabIndex={-1}
-                  className={`flex items-center gap-2 w-full px-3 py-1.5 text-left text-[13px] ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  className={`flex items-center gap-2 w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
                   onMouseDown={() => toggleTag(t.id)}
                 >
                   <span className={`h-4 w-4 flex-shrink-0 rounded border flex items-center justify-center ${selectedIds.includes(t.id) ? "bg-primary border-primary" : "border-border"}`}>
@@ -2062,7 +2062,7 @@ export function Expenses() {
             <div>
               <label className="mb-1 block text-xs invisible select-none" aria-hidden="true">x</label>
               <div className="flex h-8 items-center gap-3">
-                <button onClick={resetFilters} className="text-[13px] text-muted-foreground hover:text-foreground hover:underline">
+                <button onClick={resetFilters} className="text-13 text-muted-foreground hover:text-foreground hover:underline">
                   Reset to defaults
                 </button>
                 <Button size="sm" onClick={applyFilters}>Apply</Button>
@@ -2481,7 +2481,7 @@ function OffsetRow({
         />
       </td>
       <td className="w-[30px] py-2 text-center">
-        <span className="inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: offset.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
+        <span className="inline-flex h-5 w-5 items-center justify-center rounded text-10 font-bold text-white" style={{ backgroundColor: offset.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
           {offset.account.isJoint ? "J" : "P"}
         </span>
       </td>
@@ -2618,7 +2618,7 @@ function ExpenseRowWithOffsets({
           <EditableAccountCell value={expense.accountId} label={expense.account.name} color={expense.account.color} accounts={accounts} onSave={(v) => onInlineUpdate(expense.id, "accountId", v)} />
         </td>
         <td className="w-[30px] py-2 text-center">
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white" style={{ backgroundColor: expense.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded text-10 font-bold text-white" style={{ backgroundColor: expense.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
             {expense.account.isJoint ? "J" : "P"}
           </span>
         </td>
@@ -3335,7 +3335,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
                         onChange={(e) => setIsReimbursementExpected(e.target.checked)}
                         className="h-4 w-4 rounded border-border"
                       />
-                      <span className="text-[13px] font-normal">Expecting reimbursement or refund</span>
+                      <span className="text-13 font-normal">Expecting reimbursement or refund</span>
                     </label>
                     {isReimbursementExpected && (
                       <div className="mt-2">
@@ -3359,7 +3359,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
                       onChange={(e) => setIgnoreInBudget(e.target.checked)}
                       className="h-4 w-4 rounded border-border"
                     />
-                    <span className="text-[13px] font-normal">Ignore in budget</span>
+                    <span className="text-13 font-normal">Ignore in budget</span>
                   </label>
                 </div>
 
@@ -3372,7 +3372,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
                       onChange={(e) => setIsRecurring(e.target.checked)}
                       className="h-4 w-4 rounded border-border"
                     />
-                    <span className="text-[13px] font-normal">Recurring expense</span>
+                    <span className="text-13 font-normal">Recurring expense</span>
                   </label>
                   {isRecurring && !expense?.recurrenceRuleId && (
                     <div className="mt-3">

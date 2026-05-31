@@ -162,7 +162,7 @@ function MonthCard({
         key={day}
         type="button"
         onClick={() => handleDayTap(day, hasExpenses)}
-        className={`relative flex items-center justify-center rounded text-[11px] aspect-square transition-opacity ${
+        className={`relative flex items-center justify-center rounded text-11 aspect-square transition-opacity ${
           isDayFuture ? "text-muted-foreground/40" : "text-foreground"
         } ${isSelected ? "ring-1 ring-primary" : ""}`}
         style={bg ? { backgroundColor: bg } : undefined}
@@ -222,7 +222,7 @@ function MonthCard({
         {/* Day-of-week headers */}
         <div className="grid grid-cols-7 gap-0.5 mb-0.5">
           {DAY_LABELS.map((d, i) => (
-            <div key={i} className="text-center text-[10px] text-muted-foreground font-medium">
+            <div key={i} className="text-center text-10 text-muted-foreground font-medium">
               {d}
             </div>
           ))}

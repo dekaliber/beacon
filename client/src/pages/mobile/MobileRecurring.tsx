@@ -22,6 +22,7 @@ import type {
   UpcomingExpenseItem, RecurringHistoryMonth,
 } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { Card } from "@/components/Card";
 import { SectionLabel, DisplayStat } from "@/components/Typography";
 
 // ── Frequency helpers ─────────────────────────────────────────────────────────
@@ -105,7 +106,7 @@ function UpcomingStrip({ expenses }: { expenses: UpcomingExpenseItem[] }) {
               className="flex min-w-[64px] flex-1 flex-col border-r border-border last:border-r-0"
             >
               <div className={`px-1 py-2 text-center ${isToday ? "text-down" : "text-muted-foreground"}`}>
-                <SectionLabel as="div" className="text-[10px]">
+                <SectionLabel as="div" className="text-10">
                   {isToday ? "Today" : DAY_NAMES[day.getDay()]}
                 </SectionLabel>
                 <div className={`tp-panel-title leading-tight ${isToday ? "text-down" : ""}`}>
@@ -130,7 +131,7 @@ function UpcomingStrip({ expenses }: { expenses: UpcomingExpenseItem[] }) {
                           );
                         })}
                         {dayExpenses.length > 2 && (
-                          <div className="h-5 w-5 rounded-full flex items-center justify-center text-[8px] font-semibold bg-muted text-muted-foreground ring-1 ring-background">
+                          <div className="h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-semibold bg-muted text-muted-foreground ring-1 ring-background">
                             +{dayExpenses.length - 2}
                           </div>
                         )}
@@ -1227,7 +1228,7 @@ export function MobileRecurring() {
                     {groupName && (
                       <SectionLabel className="mb-2">{groupName}</SectionLabel>
                     )}
-                    <div className="divide-y divide-border rounded-xl border border-border overflow-hidden">
+                    <Card className="rounded-xl p-0 divide-y divide-border overflow-hidden">
                       {groupRules.map((rule) => (
                         <div
                           key={rule.id}
@@ -1251,7 +1252,7 @@ export function MobileRecurring() {
                           </span>
                         </div>
                       ))}
-                    </div>
+                    </Card>
                   </div>
                 ))}
               </div>
@@ -1282,7 +1283,7 @@ export function MobileRecurring() {
                   ) : pastRules.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No ended recurring transactions.</p>
                   ) : (
-                    <div className="divide-y divide-border rounded-xl border border-border overflow-hidden opacity-60">
+                    <Card className="rounded-xl p-0 divide-y divide-border overflow-hidden opacity-60">
                       {pastRules.map((rule) => (
                         <div key={rule.id} className="flex items-center gap-3 px-4 py-3">
                           <div className="min-w-0 flex-1">
@@ -1297,7 +1298,7 @@ export function MobileRecurring() {
                           </span>
                         </div>
                       ))}
-                    </div>
+                    </Card>
                   )}
                 </div>
               )}
@@ -1319,7 +1320,7 @@ export function MobileRecurring() {
         {activeTab === "transfers" && (
           <div className="space-y-4 pt-5">
             {transferRules && transferRules.length > 0 ? (
-              <div className="divide-y divide-border rounded-xl border border-border overflow-hidden">
+              <Card className="rounded-xl p-0 divide-y divide-border overflow-hidden">
                 {transferRules.map((rule) => (
                   <div
                     key={rule.id}
@@ -1342,7 +1343,7 @@ export function MobileRecurring() {
                     </div>
                   </div>
                 ))}
-              </div>
+              </Card>
             ) : (
               <div className="flex flex-col items-center gap-2 py-12 text-center">
                 <Repeat className="h-8 w-8 text-muted-foreground/40" />

@@ -2389,7 +2389,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
     COL_GROUPS.reduce((sum, g) => sum + (isColOpen(g.key) ? g.count : 1), 0) +
     1;
 
-  const thClass = "px-2 py-2 text-left font-mono text-[10px] font-medium tracking-[0.11em] uppercase text-[var(--color-ink-3)] whitespace-nowrap";
+  const thClass = "px-2 py-2 text-left font-mono text-10 font-medium tracking-[0.11em] uppercase text-[var(--color-ink-3)] whitespace-nowrap";
   const renderRow = (p: OptionsPosition, isGrouped = false, isDraftRow = false) => {
     // For draft rows, substitute page-load time so duration/ann-return calculations are meaningful
     const calcP = isDraftRow ? { ...p, openedAt: PAGE_LOAD_TIME } : p;
@@ -2644,7 +2644,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
     const chainRow = hasChain ? (
       <tr key={`${p.id}-chain`} className={cn("group", "border-b border-border", isGrouped && "bg-muted/10", isExpired && "bg-warn-soft/50")}>
         {/* Label — frozen */}
-        <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] group-hover:bg-[#F5F8FC]", stickyBg, isGrouped ? "pl-8 pr-2" : "pl-4 pr-2", "font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-[10px]")}>roll</td>
+        <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] group-hover:bg-[#F5F8FC]", stickyBg, isGrouped ? "pl-8 pr-2" : "pl-4 pr-2", "font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-10")}>roll</td>
         <td style={{ left: 80 }}  className={cn(ctd, "sticky z-[2] group-hover:bg-[#F5F8FC]", stickyBg)} />
         <td style={{ left: 152 }} className={cn(ctd, "sticky z-[2] group-hover:bg-[#F5F8FC]", stickyBg)} />
         <td style={{ left: 232 }} className={cn(ctd, "sticky z-[2] group-hover:bg-[#F5F8FC] border-r border-border/40", stickyBg)} />
@@ -2781,7 +2781,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
                 colSpan={isColOpen(key) ? count : 1}
                 onClick={() => toggleColGroup(key)}
                 className={cn(
-                  "px-3 pt-2 pb-1 text-left font-mono text-[10px] font-medium tracking-[0.11em] uppercase cursor-pointer select-none transition-colors",
+                  "px-3 pt-2 pb-1 text-left font-mono text-10 font-medium tracking-[0.11em] uppercase cursor-pointer select-none transition-colors",
                   "border-l border-border/50",
                   isColOpen(key)
                     ? "text-muted-foreground/70 hover:text-muted-foreground"
@@ -2945,7 +2945,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
                     colSpan={isColOpen(key) ? count : 1}
                     onClick={() => toggleColGroup(key)}
                     className={cn(
-                      "px-3 pt-2 pb-1 text-left font-mono text-[10px] font-medium tracking-[0.11em] uppercase cursor-pointer select-none transition-colors",
+                      "px-3 pt-2 pb-1 text-left font-mono text-10 font-medium tracking-[0.11em] uppercase cursor-pointer select-none transition-colors",
                       "border-l border-border/50",
                       isColOpen(key)
                         ? "text-muted-foreground/70 hover:text-muted-foreground"
@@ -3196,7 +3196,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
     });
   }
 
-  const thClass = "px-2 py-2 text-left font-mono text-[10px] font-medium tracking-[0.11em] uppercase text-[var(--color-ink-3)] whitespace-nowrap";
+  const thClass = "px-2 py-2 text-left font-mono text-10 font-medium tracking-[0.11em] uppercase text-[var(--color-ink-3)] whitespace-nowrap";
   const tdClass = "px-2 py-2 text-13 font-mono tabular-nums whitespace-nowrap";
   const tdClassChained = "px-2 pt-2 pb-1 text-13 font-mono tabular-nums whitespace-nowrap";
 
@@ -3223,7 +3223,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                 colSpan={isColOpen(key) ? count : 1}
                 onClick={() => toggleColGroup(key)}
                 className={cn(
-                  "px-3 pt-2 pb-1 text-left font-mono text-[10px] font-medium tracking-[0.11em] uppercase cursor-pointer select-none transition-colors",
+                  "px-3 pt-2 pb-1 text-left font-mono text-10 font-medium tracking-[0.11em] uppercase cursor-pointer select-none transition-colors",
                   "border-l border-border/50",
                   isColOpen(key)
                     ? "text-muted-foreground/70 hover:text-muted-foreground"
@@ -3419,7 +3419,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
             const chainRow = cs ? (
               <tr key={`${p.id}-chain`} className="group border-b border-border">
                 {/* Label — frozen */}
-                <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC] pl-4 pr-2 font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-[10px]")}>roll</td>
+                <td style={{ left: 0 }}   className={cn(ctd, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC] pl-4 pr-2 font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-10")}>roll</td>
                 <td style={{ left: 80 }}  className={cn(ctd, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC]")} />
                 <td style={{ left: 152 }} className={cn(ctd, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC]")} />
                 <td style={{ left: 232 }} className={cn(ctd, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC]")} />
@@ -3497,7 +3497,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                     colSpan={isColOpen(key) ? count : 1}
                     onClick={() => toggleColGroup(key)}
                     className={cn(
-                      "px-3 pt-2 pb-1 text-left font-mono text-[10px] font-medium tracking-[0.11em] uppercase cursor-pointer select-none transition-colors",
+                      "px-3 pt-2 pb-1 text-left font-mono text-10 font-medium tracking-[0.11em] uppercase cursor-pointer select-none transition-colors",
                       "border-l border-border/50",
                       isColOpen(key)
                         ? "text-muted-foreground/70 hover:text-muted-foreground"
