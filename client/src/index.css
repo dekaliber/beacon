@@ -181,6 +181,11 @@ textarea {
   transition: border-color 0.12s, box-shadow 0.12s;
 }
 
+/* Error border — specificity matches the base input rule so the class wins */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]).border-down {
+  border-color: var(--color-down);
+}
+
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"])::placeholder,
 textarea::placeholder {
   color: oklch(0.70 0.010 265); /* ink-4 — lighter than muted-foreground */

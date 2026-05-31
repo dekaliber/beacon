@@ -199,10 +199,10 @@ export function Accounts() {
             onClick={toggleDemoMode}
             title={isDemoMode ? "Disable demo mode" : "Enable demo mode"}
             className={cn(
-              "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+              "tp-nav-link",
               isDemoMode
                 ? "bg-warn-soft text-warn-deep hover:bg-warn-soft"
-                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                : "hover:bg-accent hover:text-accent-foreground"
             )}
           >
             {isDemoMode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

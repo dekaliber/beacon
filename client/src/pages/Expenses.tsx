@@ -13,6 +13,7 @@ import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { ItemTypeahead } from "@/components/ItemTypeahead";
 import { ToastContainer, useToast } from "@/components/Toast";
 import { MultiSelectDropdown } from "@/components/MultiSelectDropdown";
 import type { MultiSelectOption, MultiSelectGroup } from "@/components/MultiSelectDropdown";
@@ -104,7 +105,7 @@ function getScrollParentBottom(el: Element): number {
 }
 
 // ── Currency input helper ──
-function CurrencyInput({ name, defaultValue, required, onChange, autoFocus }: { name: string; defaultValue?: string; required?: boolean; onChange?: (value: number) => void; autoFocus?: boolean }) {
+function CurrencyInput({ name, defaultValue, required, onChange, autoFocus, error }: { name: string; defaultValue?: string; required?: boolean; onChange?: (value: number) => void; autoFocus?: boolean; error?: boolean }) {
   const [rawValue, setRawValue] = useState(() => {
     if (!defaultValue) return "";
     const num = parseFloat(defaultValue);
@@ -162,7 +163,7 @@ function CurrencyInput({ name, defaultValue, required, onChange, autoFocus }: { 
           onPaste={handlePaste}
           onBlur={handleBlur}
           autoFocus={autoFocus}
-          className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className={`w-full rounded-md border pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-1 ${error ? "border-down focus:border-down focus:ring-down/30" : "border-border focus:border-primary focus:ring-primary"}`}
           placeholder="0.00"
           inputMode="text"
         />
@@ -175,13 +176,15 @@ function CurrencyInput({ name, defaultValue, required, onChange, autoFocus }: { 
 
 // ── Vendor autocomplete ──
 function VendorAutocomplete({
-  name, defaultValue, vendors, onSelect, required,
+  name, defaultValue, vendors, onSelect, required, error, onValueChange,
 }: {
   name: string;
   defaultValue?: string;
   vendors: string[];
   onSelect?: (vendor: string) => void;
   required?: boolean;
+  error?: boolean;
+  onValueChange?: (value: string) => void;
 }) {
   const [value, setValue] = useState(defaultValue ?? "");
   const [open, setOpen] = useState(false);
@@ -237,6 +240,7 @@ function VendorAutocomplete({
         value={value}
         onChange={(e) => {
           setValue(e.target.value);
+          onValueChange?.(e.target.value);
           if (ref.current) {
             const rect = ref.current.getBoundingClientRect();
             setFlipUp(getScrollParentBottom(ref.current) - rect.bottom < 240);
@@ -251,7 +255,7 @@ function VendorAutocomplete({
           setOpen(true);
         }}
         onKeyDown={handleKeyDown}
-        className="w-full rounded-md border border-border px-3 py-2 text-[13px] focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+        className={`w-full rounded-md border px-3 py-2 text-[13px] focus:outline-none focus:ring-1 ${error ? "border-down focus:border-down focus:ring-down/30" : "border-border focus:border-primary focus:ring-primary"}`}
         placeholder="e.g. Amazon, Whole Foods, Netflix"
         autoComplete="off"
       />
@@ -276,7 +280,7 @@ function VendorAutocomplete({
 
 // ── Category typeahead select ──
 function CategoryTypeahead({
-  name, defaultValue, categories, required, triggerRef: externalTriggerRef, onTabFromSearch,
+  name, defaultValue, categories, required, triggerRef: externalTriggerRef, onTabFromSearch, error, onSelect,
 }: {
   name: string;
   defaultValue?: string;
@@ -284,6 +288,8 @@ function CategoryTypeahead({
   required?: boolean;
   triggerRef?: React.RefObject<HTMLButtonElement | null>;
   onTabFromSearch?: () => void;
+  error?: boolean;
+  onSelect?: () => void;
 }) {
   const [value, setValue] = useState(defaultValue ?? "");
   const [search, setSearch] = useState("");
@@ -348,6 +354,7 @@ function CategoryTypeahead({
     setOpen(false);
     setSearch("");
     justSelectedRef.current = true;
+    onSelect?.();
     setTimeout(() => triggerRef.current?.focus(), 0);
   };
 
@@ -396,7 +403,7 @@ function CategoryTypeahead({
           }
           setOpen((o) => !o);
         }}
-        className="w-full relative rounded-md border border-border bg-[rgba(255,255,255,0.78)] shadow-[var(--shadow-input)] px-3 py-2 pr-7 text-left text-[13px] text-foreground hover:border-primary/30 focus:border-primary/30 focus:outline-none transition-[border-color] duration-[120ms]"
+        className={`w-full relative rounded-md border bg-[rgba(255,255,255,0.78)] shadow-[var(--shadow-input)] px-3 py-2 pr-7 text-left text-[13px] text-foreground hover:border-primary/30 focus:outline-none transition-[border-color] duration-[120ms] ${error ? "border-down focus:border-down" : "border-border focus:border-primary/30"}`}
       >
         {selectedLabel || <span className="text-muted-foreground">Select category</span>}
         <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
@@ -438,153 +445,7 @@ function CategoryTypeahead({
   );
 }
 
-// ── Account typeahead ──
-function AccountTypeahead({
-  name, defaultValue, accounts, required, onTabFromSearch, triggerRef: externalTriggerRef,
-}: {
-  name: string;
-  defaultValue?: string;
-  accounts: Account[];
-  required?: boolean;
-  onTabFromSearch?: () => void;
-  triggerRef?: React.RefObject<HTMLButtonElement | null>;
-}) {
-  const [value, setValue] = useState(defaultValue ?? "");
-  const [search, setSearch] = useState("");
-  const [open, setOpen] = useState(false);
-  const [flipUp, setFlipUp] = useState(false);
-  const [focusIdx, setFocusIdx] = useState(0);
-  const ref = useRef<HTMLDivElement>(null);
-  const internalTriggerRef = useRef<HTMLButtonElement>(null);
-  const triggerRef = externalTriggerRef ?? internalTriggerRef;
-  const clickingRef = useRef(false);
-  const justSelectedRef = useRef(false);
 
-  useEffect(() => { setValue(defaultValue ?? ""); }, [defaultValue]);
-
-  const sortedAccounts = useMemo(() =>
-    [...accounts].sort((a, b) => a.name.localeCompare(b.name)),
-    [accounts],
-  );
-
-  const filtered = useMemo(() => {
-    const visible = sortedAccounts.filter((a) => !a.isHidden);
-    if (!search.trim()) return visible;
-    const terms = search.toLowerCase().split(/\s+/);
-    return visible.filter((a) => {
-      const words = a.name.toLowerCase().split(/\s+/);
-      return terms.every((t) => words.some((w) => w.startsWith(t)));
-    });
-  }, [search, sortedAccounts]);
-
-  useEffect(() => { setFocusIdx(0); }, [filtered]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const selectedLabel = useMemo(() => {
-    if (!value) return "";
-    return sortedAccounts.find((a) => a.id === value)?.name ?? "";
-  }, [value, sortedAccounts]);
-
-  const selectItem = (id: string) => {
-    setValue(id);
-    setOpen(false);
-    setSearch("");
-    justSelectedRef.current = true;
-    setTimeout(() => triggerRef.current?.focus(), 0);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Tab") {
-      e.preventDefault();
-      setOpen(false);
-      setSearch("");
-      onTabFromSearch?.();
-      return;
-    }
-    if (!open) return;
-    if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx((i) => Math.min(i + 1, filtered.length - 1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx((i) => Math.max(i - 1, 0)); }
-    else if (e.key === "Enter" && filtered[focusIdx]) { e.preventDefault(); selectItem(filtered[focusIdx].id); }
-    else if (e.key === "Escape") setOpen(false);
-  };
-
-  return (
-    <div ref={ref} className="relative">
-      <input type="hidden" name={name} value={value} />
-      {required && !value && <input type="text" required value="" style={{ opacity: 0, position: "absolute", pointerEvents: "none", width: 0, height: 0 }} tabIndex={-1} onChange={() => {}} />}
-      <button
-        ref={triggerRef}
-        type="button"
-        onMouseDown={() => { clickingRef.current = true; }}
-        onFocus={(e) => {
-          if (justSelectedRef.current || clickingRef.current) {
-            justSelectedRef.current = false;
-            clickingRef.current = false;
-            return;
-          }
-          // Only auto-open when tabbing forward (related target precedes this button in DOM)
-          const related = e.relatedTarget as Element | null;
-          if (related && !(related.compareDocumentPosition(e.currentTarget) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
-          if (ref.current) {
-            const rect = ref.current.getBoundingClientRect();
-            setFlipUp(getScrollParentBottom(ref.current) - rect.bottom < 240);
-          }
-          setOpen(true);
-        }}
-        onClick={() => {
-          if (!open && ref.current) {
-            const rect = ref.current.getBoundingClientRect();
-            setFlipUp(getScrollParentBottom(ref.current) - rect.bottom < 240);
-          }
-          setOpen((o) => !o);
-        }}
-        className="w-full relative rounded-md border border-border bg-[rgba(255,255,255,0.78)] shadow-[var(--shadow-input)] px-3 py-2 pr-7 text-left text-[13px] text-foreground hover:border-primary/30 focus:border-primary/30 focus:outline-none transition-[border-color] duration-[120ms]"
-      >
-        {selectedLabel || <span className="text-muted-foreground">Select account</span>}
-        <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
-      </button>
-      {open && (
-        <div className={`absolute left-0 right-0 z-50 rounded-md border border-border bg-background shadow-lg ${flipUp ? "bottom-full mb-1" : "top-full mt-1"}`}>
-          <div className="border-b border-border p-2">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type to filter..."
-              className="w-full rounded border border-border px-2 py-1 text-[13px] focus:outline-none"
-              autoFocus
-            />
-          </div>
-          <div className="max-h-48 overflow-auto">
-            {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-[13px] text-muted-foreground">No matches</p>
-            ) : (
-              filtered.map((a, i) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  tabIndex={-1}
-                  className={`block w-full px-3 py-1.5 text-left text-[13px] ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
-                  onMouseDown={() => selectItem(a.id)}
-                >
-                  {a.name}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── Tag typeahead (multi-select) ──
 function TagTypeahead({
@@ -3179,6 +3040,7 @@ interface ExpenseModalProps {
 function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expense, offsetParent, categories, accounts, tags, vendors, onCreateTag }: ExpenseModalProps) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [errors, setErrors] = useState<{ amount?: string; description?: string; vendor?: string; date?: string; categoryId?: string }>({});
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [isReimbursementExpected, setIsReimbursementExpected] = useState(false);
   const [ignoreInBudget, setIgnoreInBudget] = useState(false);
@@ -3201,6 +3063,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
 
   useEffect(() => {
     if (open) {
+      setErrors({});
       if (isOffsetMode) {
         // Offset mode: inherit parent's tags, category; no reimbursement/recurring
         setSelectedTagIds(offsetParent.tags.map((t) => t.tagId));
@@ -3246,10 +3109,17 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setSaving(true);
     const form = new FormData(e.currentTarget);
-
     const rawAmount = parseFloat(form.get("amount") as string);
+    const newErrors: typeof errors = {};
+    if (!rawAmount || rawAmount === 0) newErrors.amount = "Amount is required";
+    if (!(form.get("description") as string).trim()) newErrors.description = "Description is required";
+    if (!(form.get("vendor") as string).trim()) newErrors.vendor = "Vendor is required";
+    if (!(form.get("date") as string)) newErrors.date = "Date is required";
+
+    if (!(form.get("categoryId") as string)) newErrors.categoryId = "Category is required";
+    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
+    setSaving(true);
 
     // Determine recurrenceRuleId
     let recurrenceRuleId: string | null | undefined = isOffsetMode
@@ -3334,7 +3204,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
 
   return (
     <Modal open={open} onClose={onClose} title={isOffsetMode ? "Add Offset" : expense ? "Edit Expense" : "Add Expense"}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         {isOffsetMode && (
           <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
             Offset for: <span className="font-medium text-foreground">{offsetParent.description}</span> ({formatCurrency(offsetParent.amount)})
@@ -3343,7 +3213,8 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
 
         <div>
           <label className="block text-xs font-medium mb-1">Amount</label>
-          <CurrencyInput name="amount" defaultValue={isOffsetMode ? String(-Math.abs(parseFloat(offsetParent.amount))) : expense?.amount} required autoFocus onChange={(v) => !isOffsetMode && setAmountIsNegative(v < 0)} />
+          <CurrencyInput name="amount" defaultValue={isOffsetMode ? String(-Math.abs(parseFloat(offsetParent.amount))) : expense?.amount} required autoFocus error={!!errors.amount} onChange={(v) => { if (v !== 0) setErrors((prev) => ({ ...prev, amount: undefined })); !isOffsetMode && setAmountIsNegative(v < 0); }} />
+          {errors.amount && <p className="mt-1 text-xs text-down">{errors.amount}</p>}
         </div>
 
         <div>
@@ -3353,9 +3224,11 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
             type="text"
             required
             defaultValue={isOffsetMode ? offsetParent.description : expense?.description ?? ""}
-            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${errors.description ? "border-down focus:border-down focus:ring-down/30" : "border-border focus:border-primary focus:ring-primary"}`}
             placeholder="What did you spend on?"
+            onChange={(e) => { if (e.target.value.trim()) setErrors((prev) => ({ ...prev, description: undefined })); }}
           />
+          {errors.description && <p className="mt-1 text-xs text-down">{errors.description}</p>}
         </div>
 
         <div>
@@ -3364,9 +3237,12 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
             name="vendor"
             defaultValue={isOffsetMode ? offsetParent.vendor : expense?.vendor}
             vendors={vendors}
-            onSelect={handleVendorSelect}
+            onSelect={(v) => { handleVendorSelect(v); setErrors((prev) => ({ ...prev, vendor: undefined })); }}
+            onValueChange={(v) => { if (v.trim()) setErrors((prev) => ({ ...prev, vendor: undefined })); }}
             required
+            error={!!errors.vendor}
           />
+          {errors.vendor && <p className="mt-1 text-xs text-down">{errors.vendor}</p>}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -3377,18 +3253,21 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
               type="date"
               required
               defaultValue={isOffsetMode ? toDateInputValue(offsetParent.date) : toDateInputValue(expense?.date)}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${errors.date ? "border-down focus:border-down focus:ring-down/30" : "border-border focus:border-primary focus:ring-primary"}`}
+              onChange={() => setErrors((prev) => ({ ...prev, date: undefined }))}
             />
+            {errors.date && <p className="mt-1 text-xs text-down">{errors.date}</p>}
             {/* Relay: captures focus as it exits the date field and forwards to Account, but not on Shift+Tab backwards from Account */}
             <span tabIndex={0} className="sr-only" onFocus={(e) => { if (e.relatedTarget !== accountTriggerRef.current) accountTriggerRef.current?.focus(); }} />
           </div>
           <div>
             <label className="block text-xs font-medium mb-1">Account</label>
-            <AccountTypeahead
+            <ItemTypeahead
               name="accountId"
               required
               defaultValue={isOffsetMode ? "" : selectedAccountId}
-              accounts={accounts}
+              items={accounts}
+              placeholder="Select account"
               triggerRef={accountTriggerRef}
               onTabFromSearch={() => categoryTriggerRef.current?.focus()}
             />
@@ -3404,7 +3283,10 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
             required
             triggerRef={categoryTriggerRef}
             onTabFromSearch={() => tagsTriggerRef.current?.focus()}
+            error={!!errors.categoryId}
+            onSelect={() => setErrors((prev) => ({ ...prev, categoryId: undefined }))}
           />
+          {errors.categoryId && <p className="mt-1 text-xs text-down">{errors.categoryId}</p>}
         </div>
 
         <div>
