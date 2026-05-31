@@ -484,8 +484,9 @@ function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerC
   const [feesOpen, setFeesOpen] = useState(editing?.feesOpen?.toString() ?? "");
   const [shareCostBasis, setShareCostBasis] = useState(editing?.shareCostBasis?.toString() ?? "");
   const [stockPriceAtOpen, setStockPriceAtOpen] = useState(editing?.stockPriceAtOpen?.toString() ?? "");
-  const [deltaAtOpen, setDeltaAtOpen] = useState<number | null>(editing?.deltaAtOpen ?? null);
+  const [deltaAtOpenStr, setDeltaAtOpenStr] = useState<string>(editing?.deltaAtOpen != null ? String(Number(editing.deltaAtOpen)) : "");
   const [deltaAtOpenCapturedAt, setDeltaAtOpenCapturedAt] = useState<string | null>(editing?.deltaAtOpenCapturedAt ?? null);
+  const [deltaAtOpenStatus, setDeltaAtOpenStatus] = useState<"idle" | "fetching" | "success" | "error">("idle");
   const [notes, setNotes] = useState(editing?.notes ?? "");
   const [groupId] = useState(editing?.groupId ?? "");
   const [investmentAccountId, setInvestmentAccountId] = useState(editing?.investmentAccountId ?? "");
@@ -506,7 +507,7 @@ function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerC
   const isCoveredCall = optionType === "CALL";
 
   // Investment accounts for account selector
-  const { data: investmentAccounts } = useApi(() => getInvestmentAccounts(), []);
+  const { data: investmentAccounts, loading: accountsLoading } = useApi(() => getInvestmentAccounts(), []);
 
   // Assignment batches for CC lot picker: load when ticker + account are both selected
   const selectedTicker = selectedExistingId
@@ -531,6 +532,8 @@ function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerC
   // Only fires for new positions or drafts being opened (not already-open positions)
   const fetchStockPriceAtOpen = useCallback(async (symbol: string, openedAtVal: string) => {
     if (!symbol || !openedAtVal) return;
+
+    // Fetch stock price (timesales)
     setPriceAtOpenStatus("fetching");
     try {
       const result = await getStockPriceAtOpen(symbol, openedAtVal);
@@ -540,7 +543,25 @@ function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerC
     } catch {
       setPriceAtOpenStatus("error");
     }
-  }, []);
+
+    // Also fetch delta via option quote if we have all required option params
+    const strikeNum = parseFloat(strikePrice.replace(/,/g, ""));
+    if (symbol && optionType && !isNaN(strikeNum) && strikeNum > 0 && expirationDate) {
+      setDeltaAtOpenStatus("fetching");
+      try {
+        const quote = await getOptionQuote({ symbol, type: optionType, strike: strikeNum, expiration: expirationDate });
+        if (quote.delta != null) {
+          setDeltaAtOpenStr(quote.delta.toFixed(6));
+          setDeltaAtOpenCapturedAt(quote.capturedAt);
+          setDeltaAtOpenStatus("success");
+        } else {
+          setDeltaAtOpenStatus("error");
+        }
+      } catch {
+        setDeltaAtOpenStatus("error");
+      }
+    }
+  }, [strikePrice, optionType, expirationDate]);
 
   // Auto-fetch option quote when ticker + type + strike + expiration are all set
   const [quoteFetching, setQuoteFetching] = useState(false);
@@ -564,7 +585,7 @@ function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerC
           setQuoteAutoFilled(true);
         }
         if (quote.delta != null) {
-          setDeltaAtOpen(quote.delta);
+          setDeltaAtOpenStr(quote.delta.toFixed(6));
           setDeltaAtOpenCapturedAt(quote.capturedAt);
         }
       } catch { /* ignore — user can fill manually */ }
@@ -665,7 +686,7 @@ function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerC
         feesOpen: feesOpen ? parseFloat(feesOpen.replace(/,/g, "")) : null,
         shareCostBasis: isCoveredCall && shareCostBasis ? parseFloat(shareCostBasis.replace(/,/g, "")) : null,
         stockPriceAtOpen: stockPriceAtOpen ? parseFloat(stockPriceAtOpen.replace(/,/g, "")) : null,
-        deltaAtOpen: deltaAtOpen ?? null,
+        deltaAtOpen: deltaAtOpenStr ? parseFloat(deltaAtOpenStr) : null,
         deltaAtOpenCapturedAt: deltaAtOpenCapturedAt ?? null,
         notes: notes || null,
         investmentAccountId: investmentAccountId || null,
@@ -778,23 +799,30 @@ function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerC
           const eligibleAccounts = (investmentAccounts ?? []).filter(
             (a) => a.type === "INVESTMENT" && !a.isManaged
           );
-          return eligibleAccounts.length > 0 ? (
+          if (!accountsLoading && eligibleAccounts.length === 0) return null;
+          return (
             <div>
               <label className="block text-xs font-medium mb-1">
                 Investment Account
               </label>
               <select
+                disabled={accountsLoading}
                 value={investmentAccountId}
                 onChange={(e) => setInvestmentAccountId(e.target.value)}
-                className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
+                className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground disabled:text-muted-foreground disabled:bg-muted/40"
               >
-                <option value="">None</option>
-                {eligibleAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
+                {accountsLoading
+                  ? <option value="">Loading…</option>
+                  : <>
+                      <option value="">None</option>
+                      {eligibleAccounts.map((a) => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </>
+                }
               </select>
             </div>
-          ) : null;
+          );
         })()}
 
         {/* Assignment batch picker — CC only, appears once ticker + account are selected */}
@@ -938,27 +966,37 @@ function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerC
           </div>
         </div>
 
-        {/* Stock Price at Open */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-medium">Stock Price at Open <span className="text-muted-foreground font-normal">(optional)</span></label>
-            {priceAtOpenStatus === "fetching" && (
-              <span className="tp-caption">Getting open price...</span>
-            )}
-            {priceAtOpenStatus === "success" && (
-              <span className="tp-caption">Price as of {priceAtOpenLabel}</span>
-            )}
-            {priceAtOpenStatus === "error" && (
-              <span className="text-xs text-down">Price fetch failed</span>
-            )}
+        {/* Stock Price at Open + Delta at Open (50/50) */}
+        <div className="grid grid-cols-2 gap-4">
+          {/* Stock Price at Open */}
+          <div>
+            <label className="block text-xs font-medium mb-1">Stock Price at Open <span className="text-muted-foreground font-normal">(optional)</span></label>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+              <input
+                type="text" inputMode="decimal"
+                value={stockPriceAtOpen} onChange={(e) => setStockPriceAtOpen(e.target.value)}
+                className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            {priceAtOpenStatus === "fetching" && <p className="mt-1 tp-caption">Getting open price…</p>}
+            {priceAtOpenStatus === "success" && <p className="mt-1 tp-caption">Price as of {priceAtOpenLabel}</p>}
+            {priceAtOpenStatus === "error" && <p className="mt-1 text-xs text-down">Price fetch failed</p>}
           </div>
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+
+          {/* Delta at Open */}
+          <div>
+            <label className="block text-xs font-medium mb-1">Delta at Open <span className="text-muted-foreground font-normal">(optional)</span></label>
             <input
               type="text" inputMode="decimal"
-              value={stockPriceAtOpen} onChange={(e) => setStockPriceAtOpen(e.target.value)}
-              className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              value={deltaAtOpenStr}
+              onChange={(e) => { setDeltaAtOpenStr(e.target.value); setDeltaAtOpenCapturedAt(null); setDeltaAtOpenStatus("idle"); }}
+              placeholder={deltaAtOpenStatus === "fetching" ? "Fetching…" : ""}
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
+            {deltaAtOpenStatus === "fetching" && <p className="mt-1 tp-caption">Fetching delta…</p>}
+            {deltaAtOpenStatus === "success" && <p className="mt-1 tp-caption">From option chain</p>}
+            {deltaAtOpenStatus === "error" && <p className="mt-1 text-xs text-down">Delta fetch failed</p>}
           </div>
         </div>
 
