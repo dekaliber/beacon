@@ -1830,14 +1830,14 @@ export function Expenses() {
           )}
           <Link
             to="/expenses/reimbursements"
-            className="tp-nav-link hover:bg-accent hover:text-accent-foreground"
+            className="tp-nav-link hover:bg-accent hover:text-ink"
           >
             <AlertCircle className="h-4 w-4" />
             Reimbursements
           </Link>
           <Link
             to="/expenses/tags"
-            className="tp-nav-link hover:bg-accent hover:text-accent-foreground"
+            className="tp-nav-link hover:bg-accent hover:text-ink"
           >
             <TagIcon className="h-4 w-4" />
             Tags

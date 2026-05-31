@@ -1244,14 +1244,14 @@ export function Budgets() {
         <div className="flex items-center gap-3">
           <Link
             to="/budgets/monthly-spending"
-            className="tp-nav-link hover:bg-accent hover:text-accent-foreground"
+            className="tp-nav-link hover:bg-accent hover:text-ink"
           >
             <CalendarDays className="h-4 w-4" />
             Monthly Spending
           </Link>
           <button
             onClick={() => setBudgetModalOpen(true)}
-            className="tp-nav-link hover:bg-accent hover:text-accent-foreground"
+            className="tp-nav-link hover:bg-accent hover:text-ink"
           >
             <Pencil className="h-4 w-4" />
             Edit Budget
@@ -1312,7 +1312,7 @@ export function Budgets() {
           {/* Personal & Joint breakdown toggle */}
           <button
             onClick={toggleBreakdown}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-ink transition-colors"
           >
             <span>{showBreakdown ? "Hide" : "Show"} Personal & Joint breakdown</span>
             <ChevronDown

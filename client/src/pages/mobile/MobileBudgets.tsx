@@ -1251,7 +1251,7 @@ export function MobileBudgets() {
           <div className="flex flex-col gap-2">
             <button
               onClick={toggleBreakdown}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-ink transition-colors"
             >
               <span>{showBreakdown ? "Hide" : "Show"} Personal & Joint breakdown</span>
               <ChevronDown

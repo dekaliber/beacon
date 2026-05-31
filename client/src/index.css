@@ -84,13 +84,11 @@
   --color-primary-soft:     oklch(0.92 0.04 268);
   --color-primary-foreground: #FFFFFF;
   --color-secondary: #F1F5F9;
-  --color-secondary-foreground: #0F172A;
   --color-muted: #F8FAFC;
-  --color-muted-foreground: oklch(0.52 0.012 265); /* = ink-3 */
+  --color-muted-foreground: var(--color-ink-3);
   --color-accent: #F1F5F9;
-  --color-accent-foreground: #0F172A;
   --color-border: oklch(0.16 0.020 265 / 0.07);
-  --color-ring: oklch(0.56 0.16 268);
+
   --color-background: oklch(0.985 0.006 260);
   --color-foreground: var(--color-ink);
   --color-card: oklch(1 0 0 / 0.62);
@@ -440,10 +438,10 @@ svg.lucide {
 }
 .tp-kpi-cents {
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 400;
   color: var(--color-ink-3);
-  vertical-align: 0.55em;
+  vertical-align: baseline;
   margin-left: 2px;
 }
 

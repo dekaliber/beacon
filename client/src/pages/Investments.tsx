@@ -734,7 +734,7 @@ function AllocationCard({
     .map((i, idx) => ({ ...toSegment(i, idx), pct: i.actualPct }));
 
   return (
-    <Card className="p-0 py-2 space-y-4 border-0 shadow-none bg-transparent">
+    <div className="py-1 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -840,7 +840,7 @@ function AllocationCard({
           </div>
         )}
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -1107,6 +1107,16 @@ function WithdrawalRateCard({
 
 type AllocationFilter = "all" | "taxable" | "tax-advantaged";
 
+function KpiAmount({ value, className }: { value: number; className?: string }) {
+  const s = formatCurrency(value);
+  const i = s.indexOf('.');
+  return (
+    <DisplayStat as="p" className={`tp-kpi${className ? ` ${className}` : ''}`}>
+      {i >= 0 ? <>{s.slice(0, i)}<span className="tp-kpi-cents">{s.slice(i)}</span></> : s}
+    </DisplayStat>
+  );
+}
+
 export function Investments() {
   const navigate = useNavigate();
   const { data: accounts, refetch } = useApi(() => getInvestmentAccounts(), []);
@@ -1250,7 +1260,7 @@ if (!displayAccounts) return <BeaconLoader />;
         <h2 className="tp-page-title">Investments</h2>
         <Link
           to="/investments/securities"
-          className="tp-nav-link hover:bg-accent hover:text-accent-foreground"
+          className="tp-nav-link hover:bg-accent hover:text-ink"
         >
           <Library className="h-4 w-4" />
           Securities
@@ -1271,7 +1281,7 @@ if (!displayAccounts) return <BeaconLoader />;
               <SectionLabel>
                 Total Portfolio
               </SectionLabel>
-              <DisplayStat as="p" className="tp-kpi-l">{formatCurrency(totalPortfolioValue)}</DisplayStat>
+              <KpiAmount value={totalPortfolioValue} />
               {totalDayGain !== 0 && (
                 <GainBadge value={totalDayGain} pct={totalDayGainPct} label="1-day" className="mt-0.5" />
               )}

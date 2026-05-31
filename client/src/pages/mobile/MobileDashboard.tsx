@@ -42,6 +42,16 @@ import { SectionLabel, StatValue, DisplayStat } from "@/components/Typography";
 
 type ChartView = "total" | "personal" | "joint";
 
+function KpiAmount({ value, className }: { value: number; className: string }) {
+  const s = formatCurrency(value);
+  const i = s.indexOf('.');
+  return (
+    <DisplayStat as="p" className={className}>
+      {i >= 0 ? <>{s.slice(0, i)}<span className="tp-kpi-cents">{s.slice(i)}</span></> : s}
+    </DisplayStat>
+  );
+}
+
 export function MobileDashboard() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -203,7 +213,7 @@ export function MobileDashboard() {
         {scaledNetWorth && (
           <Card>
             <SectionLabel>Net Worth</SectionLabel>
-            <DisplayStat as="p" className="mt-0.5 tp-kpi-l">{formatCurrency(scaledNetWorth.total)}</DisplayStat>
+            <KpiAmount value={scaledNetWorth.total} className="mt-0.5 tp-kpi-l" />
             <p className="tp-fineprint mt-1">
               {refreshPhase === "running"
                 ? refreshTotal > 0

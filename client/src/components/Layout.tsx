@@ -71,7 +71,7 @@ function KeyboardShortcutsButton() {
           "relative flex items-center justify-center rounded-md p-2 transition-colors",
           open
             ? "bg-primary text-primary-foreground"
-            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            : "text-muted-foreground hover:bg-accent hover:text-ink"
         )}
         aria-label="Keyboard shortcuts"
       >
@@ -171,7 +171,7 @@ function NotificationBell() {
           "relative flex items-center justify-center rounded-md p-2 transition-colors",
           open
             ? "bg-primary text-primary-foreground"
-            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            : "text-muted-foreground hover:bg-accent hover:text-ink"
         )}
         aria-label="Notifications"
       >
@@ -271,7 +271,7 @@ export function UserMenu() {
                   "tp-nav-link w-full rounded-none",
                   isActive
                     ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    : "hover:bg-accent hover:text-ink"
                 )
               }
             >

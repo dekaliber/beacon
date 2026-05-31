@@ -741,7 +741,7 @@ export function TaxEstimatorPage() {
           <button
             type="button"
             onClick={() => setAssumptionsOpen(true)}
-            className="tp-nav-link hover:bg-accent hover:text-accent-foreground"
+            className="tp-nav-link hover:bg-accent hover:text-ink"
           >
             <Settings className="h-4 w-4" />
             Tax Assumptions

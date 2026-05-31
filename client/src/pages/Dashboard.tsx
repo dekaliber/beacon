@@ -23,6 +23,16 @@ import { SectionLabel, StatValue, DisplayStat, Caption } from "@/components/Typo
 
 type ChartView = "total" | "personal" | "joint";
 
+function KpiAmount({ value, className }: { value: number; className: string }) {
+  const s = formatCurrency(value);
+  const i = s.indexOf('.');
+  return (
+    <DisplayStat as="p" className={className}>
+      {i >= 0 ? <>{s.slice(0, i)}<span className="tp-kpi-cents">{s.slice(i)}</span></> : s}
+    </DisplayStat>
+  );
+}
+
 export function Dashboard() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -164,7 +174,7 @@ export function Dashboard() {
             {/* Headline — spans 2 cols */}
             <div className="col-span-6 sm:col-span-2 sm:border-r sm:border-border sm:pr-6">
               <SectionLabel>Net Worth</SectionLabel>
-              <DisplayStat as="p" className="tp-kpi">{formatCurrency(scaledNetWorth.total)}</DisplayStat>
+              <KpiAmount value={scaledNetWorth.total} className="tp-kpi" />
               <Caption className="mt-1">
                 {refreshPhase === "running"
                   ? refreshTotal > 0

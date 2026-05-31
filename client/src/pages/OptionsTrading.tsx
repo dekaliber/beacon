@@ -2527,7 +2527,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
             </td>
           </>
         ) : (
-          <td className={cn(tdClass, "border-l border-border/50 tp-caption")}>
+          <td className={cn(tdClass, "border-l border-border/50 text-muted-foreground text-xs")}>
             ${fmtUSD(c.totalPremiumNet)}
             <span className="mx-1">·</span>
             {c.daysLeft < 0 ? "Exp" : c.calDaysLeft === 0 ? "Today" : `${c.calDaysLeft}d`}
@@ -3739,9 +3739,9 @@ function PerformanceCharts({
                 return (
                   <div className="rounded border border-border bg-background p-2 text-xs shadow-md">
                     <p className="mb-1 font-medium">{label}</p>
-                    {realized !== 0 && <p style={{ color: "var(--color-primary)" }}>Realized: ${fmtUSD(realized)}</p>}
+                    {realized !== 0 && <p className="text-primary">Realized: ${fmtUSD(realized)}</p>}
                     {pending > 0 && <p className="text-muted-foreground">Pending: ${fmtUSD(pending)}</p>}
-                    {realized === 0 && pending === 0 && <p style={{ color: "var(--color-primary)" }}>$0.00</p>}
+                    {realized === 0 && pending === 0 && <p className="text-primary">$0.00</p>}
                     {targetWeekly != null && (
                       <p className="mt-0.5 text-muted-foreground">Target: ${fmtUSD(targetWeekly)}</p>
                     )}
@@ -3866,7 +3866,7 @@ function PerformanceCharts({
                   <div className="rounded border border-border bg-background p-2 text-xs shadow-md">
                     <p className="mb-1 font-medium">{label}</p>
                     {actual?.value != null && (
-                      <p style={{ color: "var(--color-primary)" }}>Actual: ${fmtUSD(actual.value as number)}</p>
+                      <p className="text-primary">Actual: ${fmtUSD(actual.value as number)}</p>
                     )}
                     {target?.value != null && (
                       <p className="mt-0.5 text-muted-foreground">Target: ${fmtUSD(target.value as number)}</p>
@@ -4231,7 +4231,7 @@ function SummaryCards({
             <>
               <div className="w-px bg-border self-stretch shrink-0" />
               <div className="flex-1 min-w-0 pl-3">
-                <p className="tp-stat truncate" style={{ color: "var(--color-ink-3)" }}>
+                <p className="tp-stat truncate text-ink-3">
                   {`$${(settings.startingBasis - totalCapitalAtRisk).toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
                 </p>
                 <p className="tp-caption mt-0.5">capital available</p>
@@ -4246,14 +4246,14 @@ function SummaryCards({
         <SectionLabel>Premium This Week</SectionLabel>
         <div className="flex items-end mt-1">
           <div className="flex-1 min-w-0">
-            <p className="tp-stat truncate" style={{ color: premiumThisWeek >= 0 ? "var(--color-up)" : "var(--color-down)" }}>
+            <p className={`tp-stat truncate ${premiumThisWeek >= 0 ? "text-up" : "text-down"}`}>
               {premiumThisWeek !== 0 ? `$${fmtUSD(premiumThisWeek)}` : "$0.00"}
             </p>
             <p className="tp-caption mt-0.5">realized</p>
           </div>
           <div className="w-px bg-border self-stretch shrink-0" />
           <div className="flex-1 min-w-0 pl-3">
-            <p className="tp-stat truncate" style={{ color: "var(--color-ink-3)" }}>
+            <p className="tp-stat truncate text-ink-3">
               {pendingThisWeek > 0 ? `$${fmtUSD(pendingThisWeek)}` : "$0"}
             </p>
             <p className="tp-caption mt-0.5">pending</p>
@@ -4264,7 +4264,7 @@ function SummaryCards({
       {/* Cumulative Premium */}
       <Card className="p-6">
         <SectionLabel>Cumulative Premium</SectionLabel>
-        <p className="tp-stat mt-1 truncate" style={{ color: cumulativePremium >= 0 ? "var(--color-up)" : "var(--color-down)" }}>
+        <p className={`tp-stat mt-1 truncate ${cumulativePremium >= 0 ? "text-up" : "text-down"}`}>
           {`$${fmtUSD(cumulativePremium)}`}
         </p>
         <p className="tp-caption mt-0.5 truncate">
@@ -4275,7 +4275,7 @@ function SummaryCards({
       {/* Ann. Rate of Return */}
       <Card className="p-6">
         <SectionLabel>Ann. Rate of Return</SectionLabel>
-        <p className="tp-stat mt-1 truncate" style={{ color: annReturn != null ? (annReturn >= (settings?.targetReturn ?? 0) * 100 ? "var(--color-up)" : "var(--color-warn)") : undefined }}>
+        <p className={`tp-stat mt-1 truncate ${annReturn != null ? (annReturn >= (settings?.targetReturn ?? 0) * 100 ? "text-up" : "text-warn") : ""}`}>
           {annReturn != null ? fmtPct(annReturn) : "—"}
         </p>
         <p className="tp-caption mt-0.5 truncate">
@@ -4814,7 +4814,7 @@ export function OptionsTrading() {
             <button
               type="button"
               onClick={() => setSettingsModal(true)}
-              className="tp-nav-link hover:bg-accent hover:text-accent-foreground"
+              className="tp-nav-link hover:bg-accent hover:text-ink"
             >
               <Settings className="h-4 w-4" />
               Settings

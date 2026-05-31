@@ -202,7 +202,7 @@ export function Accounts() {
               "tp-nav-link",
               isDemoMode
                 ? "bg-warn-soft text-warn-deep hover:bg-warn-soft"
-                : "hover:bg-accent hover:text-accent-foreground"
+                : "hover:bg-accent hover:text-ink"
             )}
           >
             {isDemoMode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

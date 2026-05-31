@@ -685,6 +685,16 @@ const ALLOCATION_FILTERS: { value: AllocationFilter; label: string }[] = [
   { value: "tax-advantaged", label: "Tax-Adv." },
 ];
 
+function KpiAmount({ value, className }: { value: number; className?: string }) {
+  const s = formatCurrency(value);
+  const i = s.indexOf('.');
+  return (
+    <DisplayStat as="p" className={`tp-kpi${className ? ` ${className}` : ''}`}>
+      {i >= 0 ? <>{s.slice(0, i)}<span className="tp-kpi-cents">{s.slice(i)}</span></> : s}
+    </DisplayStat>
+  );
+}
+
 export function MobileInvestments() {
   const navigate = useNavigate();
   const { data: accounts, refetch } = useApi(() => getInvestmentAccounts(), []);
@@ -843,7 +853,7 @@ export function MobileInvestments() {
             <Card className="rounded-xl p-4 space-y-4">
               <div>
                 <SectionLabel>Total Portfolio</SectionLabel>
-                <DisplayStat as="p" className="tp-kpi-l mt-0.5">{formatCurrency(totalPortfolioValue)}</DisplayStat>
+                <KpiAmount value={totalPortfolioValue} className="mt-0.5" />
                 {totalDayGain !== 0 && (
                   <GainBadge value={totalDayGain} pct={totalDayGainPct} label="1-day" className="mt-1" />
                 )}

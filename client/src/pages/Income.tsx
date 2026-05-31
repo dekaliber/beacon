@@ -963,7 +963,7 @@ export function IncomePage() {
         <div className="flex items-center gap-2">
           <Link
             to="/income/tax-estimator"
-            className="tp-nav-link hover:bg-accent hover:text-accent-foreground"
+            className="tp-nav-link hover:bg-accent hover:text-ink"
           >
             <Calculator className="h-4 w-4" />
             Tax Estimator
