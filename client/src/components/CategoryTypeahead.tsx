@@ -1,26 +1,22 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
+import type { Category } from "@/types";
 
-export function getScrollParentBottom(el: Element): number {
-  let parent = el.parentElement;
-  while (parent && parent !== document.documentElement) {
-    const { overflow, overflowY } = window.getComputedStyle(parent);
-    if (/(auto|scroll|hidden)/.test(overflow) || /(auto|scroll|hidden)/.test(overflowY)) {
-      return parent.getBoundingClientRect().bottom;
-    }
-    parent = parent.parentElement;
-  }
-  return window.innerHeight;
-}
-
-export function ItemTypeahead({
-  name, defaultValue, items, placeholder, triggerRef: externalTriggerRef, onTabFromSearch, required, error, onSelect, onChange,
+export function CategoryTypeahead({
+  name,
+  defaultValue,
+  categories,
+  required,
+  triggerRef: externalTriggerRef,
+  onTabFromSearch,
+  error,
+  onSelect,
+  onChange,
 }: {
   name: string;
   defaultValue?: string;
-  items: { id: string; name: string; isHidden?: boolean }[];
-  placeholder?: string;
+  categories: Category[];
   required?: boolean;
   triggerRef?: React.RefObject<HTMLButtonElement | null>;
   onTabFromSearch?: () => void;
@@ -43,20 +39,34 @@ export function ItemTypeahead({
 
   useEffect(() => { setValue(defaultValue ?? ""); }, [defaultValue]);
 
-  const sorted = useMemo(() =>
-    [...items].sort((a, b) => a.name.localeCompare(b.name)),
-    [items],
-  );
+  const parentCategories = categories.filter((c) => !c.parentId);
+  const childCategories = categories.filter((c) => c.parentId);
+
+  const flatOptions = useMemo(() => {
+    const opts: { id: string; label: string; parentLabel?: string }[] = [];
+    for (const parent of parentCategories) {
+      const children = childCategories.filter((c) => c.parentId === parent.id);
+      if (children.length === 0) {
+        opts.push({ id: parent.id, label: parent.name });
+      } else {
+        for (const child of children) {
+          opts.push({ id: child.id, label: child.name, parentLabel: parent.name });
+        }
+      }
+    }
+    return opts;
+  }, [categories]);
 
   const filtered = useMemo(() => {
-    const visible = sorted.filter((item) => !item.isHidden);
+    const visible = flatOptions.filter((o) => !categories.find((c) => c.id === o.id)?.isHidden);
     if (!search.trim()) return visible;
     const terms = search.toLowerCase().split(/\s+/);
-    return visible.filter((item) => {
-      const words = item.name.toLowerCase().split(/\s+/);
+    return visible.filter((o) => {
+      const text = (o.parentLabel ? o.parentLabel + " " : "") + o.label;
+      const words = text.toLowerCase().split(/\s+/).map((w) => w.replace(/^[^a-z]+/, ""));
       return terms.every((t) => words.some((w) => w.startsWith(t)));
     });
-  }, [search, sorted]);
+  }, [search, flatOptions, categories]);
 
   useEffect(() => { setFocusIdx(0); }, [filtered]);
 
@@ -90,7 +100,11 @@ export function ItemTypeahead({
     };
   }, [open]);
 
-  const selectedLabel = useMemo(() => sorted.find((item) => item.id === value)?.name ?? "", [value, sorted]);
+  const selectedLabel = useMemo(() => {
+    if (!value) return "";
+    const opt = flatOptions.find((o) => o.id === value);
+    return opt ? (opt.parentLabel ? `${opt.parentLabel} > ${opt.label}` : opt.label) : "";
+  }, [value, flatOptions]);
 
   const openDropdown = () => {
     if (triggerRef.current) {
@@ -154,7 +168,7 @@ export function ItemTypeahead({
         }}
         className={`w-full relative rounded-md border bg-[rgba(255,255,255,0.78)] shadow-[var(--shadow-input)] px-3 py-2 pr-7 text-left text-13 text-foreground hover:border-primary/30 focus:outline-none transition-[border-color] duration-[120ms] ${error ? "border-down focus:border-down" : "border-border focus:border-primary/30"}`}
       >
-        {selectedLabel || <span className="text-muted-foreground">{placeholder ?? "Select..."}</span>}
+        {selectedLabel || <span className="text-muted-foreground">Select category</span>}
         <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
       </button>
       {open && anchorRect && createPortal(
@@ -186,15 +200,16 @@ export function ItemTypeahead({
             {filtered.length === 0 ? (
               <p className="px-3 py-2 text-13 text-muted-foreground">No matches</p>
             ) : (
-              filtered.map((item, i) => (
+              filtered.map((o, i) => (
                 <button
-                  key={item.id}
+                  key={o.id}
                   type="button"
                   tabIndex={-1}
                   className={`block w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
-                  onMouseDown={() => selectItem(item.id)}
+                  onMouseDown={() => selectItem(o.id)}
                 >
-                  {item.name}
+                  {o.parentLabel && <span className="text-muted-foreground">{o.parentLabel} &gt; </span>}
+                  {o.label}
                 </button>
               ))
             )}

@@ -14,6 +14,7 @@ import { Modal } from "@/components/Modal";
 import { EmptyState } from "@/components/EmptyState";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import { ItemTypeahead } from "@/components/ItemTypeahead";
+import { CategoryTypeahead } from "@/components/CategoryTypeahead";
 import { ToastContainer, useToast } from "@/components/Toast";
 import { MultiSelectDropdown } from "@/components/MultiSelectDropdown";
 import type { MultiSelectOption, MultiSelectGroup } from "@/components/MultiSelectDropdown";
@@ -278,174 +279,6 @@ function VendorAutocomplete({
   );
 }
 
-// ── Category typeahead select ──
-function CategoryTypeahead({
-  name, defaultValue, categories, required, triggerRef: externalTriggerRef, onTabFromSearch, error, onSelect,
-}: {
-  name: string;
-  defaultValue?: string;
-  categories: Category[];
-  required?: boolean;
-  triggerRef?: React.RefObject<HTMLButtonElement | null>;
-  onTabFromSearch?: () => void;
-  error?: boolean;
-  onSelect?: () => void;
-}) {
-  const [value, setValue] = useState(defaultValue ?? "");
-  const [search, setSearch] = useState("");
-  const [open, setOpen] = useState(false);
-  const [flipUp, setFlipUp] = useState(false);
-  const [focusIdx, setFocusIdx] = useState(0);
-  const ref = useRef<HTMLDivElement>(null);
-  const internalTriggerRef = useRef<HTMLButtonElement>(null);
-  const triggerRef = externalTriggerRef ?? internalTriggerRef;
-  const clickingRef = useRef(false);
-  const justSelectedRef = useRef(false);
-
-  // Sync internal value when defaultValue changes (e.g. vendor-category autofill)
-  useEffect(() => { setValue(defaultValue ?? ""); }, [defaultValue]);
-
-  const parentCategories = categories.filter((c) => !c.parentId);
-  const childCategories = categories.filter((c) => c.parentId);
-
-  const flatOptions = useMemo(() => {
-    const opts: { id: string; label: string; parentLabel?: string }[] = [];
-    for (const parent of parentCategories) {
-      const children = childCategories.filter((c) => c.parentId === parent.id);
-      if (children.length === 0) {
-        opts.push({ id: parent.id, label: parent.name });
-      } else {
-        for (const child of children) {
-          opts.push({ id: child.id, label: child.name, parentLabel: parent.name });
-        }
-      }
-    }
-    return opts;
-  }, [categories]);
-
-  const filtered = useMemo(() => {
-    if (!search.trim()) return flatOptions;
-    const terms = search.toLowerCase().split(/\s+/);
-    return flatOptions.filter((o) => {
-      const text = (o.parentLabel ? o.parentLabel + " " : "") + o.label;
-      const words = text.toLowerCase().split(/\s+/).map((w) => w.replace(/^[^a-z]+/, ""));
-      return terms.every((t) => words.some((w) => w.startsWith(t)));
-    });
-  }, [search, flatOptions]);
-
-  useEffect(() => { setFocusIdx(0); }, [filtered]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const selectedLabel = useMemo(() => {
-    if (!value) return "";
-    const opt = flatOptions.find((o) => o.id === value);
-    return opt ? (opt.parentLabel ? `${opt.parentLabel} > ${opt.label}` : opt.label) : "";
-  }, [value, flatOptions]);
-
-  const selectItem = (id: string) => {
-    setValue(id);
-    setOpen(false);
-    setSearch("");
-    justSelectedRef.current = true;
-    onSelect?.();
-    setTimeout(() => triggerRef.current?.focus(), 0);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Tab") {
-      e.preventDefault();
-      setOpen(false);
-      setSearch("");
-      onTabFromSearch?.();
-      return;
-    }
-    if (!open) return;
-    if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx((i) => Math.min(i + 1, filtered.length - 1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx((i) => Math.max(i - 1, 0)); }
-    else if (e.key === "Enter" && filtered[focusIdx]) { e.preventDefault(); selectItem(filtered[focusIdx].id); }
-    else if (e.key === "Escape") setOpen(false);
-  };
-
-  return (
-    <div ref={ref} className="relative">
-      <input type="hidden" name={name} value={value} />
-      {required && !value && <input type="text" required value="" style={{ opacity: 0, position: "absolute", pointerEvents: "none", width: 0, height: 0 }} tabIndex={-1} onChange={() => {}} />}
-      <button
-        ref={triggerRef}
-        type="button"
-        onMouseDown={() => { clickingRef.current = true; }}
-        onFocus={(e) => {
-          if (justSelectedRef.current || clickingRef.current) {
-            justSelectedRef.current = false;
-            clickingRef.current = false;
-            return;
-          }
-          // Only auto-open when tabbing forward (related target precedes this button in DOM)
-          const related = e.relatedTarget as Element | null;
-          if (related && !(related.compareDocumentPosition(e.currentTarget) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
-          if (ref.current) {
-            const rect = ref.current.getBoundingClientRect();
-            setFlipUp(getScrollParentBottom(ref.current) - rect.bottom < 240);
-          }
-          setOpen(true);
-        }}
-        onClick={() => {
-          if (!open && ref.current) {
-            const rect = ref.current.getBoundingClientRect();
-            setFlipUp(getScrollParentBottom(ref.current) - rect.bottom < 240);
-          }
-          setOpen((o) => !o);
-        }}
-        className={`w-full relative rounded-md border bg-[rgba(255,255,255,0.78)] shadow-[var(--shadow-input)] px-3 py-2 pr-7 text-left text-13 text-foreground hover:border-primary/30 focus:outline-none transition-[border-color] duration-[120ms] ${error ? "border-down focus:border-down" : "border-border focus:border-primary/30"}`}
-      >
-        {selectedLabel || <span className="text-muted-foreground">Select category</span>}
-        <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
-      </button>
-      {open && (
-        <div className={`absolute left-0 right-0 z-50 rounded-md border border-border bg-background shadow-lg ${flipUp ? "bottom-full mb-1" : "top-full mt-1"}`}>
-          <div className="border-b border-border p-2">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type to filter..."
-              className="w-full rounded border border-border px-2 py-1 text-13 focus:outline-none"
-              autoFocus
-            />
-          </div>
-          <div className="max-h-48 overflow-auto">
-            {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-13 text-muted-foreground">No matches</p>
-            ) : (
-              filtered.map((o, i) => (
-                <button
-                  key={o.id}
-                  type="button"
-                  tabIndex={-1}
-                  className={`block w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
-                  onMouseDown={() => selectItem(o.id)}
-                >
-                  {o.parentLabel && <span className="text-muted-foreground">{o.parentLabel} &gt; </span>}
-                  {o.label}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-
 
 // ── Tag typeahead (multi-select) ──
 function TagTypeahead({
@@ -461,10 +294,12 @@ function TagTypeahead({
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [flipUp, setFlipUp] = useState(false);
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const [focusIdx, setFocusIdx] = useState(0);
   const [creating, setCreating] = useState(false);
   const [localTags, setLocalTags] = useState<Tag[]>([]);
   const ref = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const internalTriggerRef = useRef<HTMLButtonElement>(null);
   const triggerRef = externalTriggerRef ?? internalTriggerRef;
   const clickingRef = useRef(false);
@@ -492,11 +327,42 @@ function TagTypeahead({
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (
+        ref.current && !ref.current.contains(target) &&
+        (!dropdownRef.current || !dropdownRef.current.contains(target))
+      ) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  // Close when the page scrolls (but not when scrolling inside the dropdown list)
+  useEffect(() => {
+    if (!open) return;
+    const handleScroll = (e: Event) => {
+      if (dropdownRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    const handleResize = () => setOpen(false);
+    window.addEventListener("scroll", handleScroll, true);
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [open]);
+
+  const openDropdown = () => {
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setAnchorRect(rect);
+      setFlipUp(window.innerHeight - rect.bottom < 240);
+    }
+    setOpen(true);
+  };
 
   const toggleTag = (id: string) => {
     onChange(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
@@ -548,18 +414,14 @@ function TagTypeahead({
           // Only auto-open when tabbing forward
           const related = e.relatedTarget as Element | null;
           if (related && !(related.compareDocumentPosition(e.currentTarget) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
-          if (ref.current) {
-            const rect = ref.current.getBoundingClientRect();
-            setFlipUp(getScrollParentBottom(ref.current) - rect.bottom < 240);
-          }
-          setOpen(true);
+          openDropdown();
         }}
         onClick={() => {
-          if (!open && ref.current) {
-            const rect = ref.current.getBoundingClientRect();
-            setFlipUp(getScrollParentBottom(ref.current) - rect.bottom < 240);
+          if (!open) {
+            openDropdown();
+          } else {
+            setOpen(false);
           }
-          setOpen((o) => !o);
         }}
         className="w-full relative rounded-md border border-border bg-[rgba(255,255,255,0.78)] shadow-[var(--shadow-input)] px-3 py-2 pr-7 text-left text-13 text-foreground hover:border-primary/30 focus:border-primary/30 focus:outline-none transition-[border-color] duration-[120ms] min-h-[38px]"
       >
@@ -580,8 +442,20 @@ function TagTypeahead({
         )}
         <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
       </button>
-      {open && (
-        <div className={`absolute left-0 right-0 z-50 rounded-md border border-border bg-background shadow-lg ${flipUp ? "bottom-full mb-1" : "top-full mt-1"}`}>
+      {open && anchorRect && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            position: "fixed",
+            left: anchorRect.left,
+            width: anchorRect.width,
+            zIndex: 200,
+            ...(flipUp
+              ? { bottom: window.innerHeight - anchorRect.top + 4 }
+              : { top: anchorRect.bottom + 4 }),
+          }}
+          className="rounded-md border border-border bg-background shadow-lg"
+        >
           <div className="border-b border-border p-2">
             <input
               type="text"
@@ -623,7 +497,8 @@ function TagTypeahead({
               ))
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
@@ -3491,9 +3366,9 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
                   type="button"
                   onClick={handleDeleteClick}
                   disabled={deleting}
-                  className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-down hover:bg-down/10 transition-colors"
+                  className="flex items-center gap-1.5 rounded-md px-3 py-2 text-13 font-normal text-down hover:bg-down/10 transition-colors"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-3.5 w-3.5" />
                   {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}
                 </button>
               )}

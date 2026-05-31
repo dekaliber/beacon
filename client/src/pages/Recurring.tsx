@@ -39,6 +39,8 @@ import { formatCurrency, formatDate, toDateInputValue } from "@/lib/utils";
 import type { RecurrenceRule, Account, Category, TransferRule } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import { SectionLabel, DisplayStat, ColumnHeader } from "@/components/Typography";
+import { ItemTypeahead } from "@/components/ItemTypeahead";
+import { CategoryTypeahead } from "@/components/CategoryTypeahead";
 
 // ── Frequency helpers ─────────────────────────────────────────────────────────
 
@@ -716,10 +718,12 @@ function TransferRuleModal({
 }) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<TransferRuleFormData>({});
+  const [errors, setErrors] = useState<{ description?: string; amount?: string; fromAccountId?: string; toAccountId?: string; startDate?: string }>({});
   const bankAccounts = accounts.filter((a) => a.type === "CHECKING" || a.type === "SAVINGS");
 
   useEffect(() => {
     if (open) {
+      setErrors({});
       setForm(
         rule
           ? {
@@ -745,26 +749,35 @@ function TransferRuleModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const newErrors: typeof errors = {};
+    if (!form.description?.trim()) newErrors.description = "Description is required";
+    const amt = parseFloat(String(form.amount ?? ""));
+    if (!form.amount || isNaN(amt) || amt <= 0) newErrors.amount = "Enter a valid amount";
+    if (!form.fromAccountId) newErrors.fromAccountId = "Select a source account";
+    if (!form.toAccountId) newErrors.toAccountId = "Select a destination account";
+    if (!rule && !form.startDate) newErrors.startDate = "Start date is required";
+    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
     setSaving(true);
     await onSave({ ...form, endDate: form.endDate || null });
     setSaving(false);
   };
 
   const inputCls = "w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
+  const errCls = "w-full rounded-md border border-down px-3 py-2 text-sm focus:border-down focus:outline-none focus:ring-1 focus:ring-down/30";
 
   return (
     <Modal open={open} onClose={onClose} title={rule ? "Edit Recurring Transfer" : "New Recurring Transfer"}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         <div>
           <label className="block text-xs font-medium mb-1">Description</label>
           <input
             type="text"
-            required
             value={form.description ?? ""}
-            onChange={(e) => set({ description: e.target.value })}
+            onChange={(e) => { set({ description: e.target.value }); setErrors((er) => ({ ...er, description: undefined })); }}
             placeholder="e.g. Monthly joint contribution"
-            className={inputCls}
+            className={errors.description ? errCls : inputCls}
           />
+          {errors.description && <p className="mt-1 text-xs text-down">{errors.description}</p>}
         </div>
 
         <div>
@@ -774,13 +787,13 @@ function TransferRuleModal({
             <input
               type="text"
               inputMode="decimal"
-              required
               placeholder="0.00"
               value={form.amount ?? ""}
-              onChange={(e) => set({ amount: e.target.value })}
-              className={`${inputCls} pl-7`}
+              onChange={(e) => { set({ amount: e.target.value }); setErrors((er) => ({ ...er, amount: undefined })); }}
+              className={`${errors.amount ? errCls : inputCls} pl-7`}
             />
           </div>
+          {errors.amount && <p className="mt-1 text-xs text-down">{errors.amount}</p>}
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -788,10 +801,10 @@ function TransferRuleModal({
             <label className="block text-xs font-medium mb-1">From</label>
             <div className="relative">
               <select
-                required
                 value={form.fromAccountId ?? ""}
-                onChange={(e) => set({ fromAccountId: e.target.value })}
-                className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
+                onChange={(e) => { set({ fromAccountId: e.target.value }); setErrors((er) => ({ ...er, fromAccountId: undefined })); }}
+                className="w-full appearance-none rounded-md border py-2 pl-2 pr-6 text-sm text-foreground"
+                style={errors.fromAccountId ? { borderColor: "var(--color-down)" } : undefined}
               >
                 <option value="">— Select account —</option>
                 {bankAccounts.map((a) => (
@@ -800,15 +813,16 @@ function TransferRuleModal({
               </select>
               <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
             </div>
+            {errors.fromAccountId && <p className="mt-1 text-xs text-down">{errors.fromAccountId}</p>}
           </div>
           <div>
             <label className="block text-xs font-medium mb-1">To</label>
             <div className="relative">
               <select
-                required
                 value={form.toAccountId ?? ""}
-                onChange={(e) => set({ toAccountId: e.target.value })}
-                className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
+                onChange={(e) => { set({ toAccountId: e.target.value }); setErrors((er) => ({ ...er, toAccountId: undefined })); }}
+                className="w-full appearance-none rounded-md border py-2 pl-2 pr-6 text-sm text-foreground"
+                style={errors.toAccountId ? { borderColor: "var(--color-down)" } : undefined}
               >
                 <option value="">— Select account —</option>
                 {bankAccounts.filter((a) => a.id !== form.fromAccountId).map((a) => (
@@ -817,6 +831,7 @@ function TransferRuleModal({
               </select>
               <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
             </div>
+            {errors.toAccountId && <p className="mt-1 text-xs text-down">{errors.toAccountId}</p>}
           </div>
         </div>
 
@@ -854,11 +869,11 @@ function TransferRuleModal({
             <label className="block text-xs font-medium mb-1">Start Date</label>
             <input
               type="date"
-              required={!rule}
               value={form.startDate ?? ""}
-              onChange={(e) => set({ startDate: e.target.value })}
-              className={inputCls}
+              onChange={(e) => { set({ startDate: e.target.value }); setErrors((er) => ({ ...er, startDate: undefined })); }}
+              className={errors.startDate ? errCls : inputCls}
             />
+            {errors.startDate && <p className="mt-1 text-xs text-down">{errors.startDate}</p>}
           </div>
           <div>
             <label className="block text-xs font-medium mb-1">
@@ -984,23 +999,6 @@ export function Recurring() {
     return [...named, ...ungrouped];
   }, [rules]);
 
-  const categoryOptions = useMemo(() => {
-    const cats = categories ?? [];
-    const parentNames = new Map(
-      cats.filter((c) => !c.parentId).map((c) => [c.id, c.name]),
-    );
-    return [
-      { id: "", label: "No category" },
-      ...cats
-        .map((c) => ({
-          id: c.id,
-          label: c.parentId
-            ? `${parentNames.get(c.parentId) ?? "?"} > ${c.name}`
-            : c.name,
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
-    ];
-  }, [categories]);
 
   // ── Helpers ──
 
@@ -1551,41 +1549,24 @@ export function Recurring() {
           {/* Account */}
           <div>
             <label className="block text-xs font-medium mb-1">Account</label>
-            <div className="relative">
-              <select
-                value={editForm.accountId}
-                onChange={(e) => setEditForm((f) => ({ ...f, accountId: e.target.value }))}
-                className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
-              >
-                {(() => {
-                  const current = (accounts ?? []).find((a) => a.id === editForm.accountId);
-                  return current?.isHidden
-                    ? <option key={current.id} value={current.id} disabled>{current.name}</option>
-                    : null;
-                })()}
-                {(accounts ?? []).filter((a) => !a.isHidden).map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
-            </div>
+            <ItemTypeahead
+              name="accountId"
+              defaultValue={editForm.accountId}
+              items={(accounts ?? []).map((a) => ({ id: a.id, name: a.name, isHidden: a.isHidden }))}
+              placeholder="Select account"
+              onChange={(id) => setEditForm((f) => ({ ...f, accountId: id }))}
+            />
           </div>
 
           {/* Category */}
           <div>
             <label className="block text-xs font-medium mb-1">Category</label>
-            <div className="relative">
-              <select
-                value={editForm.categoryId}
-                onChange={(e) => setEditForm((f) => ({ ...f, categoryId: e.target.value }))}
-                className="w-full appearance-none rounded-md border border-border py-2 pl-2 pr-6 text-sm text-foreground"
-              >
-                {categoryOptions.map((o) => (
-                  <option key={o.id} value={o.id}>{o.label}</option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
-            </div>
+            <CategoryTypeahead
+              name="categoryId"
+              defaultValue={editForm.categoryId}
+              categories={categories ?? []}
+              onChange={(id) => setEditForm((f) => ({ ...f, categoryId: id }))}
+            />
           </div>
 
           {/* Group */}

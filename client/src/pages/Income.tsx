@@ -20,7 +20,8 @@ import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/
 import type { Account, Category, Income } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import { SectionLabel, ColumnHeader } from "@/components/Typography";
-import { ItemTypeahead, getScrollParentBottom } from "@/components/ItemTypeahead";
+import { ItemTypeahead } from "@/components/ItemTypeahead";
+import { CategoryTypeahead } from "@/components/CategoryTypeahead";
 
 const INCOME_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "INVESTMENT"];
 
@@ -531,168 +532,6 @@ function EditableTaxStatusCell({ value, onSave }: { value: string | null; onSave
   );
 }
 
-// ── Category typeahead (modal, two-level hierarchy) ──
-function CategoryTypeahead({
-  name, defaultValue, categories, required, triggerRef: externalTriggerRef, onTabFromSearch,
-}: {
-  name: string;
-  defaultValue?: string;
-  categories: Category[];
-  required?: boolean;
-  triggerRef?: React.RefObject<HTMLButtonElement | null>;
-  onTabFromSearch?: () => void;
-}) {
-  const [value, setValue] = useState(defaultValue ?? "");
-  const [search, setSearch] = useState("");
-  const [open, setOpen] = useState(false);
-  const [flipUp, setFlipUp] = useState(false);
-  const [focusIdx, setFocusIdx] = useState(0);
-  const ref = useRef<HTMLDivElement>(null);
-  const internalTriggerRef = useRef<HTMLButtonElement>(null);
-  const triggerRef = externalTriggerRef ?? internalTriggerRef;
-  const clickingRef = useRef(false);
-  const justSelectedRef = useRef(false);
-
-  useEffect(() => { setValue(defaultValue ?? ""); }, [defaultValue]);
-
-  const parentCategories = categories.filter((c) => !c.parentId);
-  const childCategories = categories.filter((c) => c.parentId);
-
-  const flatOptions = useMemo(() => {
-    const opts: { id: string; label: string; parentLabel?: string }[] = [];
-    for (const parent of parentCategories) {
-      const children = childCategories.filter((c) => c.parentId === parent.id);
-      if (children.length === 0) {
-        opts.push({ id: parent.id, label: parent.name });
-      } else {
-        for (const child of children) {
-          opts.push({ id: child.id, label: child.name, parentLabel: parent.name });
-        }
-      }
-    }
-    return opts;
-  }, [categories]);
-
-  const filtered = useMemo(() => {
-    const visible = flatOptions.filter((o) => !categories.find((c) => c.id === o.id)?.isHidden);
-    if (!search.trim()) return visible;
-    const terms = search.toLowerCase().split(/\s+/);
-    return visible.filter((o) => {
-      const text = (o.parentLabel ? o.parentLabel + " " : "") + o.label;
-      const words = text.toLowerCase().split(/\s+/);
-      return terms.every((t) => words.some((w) => w.startsWith(t)));
-    });
-  }, [search, flatOptions, categories]);
-
-  useEffect(() => { setFocusIdx(0); }, [filtered]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const selectedLabel = useMemo(() => {
-    if (!value) return "";
-    const opt = flatOptions.find((o) => o.id === value);
-    return opt ? (opt.parentLabel ? `${opt.parentLabel} > ${opt.label}` : opt.label) : "";
-  }, [value, flatOptions]);
-
-  const selectItem = (id: string) => {
-    setValue(id);
-    setOpen(false);
-    setSearch("");
-    justSelectedRef.current = true;
-    setTimeout(() => triggerRef.current?.focus(), 0);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Tab") {
-      e.preventDefault();
-      setOpen(false);
-      setSearch("");
-      onTabFromSearch?.();
-      return;
-    }
-    if (!open) return;
-    if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx((i) => Math.min(i + 1, filtered.length - 1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx((i) => Math.max(i - 1, 0)); }
-    else if (e.key === "Enter" && filtered[focusIdx]) { e.preventDefault(); selectItem(filtered[focusIdx].id); }
-    else if (e.key === "Escape") setOpen(false);
-  };
-
-  return (
-    <div ref={ref} className="relative">
-      <input type="hidden" name={name} value={value} />
-      {required && !value && <input type="text" required value="" style={{ opacity: 0, position: "absolute", pointerEvents: "none", width: 0, height: 0 }} tabIndex={-1} onChange={() => {}} />}
-      <button
-        ref={triggerRef}
-        type="button"
-        onMouseDown={() => { clickingRef.current = true; }}
-        onFocus={(e) => {
-          if (justSelectedRef.current || clickingRef.current) {
-            justSelectedRef.current = false;
-            clickingRef.current = false;
-            return;
-          }
-          const related = e.relatedTarget as Element | null;
-          if (related && !(related.compareDocumentPosition(e.currentTarget) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
-          if (ref.current) {
-            const rect = ref.current.getBoundingClientRect();
-            setFlipUp(getScrollParentBottom(ref.current) - rect.bottom < 240);
-          }
-          setOpen(true);
-        }}
-        onClick={() => {
-          if (!open && ref.current) {
-            const rect = ref.current.getBoundingClientRect();
-            setFlipUp(getScrollParentBottom(ref.current) - rect.bottom < 240);
-          }
-          setOpen((o) => !o);
-        }}
-        className="w-full relative rounded-md border border-border bg-[rgba(255,255,255,0.78)] shadow-[var(--shadow-input)] px-3 py-2 pr-7 text-left text-13 text-foreground hover:border-primary/30 focus:border-primary/30 focus:outline-none transition-[border-color] duration-[120ms]"
-      >
-        {selectedLabel || <span className="text-muted-foreground">Select category</span>}
-        <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
-      </button>
-      {open && (
-        <div className={`absolute left-0 right-0 z-50 rounded-md border border-border bg-background shadow-lg ${flipUp ? "bottom-full mb-1" : "top-full mt-1"}`}>
-          <div className="border-b border-border p-2">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type to filter..."
-              className="w-full rounded border border-border px-2 py-1 text-13 focus:outline-none"
-              autoFocus
-            />
-          </div>
-          <div className="max-h-48 overflow-auto">
-            {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-13 text-muted-foreground">No matches</p>
-            ) : (
-              filtered.map((o, i) => (
-                <button
-                  key={o.id}
-                  type="button"
-                  tabIndex={-1}
-                  className={`block w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
-                  onMouseDown={() => selectItem(o.id)}
-                >
-                  {o.parentLabel && <span className="text-muted-foreground">{o.parentLabel} &gt; </span>}
-                  {o.label}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ═══════════════ MAIN COMPONENT ═══════════════
 
@@ -1559,7 +1398,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showOptional, setShowOptional] = useState(false);
   const [taxClassification, setTaxClassification] = useState<string>("");
-  const [errors, setErrors] = useState<{ amount?: string; accountId?: string }>({});
+  const [errors, setErrors] = useState<{ amount?: string; accountId?: string; date?: string }>({});
   const categoryTriggerRef = useRef<HTMLButtonElement>(null);
   const accountTriggerRef = useRef<HTMLButtonElement>(null);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
@@ -1582,6 +1421,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
     const newErrors: typeof errors = {};
     if (!amount || amount <= 0) newErrors.amount = "Amount is required";
     if (!accountId) newErrors.accountId = "Account is required";
+    if (!(form.get("date") as string)) newErrors.date = "Date is required";
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -1642,7 +1482,8 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
 
         <div>
           <label className="block text-xs font-medium mb-1">Date</label>
-          <input name="date" type="date" required defaultValue={toDateInputValue(income?.date)} className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
+          <input name="date" type="date" defaultValue={toDateInputValue(income?.date)} onChange={() => setErrors((er) => ({ ...er, date: undefined }))} className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${errors.date ? "border-down focus:border-down focus:ring-down/30" : "border-border focus:border-primary focus:ring-primary"}`} />
+          {errors.date && <p className="mt-1 text-xs text-down">{errors.date}</p>}
           {/* Relay: captures focus as it exits the date field and forwards to Category, but not on Shift+Tab backwards from Category */}
           <span tabIndex={0} className="sr-only" onFocus={(e) => { if (e.relatedTarget !== categoryTriggerRef.current) categoryTriggerRef.current?.focus(); }} />
         </div>
@@ -1717,9 +1558,9 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
                 onClick={handleDeleteClick}
                 disabled={deleting}
                 title={isActivityLinked ? "This transaction was generated by an investment activity and cannot be manually deleted" : undefined}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${isActivityLinked ? "opacity-40 cursor-not-allowed text-down" : "text-down hover:bg-down/10"}`}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-13 font-normal transition-colors ${isActivityLinked ? "opacity-40 cursor-not-allowed text-down" : "text-down hover:bg-down/10"}`}
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-3.5 w-3.5" />
                 {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}
               </button>
             )}
