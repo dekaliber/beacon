@@ -676,9 +676,9 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
                 type="button"
                 onClick={handleDeleteClick}
                 disabled={deleting}
-                className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-down hover:bg-down/10 transition-colors"
+                className="flex items-center gap-1.5 rounded-md px-3 py-2 text-13 font-normal text-down hover:bg-down/10 transition-colors"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-3.5 w-3.5" />
                 {deleting ? "Deleting..." : confirmDelete ? "Confirm Delete" : "Delete"}
               </button>
             )}

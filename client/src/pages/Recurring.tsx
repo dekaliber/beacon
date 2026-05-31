@@ -1349,13 +1349,13 @@ export function Recurring() {
         title="Archive recurring transfer?"
         actions={
           <>
-            <button
+            <Button
+              variant="secondary" className="flex-1"
               onClick={() => setArchiveTransferTarget(null)}
               disabled={transferActionLoading}
-              className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
             >
               Cancel
-            </button>
+            </Button>
             <button
               onClick={async () => {
                 if (!archiveTransferTarget) return;
@@ -1387,13 +1387,13 @@ export function Recurring() {
         title="Archive recurring transaction?"
         actions={
           <>
-            <button
+            <Button
+              variant="secondary" className="flex-1"
               onClick={() => setArchiveTarget(null)}
               disabled={actionLoading}
-              className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
             >
               Cancel
-            </button>
+            </Button>
             <button
               onClick={handleArchiveConfirm}
               disabled={actionLoading}
@@ -1432,13 +1432,13 @@ export function Recurring() {
             title="Permanently delete recurring transaction?"
             actions={
               <>
-                <button
+                <Button
+                  variant="secondary" className="flex-1"
                   onClick={() => setDeleteTarget(null)}
                   disabled={actionLoading}
-                  className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
                 >
                   Cancel
-                </button>
+                </Button>
                 <button
                   onClick={handleSwitchToArchive}
                   disabled={actionLoading}
@@ -1450,7 +1450,7 @@ export function Recurring() {
                 <button
                   onClick={handleDeleteConfirm}
                   disabled={actionLoading || linkedExpenses === "loading"}
-                  className="flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-sm font-medium text-down hover:bg-down/20 transition-colors disabled:opacity-50"
+                  className="flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-13 font-normal text-down hover:bg-down/20 transition-colors disabled:opacity-50"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   {actionLoading ? "Deleting…" : "Confirm Delete"}
@@ -1613,9 +1613,9 @@ export function Recurring() {
               type="button"
               onClick={handleEditDeleteClick}
               disabled={saving}
-              className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-down hover:bg-down/10 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-md px-3 py-2 text-13 font-normal text-down hover:bg-down/10 transition-colors disabled:opacity-50"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-3.5 w-3.5" />
               Delete
             </button>
             <div className="flex gap-2">

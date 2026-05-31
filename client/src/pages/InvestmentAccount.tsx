@@ -36,6 +36,7 @@ import {
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
+import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
 import {
   getInvestmentHoldings,
@@ -144,7 +145,7 @@ function GainCell({
     <span
       className={`inline-flex font-medium tabular-nums font-mono ${
         pos ? "text-up" : "text-down"
-      } text-${size} ${size === "base" && pct != null ? "flex-col items-start" : "flex-row items-center gap-1"}`}
+      } ${size === "base" ? "text-base" : "text-13"} ${size === "base" && pct != null ? "flex-col items-start" : "flex-row items-center gap-1"}`}
     >
       <span className="inline-flex items-center gap-1">
         <Icon className="h-3 w-3 flex-shrink-0" />
@@ -955,19 +956,18 @@ function LotRow({
                   If you recorded this purchase by mistake, you can force-delete. Otherwise, use the <strong>Sell</strong> function to properly record a sale.
                 </p>
                 <div className="mt-4 flex gap-2">
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary" className="flex-1"
                     onClick={() => { setShowDeleteModal(false); setDeleteWarning(null); }}
                     disabled={deleting}
-                    className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
                   >
                     Cancel
-                  </button>
+                  </Button>
                   <button
                     type="button"
                     onClick={() => handleDeleteConfirm(true)}
                     disabled={deleting}
-                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-sm font-medium text-down hover:bg-down/20 transition-colors disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-13 font-normal text-down hover:bg-down/20 transition-colors disabled:opacity-50"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     {deleting ? "Deleting..." : "Delete Anyway"}
@@ -980,19 +980,18 @@ function LotRow({
                   Are you sure you want to delete this lot? This action cannot be undone.
                 </p>
                 <div className="mt-4 flex gap-2">
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary" className="flex-1"
                     onClick={() => setShowDeleteModal(false)}
                     disabled={deleting}
-                    className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
                   >
                     Cancel
-                  </button>
+                  </Button>
                   <button
                     type="button"
                     onClick={() => handleDeleteConfirm(false)}
                     disabled={deleting}
-                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-sm font-medium text-down hover:bg-down/20 transition-colors disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-13 font-normal text-down hover:bg-down/20 transition-colors disabled:opacity-50"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     {deleting ? "Deleting..." : "Confirm Delete"}
@@ -1447,19 +1446,18 @@ function HoldingRow({
                   Deleting this holding will orphan its sale history (the records will be preserved but unlinked). If you still want to proceed, confirm below.
                 </p>
                 <div className="mt-4 flex gap-2">
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary" className="flex-1"
                     onClick={() => { setShowDeleteModal(false); setDeleteWarning(null); }}
                     disabled={deleting}
-                    className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
                   >
                     Cancel
-                  </button>
+                  </Button>
                   <button
                     type="button"
                     onClick={() => handleDeleteConfirm(true)}
                     disabled={deleting}
-                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-sm font-medium text-down hover:bg-down/20 transition-colors disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-13 font-normal text-down hover:bg-down/20 transition-colors disabled:opacity-50"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     {deleting ? "Deleting..." : "Delete Anyway"}
@@ -1472,19 +1470,18 @@ function HoldingRow({
                   Are you sure you want to delete this investment? This action cannot be undone.
                 </p>
                 <div className="mt-4 flex gap-2">
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary" className="flex-1"
                     onClick={() => setShowDeleteModal(false)}
                     disabled={deleting}
-                    className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
                   >
                     Cancel
-                  </button>
+                  </Button>
                   <button
                     type="button"
                     onClick={() => handleDeleteConfirm(false)}
                     disabled={deleting}
-                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-sm font-medium text-down hover:bg-down/20 transition-colors disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-13 font-normal text-down hover:bg-down/20 transition-colors disabled:opacity-50"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     {deleting ? "Deleting..." : "Confirm Delete"}
@@ -2023,19 +2020,18 @@ function ManualHoldingRow({
               Are you sure you want to delete this investment? This action cannot be undone.
             </p>
             <div className="mt-4 flex gap-2">
-              <button
-                type="button"
+              <Button
+                variant="secondary" className="flex-1"
                 onClick={() => setShowDeleteModal(false)}
                 disabled={deleting}
-                className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
               >
                 Cancel
-              </button>
+              </Button>
               <button
                 type="button"
                 onClick={handleDeleteConfirm}
                 disabled={deleting}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-sm font-medium text-down hover:bg-down/20 transition-colors disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-down/10 px-3 py-2 text-13 font-normal text-down hover:bg-down/20 transition-colors disabled:opacity-50"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 {deleting ? "Deleting..." : "Confirm Delete"}
@@ -2074,7 +2070,7 @@ function EmptyPortfolio({
         </svg>
       </div>
       <div className="text-center">
-        <p className="font-semibold text-lg">Nothing in this portfolio yet</p>
+        <p className="tp-card-title">Nothing in this portfolio yet</p>
         <p className="text-muted-foreground text-sm mt-1">
           Add investments to see performance and track returns
         </p>
@@ -2486,11 +2482,11 @@ function SellModal({
                 <div className="max-h-52 overflow-y-auto rounded border border-border">
                   <table className="w-full text-xs">
                     <thead className="sticky top-0 bg-muted z-10">
-                      <tr className="text-muted-foreground uppercase tracking-[1px] font-mono">
-                        <th className="py-2 px-3 text-left font-medium">Acquired</th>
-                        <th className="py-2 px-3 text-right font-medium">Available</th>
-                        <th className="py-2 px-3 text-right font-medium">Cost/Share</th>
-                        <th className="py-2 px-3 text-right font-medium" style={{ width: "130px" }}>Shares</th>
+                      <tr>
+                        <th className="py-2 px-3 text-left tp-table-header">Acquired</th>
+                        <th className="py-2 px-3 text-right tp-table-header">Available</th>
+                        <th className="py-2 px-3 text-right tp-table-header">Cost/Share</th>
+                        <th className="py-2 px-3 text-right tp-table-header" style={{ width: "130px" }}>Shares</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2913,7 +2909,7 @@ function EditSaleActivityModal({
       {error && <p className="text-sm text-down mb-3">{error}</p>}
 
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
+        <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
         <Button onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
       </div>
     </Modal>
@@ -4152,11 +4148,12 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
 
   if (!hasPending && (!activities || activities.length === 0)) {
     return (
-      <Card className="p-8 text-center">
-        <p className="text-sm font-medium text-muted-foreground">No activity yet</p>
-        <p className="tp-caption mt-1">
-          Purchases, sales, and dividends will appear here once recorded.
-        </p>
+      <Card>
+        <EmptyState
+          icon={LineChart}
+          title="No activity yet"
+          description="Purchases, sales, and dividends will appear here once recorded."
+        />
       </Card>
     );
   }
@@ -5413,7 +5410,7 @@ function GrowthChart({ accountId, isManaged, onImportClick, onDayGain }: { accou
     : null;
 
   const header = (
-    <div className="flex items-center justify-between mb-3">
+    <div className="flex items-start justify-between mb-3">
       <div className="flex gap-1">
         {(["WTD", "MTD", "YTD"] as ChartDuration[]).map(d => (
           <button
@@ -5430,7 +5427,7 @@ function GrowthChart({ accountId, isManaged, onImportClick, onDayGain }: { accou
         ))}
       </div>
       {periodGain != null && (
-        <div className={`text-right tp-numeric font-semibold ${periodGain >= 0 ? "text-up" : "text-down"}`}>
+        <div className={`text-right font-mono tabular-nums text-13 font-semibold ${periodGain >= 0 ? "text-up" : "text-down"}`}>
           <div>{periodGain >= 0 ? "+" : "−"}{formatCurrency(Math.abs(periodGain))}
             {periodGainPct != null && (
               <span className="text-xs ml-1 opacity-70">({Math.abs(periodGainPct).toFixed(2)}%)</span>

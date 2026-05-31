@@ -268,7 +268,7 @@ export function UserMenu() {
               onClick={() => setOpen(false)}
               className={({ isActive }) =>
                 cn(
-                  "tp-nav-link",
+                  "tp-nav-link w-full rounded-none",
                   isActive
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
