@@ -863,12 +863,14 @@ function ExpenseRow({
   upcoming = false,
   isOffset = false,
   parentFullyOffset = false,
+  groupAccent,
   onTap,
 }: {
   expense: Expense;
   upcoming?: boolean;
   isOffset?: boolean;
   parentFullyOffset?: boolean;
+  groupAccent?: "primary" | "secondary";
   onTap?: () => void;
 }) {
   const fullyOffset = isFullyOffset(expense);
@@ -881,11 +883,17 @@ function ExpenseRow({
 
   const mutedText = fullyOffset ? "text-ink-4" : "";
 
+  const borderLeft = groupAccent === "primary"
+    ? "relative before:absolute before:top-0 before:-bottom-px before:left-0 before:w-[3px] before:bg-primary"
+    : groupAccent === "secondary"
+    ? "relative before:absolute before:top-0 before:-bottom-px before:left-0 before:w-[3px] before:bg-primary/30"
+    : "";
+
   if (isOffset) {
     const gray = parentFullyOffset ? "text-ink-4" : "text-muted-foreground";
     const grayDim = parentFullyOffset ? "text-ink-4/70" : "text-muted-foreground/70";
     return (
-      <div className="flex items-start gap-2 py-2">
+      <div className={`flex items-start gap-2 px-4 py-2 ${borderLeft}`}>
         <CornerDownRight className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${gray}`} />
         <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
           <div className="min-w-0">
@@ -907,7 +915,7 @@ function ExpenseRow({
 
   return (
     <div
-      className={`py-3 ${upcoming ? "italic opacity-60" : ""} ${rowBg} ${onTap ? "cursor-pointer active:opacity-60" : ""}`}
+      className={`py-3 px-4 ${borderLeft} ${upcoming ? "italic opacity-60" : ""} ${rowBg} ${onTap ? "cursor-pointer active:opacity-60" : ""}`}
       onClick={onTap}
     >
       <div className="flex items-start justify-between gap-3">
@@ -1666,7 +1674,7 @@ export function MobileExpenses() {
               Upcoming
             </SectionLabel>
             <div className="relative">
-              <div className="divide-y divide-border">
+              <div className="-mx-4 divide-y divide-border">
                 {visibleUpcoming.map((expense) => (
                   <React.Fragment key={expense.id}>
                     <ExpenseRow expense={expense} upcoming onTap={() => setEditingExpense(expense)} />
@@ -1700,7 +1708,7 @@ export function MobileExpenses() {
           {allExpenses.length === 0 && !loadingExpenses ? (
             <p className="py-6 text-center text-sm text-muted-foreground">No expenses this month.</p>
           ) : (
-            <div className="divide-y divide-border">
+            <div className="-mx-4 divide-y divide-border">
               {buildRenderItems(allExpenses).map((item) => {
                 if (item.type === "single") {
                   return (
@@ -1712,20 +1720,16 @@ export function MobileExpenses() {
                     </React.Fragment>
                   );
                 }
-                // Group: wrapper carries the left border so inner divide-y lines
-                // start inside the padding and never touch the left border.
                 return (
-                  <div key={item.members[0].expense.id} className="-ml-4 pl-4 border-l-2 border-primary">
-                    <div className="divide-y divide-border">
-                      {item.members.map(({ expense }) => (
-                        <React.Fragment key={expense.id}>
-                          <ExpenseRow expense={expense} onTap={() => setEditingExpense(expense)} />
-                          {expense.offsets?.map((offset) => (
-                            <ExpenseRow key={offset.id} expense={offset} isOffset parentFullyOffset={isFullyOffset(expense)} />
-                          ))}
-                        </React.Fragment>
-                      ))}
-                    </div>
+                  <div key={item.members[0].expense.id} className="divide-y divide-border">
+                    {item.members.map(({ expense, isPrimary }) => (
+                      <React.Fragment key={expense.id}>
+                        <ExpenseRow expense={expense} groupAccent={isPrimary ? "primary" : "secondary"} onTap={() => setEditingExpense(expense)} />
+                        {expense.offsets?.map((offset) => (
+                          <ExpenseRow key={offset.id} expense={offset} isOffset groupAccent={isPrimary ? "primary" : "secondary"} parentFullyOffset={isFullyOffset(expense)} />
+                        ))}
+                      </React.Fragment>
+                    ))}
                   </div>
                 );
               })}

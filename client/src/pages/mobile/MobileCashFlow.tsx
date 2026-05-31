@@ -711,7 +711,7 @@ function MobileEventsLedger({
   }
 
   return (
-    <div className="mt-4 border-t border-border">
+    <div className="-mx-4 mt-4 border-t border-border">
       {events.map((event) => {
         const isCCPayment = event.type === "CC_PAYMENT";
         const isInjection = event.type === "BALANCE_ADJUSTMENT";
@@ -725,12 +725,12 @@ function MobileEventsLedger({
                   type: "button" as const,
                   onClick: () => isCCPayment ? onCCPaymentTap?.(event) : onInjectionTap?.(event),
                   className: cn(
-                    "w-full text-left border-b border-border/50 py-2.5 active:bg-muted/40 transition-colors",
+                    "w-full text-left border-b border-border/50 px-4 py-2.5 active:bg-muted/40 transition-colors",
                     isInjection && "bg-warn-soft/50 active:bg-warn-soft/60",
                   ),
                 }
               : {
-                  className: "border-b border-border/50 py-2.5",
+                  className: "border-b border-border/50 px-4 py-2.5",
                 })}
           >
             {/* Line 1: icon + description + amount + chevron for CC_PAYMENT */}
@@ -786,7 +786,7 @@ function MobileEventsLedger({
         <button
           type="button"
           onClick={onAddInjection}
-          className="w-full flex items-center gap-1.5 py-2.5 tp-caption hover:text-foreground border-b border-dashed border-border transition-colors"
+          className="w-full flex items-center gap-1.5 px-4 py-2.5 tp-caption hover:text-foreground border-b border-dashed border-border transition-colors"
         >
           <PlusCircle className="h-3.5 w-3.5" />
           Add cash injection

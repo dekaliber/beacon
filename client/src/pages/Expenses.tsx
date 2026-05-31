@@ -2444,7 +2444,7 @@ function OffsetRow({
       className={`bg-muted/20 hover:bg-muted/30 ${upcomingClass} ${isDraggable ? "cursor-grab" : ""} ${isBeingDragged ? "opacity-40" : ""}`}
       onMouseDown={isDraggable ? (e) => onDragStart?.(e, offset, "offset") : undefined}
     >
-      <td className={`w-[44px] py-2 pr-2 border-l-[3px] text-center ${isGrouped ? "border-primary/30" : "border-transparent"}`}></td>
+      <td className={`relative w-[44px] py-2 pr-2 text-center ${isGrouped ? "before:absolute before:top-0 before:-bottom-px before:left-0 before:w-[3px] before:bg-primary/30" : ""}`}></td>
       <td className={`w-[70px] py-2 pr-3 ${textClass}`}>
         <EditableCell value={offset.date} type="date" onSave={(v) => onInlineUpdate(offset.id, "date", v)} className={textClass} />
       </td>
@@ -2564,10 +2564,12 @@ function ExpenseRowWithOffsets({
         onMouseDown={isNegativeStandalone ? (e) => onDragStart?.(e, expense, "negative") : undefined}
       >
         <td
-          className={`w-[44px] py-2 pr-2 border-l-[3px] text-center ${
+          className={`relative w-[44px] py-2 pr-2 text-center ${
             groupMeta
-              ? groupMeta.isPrimary ? "border-primary" : "border-primary/30"
-              : "border-transparent"
+              ? groupMeta.isPrimary
+                ? "before:absolute before:top-0 before:-bottom-px before:left-0 before:w-[3px] before:bg-primary"
+                : "before:absolute before:top-0 before:-bottom-px before:left-0 before:w-[3px] before:bg-primary/30"
+              : ""
           }`}
         >
           <input

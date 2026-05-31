@@ -460,7 +460,7 @@ function IncomeRow({
 
   return (
     <div
-      className={`py-3 ${upcoming ? "italic opacity-60" : notReceived ? "bg-muted/40" : ""} ${onTap ? "cursor-pointer active:opacity-60" : ""}`}
+      className={`py-3 px-4 ${upcoming ? "italic opacity-60" : notReceived ? "bg-muted/40" : ""} ${onTap ? "cursor-pointer active:opacity-60" : ""}`}
       onClick={onTap}
     >
       <div className="flex items-start justify-between gap-3">
@@ -1126,7 +1126,7 @@ export function MobileIncome() {
               Upcoming
             </SectionLabel>
             <div className="relative">
-              <div className="divide-y divide-border">
+              <div className="-mx-4 divide-y divide-border">
                 {visibleUpcoming.map((income) => (
                   <IncomeRow key={income.id} income={income} upcoming />
                 ))}
@@ -1153,7 +1153,7 @@ export function MobileIncome() {
           {allIncomes.length === 0 && !loadingIncome ? (
             <p className="py-6 text-center text-sm text-muted-foreground">No income this period.</p>
           ) : (
-            <div className="divide-y divide-border">
+            <div className="-mx-4 divide-y divide-border">
               {allIncomes.map((income) => (
                 <IncomeRow
                   key={income.id}
