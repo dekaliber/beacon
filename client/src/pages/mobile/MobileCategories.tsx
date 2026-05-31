@@ -187,7 +187,7 @@ export function MobileCategories() {
           <button
             type="button"
             onClick={openAdd}
-            className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+            className="flex items-center gap-1.5 rounded-md bg-gradient-to-b from-primary to-primary-deep px-3 py-2 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95"
           >
             <Plus className="h-4 w-4" /> Add
           </button>
@@ -379,7 +379,7 @@ function MobileCategoryModal({
             <button
               type="button"
               onClick={() => setConfirmDelete(false)}
-              className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent transition-colors"
+              className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
             >
               Cancel
             </button>
@@ -497,7 +497,7 @@ function MobileCategoryModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent transition-colors"
+            className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
           >
             Cancel
           </button>
@@ -505,7 +505,7 @@ function MobileCategoryModal({
             type="submit"
             form="mobile-category-form"
             disabled={saving}
-            className="flex-1 rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
+            className="flex-1 rounded-md bg-gradient-to-b from-primary to-primary-deep py-2.5 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95 disabled:opacity-50"
           >
             {saving ? "Saving…" : category ? "Save Changes" : "Add"}
           </button>

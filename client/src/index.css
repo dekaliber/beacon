@@ -92,9 +92,9 @@
   --color-border: oklch(0.16 0.020 265 / 0.07);
   --color-ring: oklch(0.56 0.16 268);
   --color-background: oklch(0.985 0.006 260);
-  --color-foreground: oklch(0.16 0.020 265); /* = ink */
+  --color-foreground: var(--color-ink);
   --color-card: oklch(1 0 0 / 0.62);
-  --color-card-foreground: oklch(0.16 0.020 265);
+  --color-card-foreground: var(--color-ink);
 
   /* ── Mesh gradient stops ─────────────────────────────────── */
 
@@ -420,7 +420,13 @@ svg.lucide {
   font-weight: 600;
   letter-spacing: -0.025em;
   font-feature-settings: "tnum";
-  color: var(--color-ink);
+}
+.tp-kpi-m {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-feature-settings: "tnum";
 }
 
 /* KPI — Hanken 42/600/−0.025em tnum · ink
@@ -431,7 +437,6 @@ svg.lucide {
   font-weight: 600;
   letter-spacing: -0.025em;
   font-feature-settings: "tnum";
-  color: var(--color-ink);
 }
 .tp-kpi-cents {
   font-family: var(--font-mono);
@@ -450,7 +455,6 @@ svg.lucide {
   font-weight: 600;
   letter-spacing: -0.018em;
   font-feature-settings: "tnum";
-  color: var(--color-ink);
 }
 
 /* Numeric — Mono 13/500 tnum+zero · ink
@@ -460,7 +464,6 @@ svg.lucide {
   font-size: 13px;
   font-weight: 500;
   font-feature-settings: "tnum", "zero";
-  color: var(--color-ink);
 }
 
 /* RowLabel — Body 13/500/−0.005em · ink

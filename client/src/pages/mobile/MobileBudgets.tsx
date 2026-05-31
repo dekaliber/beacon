@@ -384,7 +384,7 @@ function Metric({
   return (
     <div className={plain ? "py-2.5" : "rounded-lg bg-muted/40 px-3 py-2.5"}>
       <p className="tp-caption">{label}</p>
-      <p className={`mt-0.5 text-lg font-bold leading-tight whitespace-nowrap ${valueClass ?? ""}`}>{value}</p>
+      <p className={`mt-0.5 tp-stat leading-tight whitespace-nowrap ${valueClass ?? ""}`}>{value}</p>
       {sub && <p className="mt-0.5 tp-caption">{sub}</p>}
     </div>
   );
@@ -744,9 +744,7 @@ function BudgetPanelSection({
     <div className="flex items-start justify-between gap-4">
       <div>
         <div className="flex items-center gap-2">
-          <SectionLabel className="text-sm">
-            {title}
-          </SectionLabel>
+          <span className="tp-card-title">{title}</span>
           {subtitle && (
             <div className="relative">
               <button
@@ -774,11 +772,7 @@ function BudgetPanelSection({
       </div>
       {!isNoBudget && (
         <div
-          className={`flex-shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${
-            isOverPace
-              ? "bg-down/10 text-down"
-              : "bg-up/10 text-up"
-          }`}
+          className={`tp-delta-pill flex-shrink-0 ${isOverPace ? "down" : "up"}`}
         >
           {pctLabel(displayPctAboveBelow)} {isOverPace ? "over" : "under"} budget
         </div>
@@ -1108,7 +1102,7 @@ function CategoryAvgMonthlyGrid({ year, completedMonths }: { year: number; compl
             </div>
             <div className="flex items-center mt-0.5">
               <div className="w-1/2">
-                <p className="text-base font-bold leading-tight">{formatCurrency(item.avgMonthly)}</p>
+                <p className="tp-stat leading-tight">{formatCurrency(item.avgMonthly)}</p>
                 <p className="mt-0.5 tp-caption">avg / month</p>
               </div>
               <div className="w-1/2 flex justify-center">

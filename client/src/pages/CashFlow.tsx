@@ -848,19 +848,16 @@ function AccountPanel({ projection, windowEnd, onRefetch, selectedCCPaymentId, o
         <div className="flex items-center gap-6">
           <div>
             <SectionLabel className="mb-0.5">Today</SectionLabel>
-            <DisplayStat as="p" className="tp-stat">{formatCurrency(projection.startBalance)}</DisplayStat>
+            <DisplayStat as="p" className="tp-kpi-m">{formatCurrency(projection.startBalance)}</DisplayStat>
           </div>
           <div className="text-muted-foreground">→</div>
           <div>
             <SectionLabel className="mb-0.5">
               {fmtDate(windowEnd)}
             </SectionLabel>
-            <p className={cn(
-              "tp-kpi-l tabular-nums font-display",
-              projection.endBalance < 0 ? "text-down" : "text-foreground"
-            )}>
+            <DisplayStat as="p" className={cn("tp-kpi-m", projection.endBalance < 0 ? "text-down" : "text-foreground")}>
               {formatCurrency(projection.endBalance)}
-            </p>
+            </DisplayStat>
           </div>
         </div>
         {firstNegativeDate && (

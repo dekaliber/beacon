@@ -132,7 +132,7 @@ export function MobileReimbursements() {
             <button
               type="button"
               onClick={closeSheet}
-              className="flex-1 rounded-md border border-border py-3 text-sm font-medium text-muted-foreground hover:bg-accent transition-colors"
+              className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-3 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
             >
               Cancel
             </button>

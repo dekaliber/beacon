@@ -249,7 +249,7 @@ export function MobileDashboard() {
         {/* ── MTD Spend ─────────────────────────────────────────────────────── */}
         <Card>
           <div>
-            <p className="text-sm text-muted-foreground">MTD Spend</p>
+            <p className="tp-eyebrow">MTD Spend</p>
             <DisplayStat as="p" className="tp-kpi-l">{fmtWhole(totalSpent)}</DisplayStat>
             {budgetAmount !== null ? (
               <p className="mt-0.5 tp-fineprint">of {fmtWhole(budgetAmount)} budget</p>
@@ -331,7 +331,7 @@ export function MobileDashboard() {
               )}
             </svg>
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-muted-foreground">Budget Used</p>
+              <p className="tp-eyebrow">Budget Used</p>
               {budgetPct !== null ? (
                 <DisplayStat as="p" className={`tp-kpi-l ${isOverBudget ? "text-down" : ""}`}>{budgetPct}%</DisplayStat>
               ) : (
@@ -421,7 +421,7 @@ export function MobileDashboard() {
         {/* ── Monthly Pace ──────────────────────────────────────────────────── */}
         <Card>
           <div className="mb-3 flex items-start justify-between gap-2">
-            <p className="text-sm text-muted-foreground">Monthly Pace</p>
+            <p className="tp-eyebrow">Monthly Pace</p>
             <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-muted p-0.5 text-xs font-medium">
               {(["total", "personal", "joint"] as const).map((v) => (
                 <button
@@ -596,7 +596,7 @@ export function MobileDashboard() {
             {/* Table */}
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-border text-muted-foreground font-mono">
+                <tr className="border-b border-border text-muted-foreground">
                   <th className="pb-1.5 text-left font-medium">Category</th>
                   <th className="pb-1.5 text-right font-medium">{abbrYear(dashboardOutliers.currentMonthLabel)}</th>
                   <th className="pb-1.5 text-right font-medium">{abbrYear(dashboardOutliers.previousMonthLabel)}</th>
@@ -613,10 +613,10 @@ export function MobileDashboard() {
                       key={o.categoryId ?? `__cat${i}__`}
                       className={`border-b border-border last:border-0 ${i % 2 === 0 ? "bg-muted/15" : ""}`}
                     >
-                      <td className="py-1.5 pr-2 text-muted-foreground font-mono">{o.categoryName}</td>
-                      <td className="py-1.5 px-2 text-right tabular-nums font-mono">{fmtWhole(o.currentAmount)}</td>
-                      <td className="py-1.5 px-2 text-right tabular-nums font-mono text-muted-foreground font-mono">{fmtWhole(o.previousAmount)}</td>
-                      <td className={`py-1.5 pl-2 text-right tabular-nums font-mono font-semibold font-mono ${deltaColor}`}>
+                      <td className="py-1.5 text-muted-foreground">{o.categoryName}</td>
+                      <td className="py-1.5 text-right tabular-nums font-mono">{fmtWhole(o.currentAmount)}</td>
+                      <td className="py-1.5 text-right tabular-nums font-mono text-muted-foreground">{fmtWhole(o.previousAmount)}</td>
+                      <td className={`py-1.5 text-right tabular-nums font-mono font-semibold ${deltaColor}`}>
                         {deltaSign}{fmtWhole(Math.abs(o.delta))}
                       </td>
                     </tr>

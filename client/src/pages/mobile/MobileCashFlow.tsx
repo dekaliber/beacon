@@ -232,7 +232,7 @@ function EditBalanceSheet({
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
+              className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[.88] disabled:opacity-50"
             >
               Cancel
             </button>
@@ -240,7 +240,7 @@ function EditBalanceSheet({
               type="submit"
               form="edit-balance-form"
               disabled={saving}
-              className="flex-1 rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+              className="flex-1 rounded-md bg-gradient-to-b from-primary to-primary-deep py-2.5 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95 disabled:opacity-50"
             >
               {saving ? "Saving…" : "Save"}
             </button>
@@ -413,7 +413,7 @@ function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved,
               type="button"
               onClick={() => { onClose(); setConfirmDelete(false); }}
               disabled={saving}
-              className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
+              className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[.88] disabled:opacity-50"
             >
               Cancel
             </button>
@@ -421,7 +421,7 @@ function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved,
               type="submit"
               form="cash-injection-form"
               disabled={saving || !amount || parseFloat(amount) <= 0}
-              className="flex-1 rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+              className="flex-1 rounded-md bg-gradient-to-b from-primary to-primary-deep py-2.5 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95 disabled:opacity-50"
             >
               {saving ? "Saving…" : "Save"}
             </button>
@@ -610,7 +610,7 @@ function CCPaymentSheet({
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"
+              className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[.88] disabled:opacity-50"
             >
               Cancel
             </button>
@@ -618,7 +618,7 @@ function CCPaymentSheet({
               type="button"
               onClick={handleConfirm}
               disabled={saving || !value || parseFloat(value) <= 0}
-              className="flex-1 rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+              className="flex-1 rounded-md bg-gradient-to-b from-primary to-primary-deep py-2.5 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95 disabled:opacity-50"
             >
               {saving ? "Saving…" : "Confirm"}
             </button>
@@ -826,17 +826,14 @@ function ProjectionSection({
         <div className="flex items-center gap-6">
           <div>
             <SectionLabel className="mb-0.5">Today</SectionLabel>
-            <DisplayStat as="p" className="tp-stat">{formatCurrency(projection.startBalance)}</DisplayStat>
+            <DisplayStat as="p" className="tp-kpi-m">{formatCurrency(projection.startBalance)}</DisplayStat>
           </div>
           <div className="text-muted-foreground">→</div>
           <div>
             <SectionLabel className="mb-0.5">{fmtDate(windowEnd)}</SectionLabel>
-            <p className={cn(
-              "tp-kpi-l tabular-nums font-display",
-              projection.endBalance < 0 ? "text-down" : "text-foreground"
-            )}>
+            <DisplayStat as="p" className={cn("tp-kpi-m", projection.endBalance < 0 ? "text-down" : "text-foreground")}>
               {formatCurrency(projection.endBalance)}
-            </p>
+            </DisplayStat>
           </div>
         </div>
       </div>

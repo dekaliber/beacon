@@ -300,9 +300,13 @@ function CashEditSheet({
   useBodyScrollLock(open);
   const [input, setInput] = useState("");
   const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (open) setInput(initialValue != null ? String(initialValue) : "");
+    if (open) {
+      setInput(initialValue != null ? String(initialValue) : "");
+      setTimeout(() => inputRef.current?.focus(), 250);
+    }
   }, [open, initialValue]);
 
   const handleSave = async () => {
@@ -347,12 +351,12 @@ function CashEditSheet({
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
+              ref={inputRef}
               type="text"
               inputMode="decimal"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="0.00"
-              autoFocus
               className="w-full rounded-md border border-border pl-7 pr-3 py-3 text-sm tabular-nums font-mono focus:border-primary focus:outline-none"
             />
           </div>
@@ -360,7 +364,7 @@ function CashEditSheet({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-md border border-border py-3 text-sm font-medium text-muted-foreground"
+              className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-3 text-sm font-medium text-muted-foreground"
             >
               Cancel
             </button>
@@ -368,7 +372,7 @@ function CashEditSheet({
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="flex-1 rounded-md bg-primary py-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
+              className="flex-1 rounded-md bg-gradient-to-b from-primary to-primary-deep py-3 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95 disabled:opacity-50"
             >
               {saving ? "Saving…" : "Save"}
             </button>
@@ -533,7 +537,7 @@ function LotEditScreen({
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 rounded-md border border-border py-3 text-sm font-medium text-muted-foreground"
+          className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-3 text-sm font-medium text-muted-foreground"
         >
           Cancel
         </button>
@@ -541,7 +545,7 @@ function LotEditScreen({
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="flex-1 rounded-md bg-primary py-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
+          className="flex-1 rounded-md bg-gradient-to-b from-primary to-primary-deep py-3 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95 disabled:opacity-50"
         >
           {saving ? "Saving…" : lot ? "Save Changes" : "Add Purchase"}
         </button>
@@ -1322,7 +1326,7 @@ function AddInvestmentFullscreen({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-md border border-border py-3 text-sm font-medium text-muted-foreground"
+            className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-3 text-sm font-medium text-muted-foreground"
           >
             Cancel
           </button>
@@ -1330,7 +1334,7 @@ function AddInvestmentFullscreen({
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 rounded-md bg-primary py-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
+            className="flex-1 rounded-md bg-gradient-to-b from-primary to-primary-deep py-3 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95 disabled:opacity-50"
           >
             {saving ? "Saving…" : "Add Investment"}
           </button>
@@ -1467,7 +1471,7 @@ function AddManualFullscreen({
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 rounded-md border border-border py-3 text-sm font-medium text-muted-foreground"
+          className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-3 text-sm font-medium text-muted-foreground"
         >
           Cancel
         </button>
@@ -1475,7 +1479,7 @@ function AddManualFullscreen({
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="flex-1 rounded-md bg-primary py-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
+          className="flex-1 rounded-md bg-gradient-to-b from-primary to-primary-deep py-3 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95 disabled:opacity-50"
         >
           {saving ? "Saving…" : editing ? "Save Changes" : "Add Investment"}
         </button>
@@ -1729,7 +1733,7 @@ export function MobileInvestmentAccount() {
                   <button
                     type="button"
                     onClick={() => setAddInvestmentOpen(true)}
-                    className="flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground"
+                    className="flex items-center gap-2 rounded-md bg-gradient-to-b from-primary to-primary-deep px-4 py-2.5 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95"
                   >
                     <Plus className="h-4 w-4" />
                     Add investment

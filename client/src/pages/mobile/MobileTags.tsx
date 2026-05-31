@@ -1,11 +1,12 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
-import { Plus, Pencil, Trash2, Tag as TagIcon, ChevronDown, ChevronUp, CornerDownRight, AlertTriangle, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Tag as TagIcon, CornerDownRight, AlertTriangle, X } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
 import { getTags, createTag, updateTag, deleteTag, getExpenses, getTagOrphanedOffsets } from "@/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Expense, OrphanedOffset, Tag } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
+import { Card } from "@/components/Card";
 import { SectionLabel, StatValue } from "@/components/Typography";
 
 const PRESET_COLORS = [
@@ -114,19 +115,16 @@ function TagRow({
 
   return (
     <div>
-      <div className="flex items-center gap-3 px-4 py-3">
-        {/* Color swatch — tap to edit */}
-        <button
-          type="button"
-          onClick={() => onEdit(tag)}
-          className="flex min-w-0 flex-1 items-center gap-3"
-        >
-          <span
-            className="h-6 w-6 shrink-0 rounded-md"
-            style={{ backgroundColor: tag.color ?? "var(--color-gray-400)" }}
-          />
-          <span className="truncate text-sm font-medium">{tag.name}</span>
-        </button>
+      <div
+        className="flex cursor-pointer items-center gap-3 px-4 py-3 active:bg-accent/50"
+        onClick={handleToggle}
+      >
+        {/* Color swatch + name */}
+        <span
+          className="h-6 w-6 shrink-0 rounded-md"
+          style={{ backgroundColor: tag.color ?? "var(--color-gray-400)" }}
+        />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{tag.name}</span>
 
         {/* Totals */}
         <div className="flex shrink-0 items-center gap-2 text-xs tabular-nums font-mono text-muted-foreground">
@@ -147,20 +145,12 @@ function TagRow({
         {/* Edit */}
         <button
           type="button"
-          onClick={() => onEdit(tag)}
+          onClick={(e) => { e.stopPropagation(); onEdit(tag); }}
           className="shrink-0 rounded p-1.5 text-muted-foreground/50 hover:bg-accent hover:text-muted-foreground"
         >
           <Pencil className="h-3.5 w-3.5" />
         </button>
 
-        {/* Expand toggle */}
-        <button
-          type="button"
-          onClick={handleToggle}
-          className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-accent"
-        >
-          {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-        </button>
       </div>
 
       {/* Inline expense list */}
@@ -239,7 +229,7 @@ export function MobileTags() {
           <button
             type="button"
             onClick={openAdd}
-            className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+            className="flex items-center gap-1.5 rounded-md bg-gradient-to-b from-primary to-primary-deep px-3 py-2 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95"
           >
             <Plus className="h-4 w-4" /> Add
           </button>
@@ -255,7 +245,7 @@ export function MobileTags() {
             <button
               type="button"
               onClick={openAdd}
-              className="mt-4 flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground mx-auto"
+              className="mt-4 flex items-center gap-1.5 rounded-md bg-gradient-to-b from-primary to-primary-deep px-3 py-2 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95 mx-auto"
             >
               <Plus className="h-4 w-4" /> Add Tag
             </button>
@@ -269,11 +259,11 @@ export function MobileTags() {
                     {groupName}
                   </SectionLabel>
                 )}
-                <div className="overflow-hidden rounded-xl border border-border divide-y divide-border">
+                <Card className="rounded-xl p-0 divide-y divide-border overflow-hidden">
                   {groupTags.map((tag) => (
                     <TagRow key={tag.id} tag={tag} onEdit={openEdit} />
                   ))}
-                </div>
+                </Card>
               </div>
             ))}
           </div>
@@ -364,7 +354,7 @@ function MobileTagModal({
           <button
             type="button"
             onClick={() => setConfirmDelete(false)}
-            className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent transition-colors"
+            className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
           >
             Cancel
           </button>
@@ -457,7 +447,7 @@ function MobileTagModal({
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent transition-colors"
+          className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
         >
           Cancel
         </button>
@@ -465,7 +455,7 @@ function MobileTagModal({
           type="submit"
           form="mobile-tag-form"
           disabled={saving}
-          className="flex-1 rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50 transition-opacity"
+          className="flex-1 rounded-md bg-gradient-to-b from-primary to-primary-deep py-2.5 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95 disabled:opacity-50"
         >
           {saving ? "Saving…" : tag ? "Save Changes" : "Add"}
         </button>

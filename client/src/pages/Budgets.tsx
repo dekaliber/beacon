@@ -368,7 +368,7 @@ function Metric({
   return (
     <div className="rounded-lg bg-muted/40 px-3 py-2.5">
       <p className="tp-caption">{label}</p>
-      <p className={`mt-0.5 text-lg font-bold leading-tight ${valueClass ?? ""}`}>{value}</p>
+      <p className={`mt-0.5 tp-stat leading-tight ${valueClass ?? ""}`}>{value}</p>
       {sub && <p className="mt-0.5 tp-caption">{sub}</p>}
     </div>
   );
@@ -610,7 +610,7 @@ function BudgetPanelCard({
           {/* Left 1/3: projection metric */}
           <div className="w-1/3 shrink-0">
             <p className="tp-caption">Annual projection</p>
-            <p className={`mt-0.5 text-lg font-bold leading-tight ${
+            <p className={`mt-0.5 tp-stat leading-tight ${
               panel.effectiveAnnualBudget > 0 && panel.projectedAnnual > panel.effectiveAnnualBudget
                 ? "text-down"
                 : ""
@@ -1139,7 +1139,7 @@ function CategoryAvgMonthlyGrid({ year, completedMonths }: { year: number; compl
             </div>
             <div className="flex items-center mt-0.5">
               <div className="w-1/2">
-                <p className="text-base font-bold leading-tight">{formatCurrency(item.avgMonthly)}</p>
+                <p className="tp-stat leading-tight">{formatCurrency(item.avgMonthly)}</p>
                 <p className="mt-0.5 tp-caption">avg / month</p>
               </div>
               <div className="w-1/2 flex justify-center">

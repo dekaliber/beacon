@@ -437,7 +437,7 @@ function RuleDetailSheet({
                 <p className="mt-0.5 text-sm text-muted-foreground">{formatFrequency(rule.frequency, rule.interval)}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className={`text-lg font-bold ${parseFloat(rule.amount) < 0 ? "text-up" : ""}`}>
+                <span className={`tp-stat ${parseFloat(rule.amount) < 0 ? "text-up" : ""}`}>
                   {displayAmount(rule.amount)}
                 </span>
                 <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-accent" aria-label="Close">
@@ -468,14 +468,14 @@ function RuleDetailSheet({
               <div className="flex gap-3">
                 <button
                   onClick={() => { onClose(); setTimeout(() => onArchive(rule), 200); }}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent transition-colors"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
                 >
                   <Archive className="h-4 w-4" />
                   Archive
                 </button>
                 <button
                   onClick={() => { onClose(); setTimeout(() => onEdit(rule), 200); }}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-gradient-to-b from-primary to-primary-deep py-2.5 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95"
                 >
                   <Pencil className="h-4 w-4" />
                   Edit
@@ -662,7 +662,7 @@ function EditRuleModal({
             <button type="button" onClick={onClose} disabled={saving} className="rounded-md border border-border px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent transition-colors disabled:opacity-50">
               Cancel
             </button>
-            <button type="button" onClick={handleSave} disabled={saving} className="rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50 transition-opacity hover:opacity-90">
+            <button type="button" onClick={handleSave} disabled={saving} className="rounded-md bg-gradient-to-b from-primary to-primary-deep px-4 py-2.5 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95 disabled:opacity-50">
               {saving ? "Saving…" : "Save Changes"}
             </button>
           </div>
@@ -708,7 +708,7 @@ function ConfirmSheet({
           <div className="text-sm text-muted-foreground">{description}</div>
           {extra}
           <div className="flex gap-3 pt-1">
-            <button onClick={onCancel} disabled={loading} className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent transition-colors disabled:opacity-50">
+            <button onClick={onCancel} disabled={loading} className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors disabled:opacity-50">
               Cancel
             </button>
             <button
@@ -817,7 +817,7 @@ function DeleteRuleSheet({
 
           {/* Actions */}
           <div className="flex gap-2 pt-1">
-            <button onClick={onCancel} disabled={loading} className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent transition-colors disabled:opacity-50">
+            <button onClick={onCancel} disabled={loading} className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors disabled:opacity-50">
               Cancel
             </button>
             <button onClick={onArchive} disabled={loading} className="flex items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2.5 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50">
@@ -991,10 +991,10 @@ function TransferRuleModal({
 
       <div className="shrink-0 border-t border-border p-4">
         <div className="flex gap-3">
-          <button type="button" onClick={onClose} disabled={saving} className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent transition-colors disabled:opacity-50">
+          <button type="button" onClick={onClose} disabled={saving} className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors disabled:opacity-50">
             Cancel
           </button>
-          <button type="submit" form="transfer-rule-form" disabled={saving} className="flex-1 rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50 transition-opacity hover:opacity-90">
+          <button type="submit" form="transfer-rule-form" disabled={saving} className="flex-1 rounded-md bg-gradient-to-b from-primary to-primary-deep py-2.5 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95 disabled:opacity-50">
             {saving ? "Saving…" : rule ? "Save Changes" : "Create Transfer"}
           </button>
         </div>
@@ -1032,7 +1032,7 @@ function TransferDetailSheet({
                 <p className="mt-0.5 text-sm text-muted-foreground">{formatFrequency(rule.frequency, rule.interval)}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-lg font-bold">{formatCurrency(parseFloat(rule.amount))}</span>
+                <span className="tp-stat">{formatCurrency(parseFloat(rule.amount))}</span>
                 <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-accent" aria-label="Close">
                   <X className="h-5 w-5" />
                 </button>
@@ -1062,11 +1062,11 @@ function TransferDetailSheet({
 
             <div className="shrink-0 border-t border-border p-4">
               <div className="flex gap-3">
-                <button onClick={() => { onClose(); setTimeout(() => onArchive(rule), 200); }} className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent transition-colors">
+                <button onClick={() => { onClose(); setTimeout(() => onArchive(rule), 200); }} className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors">
                   <Archive className="h-4 w-4" />
                   Archive
                 </button>
-                <button onClick={() => { onClose(); setTimeout(() => onEdit(rule), 200); }} className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity">
+                <button onClick={() => { onClose(); setTimeout(() => onEdit(rule), 200); }} className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-gradient-to-b from-primary to-primary-deep py-2.5 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95">
                   <Pencil className="h-4 w-4" />
                   Edit
                 </button>
@@ -1371,7 +1371,7 @@ export function MobileRecurring() {
       {activeTab === "transfers" && (
         <button
           onClick={() => { setEditingTransferRule(null); setTransferModalOpen(true); }}
-          className="fixed bottom-20 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90 transition-opacity"
+          className="fixed bottom-20 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-b from-primary to-primary-deep border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95"
           aria-label="New recurring transfer"
         >
           <Plus className="h-6 w-6" />
