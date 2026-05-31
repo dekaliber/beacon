@@ -310,6 +310,7 @@ function MobileTagModal({
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [color, setColor] = useState<string>(tag?.color ?? PRESET_COLORS[0]);
+  const [nameError, setNameError] = useState("");
 
   // Lock body scroll while open
   useEffect(() => {
@@ -329,8 +330,12 @@ function MobileTagModal({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setSaving(true);
     const form = new FormData(e.currentTarget);
+    if (!(form.get("name") as string).trim()) {
+      setNameError("Name is required");
+      return;
+    }
+    setSaving(true);
     const group = (form.get("group") as string).trim();
     await onSave({
       name: form.get("name") as string,
@@ -390,18 +395,19 @@ function MobileTagModal({
         </button>
       </div>
 
-      <form id="mobile-tag-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto overscroll-contain">
+      <form id="mobile-tag-form" onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto overscroll-contain">
         <div className="space-y-5 p-4">
           <div>
             <label className="mb-1.5 block text-sm font-medium">Name</label>
             <input
               name="name"
               type="text"
-              required
               defaultValue={tag?.name ?? ""}
               placeholder="e.g. tax-deductible"
-              className="w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
+              onChange={() => setNameError("")}
+              className={`w-full rounded-md border px-3 py-2.5 text-sm focus:outline-none ${nameError ? "border-down" : "border-border focus:border-primary"}`}
             />
+            {nameError && <p className="mt-1 text-xs text-down">{nameError}</p>}
           </div>
 
           <div>

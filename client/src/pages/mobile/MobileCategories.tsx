@@ -269,6 +269,7 @@ function MobileCategoryModal({
   const [usageInfo, setUsageInfo] = useState<{ count: number; categoryIds: string[] } | null>(null);
   const [reassignTo, setReassignTo] = useState("");
   const [selectedKind, setSelectedKind] = useState<"EXPENSE" | "INCOME">(kind);
+  const [nameError, setNameError] = useState("");
 
   const isTopLevelAdd = !category && !parentId;
   const kindLabel = selectedKind === "INCOME" ? "Income " : "";
@@ -296,8 +297,12 @@ function MobileCategoryModal({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setSaving(true);
     const form = new FormData(e.currentTarget);
+    if (!(form.get("name") as string).trim()) {
+      setNameError("Name is required");
+      return;
+    }
+    setSaving(true);
     await onSave({
       name: form.get("name") as string,
       color: selectedColor,
@@ -406,7 +411,7 @@ function MobileCategoryModal({
         </button>
       </div>
 
-      <form id="mobile-category-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto overscroll-contain">
+      <form id="mobile-category-form" onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto overscroll-contain">
         <div className="space-y-5 p-4">
 
           {isTopLevelAdd && (
@@ -431,11 +436,12 @@ function MobileCategoryModal({
             <input
               name="name"
               type="text"
-              required
               defaultValue={category?.name ?? ""}
               placeholder="Category name"
-              className="w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
+              onChange={() => setNameError("")}
+              className={`w-full rounded-md border px-3 py-2.5 text-sm focus:outline-none ${nameError ? "border-down" : "border-border focus:border-primary"}`}
             />
+            {nameError && <p className="mt-1 text-xs text-down">{nameError}</p>}
           </div>
 
           {!parentId && (

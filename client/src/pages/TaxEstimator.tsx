@@ -1328,7 +1328,7 @@ export function TaxEstimatorPage() {
                     {(isCaTmt || isFedTmt) && <span className="rounded px-1.5 py-0.5 text-10 font-semibold bg-violet-soft text-violet-deep">TMT</span>}
                     {isPhaseOut && <span className="text-xs italic">(partially phased out)</span>}
                   </span>
-                  <span className="text-down">-{formatCurrency(deductionAmt)}</span>
+                  <span className="text-down tabular-nums font-mono">-{formatCurrency(deductionAmt)}</span>
                 </div>
                 <div className="flex justify-between font-semibold">
                   <span className="flex items-center gap-1.5">
@@ -1336,7 +1336,7 @@ export function TaxEstimatorPage() {
                     {isCa && <span className="rounded px-1.5 py-0.5 text-10 font-semibold bg-sky-soft text-sky-deep">CA</span>}
                     {(isCaTmt || isFedTmt) && <span className="rounded px-1.5 py-0.5 text-10 font-semibold bg-violet-soft text-violet-deep">TMT</span>}
                   </span>
-                  <span>{formatCurrency(totalAmt)}</span>
+                  <span className="tabular-nums font-mono">{formatCurrency(totalAmt)}</span>
                 </div>
               </div>
             );
@@ -1401,8 +1401,8 @@ export function TaxEstimatorPage() {
             <thead>
               <tr className="border-b border-border text-left tp-caption">
                 <th className="pb-2 font-medium">Component</th>
-                <th className="pb-2 text-right font-medium">Rate</th>
-                <th className="pb-2 text-right font-medium">Tax</th>
+                <th className="pb-2 text-right font-medium w-20">Rate</th>
+                <th className="pb-2 text-right font-medium w-36">Tax</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
@@ -1488,8 +1488,8 @@ export function TaxEstimatorPage() {
               <thead>
                 <tr className="border-b border-border text-left tp-caption">
                   <th className="pb-2 font-medium">Component</th>
-                  <th className="pb-2 text-right font-medium">Rate</th>
-                  <th className="pb-2 text-right font-medium">Tax</th>
+                  <th className="pb-2 text-right font-medium w-20">Rate</th>
+                  <th className="pb-2 text-right font-medium w-36">Tax</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
@@ -1582,18 +1582,18 @@ export function TaxEstimatorPage() {
                 {withheldNum > 0 && (
                   <div className="flex justify-between text-muted-foreground">
                     <span>Less: Tax Withheld</span>
-                    <span className="text-down">-{formatCurrency(withheldNum)}</span>
+                    <span className="text-down tabular-nums font-mono">-{formatCurrency(withheldNum)}</span>
                   </div>
                 )}
                 {totalQPaid > 0 && (
                   <div className="flex justify-between text-muted-foreground">
                     <span>Less: Estimated Payments</span>
-                    <span className="text-down">-{formatCurrency(totalQPaid)}</span>
+                    <span className="text-down tabular-nums font-mono">-{formatCurrency(totalQPaid)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-semibold">
                   <span>{netOwed >= 0 ? (useTmt ? "Net TMT Owed" : "Net Tax Owed") : "Estimated Refund"}</span>
-                  <span className="text-foreground">{formatCurrency(Math.abs(netOwed))}</span>
+                  <span className="text-foreground tabular-nums font-mono">{formatCurrency(Math.abs(netOwed))}</span>
                 </div>
               </div>
             );
@@ -1616,8 +1616,8 @@ export function TaxEstimatorPage() {
               <thead>
                 <tr className="border-b border-border text-left tp-caption">
                   <th className="pb-2 font-medium">Component</th>
-                  <th className="pb-2 text-right font-medium">Rate</th>
-                  <th className="pb-2 text-right font-medium">Tax</th>
+                  <th className="pb-2 text-right font-medium w-20">Rate</th>
+                  <th className="pb-2 text-right font-medium w-36">Tax</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
@@ -1662,8 +1662,8 @@ export function TaxEstimatorPage() {
                 <thead>
                   <tr className="border-b border-border text-left tp-caption">
                     <th className="pb-2 font-medium">Component</th>
-                    <th className="pb-2 text-right font-medium">Rate</th>
-                    <th className="pb-2 text-right font-medium">Tax</th>
+                    <th className="pb-2 text-right font-medium w-20">Rate</th>
+                    <th className="pb-2 text-right font-medium w-36">Tax</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
@@ -1703,18 +1703,18 @@ export function TaxEstimatorPage() {
                   {caWithheldNum > 0 && (
                     <div className="flex justify-between text-muted-foreground">
                       <span>Less: CA Tax Withheld</span>
-                      <span className="text-down">-{formatCurrency(caWithheldNum)}</span>
+                      <span className="text-down tabular-nums font-mono">-{formatCurrency(caWithheldNum)}</span>
                     </div>
                   )}
                   {totalCAQPaid > 0 && (
                     <div className="flex justify-between text-muted-foreground">
                       <span>Less: Estimated Payments</span>
-                      <span className="text-down">-{formatCurrency(totalCAQPaid)}</span>
+                      <span className="text-down tabular-nums font-mono">-{formatCurrency(totalCAQPaid)}</span>
                     </div>
                   )}
                   <div className="flex justify-between font-semibold">
                     <span>{netOwed >= 0 ? (useCaTmt ? "Net CA TMT Owed" : "Net Tax Owed") : "Estimated Refund"}</span>
-                    <span className="text-foreground">{formatCurrency(Math.abs(netOwed))}</span>
+                    <span className="text-foreground tabular-nums font-mono">{formatCurrency(Math.abs(netOwed))}</span>
                   </div>
                 </div>
               );

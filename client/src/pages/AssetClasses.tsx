@@ -347,20 +347,26 @@ function AssetClassModal({ open, onClose, onSave, onDelete, editing, isChild }: 
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [color, setColor] = useState<string>(editing?.color ?? PRESET_COLORS[0]);
+  const [nameError, setNameError] = useState("");
 
   useEffect(() => {
     if (open) {
       setColor(editing?.color ?? PRESET_COLORS[0]);
       setConfirmDelete(false);
+      setNameError("");
     }
   }, [open, editing]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setSaving(true);
     const form = new FormData(e.currentTarget);
+    const name = form.get("name") as string | null;
+    if (name !== null && !name.trim()) {
+      setNameError("Name is required");
+      return;
+    }
+    setSaving(true);
     try {
-      const name = form.get("name") as string | null;
       const rawTarget = form.get("targetPct") as string | null;
       const targetData: { targetPct?: number | null } = {};
       if (rawTarget !== null) {
@@ -381,7 +387,7 @@ function AssetClassModal({ open, onClose, onSave, onDelete, editing, isChild }: 
 
   return (
     <Modal open={open} onClose={onClose} title={title}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         {/* Name — hidden for system class (can only change color) */}
         {(!editing || !editing.isSystem) && (
           <div>
@@ -389,11 +395,12 @@ function AssetClassModal({ open, onClose, onSave, onDelete, editing, isChild }: 
             <input
               name="name"
               type="text"
-              required
               defaultValue={editing?.name ?? ""}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              onChange={() => setNameError("")}
+              className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${nameError ? "border-down focus:border-down focus:ring-down/30" : "border-border focus:border-primary focus:ring-primary"}`}
               placeholder={isChild ? "e.g. Large Cap" : "e.g. Alternatives"}
             />
+            {nameError && <p className="mt-1 text-xs text-down">{nameError}</p>}
           </div>
         )}
 

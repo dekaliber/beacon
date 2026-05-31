@@ -292,6 +292,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
   // True when the account already has holdings with real lot dates — managed toggle is locked off
   const [hasTrackedHoldings, setHasTrackedHoldings] = useState(false);
   const [hideWarning, setHideWarning] = useState<HideWarning | null>(null);
+  const [nameError, setNameError] = useState("");
 
   // Bank accounts available as link targets for CC and investment settings
   const bankAccounts = allAccounts.filter(
@@ -315,6 +316,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
       setConfirmDelete(false);
       setHasTrackedHoldings(false);
       setHideWarning(null);
+      setNameError("");
       // For existing investment accounts, check whether any holdings have real lot dates
       if (account?.type === "INVESTMENT") {
         getInvestmentHoldings(account.id).then((holdings) => {
@@ -360,6 +362,10 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
+    if (!(form.get("name") as string).trim()) {
+      setNameError("Name is required");
+      return;
+    }
     const data = buildData(form);
 
     // When hiding an existing account for the first time, check for warnings
@@ -425,17 +431,18 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
 
   return (
     <Modal open={open} onClose={onClose} title={account ? "Edit Account" : "Add Account"}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         <div>
           <label className="block text-xs font-medium mb-1">Name</label>
           <input
             name="name"
             type="text"
-            required
             defaultValue={account?.name ?? ""}
-            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            onChange={() => setNameError("")}
+            className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${nameError ? "border-down focus:border-down focus:ring-down/30" : "border-border focus:border-primary focus:ring-primary"}`}
             placeholder="e.g. Chase Checking"
           />
+          {nameError && <p className="mt-1 text-xs text-down">{nameError}</p>}
         </div>
 
         <div>
@@ -443,7 +450,6 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
           <div className="relative">
             <select
               name="type"
-              required
               value={accountType}
               onChange={(e) => {
                 const t = e.target.value as Account["type"];

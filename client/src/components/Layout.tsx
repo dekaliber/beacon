@@ -64,7 +64,7 @@ function KeyboardShortcutsButton() {
   if (!shortcuts) return null;
 
   return (
-    <div className="relative ml-2" ref={ref}>
+    <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
         className={cn(
@@ -164,7 +164,7 @@ function NotificationBell() {
   };
 
   return (
-    <div className="relative ml-2" ref={ref}>
+    <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
         className={cn(
@@ -268,7 +268,7 @@ export function UserMenu() {
               onClick={() => setOpen(false)}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors",
+                  "tp-nav-link",
                   isActive
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
@@ -282,7 +282,7 @@ export function UserMenu() {
           <div className="border-t border-border">
             <button
               onClick={() => signOut({ redirectUrl: "/login" })}
-              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors rounded-b-md"
+              className="tp-nav-link w-full rounded-b-md"
             >
               <LogOut className="h-4 w-4" />
               Sign out

@@ -429,6 +429,10 @@ function MobileExpenseModal({
     e.preventDefault();
     setError(null);
     const fd = new FormData(e.currentTarget);
+    const amount = parseFloat(fd.get("amount") as string);
+    if (!fd.get("amount") || isNaN(amount) || amount === 0) { setError("Amount is required"); return; }
+    if (!(fd.get("description") as string).trim()) { setError("Description is required"); return; }
+    if (!fd.get("accountId")) { setError("Account is required"); return; }
     setSaving(true);
     try {
       let recurrenceRuleId: string | null | undefined = isRecurring
@@ -492,7 +496,7 @@ function MobileExpenseModal({
       </div>
 
       {/* Scrollable form */}
-      <form id="mobile-expense-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto overscroll-contain">
+      <form id="mobile-expense-form" onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto overscroll-contain">
         <div className="space-y-5 p-4">
           {error && (
             <div className="rounded-md bg-down/10 px-3 py-2 text-sm text-down">
@@ -511,7 +515,6 @@ function MobileExpenseModal({
                   name="amount"
                   type="text"
                   inputMode="decimal"
-                  required
                   placeholder="0.00"
                   defaultValue={expense ? parseFloat(expense.amount).toFixed(2) : undefined}
                   className="w-full rounded-md border border-border py-2.5 pl-7 pr-3 text-sm focus:border-primary focus:outline-none"
@@ -524,7 +527,6 @@ function MobileExpenseModal({
                 <input
                   name="date"
                   type="date"
-                  required
                   defaultValue={expense?.date?.slice(0, 10) ?? today}
                   className="w-full appearance-none rounded-md border border-border px-3 py-2.5 pr-8 text-sm text-foreground focus:border-primary focus:outline-none"
                 />
@@ -538,7 +540,6 @@ function MobileExpenseModal({
             <input
               name="description"
               type="text"
-              required
               placeholder="What did you spend on?"
               defaultValue={expense?.description ?? ""}
               className="w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
@@ -555,7 +556,6 @@ function MobileExpenseModal({
             <div className="relative">
               <select
                 name="accountId"
-                required
                 value={selectedAccountId}
                 onChange={(e) => setSelectedAccountId(e.target.value)}
                 className="appearance-none w-full rounded-md border border-border py-2.5 pl-3 pr-8 text-sm text-foreground focus:border-primary focus:outline-none"

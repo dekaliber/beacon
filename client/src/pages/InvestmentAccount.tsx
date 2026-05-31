@@ -183,6 +183,7 @@ function SmartDateInput({
   required,
   autoFocus,
   className,
+  style,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -190,6 +191,7 @@ function SmartDateInput({
   required?: boolean;
   autoFocus?: boolean;
   className?: string;
+  style?: React.CSSProperties;
 }) {
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     const text = e.clipboardData.getData("text").trim();
@@ -211,6 +213,7 @@ function SmartDateInput({
       required={required}
       autoFocus={autoFocus}
       className={className}
+      style={style}
     />
   );
 }
@@ -420,21 +423,29 @@ interface LotFormRow {
   acquiredDate: string;
 }
 
+interface LotFieldErrors {
+  quantity?: string;
+  costPerShare?: string;
+  acquiredDate?: string;
+}
+
 function LotFormEntry({
   lot,
   onChange,
   onRemove,
   canRemove,
   hideDate = false,
+  errors = {},
 }: {
   lot: LotFormRow;
   onChange: (field: keyof LotFormRow, value: string) => void;
   onRemove: () => void;
   canRemove: boolean;
   hideDate?: boolean;
+  errors?: LotFieldErrors;
 }) {
   return (
-    <div className="flex gap-3 items-end">
+    <div className="flex gap-3 items-start">
       {!hideDate && (
         <div className="flex-1 min-w-0">
           <label className="block text-xs font-medium mb-1">Acquired Date</label>
@@ -442,9 +453,10 @@ function LotFormEntry({
             value={lot.acquiredDate}
             onChange={(v) => onChange("acquiredDate", v)}
             max={localToday()}
-            required
             className="w-full rounded border border-border px-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            style={errors.acquiredDate ? { borderColor: "var(--color-down)" } : undefined}
           />
+          {errors.acquiredDate && <p className="mt-1 text-xs text-down">{errors.acquiredDate}</p>}
         </div>
       )}
       <div className="flex-1 min-w-0">
@@ -455,23 +467,28 @@ function LotFormEntry({
           value={lot.quantity}
           onChange={(e) => onChange("quantity", e.target.value)}
           placeholder="0.00"
-          required
-          className="w-full rounded border border-border px-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className={`w-full rounded border px-3 py-1.5 text-sm focus:outline-none focus:ring-1 ${errors.quantity ? "border-down focus:border-down focus:ring-down/30" : "border-border focus:border-primary focus:ring-primary"}`}
         />
+        {errors.quantity && <p className="mt-1 text-xs text-down">{errors.quantity}</p>}
       </div>
       <div className="flex-1 min-w-0">
         <label className="block text-xs font-medium mb-1">{hideDate ? "Total Cost" : "Cost Per Share"}</label>
         <DollarInput
           value={lot.costPerShare}
           onChange={(v) => onChange("costPerShare", v)}
-          required
+          inputClassName={
+            errors.costPerShare
+              ? "w-full rounded border border-down pl-7 pr-3 py-1.5 text-sm focus:border-down focus:outline-none focus:ring-1 focus:ring-down/30"
+              : undefined
+          }
         />
+        {errors.costPerShare && <p className="mt-1 text-xs text-down">{errors.costPerShare}</p>}
       </div>
       <button
         type="button"
         onClick={onRemove}
         disabled={!canRemove}
-        className="flex-shrink-0 pb-1 p-1.5 text-muted-foreground hover:text-down disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="flex-shrink-0 mt-5 p-1.5 text-muted-foreground hover:text-down disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         title="Remove lot"
       >
         <Trash2 className="h-4 w-4" />
@@ -506,7 +523,8 @@ function AddInvestmentModal({
     { quantity: "", costPerShare: "", acquiredDate: localToday() },
   ]);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [lotErrors, setLotErrors] = useState<LotFieldErrors[]>([{}]);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [fetchedPrice, setFetchedPrice] = useState<number | null>(null);
   const [fetchingPrice, setFetchingPrice] = useState(false);
 
@@ -517,7 +535,8 @@ function AddInvestmentModal({
       setSelectedTicker(null);
       setGroup("");
       setLots([{ quantity: "", costPerShare: "", acquiredDate: localToday() }]);
-      setError(null);
+      setLotErrors([{}]);
+      setSaveError(null);
       setFetchedPrice(null);
     }
   }, [open]);
@@ -527,7 +546,8 @@ function AddInvestmentModal({
     setSelectedTicker(null);
     setGroup("");
     setLots([{ quantity: "", costPerShare: "", acquiredDate: localToday() }]);
-    setError(null);
+    setLotErrors([{}]);
+    setSaveError(null);
     setFetchedPrice(null);
   };
 
@@ -553,16 +573,52 @@ function AddInvestmentModal({
     }
   };
 
-  const updateLotRow = (i: number, field: keyof LotFormRow, value: string) =>
+  const updateLotRow = (i: number, field: keyof LotFormRow, value: string) => {
     setLots((prev) => prev.map((l, idx) => (idx === i ? { ...l, [field]: value } : l)));
-  const addLotRow = () =>
+    setLotErrors((prev) => {
+      const next = [...prev];
+      next[i] = { ...next[i], [field]: undefined };
+      return next;
+    });
+  };
+  const addLotRow = () => {
     setLots((prev) => [...prev, { quantity: "", costPerShare: "", acquiredDate: localToday() }]);
-  const removeLotRow = (i: number) =>
+    setLotErrors((prev) => [...prev, {}]);
+  };
+  const removeLotRow = (i: number) => {
     setLots((prev) => prev.filter((_, idx) => idx !== i));
+    setLotErrors((prev) => prev.filter((_, idx) => idx !== i));
+  };
 
   const doSave = async (): Promise<boolean> => {
     if (!selectedTicker) return false;
-    setError(null);
+
+    // Validate all lot rows before touching the API — collect all field errors at once
+    const newLotErrors: LotFieldErrors[] = lots.map(() => ({}));
+    let hasErrors = false;
+    for (let i = 0; i < lots.length; i++) {
+      const lot = lots[i];
+      const qty = parseFloat(lot.quantity.replace(/,/g, ""));
+      const rawCost = parseFloat(lot.costPerShare.replace(/,/g, ""));
+      if (!lot.quantity || isNaN(qty) || qty <= 0) {
+        newLotErrors[i].quantity = "Enter a quantity greater than 0";
+        hasErrors = true;
+      }
+      if (!lot.costPerShare || isNaN(rawCost) || rawCost <= 0) {
+        newLotErrors[i].costPerShare = `Enter a ${managed ? "total cost" : "cost per share"} greater than 0`;
+        hasErrors = true;
+      }
+      if (!managed && !lot.acquiredDate) {
+        newLotErrors[i].acquiredDate = "Enter an acquired date";
+        hasErrors = true;
+      }
+    }
+    if (hasErrors) {
+      setLotErrors(newLotErrors);
+      return false;
+    }
+
+    setSaveError(null);
     setSaving(true);
     try {
       const holding = await createHolding({
@@ -576,7 +632,6 @@ function AddInvestmentModal({
       for (const lot of lots) {
         const qty = parseFloat(lot.quantity.replace(/,/g, ""));
         const rawCost = parseFloat(lot.costPerShare.replace(/,/g, ""));
-        if (isNaN(qty) || isNaN(rawCost) || qty <= 0) continue;
         // Managed mode: field holds total cost — derive cost-per-share automatically
         const costPerShare = managed ? rawCost / qty : rawCost;
         await createLot({
@@ -588,7 +643,7 @@ function AddInvestmentModal({
       }
       return true;
     } catch (err: any) {
-      setError(err?.message ?? "Failed to save. Please try again.");
+      setSaveError(err?.message ?? "Failed to save. Please try again.");
       return false;
     } finally {
       setSaving(false);
@@ -610,7 +665,8 @@ function AddInvestmentModal({
       onClose={onClose}
       title={`Add to ${accountName}`}
       // Narrower width; no max-h so dropdown isn't clipped during search
-      className={step === "search" ? "max-w-xl" : "max-w-xl max-h-[90vh]"}
+      // overflow-visible overrides the modal's default overflow-hidden so the results dropdown isn't clipped
+      className={step === "search" ? "max-w-xl overflow-visible" : "max-w-xl max-h-[90vh]"}
       // During search: no overflow clipping (dropdown is absolutely positioned)
       // During lots: scrollable for multi-lot forms
       contentClassName={step === "search" ? "px-6 pb-6" : "overflow-y-auto px-6 pb-6"}
@@ -618,7 +674,7 @@ function AddInvestmentModal({
       {step === "search" ? (
         <TickerSearch onSelect={handleTickerSelect} onCancel={onClose} />
       ) : (
-        <form onSubmit={handleSave} className="space-y-5">
+        <form onSubmit={handleSave} noValidate className="space-y-5">
           {/* Ticker header card */}
           <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/20">
             <button
@@ -675,6 +731,7 @@ function AddInvestmentModal({
                 onRemove={() => removeLotRow(i)}
                 canRemove={lots.length > 1}
                 hideDate={managed}
+                errors={lotErrors[i]}
               />
             ))}
           </div>
@@ -690,7 +747,7 @@ function AddInvestmentModal({
             </button>
           )}
 
-          {error && <p className="text-sm text-down">{error}</p>}
+          {saveError && <p className="text-sm text-down">{saveError}</p>}
 
           <div className="flex justify-end gap-2 pt-2 border-t border-border">
             <Button type="button" variant="secondary" onClick={onClose}>
@@ -1002,7 +1059,7 @@ function AddLotRow({
   // For managed mode the form is rendered inline (not as a table row)
   if (managed) {
     return (
-      <form onSubmit={handleSave} className="flex gap-3 items-end">
+      <form onSubmit={handleSave} noValidate className="flex gap-3 items-end">
         <div className="flex-1 min-w-0">
           <label className="block text-xs font-medium mb-1">Total Shares</label>
           <input
@@ -1086,7 +1143,7 @@ function AddLotRow({
         />
       </td>
       <td colSpan={4} className="py-2 px-2">
-        <form onSubmit={handleSave} className="flex items-center gap-2">
+        <form onSubmit={handleSave} noValidate className="flex items-center gap-2">
           <Button type="submit" disabled={saving} className="h-7 text-xs px-2 py-0">
             {saving ? "Saving…" : "Save"}
           </Button>
@@ -1825,7 +1882,7 @@ function AddManualInvestmentModal({
       onClose={onClose}
       title={editing ? "Edit Manual Investment" : "Add Manual Investment"}
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium mb-1">Name</label>
@@ -3478,7 +3535,7 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
 
   return (
     <Modal open onClose={onClose} title={`Review Pending Buy — ${pendingBuy.ticker}`}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         {/* Origin summary */}
         <div className="rounded-md bg-muted/30 px-3 py-2 text-sm space-y-0.5">
           <div className="flex items-center gap-3">
@@ -4702,7 +4759,7 @@ function RealizedGainSnapshotPanel({
   }
 
   return (
-    <form onSubmit={handleSave} className="px-4 py-4 space-y-4">
+    <form onSubmit={handleSave} noValidate className="px-4 py-4 space-y-4">
       <p className="tp-caption">
         Paste in the YTD realized gain/loss totals from your account dashboard (e.g. Wealthfront).
       </p>
@@ -5848,7 +5905,7 @@ export function InvestmentAccount() {
                   )}
                 </div>
                 {editingCash ? (
-                  <form onSubmit={handleSaveCash} className="flex items-center gap-1.5 mt-1.5">
+                  <form onSubmit={handleSaveCash} noValidate className="flex items-center gap-1.5 mt-1.5">
                     <div className="relative w-full">
                       <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                       <input

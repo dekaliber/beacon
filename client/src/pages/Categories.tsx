@@ -269,6 +269,7 @@ function CategoryModal({ open, onClose, onSave, onDelete, category, parentId, ki
   const [usageInfo, setUsageInfo] = useState<{ count: number; categoryIds: string[] } | null>(null);
   const [reassignTo, setReassignTo] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [nameError, setNameError] = useState("");
 
   const isTopLevelAdd = !category && !parentId;
 
@@ -280,13 +281,18 @@ function CategoryModal({ open, onClose, onSave, onDelete, category, parentId, ki
       setConfirmDelete(false);
       setUsageInfo(null);
       setReassignTo("");
+      setNameError("");
     }
   }, [open, category, kind]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setSaving(true);
     const form = new FormData(e.currentTarget);
+    if (!(form.get("name") as string).trim()) {
+      setNameError("Name is required");
+      return;
+    }
+    setSaving(true);
     await onSave({
       name: form.get("name") as string,
       color: (form.get("color") as string) || undefined,
@@ -305,7 +311,7 @@ function CategoryModal({ open, onClose, onSave, onDelete, category, parentId, ki
       onClose={onClose}
       title={category ? `Edit ${kindLabel}Category` : parentId ? `Add ${kindLabel}Subcategory` : "Add Category"}
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         {isTopLevelAdd && (
           <div>
             <label className="block text-xs font-medium mb-1">Type</label>
@@ -327,11 +333,12 @@ function CategoryModal({ open, onClose, onSave, onDelete, category, parentId, ki
           <input
             name="name"
             type="text"
-            required
             defaultValue={category?.name ?? ""}
-            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            onChange={() => setNameError("")}
+            className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${nameError ? "border-down focus:border-down focus:ring-down/30" : "border-border focus:border-primary focus:ring-primary"}`}
             placeholder="Category name"
           />
+          {nameError && <p className="mt-1 text-xs text-down">{nameError}</p>}
         </div>
 
         {!parentId && (

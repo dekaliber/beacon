@@ -867,11 +867,13 @@ function TransferRuleModal({
 }) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<TransferRuleFormData>({});
+  const [error, setError] = useState<string | null>(null);
   const bankAccounts = accounts.filter((a) => a.type === "CHECKING" || a.type === "SAVINGS");
   useBodyScrollLock(open);
 
   useEffect(() => {
     if (open) {
+      setError(null);
       setForm(rule
         ? {
             description: rule.description, amount: rule.amount,
@@ -889,6 +891,12 @@ function TransferRuleModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.description?.trim()) { setError("Description is required"); return; }
+    const amt = parseFloat(String(form.amount ?? ""));
+    if (!form.amount || isNaN(amt) || amt <= 0) { setError("Enter a valid amount"); return; }
+    if (!form.fromAccountId) { setError("Select a source account"); return; }
+    if (!form.toAccountId) { setError("Select a destination account"); return; }
+    if (!rule && !form.startDate) { setError("Start date is required"); return; }
     setSaving(true);
     await onSave({ ...form, endDate: form.endDate || null });
     setSaving(false);
@@ -907,18 +915,20 @@ function TransferRuleModal({
         </button>
       </div>
 
-      <form id="transfer-rule-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto overscroll-contain">
+      <form id="transfer-rule-form" onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto overscroll-contain">
         <div className="space-y-4 p-4">
+          {error && <div className="rounded-md bg-down/10 px-3 py-2 text-sm text-down">{error}</div>}
+
           <div>
             <label className="mb-1.5 block text-sm font-medium">Description</label>
-            <input type="text" required value={form.description ?? ""} onChange={(e) => set({ description: e.target.value })} placeholder="e.g. Monthly joint contribution" className={inputCls} />
+            <input type="text" value={form.description ?? ""} onChange={(e) => { set({ description: e.target.value }); setError(null); }} placeholder="e.g. Monthly joint contribution" className={inputCls} />
           </div>
 
           <div>
             <label className="mb-1.5 block text-sm font-medium">Amount</label>
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-              <input type="text" inputMode="decimal" required placeholder="0.00" value={form.amount ?? ""} onChange={(e) => set({ amount: e.target.value })} className={`${inputCls} pl-7`} />
+              <input type="text" inputMode="decimal" placeholder="0.00" value={form.amount ?? ""} onChange={(e) => { set({ amount: e.target.value }); setError(null); }} className={`${inputCls} pl-7`} />
             </div>
           </div>
 
@@ -926,7 +936,7 @@ function TransferRuleModal({
             <div>
               <label className="mb-1.5 block text-sm font-medium">From</label>
               <div className="relative">
-                <select required value={form.fromAccountId ?? ""} onChange={(e) => set({ fromAccountId: e.target.value })} className="w-full appearance-none rounded-md border border-border py-2.5 pl-2 pr-6 text-sm text-foreground">
+                <select value={form.fromAccountId ?? ""} onChange={(e) => { set({ fromAccountId: e.target.value }); setError(null); }} className="w-full appearance-none rounded-md border border-border py-2.5 pl-2 pr-6 text-sm text-foreground">
                   <option value="">Select…</option>
                   {bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
@@ -936,7 +946,7 @@ function TransferRuleModal({
             <div>
               <label className="mb-1.5 block text-sm font-medium">To</label>
               <div className="relative">
-                <select required value={form.toAccountId ?? ""} onChange={(e) => set({ toAccountId: e.target.value })} className="w-full appearance-none rounded-md border border-border py-2.5 pl-2 pr-6 text-sm text-foreground">
+                <select value={form.toAccountId ?? ""} onChange={(e) => { set({ toAccountId: e.target.value }); setError(null); }} className="w-full appearance-none rounded-md border border-border py-2.5 pl-2 pr-6 text-sm text-foreground">
                   <option value="">Select…</option>
                   {bankAccounts.filter((a) => a.id !== form.fromAccountId).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
@@ -967,7 +977,7 @@ function TransferRuleModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1.5 block text-sm font-medium">Start Date</label>
-              <input type="date" required={!rule} value={form.startDate ?? ""} onChange={(e) => set({ startDate: e.target.value })} className={inputCls} />
+              <input type="date" value={form.startDate ?? ""} onChange={(e) => { set({ startDate: e.target.value }); setError(null); }} className={inputCls} />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium">

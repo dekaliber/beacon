@@ -283,6 +283,7 @@ function MobileAccountModal({
   const [defaultCashAccountId, setDefaultCashAccountId] = useState(account?.defaultCashAccountId ?? "");
   const [hasTrackedHoldings, setHasTrackedHoldings] = useState(false);
   const [hideWarning, setHideWarning] = useState<HideWarning | null>(null);
+  const [nameError, setNameError] = useState("");
 
   const bankAccounts = allAccounts.filter(
     (a) => (a.type === "CHECKING" || a.type === "SAVINGS") && a.isActive && !a.isHidden && a.id !== account?.id
@@ -345,6 +346,10 @@ function MobileAccountModal({
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
+    if (!(form.get("name") as string).trim()) {
+      setNameError("Name is required");
+      return;
+    }
     const data = buildData(form);
 
     if (account && isHidden && !account.isHidden) {
@@ -438,7 +443,7 @@ function MobileAccountModal({
       </div>
 
       {/* Scrollable form */}
-      <form id="mobile-account-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto overscroll-contain">
+      <form id="mobile-account-form" onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto overscroll-contain">
         <div className="space-y-5 p-4">
 
           {/* Name */}
@@ -447,11 +452,12 @@ function MobileAccountModal({
             <input
               name="name"
               type="text"
-              required
               defaultValue={account?.name ?? ""}
               placeholder="e.g. Chase Checking"
-              className="w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
+              onChange={() => setNameError("")}
+              className={`w-full rounded-md border px-3 py-2.5 text-sm focus:outline-none ${nameError ? "border-down" : "border-border focus:border-primary"}`}
             />
+            {nameError && <p className="mt-1 text-xs text-down">{nameError}</p>}
           </div>
 
           {/* Type */}
@@ -460,7 +466,6 @@ function MobileAccountModal({
             <div className="relative">
               <select
                 name="type"
-                required
                 value={accountType}
                 onChange={(e) => {
                   const t = e.target.value as Account["type"];

@@ -723,7 +723,7 @@ function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerC
 
   return (
     <Modal open onClose={onClose} title={editing ? "Edit Position" : "Open New Position / Draft"}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         {/* Ticker */}
         <div>
           <label className="block text-xs font-medium mb-1">Underlying Ticker</label>
@@ -805,22 +805,25 @@ function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerC
               <label className="block text-xs font-medium mb-1">
                 Investment Account
               </label>
-              <select
-                disabled={accountsLoading}
-                value={investmentAccountId}
-                onChange={(e) => setInvestmentAccountId(e.target.value)}
-                className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground disabled:text-muted-foreground disabled:bg-muted/40"
-              >
-                {accountsLoading
-                  ? <option value="">Loading…</option>
-                  : <>
-                      <option value="">None</option>
-                      {eligibleAccounts.map((a) => (
-                        <option key={a.id} value={a.id}>{a.name}</option>
-                      ))}
-                    </>
-                }
-              </select>
+              <div className="relative">
+                <select
+                  disabled={accountsLoading}
+                  value={investmentAccountId}
+                  onChange={(e) => setInvestmentAccountId(e.target.value)}
+                  className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground disabled:text-muted-foreground disabled:bg-muted/40"
+                >
+                  {accountsLoading
+                    ? <option value="">Loading…</option>
+                    : <>
+                        <option value="">None</option>
+                        {eligibleAccounts.map((a) => (
+                          <option key={a.id} value={a.id}>{a.name}</option>
+                        ))}
+                      </>
+                  }
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+              </div>
             </div>
           );
         })()}
@@ -831,34 +834,37 @@ function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerC
             <label className="block text-xs font-medium mb-1">
               Written Against Assigned Lot <span className="text-muted-foreground font-normal">(optional)</span>
             </label>
-            <select
-              value={selectedBatchKey}
-              onChange={(e) => {
-                const key = e.target.value;
-                setSelectedBatchKey(key);
-                if (!key) return;
-                const [strike, expiry] = key.split("|");
-                const batch = assignedBatches!.find(
-                  (b) => `${parseFloat(b.strikePrice)}|${b.expirationDate}` === `${parseFloat(strike)}|${expiry}`
-                ) ?? null;
-                if (batch) {
-                  setContracts(batch.contractsRemaining.toString());
-                  if (batch.weightedCostPerShare != null)
-                    setShareCostBasis(batch.weightedCostPerShare.toFixed(6).replace(/\.?0+$/, ""));
-                }
-              }}
-              className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
-            >
-              <option value="">None / not from an assignment</option>
-              {assignedBatches!.map((batch) => {
-                const expLabel = new Date(batch.expirationDate + "T12:00:00Z").toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" });
-                return (
-                  <option key={`${batch.strikePrice}|${batch.expirationDate}`} value={`${batch.strikePrice}|${batch.expirationDate}`}>
-                    ${parseFloat(batch.strikePrice).toFixed(2)} · {expLabel} expiry · {batch.contractsRemaining} of {batch.totalContracts} contracts remaining
-                  </option>
-                );
-              })}
-            </select>
+            <div className="relative">
+              <select
+                value={selectedBatchKey}
+                onChange={(e) => {
+                  const key = e.target.value;
+                  setSelectedBatchKey(key);
+                  if (!key) return;
+                  const [strike, expiry] = key.split("|");
+                  const batch = assignedBatches!.find(
+                    (b) => `${parseFloat(b.strikePrice)}|${b.expirationDate}` === `${parseFloat(strike)}|${expiry}`
+                  ) ?? null;
+                  if (batch) {
+                    setContracts(batch.contractsRemaining.toString());
+                    if (batch.weightedCostPerShare != null)
+                      setShareCostBasis(batch.weightedCostPerShare.toFixed(6).replace(/\.?0+$/, ""));
+                  }
+                }}
+                className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
+              >
+                <option value="">None / not from an assignment</option>
+                {assignedBatches!.map((batch) => {
+                  const expLabel = new Date(batch.expirationDate + "T12:00:00Z").toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" });
+                  return (
+                    <option key={`${batch.strikePrice}|${batch.expirationDate}`} value={`${batch.strikePrice}|${batch.expirationDate}`}>
+                      ${parseFloat(batch.strikePrice).toFixed(2)} · {expLabel} expiry · {batch.contractsRemaining} of {batch.totalContracts} contracts remaining
+                    </option>
+                  );
+                })}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+            </div>
           </div>
         )}
 
@@ -1229,7 +1235,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
 
   return (
     <Modal open onClose={onClose} title={`Close: ${position.ticker.symbol} $${position.strikePrice} ${position.optionType}`}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         {/* Outcome selector */}
         <div>
           <label className="block text-xs font-medium mb-1">Outcome</label>
@@ -1328,16 +1334,19 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
                       <span className="ml-2 text-xs text-muted-foreground">(linked via assigned lot)</span>
                     </div>
                   ) : (
-                    <select
-                      value={investmentAccountId}
-                      onChange={(e) => setInvestmentAccountId(e.target.value)}
-                      className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
-                    >
-                      <option value="">None</option>
-                      {eligible.map((a) => (
-                        <option key={a.id} value={a.id}>{a.name}</option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={investmentAccountId}
+                        onChange={(e) => setInvestmentAccountId(e.target.value)}
+                        className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
+                      >
+                        <option value="">None</option>
+                        {eligible.map((a) => (
+                          <option key={a.id} value={a.id}>{a.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+                    </div>
                   )}
                 </div>
               ) : null;
@@ -1350,16 +1359,19 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
             <label className="block text-xs font-medium mb-1">
               Destination Account <span className="text-muted-foreground font-normal">(for income record)</span>
             </label>
-            <select
-              value={bankingAccountId}
-              onChange={(e) => setBankingAccountId(e.target.value)}
-              className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
-            >
-              <option value="">None</option>
-              {bankingAccounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={bankingAccountId}
+                onChange={(e) => setBankingAccountId(e.target.value)}
+                className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
+              >
+                <option value="">None</option>
+                {bankingAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+            </div>
           </div>
         )}
 
@@ -1585,7 +1597,7 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
 
   return (
     <Modal open onClose={onClose} title={`Edit Close: ${position.ticker.symbol} $${position.strikePrice} ${position.optionType}`}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         <div>
           <label className="block text-xs font-medium mb-1">Outcome</label>
           <div className="grid grid-cols-2 rounded-md border border-border overflow-hidden text-sm font-medium">
@@ -1686,16 +1698,19 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
                       <span className="ml-2 text-xs text-muted-foreground">(linked via assigned lot)</span>
                     </div>
                   ) : (
-                    <select
-                      value={investmentAccountId}
-                      onChange={(e) => setInvestmentAccountId(e.target.value)}
-                      className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
-                    >
-                      <option value="">None</option>
-                      {eligible.map((a) => (
-                        <option key={a.id} value={a.id}>{a.name}</option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={investmentAccountId}
+                        onChange={(e) => setInvestmentAccountId(e.target.value)}
+                        className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
+                      >
+                        <option value="">None</option>
+                        {eligible.map((a) => (
+                          <option key={a.id} value={a.id}>{a.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+                    </div>
                   )}
                 </div>
               ) : null;
@@ -1708,16 +1723,19 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
             <label className="block text-xs font-medium mb-1">
               Destination Account <span className="text-muted-foreground font-normal">(for income record)</span>
             </label>
-            <select
-              value={bankingAccountId}
-              onChange={(e) => setBankingAccountId(e.target.value)}
-              className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
-            >
-              <option value="">None</option>
-              {bankingAccounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={bankingAccountId}
+                onChange={(e) => setBankingAccountId(e.target.value)}
+                className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
+              >
+                <option value="">None</option>
+                {bankingAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+            </div>
           </div>
         )}
 
@@ -1874,7 +1892,7 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
 
   return (
     <Modal open onClose={onClose} title="Options Trading Settings">
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         <div>
           <label className="block text-xs font-medium mb-1">Starting Basis</label>
           <div className="relative">
@@ -1980,16 +1998,19 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
         </div>
         <div>
           <label className="block text-xs font-medium mb-1">Starting Week</label>
-          <select
-            value={startingWeek}
-            onChange={(e) => setStartingWeek(e.target.value)}
-            className="w-full appearance-none rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
-          >
-            <option value="">— Use first week with closed positions —</option>
-            {yearWeeks.map((w) => (
-              <option key={w.monIso} value={w.monIso}>{w.label}</option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={startingWeek}
+              onChange={(e) => setStartingWeek(e.target.value)}
+              className="w-full appearance-none rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground focus:border-primary focus:outline-none"
+            >
+              <option value="">— Use first week with closed positions —</option>
+              {yearWeeks.map((w) => (
+                <option key={w.monIso} value={w.monIso}>{w.label}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+          </div>
           <p className="tp-caption mt-1.5">First week counted toward performance. Sets the origin for charts and annualized return.</p>
         </div>
         <div>
@@ -2007,16 +2028,19 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
         {bankingAccounts.length > 0 && (
           <div>
             <label className="block text-xs font-medium mb-1">Default Cash Account <span className="text-muted-foreground font-normal">(optional)</span></label>
-            <select
-              value={defaultCashAccountId}
-              onChange={(e) => setDefaultCashAccountId(e.target.value)}
-              className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
-            >
-              <option value="">None</option>
-              {bankingAccounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={defaultCashAccountId}
+                onChange={(e) => setDefaultCashAccountId(e.target.value)}
+                className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-sm text-foreground"
+              >
+                <option value="">None</option>
+                {bankingAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+            </div>
             <p className="tp-caption mt-1.5">Pre-selected as the destination account for premium income when closing a position.</p>
           </div>
         )}
@@ -2084,7 +2108,7 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
 
   return (
     <Modal open onClose={onClose} title={`Confirm: ${position.ticker.symbol} $${position.strikePrice} ${position.optionType}`}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         <p className="text-sm text-muted-foreground">Confirm the details for this position. All fields are pre-filled with defaults — edit as needed.</p>
 
         <div>

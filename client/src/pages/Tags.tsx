@@ -339,11 +339,16 @@ function TagModal({ open, onClose, onSave, onDelete, tag }: TagModalProps) {
   const [color, setColor] = useState<string>(tag?.color ?? PRESET_COLORS[0]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [nameError, setNameError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setSaving(true);
     const form = new FormData(e.currentTarget);
+    if (!(form.get("name") as string).trim()) {
+      setNameError("Name is required");
+      return;
+    }
+    setSaving(true);
     const group = (form.get("group") as string).trim();
     await onSave({
       name: form.get("name") as string,
@@ -364,22 +369,24 @@ function TagModal({ open, onClose, onSave, onDelete, tag }: TagModalProps) {
   const handleClose = () => {
     setConfirmDelete(false);
     setDeleting(false);
+    setNameError("");
     onClose();
   };
 
   return (
     <Modal open={open} onClose={handleClose} title={tag ? "Edit Tag" : "Add Tag"}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         <div>
           <label className="block text-xs font-medium mb-1">Name</label>
           <input
             name="name"
             type="text"
-            required
             defaultValue={tag?.name ?? ""}
-            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            onChange={() => setNameError("")}
+            className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${nameError ? "border-down focus:border-down focus:ring-down/30" : "border-border focus:border-primary focus:ring-primary"}`}
             placeholder="e.g. tax-deductible"
           />
+          {nameError && <p className="mt-1 text-xs text-down">{nameError}</p>}
         </div>
 
         <div>

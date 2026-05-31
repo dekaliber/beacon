@@ -265,6 +265,7 @@ function MobileAssetClassModal({
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [color, setColor] = useState(editing?.color ?? PRESET_COLORS[0]);
+  const [nameError, setNameError] = useState("");
 
   const derivedVal = editing && isDerived(editing) ? effectiveTarget(editing) : undefined;
   const showDerivedTarget = editing !== null && derivedVal !== undefined;
@@ -298,10 +299,14 @@ function MobileAssetClassModal({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setSaving(true);
     const form = new FormData(e.currentTarget);
+    const name = form.get("name") as string | null;
+    if (name !== null && !name.trim()) {
+      setNameError("Name is required");
+      return;
+    }
+    setSaving(true);
     try {
-      const name = form.get("name") as string | null;
       const rawTarget = form.get("targetPct") as string | null;
       const targetData: { targetPct?: number | null } = {};
       if (rawTarget !== null) {
@@ -330,7 +335,7 @@ function MobileAssetClassModal({
         </button>
       </div>
 
-      <form id="mobile-asset-class-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto overscroll-contain">
+      <form id="mobile-asset-class-form" onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto overscroll-contain">
         <div className="space-y-5 p-4">
 
           {/* Name — hidden for system classes */}
@@ -340,11 +345,12 @@ function MobileAssetClassModal({
               <input
                 name="name"
                 type="text"
-                required
                 defaultValue={editing?.name ?? ""}
                 placeholder={isChild ? "e.g. Large Cap" : "e.g. Alternatives"}
-                className="w-full rounded-md border border-border px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
+                onChange={() => setNameError("")}
+                className={`w-full rounded-md border px-3 py-2.5 text-sm focus:outline-none ${nameError ? "border-down" : "border-border focus:border-primary"}`}
               />
+              {nameError && <p className="mt-1 text-xs text-down">{nameError}</p>}
             </div>
           )}
 

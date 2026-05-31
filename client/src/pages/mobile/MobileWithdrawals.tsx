@@ -6,6 +6,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Pencil,
   Trash2,
   ChevronRight as ChevronRightIcon,
@@ -504,25 +505,28 @@ function TransferFullscreen({
 
       {/* Form */}
       <div className="overflow-y-auto flex-1 px-4 py-5">
-        <form id="transfer-form" onSubmit={handleSubmit} className="space-y-4">
+        <form id="transfer-form" onSubmit={handleSubmit} noValidate className="space-y-4">
           {/* From */}
           <div>
             <label className="mb-1.5 block text-sm font-medium">
               From Account <span className="text-down">*</span>
             </label>
-            <select value={form.fromAccountId} onChange={set("fromAccountId")} required className={inputClass}>
-              <option value="">Select account…</option>
-              <optgroup label="Investment Accounts">
-                {investmentAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </optgroup>
-              <optgroup label="Banking Accounts">
-                {bankingAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </optgroup>
-            </select>
+            <div className="relative">
+              <select value={form.fromAccountId} onChange={set("fromAccountId")} className={cn(inputClass, "appearance-none pl-3 pr-8")}>
+                <option value="">Select account…</option>
+                <optgroup label="Investment Accounts">
+                  {investmentAccounts.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Banking Accounts">
+                  {bankingAccounts.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </optgroup>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            </div>
           </div>
 
           {/* To */}
@@ -530,19 +534,22 @@ function TransferFullscreen({
             <label className="mb-1.5 block text-sm font-medium">
               To Account <span className="text-down">*</span>
             </label>
-            <select value={form.toAccountId} onChange={set("toAccountId")} required className={inputClass}>
-              <option value="">Select account…</option>
-              <optgroup label="Investment Accounts">
-                {investmentAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </optgroup>
-              <optgroup label="Banking Accounts">
-                {bankingAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </optgroup>
-            </select>
+            <div className="relative">
+              <select value={form.toAccountId} onChange={set("toAccountId")} className={cn(inputClass, "appearance-none pl-3 pr-8")}>
+                <option value="">Select account…</option>
+                <optgroup label="Investment Accounts">
+                  {investmentAccounts.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Banking Accounts">
+                  {bankingAccounts.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </optgroup>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            </div>
           </div>
 
           {/* Amount + Date */}
@@ -558,7 +565,6 @@ function TransferFullscreen({
                   inputMode="decimal"
                   value={form.amount}
                   onChange={set("amount")}
-                  required
                   className={cn(inputClass, "pl-7")}
                   placeholder="0.00"
                 />
@@ -572,7 +578,6 @@ function TransferFullscreen({
                 type="date"
                 value={form.date}
                 onChange={set("date")}
-                required
                 className={inputClass}
               />
             </div>

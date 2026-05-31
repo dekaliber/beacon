@@ -216,6 +216,9 @@ function MobileIncomeModal({
     e.preventDefault();
     setError(null);
     const fd = new FormData(e.currentTarget);
+    const amount = parseFloat(fd.get("amount") as string);
+    if (!fd.get("amount") || isNaN(amount) || amount <= 0) { setError("Amount is required"); return; }
+    if (!fd.get("accountId")) { setError("Account is required"); return; }
     setSaving(true);
     try {
       const data: Record<string, unknown> = {
@@ -256,7 +259,7 @@ function MobileIncomeModal({
       </div>
 
       {/* Scrollable form */}
-      <form id="mobile-income-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto overscroll-contain">
+      <form id="mobile-income-form" onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto overscroll-contain">
         <div className="space-y-5 p-4">
           {error && (
             <div className="rounded-md bg-down/10 px-3 py-2 text-sm text-down">
@@ -275,7 +278,6 @@ function MobileIncomeModal({
                   name="amount"
                   type="text"
                   inputMode="decimal"
-                  required
                   placeholder="0.00"
                   defaultValue={income ? parseFloat(income.amount).toFixed(2) : undefined}
                   className="w-full rounded-md border border-border py-2.5 pl-7 pr-3 text-sm focus:border-primary focus:outline-none"
@@ -288,7 +290,6 @@ function MobileIncomeModal({
                 <input
                   name="date"
                   type="date"
-                  required
                   defaultValue={income?.date?.slice(0, 10) ?? today}
                   className="w-full appearance-none rounded-md border border-border px-3 py-2.5 pr-8 text-sm text-foreground focus:border-primary focus:outline-none"
                 />
@@ -320,7 +321,6 @@ function MobileIncomeModal({
             <div className="relative">
               <select
                 name="accountId"
-                required
                 defaultValue={income?.accountId ?? ""}
                 className="appearance-none w-full rounded-md border border-border py-2.5 pl-2 pr-6 text-sm text-foreground"
               >

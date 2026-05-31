@@ -243,7 +243,8 @@ function TransferModal({
     notes: "",
   });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<{ fromAccountId?: string; toAccountId?: string; amount?: string; date?: string }>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -255,7 +256,8 @@ function TransferModal({
         description: initialData?.description ?? "",
         notes: initialData?.notes ?? "",
       });
-      setError(null);
+      setErrors({});
+      setSaveError(null);
     }
   }, [open, initialData]);
 
@@ -272,21 +274,21 @@ function TransferModal({
 
   const set = (field: keyof TransferFormData) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-  ) => setForm((f) => ({ ...f, [field]: e.target.value }));
+  ) => {
+    setForm((f) => ({ ...f, [field]: e.target.value }));
+    setErrors((er) => ({ ...er, [field]: undefined }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.fromAccountId || !form.toAccountId || !form.amount || !form.date) {
-      setError("Please fill in all required fields.");
-      return;
-    }
+    const newErrors: typeof errors = {};
+    if (!form.fromAccountId) newErrors.fromAccountId = "Select a source account";
+    if (!form.toAccountId) newErrors.toAccountId = "Select a destination account";
     const amount = parseFloat(form.amount);
-    if (isNaN(amount) || amount <= 0) {
-      setError("Amount must be a positive number.");
-      return;
-    }
+    if (!form.amount || isNaN(amount) || amount <= 0) newErrors.amount = "Enter a valid amount";
+    if (!form.date) newErrors.date = "Date is required";
+    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
     setSaving(true);
-    setError(null);
     try {
       if (editingTransferId) {
         await updateTransfer(editingTransferId, {
@@ -313,7 +315,7 @@ function TransferModal({
       onSaved();
       onClose();
     } catch {
-      setError("Failed to save transfer. Please try again.");
+      setSaveError("Failed to save transfer. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -325,63 +327,65 @@ function TransferModal({
       onClose={onClose}
       title={editingTransferId ? "Edit Transfer" : "Record Portfolio Withdrawal"}
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         {/* From account */}
         <div>
-          <label className="block text-xs font-medium mb-1">
-            From Account
-          </label>
-          <select
-            value={form.fromAccountId}
-            onChange={set("fromAccountId")}
-            required
-            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-            <option value="">Select account…</option>
-            <optgroup label="Investment Accounts">
-              {investmentAccounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Banking Accounts">
-              {bankingAccounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </optgroup>
-          </select>
+          <label className="block text-xs font-medium mb-1">From Account</label>
+          <div className="relative">
+            <select
+              value={form.fromAccountId}
+              onChange={set("fromAccountId")}
+              className="w-full appearance-none rounded-md border py-2 pl-2 pr-6 text-sm text-foreground"
+              style={errors.fromAccountId ? { borderColor: "var(--color-down)" } : undefined}
+            >
+              <option value="">Select account…</option>
+              <optgroup label="Investment Accounts">
+                {investmentAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </optgroup>
+              <optgroup label="Banking Accounts">
+                {bankingAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </optgroup>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+          </div>
+          {errors.fromAccountId && <p className="mt-1 text-xs text-down">{errors.fromAccountId}</p>}
         </div>
 
         {/* To account */}
         <div>
-          <label className="block text-xs font-medium mb-1">
-            To Account
-          </label>
-          <select
-            value={form.toAccountId}
-            onChange={set("toAccountId")}
-            required
-            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-            <option value="">Select account…</option>
-            <optgroup label="Investment Accounts">
-              {investmentAccounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Banking Accounts">
-              {bankingAccounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </optgroup>
-          </select>
+          <label className="block text-xs font-medium mb-1">To Account</label>
+          <div className="relative">
+            <select
+              value={form.toAccountId}
+              onChange={set("toAccountId")}
+              className="w-full appearance-none rounded-md border py-2 pl-2 pr-6 text-sm text-foreground"
+              style={errors.toAccountId ? { borderColor: "var(--color-down)" } : undefined}
+            >
+              <option value="">Select account…</option>
+              <optgroup label="Investment Accounts">
+                {investmentAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </optgroup>
+              <optgroup label="Banking Accounts">
+                {bankingAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </optgroup>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+          </div>
+          {errors.toAccountId && <p className="mt-1 text-xs text-down">{errors.toAccountId}</p>}
         </div>
 
         {/* Amount + Date */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium mb-1">
-              Amount
-            </label>
+            <label className="block text-xs font-medium mb-1">Amount</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
               <input
@@ -389,23 +393,22 @@ function TransferModal({
                 inputMode="decimal"
                 value={form.amount}
                 onChange={set("amount")}
-                required
-                className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className={`w-full rounded-md border pl-7 pr-3 py-2 text-sm focus:outline-none focus:ring-1 ${errors.amount ? "border-down focus:border-down focus:ring-down/30" : "border-border focus:border-primary focus:ring-primary"}`}
                 placeholder="0.00"
               />
             </div>
+            {errors.amount && <p className="mt-1 text-xs text-down">{errors.amount}</p>}
           </div>
           <div>
-            <label className="block text-xs font-medium mb-1">
-              Date
-            </label>
+            <label className="block text-xs font-medium mb-1">Date</label>
             <input
               type="date"
               value={form.date}
               onChange={set("date")}
-              required
               className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              style={errors.date ? { borderColor: "var(--color-down)" } : undefined}
             />
+            {errors.date && <p className="mt-1 text-xs text-down">{errors.date}</p>}
           </div>
         </div>
 
@@ -448,7 +451,7 @@ function TransferModal({
           </div>
         )}
 
-        {error && <p className="text-sm text-down">{error}</p>}
+        {saveError && <p className="text-sm text-down">{saveError}</p>}
 
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
