@@ -42,7 +42,7 @@ import { useNotifications } from "@/context/NotificationContext";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
-import { Plus, ChevronDown, ChevronUp, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, Filter, BookmarkPlus, BookmarkCheck, Info } from "lucide-react";
+import { Plus, ChevronDown, ChevronUp, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info } from "lucide-react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { SectionLabel, ColumnHeader, StatValue } from "@/components/Typography";
@@ -2791,7 +2791,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
           <col style={{ width: '80px', minWidth: '80px' }} />{/* Ticker — sticky */}
           <col style={{ width: '72px', minWidth: '72px' }} />{/* Type — sticky */}
           <col style={{ width: '80px', minWidth: '80px' }} />{/* Strike — sticky */}
-          <col style={{ width: '96px', minWidth: '96px' }} />{/* Expiration — sticky */}
+          <col style={{ width: '80px', minWidth: '80px' }} />{/* Expiration — sticky */}
         </colgroup>
         <thead ref={theadRef} className="bg-[#FAFCFE]">
           {/* ── Row 1: group headers ── */}
@@ -2827,7 +2827,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
             <th style={{ left: 0 }}   className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] pl-4 pr-2")}>Ticker</th>
             <th style={{ left: 80 }}  className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Type</th>
             <th style={{ left: 152 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Strike</th>
-            <th style={{ left: 232 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] border-r border-border/40")}>Expiration</th>
+            <th style={{ left: 232 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] border-r border-border/40")}>Exp</th>
             {isColOpen("details") ? (
               <>
                 <th className={cn(thClass, "border-l border-border/50")}>Contracts</th>
@@ -2990,7 +2990,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
                 <th style={{ left: 0 }}   className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] pl-4 pr-2")}>Ticker</th>
                 <th style={{ left: 80 }}  className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Type</th>
                 <th style={{ left: 152 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Strike</th>
-                <th style={{ left: 232 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] border-r border-border/40")}>Expiration</th>
+                <th style={{ left: 232 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] border-r border-border/40")}>Exp</th>
                 {isColOpen("details") ? (
                   <>
                     <th className={cn(thClass, "border-l border-border/50")}>Contracts</th>
@@ -3236,7 +3236,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
           <col style={{ width: '80px', minWidth: '80px' }} />{/* Ticker — sticky */}
           <col style={{ width: '72px', minWidth: '72px' }} />{/* Type — sticky */}
           <col style={{ width: '80px', minWidth: '80px' }} />{/* Strike — sticky */}
-          <col style={{ width: '96px', minWidth: '96px' }} />{/* Expiration — sticky */}
+          <col style={{ width: '80px', minWidth: '80px' }} />{/* Expiration — sticky */}
           <col style={{ width: '72px', minWidth: '72px' }} />{/* Contracts — sticky */}
         </colgroup>
         <thead ref={theadRef} className="bg-[#FAFCFE]">
@@ -3272,8 +3272,8 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
             <th style={{ left: 0 }}   className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] pl-4 pr-2")}>Ticker</th>
             <th style={{ left: 80 }}  className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Type</th>
             <th style={{ left: 152 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Strike</th>
-            <th style={{ left: 232 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Expiration</th>
-            <th style={{ left: 328 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] border-r border-border/40")}>Contracts</th>
+            <th style={{ left: 232 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Exp</th>
+            <th style={{ left: 312 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] border-r border-border/40")}>Contracts</th>
             {/* Dates group */}
             {isColOpen("dates") ? (
               <>
@@ -3366,7 +3366,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                 </td>
                 <td style={{ left: 152 }} className={cn(td, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC]")}>${fmtUSD(p.strikePrice)}</td>
                 <td style={{ left: 232 }} className={cn(tdText, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC]")}>{fmtDate(p.expirationDate)}</td>
-                <td style={{ left: 328 }} className={cn(td, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC] border-r border-border/40")}>{p.contracts}</td>
+                <td style={{ left: 312 }} className={cn(td, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC] border-r border-border/40")}>{p.contracts}</td>
                 {/* Dates group */}
                 {isColOpen("dates") ? (
                   <>
@@ -3455,7 +3455,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                 <td style={{ left: 80 }}  className={cn(ctd, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC]")} />
                 <td style={{ left: 152 }} className={cn(ctd, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC]")} />
                 <td style={{ left: 232 }} className={cn(ctd, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC]")} />
-                <td style={{ left: 328 }} className={cn(ctd, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC] border-r border-border/40")} />
+                <td style={{ left: 312 }} className={cn(ctd, "sticky z-[2] bg-[#FAFCFE] group-hover:bg-[#F5F8FC] border-r border-border/40")} />
                 {/* Dates group */}
                 {isColOpen("dates") ? (
                   <>
@@ -3548,8 +3548,8 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                 <th style={{ left: 0 }}   className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] pl-4 pr-2")}>Ticker</th>
                 <th style={{ left: 80 }}  className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Type</th>
                 <th style={{ left: 152 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Strike</th>
-                <th style={{ left: 232 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Expiration</th>
-                <th style={{ left: 328 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] border-r border-border/40")}>Contracts</th>
+                <th style={{ left: 232 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE]")}>Exp</th>
+                <th style={{ left: 312 }} className={cn(thClass, "sticky z-[3] bg-[#FAFCFE] border-r border-border/40")}>Contracts</th>
                 {isColOpen("dates") ? (
                   <>
                     <th className={cn(thClass, "border-l border-border/50")}>Opened</th>
@@ -4901,7 +4901,7 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
         onClick={() => setIsOpen((o) => !o)}
       >
         <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
+          <ScanSearch className="h-4 w-4 text-muted-foreground" />
           <SectionLabel as="span">Option Screener</SectionLabel>
           {results != null && !loading && (
             <span className="ml-2 inline-flex items-center justify-center rounded-full bg-primary/10 text-primary text-xs px-1.5 py-0.5 font-medium">
@@ -5091,7 +5091,7 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
                     <tr className="border-b border-border bg-muted/30">
                       <th className="pl-4 pr-2 py-2 text-left tp-table-header whitespace-nowrap">Ticker</th>
                       <th className="px-2 py-2 text-left tp-table-header whitespace-nowrap">Type</th>
-                      <th className="px-2 py-2 text-left tp-table-header whitespace-nowrap">Expiration</th>
+                      <th className="px-2 py-2 text-left tp-table-header whitespace-nowrap">Exp</th>
                       <th className="px-2 py-2 text-right tp-table-header whitespace-nowrap">DTE</th>
                       <th className="px-2 py-2 text-right tp-table-header whitespace-nowrap">Strike</th>
                       <th className="px-2 py-2 text-right tp-table-header whitespace-nowrap">Underlying</th>
@@ -5776,7 +5776,7 @@ function ImportOptionsModal({ open, onClose, onComplete }: {
                   <ColumnHeader className="px-2 py-1.5">Ticker</ColumnHeader>
                   <ColumnHeader className="px-2 py-1.5">Type</ColumnHeader>
                   <ColumnHeader className="px-2 py-1.5 text-right">Strike</ColumnHeader>
-                  <ColumnHeader className="px-2 py-1.5">Expiration</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5">Exp</ColumnHeader>
                   <ColumnHeader className="px-2 py-1.5">Opened</ColumnHeader>
                   <ColumnHeader className="px-2 py-1.5 text-right">Premium</ColumnHeader>
                   <ColumnHeader className="px-2 py-1.5 text-right">Qty</ColumnHeader>
