@@ -3141,10 +3141,14 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
   }
 
   const sorted = [...positions].sort((a, b) => {
-    const expDiff = a.expirationDate.localeCompare(b.expirationDate);
-    if (expDiff !== 0) return expDiff;
+    const aClose = a.closedAt ? a.closedAt.split("T")[0] : a.expirationDate.split("T")[0];
+    const bClose = b.closedAt ? b.closedAt.split("T")[0] : b.expirationDate.split("T")[0];
+    const closeDiff = aClose.localeCompare(bClose);
+    if (closeDiff !== 0) return closeDiff;
     const tickerDiff = a.ticker.symbol.localeCompare(b.ticker.symbol);
     if (tickerDiff !== 0) return tickerDiff;
+    const expDiff = a.expirationDate.localeCompare(b.expirationDate);
+    if (expDiff !== 0) return expDiff;
     const strikeDiff = Number(a.strikePrice) - Number(b.strikePrice);
     if (strikeDiff !== 0) return strikeDiff;
     return Number(a.premiumPerShare) - Number(b.premiumPerShare);
@@ -3367,7 +3371,11 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                 {isColOpen("dates") ? (
                   <>
                     <td className={cn(td, "border-l border-border/50")} title={fmtDateTimeFull(p.openedAt)}>{fmtDateTimeShort(p.openedAt)}</td>
-                    <td className={td} title={p.closedAt ? fmtDateTimeFull(p.closedAt) : undefined}>{p.closedAt ? fmtDateTimeShort(p.closedAt) : fmtDate(p.expirationDate)}</td>
+                    <td className={td} title={(() => {
+                      if (p.closedAt) return fmtDateTimeFull(p.closedAt);
+                      const [ey, em, ed] = p.expirationDate.split("T")[0].split("-").map(Number);
+                      return fmtDateTimeFull(new Date(Date.UTC(ey, em - 1, ed, 20, 0, 0)).toISOString());
+                    })()}>{p.closedAt ? fmtDateTimeShort(p.closedAt) : fmtDate(p.expirationDate)}</td>
                     <td className={td}>{c.daysInTrade != null ? `${Math.round(c.daysInTrade)}d` : "—"}</td>
                   </>
                 ) : (
@@ -5346,16 +5354,6 @@ export function OptionsTrading() {
         capitalChanges={capitalChanges ?? []}
       />
 
-      {/* Performance Charts */}
-      <PerformanceCharts
-        openPositions={openPositions}
-        closedPositions={closedPositions}
-        settings={settings ?? null}
-      />
-
-      {/* Performance Table */}
-      <PerformanceTable positions={normalizedPositions.filter((p) => !p.isDraft)} />
-
       {/* Tabs */}
       <Card>
         <div className="flex border-b border-border px-4">
@@ -5399,6 +5397,16 @@ export function OptionsTrading() {
           )}
         </div>
       </Card>
+
+      {/* Performance Charts */}
+      <PerformanceCharts
+        openPositions={openPositions}
+        closedPositions={closedPositions}
+        settings={settings ?? null}
+      />
+
+      {/* Performance Table */}
+      <PerformanceTable positions={normalizedPositions.filter((p) => !p.isDraft)} />
 
       {/* Option Screener */}
       <OptionScreener trackedTickers={tickers ?? []} onDraftCreated={refetchAll} />
