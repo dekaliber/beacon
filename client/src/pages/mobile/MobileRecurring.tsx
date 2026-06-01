@@ -131,19 +131,19 @@ function UpcomingStrip({ expenses }: { expenses: UpcomingExpenseItem[] }) {
                           );
                         })}
                         {dayExpenses.length > 2 && (
-                          <div className="h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-semibold bg-muted text-muted-foreground ring-1 ring-background">
+                          <div className="h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-semibold bg-secondary text-muted-foreground ring-1 ring-background">
                             +{dayExpenses.length - 2}
                           </div>
                         )}
                       </div>
                     </div>
                     {debits.length > 0 && (
-                      <span className="rounded bg-muted px-1 py-0.5 text-[9px] font-medium text-foreground whitespace-nowrap">
+                      <span className="rounded bg-secondary px-1 py-0.5 text-[9px] font-medium text-foreground whitespace-nowrap">
                         {formatCurrency(debitTotal)}
                       </span>
                     )}
                     {credits.length > 0 && (
-                      <span className="rounded bg-muted px-1 py-0.5 text-[9px] font-medium text-up whitespace-nowrap">
+                      <span className="rounded bg-secondary px-1 py-0.5 text-[9px] font-medium text-up whitespace-nowrap">
                         +{formatCurrency(creditTotal)}
                       </span>
                     )}

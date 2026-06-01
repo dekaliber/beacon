@@ -432,7 +432,7 @@ export function MobileDashboard() {
         <Card>
           <div className="mb-3 flex items-start justify-between gap-2">
             <p className="tp-eyebrow">Monthly Pace</p>
-            <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-muted p-0.5 text-xs font-medium">
+            <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-secondary p-0.5 text-xs font-medium">
               {(["total", "personal", "joint"] as const).map((v) => (
                 <button
                   key={v}
@@ -579,7 +579,7 @@ export function MobileDashboard() {
                   vs {dashboardOutliers.previousMonthLabel} · {dashboardOutliers.comparisonNote}
                 </p>
               </div>
-              <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5 text-xs font-medium">
+              <div className="flex items-center gap-0.5 rounded-lg bg-secondary p-0.5 text-xs font-medium">
                 <button
                   onClick={() => setOutlierComparison("mom")}
                   className={`rounded-md px-2.5 py-1 transition-colors ${

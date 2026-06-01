@@ -92,7 +92,7 @@ function KeyboardShortcutsButton() {
                     <Caption>{s.conditional}</Caption>
                   )}
                 </div>
-                <kbd className="shrink-0 inline-flex items-center justify-center rounded border border-border bg-muted px-1.5 py-0.5 text-xs font-mono font-medium">
+                <kbd className="shrink-0 inline-flex items-center justify-center rounded border border-border bg-secondary px-1.5 py-0.5 text-xs font-mono font-medium">
                   {s.key}
                 </kbd>
               </div>

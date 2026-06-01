@@ -575,7 +575,7 @@ function BudgetPanelCard({
     <div className="space-y-2">
       <BandLabel
         action={
-          <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5 text-xs font-medium">
+          <div className="flex items-center gap-0.5 rounded-lg bg-secondary p-0.5 text-xs font-medium">
             <button
               type="button"
               onClick={() => showDiscretionary && onToggleDiscretionary()}

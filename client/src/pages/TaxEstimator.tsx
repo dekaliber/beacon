@@ -693,7 +693,7 @@ export function TaxEstimatorPage() {
 
   const rateLabel = (bucket: TaxBucket, groupSTCG?: number, groupLTCG?: number, groupCollectible?: number): React.ReactNode => {
     if (bucket === "exempt" || bucket === "return_of_capital")
-      return <RateBadge label="Non-taxable" className="bg-muted text-muted-foreground" />;
+      return <RateBadge label="Non-taxable" className="bg-border text-muted-foreground" />;
     if (bucket === "qualified_dividend")
       return <RateBadge label={`${fmtPct(calc.marginalPrefRate)} capital gains rate`} className="bg-up-soft text-up-deep" />;
     if (bucket === "capital_gain") {
@@ -1355,7 +1355,7 @@ export function TaxEstimatorPage() {
           {/* Tab strip */}
           <div className="mb-4 flex items-center gap-3">
             <Landmark className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5 text-xs font-medium">
+            <div className="flex items-center gap-0.5 rounded-lg bg-secondary p-0.5 text-xs font-medium">
               <button
                 type="button"
                 onClick={() => setTaxBreakdownTab("federal")}

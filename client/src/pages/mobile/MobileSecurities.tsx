@@ -204,7 +204,7 @@ export function MobileSecurities() {
                 return (
                   <StatValue
                     key={w.assetClassId}
-                    className="rounded bg-muted px-1.5 py-0.5 text-10 text-muted-foreground font-medium whitespace-nowrap"
+                    className="rounded bg-border px-1.5 py-0.5 text-10 text-muted-foreground font-medium whitespace-nowrap"
                   >
                     {abbrev} {pct}%
                   </StatValue>
@@ -463,7 +463,7 @@ function EditOverlay({ instrument, allInstruments, assetClasses, onClose, onSave
                 ? "bg-down/10 text-down"
                 : total >= 99.9
                 ? "bg-up-soft text-up-deep"
-                : "bg-muted text-muted-foreground",
+                : "bg-secondary text-muted-foreground",
             )}>
               <span>Total</span>
               <span>{total.toFixed(1)}%</span>

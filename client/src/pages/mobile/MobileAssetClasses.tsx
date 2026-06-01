@@ -173,7 +173,7 @@ export function MobileAssetClasses() {
                     <span className={cn(
                       "shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
                       derived !== undefined
-                        ? "bg-muted text-muted-foreground"
+                        ? "bg-secondary text-muted-foreground"
                         : displayTarget != null
                         ? "bg-primary/10 text-primary"
                         : "text-muted-foreground"
@@ -325,7 +325,7 @@ function MobileAssetClassModal({
         <div className="flex items-center gap-2">
           <h2 className="tp-panel-title">{title}</h2>
           {editing?.isSystem && (
-            <span className="rounded bg-muted px-1.5 py-0.5 text-10 font-medium text-muted-foreground">
+            <span className="rounded bg-border px-1.5 py-0.5 text-10 font-medium text-muted-foreground">
               built-in
             </span>
           )}

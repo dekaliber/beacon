@@ -651,7 +651,7 @@ function HoldingDetailSheet({
             <div className="flex items-center gap-2">
               <span className="font-bold text-lg">{holding?.ticker}</span>
               {holding?.type && (
-                <span className="rounded bg-muted px-1.5 py-0.5 tp-caption">
+                <span className="rounded bg-border px-1.5 py-0.5 tp-caption">
                   {holding.type}
                 </span>
               )}
@@ -1091,7 +1091,7 @@ function TickerSearch({
                 <span className="tp-caption truncate">{r.name}</span>
               </div>
               <div className="flex items-center gap-2 tp-caption shrink-0 ml-3">
-                <span className="rounded bg-muted px-1.5 py-0.5">{r.type}</span>
+                <span className="rounded bg-border px-1.5 py-0.5">{r.type}</span>
               </div>
             </button>
           ))}
@@ -1903,7 +1903,7 @@ export function MobileInvestmentAccount() {
                         key={ticker}
                         onClick={() => toggleTicker(ticker)}
                         className={`rounded-full border px-2.5 py-0.5 text-xs font-mono font-medium transition-colors ${
-                          active ? "bg-muted text-foreground border-foreground/30" : "border-border text-muted-foreground"
+                          active ? "bg-secondary text-foreground border-foreground/30" : "border-border text-muted-foreground"
                         }`}
                       >
                         {ticker}

@@ -412,7 +412,7 @@ export function Dashboard() {
             <div>
               <SectionLabel>Monthly Pace</SectionLabel>
             </div>
-            <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-muted p-0.5 text-xs font-medium">
+            <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-secondary p-0.5 text-xs font-medium">
               {(["total", "personal", "joint"] as const).map((v) => (
                 <button
                   key={v}
@@ -557,7 +557,7 @@ export function Dashboard() {
                     Top 10 subcategory changes vs {dashboardOutliers.previousMonthLabel} · {dashboardOutliers.comparisonNote}
                   </p>
                 </div>
-                <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5 text-xs font-medium">
+                <div className="flex items-center gap-0.5 rounded-lg bg-secondary p-0.5 text-xs font-medium">
                   <button
                     onClick={() => setOutlierComparison("mom")}
                     className={`rounded-md px-2.5 py-1 transition-colors ${outlierComparison === "mom" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}

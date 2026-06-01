@@ -194,7 +194,7 @@ export function SecuritiesPage() {
               return (
                 <StatValue
                   key={w.assetClassId}
-                  className="rounded bg-muted px-1.5 py-0.5 tp-caption font-medium whitespace-nowrap"
+                  className="rounded bg-border px-1.5 py-0.5 tp-caption font-medium whitespace-nowrap"
                 >
                   {abbrev} {pct}%
                 </StatValue>
@@ -553,7 +553,7 @@ function EditModal({ open, instrument, allInstruments, assetClasses, onClose, on
           {activeAliases.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
               {activeAliases.map((t) => (
-                <span key={t.id} className="flex items-center gap-0.5 rounded bg-muted px-2 py-0.5 text-sm font-medium">
+                <span key={t.id} className="flex items-center gap-0.5 rounded bg-border px-2 py-0.5 text-sm font-medium">
                   {t.ticker}
                   <button
                     onClick={() => setToRemove((prev) => new Set([...prev, t.ticker]))}

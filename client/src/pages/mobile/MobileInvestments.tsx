@@ -275,7 +275,7 @@ function WithdrawalSheet({
                     <div
                       className={`w-[60%] rounded-t-sm transition-colors ${
                         m.isFuture
-                          ? "bg-muted"
+                          ? "bg-secondary"
                           : isSelected
                           ? "bg-primary"
                           : "bg-primary/50"

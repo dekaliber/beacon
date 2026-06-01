@@ -1036,7 +1036,7 @@ function WithdrawalRateCard({
                     <div
                       className={`w-[55%] rounded-t-sm transition-colors cursor-default ${
                         m.isFuture
-                          ? "bg-muted"
+                          ? "bg-secondary"
                           : "bg-primary/50 hover:bg-primary/80"
                       }`}
                       style={{ height: heightPct > 0 ? `${heightPct}%` : m.isFuture ? "3px" : "2px" }}

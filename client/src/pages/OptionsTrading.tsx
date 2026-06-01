@@ -3414,7 +3414,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                     p.outcome === "EXPIRED_WORTHLESS" ? "bg-up-soft text-up-deep" :
                     p.outcome === "ASSIGNED" ? "bg-warn-soft text-warn-deep" :
                     p.outcome === "ROLLED" ? "bg-blue-soft text-blue-deep" :
-                    "bg-muted text-muted-foreground"
+                    "bg-secondary text-muted-foreground"
                   )}>
                     {p.outcome ? outcomeLabel[p.outcome] : "—"}
                   </span>
@@ -5370,7 +5370,7 @@ export function OptionsTrading() {
           <button className={tabClass(tab === "closed")} onClick={() => setTab("closed")}>
             Closed / Expired
             {closedPositions.length > 0 && (
-              <span className="ml-2 inline-flex items-center justify-center rounded-full bg-muted text-muted-foreground text-xs px-1.5 py-0.5 font-medium">
+              <span className="ml-2 inline-flex items-center justify-center rounded-full bg-border text-muted-foreground text-xs px-1.5 py-0.5 font-medium">
                 {closedPositions.length}
               </span>
             )}

@@ -743,7 +743,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                           </SectionLabel>
                         )}
                         {event.type === "CC_PAYMENT" && !event.overrideId && (
-                          <SectionLabel as="span" className="rounded-full bg-muted px-1.5 py-0.5 text-10">
+                          <SectionLabel as="span" className="rounded-full bg-border px-1.5 py-0.5 text-10">
                             Estimated
                           </SectionLabel>
                         )}

@@ -544,7 +544,7 @@ function CCPaymentSheet({
                   Confirmed
                 </SectionLabel>
               ) : (
-                <SectionLabel as="span" className="rounded-full bg-muted px-2 py-0.5 text-10">
+                <SectionLabel as="span" className="rounded-full bg-border px-2 py-0.5 text-10">
                   Estimated
                 </SectionLabel>
               )}
@@ -762,7 +762,7 @@ function MobileEventsLedger({
                   </SectionLabel>
                 )}
                 {event.type === "CC_PAYMENT" && !event.overrideId && (
-                  <SectionLabel as="span" className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-10">
+                  <SectionLabel as="span" className="ml-1.5 rounded-full bg-border px-1.5 py-0.5 text-10">
                     Estimated
                   </SectionLabel>
                 )}

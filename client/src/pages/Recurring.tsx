@@ -144,7 +144,7 @@ function VendorBubbles({ items }: { items: UpcomingExpenseItem[] }) {
       <div className="flex -space-x-2">
         {visible.map((e, i) => <VendorBubble key={i} item={e} />)}
         {overflow > 0 && (
-          <div className="h-7 w-7 rounded-full flex items-center justify-center text-10 font-semibold bg-muted text-muted-foreground ring-2 ring-background">
+          <div className="h-7 w-7 rounded-full flex items-center justify-center text-10 font-semibold bg-secondary text-muted-foreground ring-2 ring-background">
             +{overflow}
           </div>
         )}
@@ -208,12 +208,12 @@ function UpcomingStrip({ expenses }: { expenses: UpcomingExpenseItem[] }) {
                   <>
                     <VendorBubbles items={dayExpenses} />
                     {debits.length > 0 && (
-                      <span className="rounded-md bg-muted px-1.5 py-0.5 text-11 font-medium text-foreground whitespace-nowrap">
+                      <span className="rounded-md bg-secondary px-1.5 py-0.5 text-11 font-medium text-foreground whitespace-nowrap">
                         {formatCurrency(debitTotal)}
                       </span>
                     )}
                     {credits.length > 0 && (
-                      <span className="rounded-md bg-muted px-1.5 py-0.5 text-11 font-medium text-up whitespace-nowrap">
+                      <span className="rounded-md bg-secondary px-1.5 py-0.5 text-11 font-medium text-up whitespace-nowrap">
                         +{formatCurrency(creditTotal)}
                       </span>
                     )}

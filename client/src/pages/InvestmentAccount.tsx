@@ -383,7 +383,7 @@ function TickerSearch({
                   <span className="tp-caption truncate">{r.name}</span>
                 </div>
                 <div className="flex items-center gap-2 tp-caption flex-shrink-0 ml-3">
-                  <span className="rounded bg-muted px-1.5 py-0.5">{r.type}</span>
+                  <span className="rounded bg-border px-1.5 py-0.5">{r.type}</span>
                   {mode === "stocks" && <span>{r.exchange}</span>}
                 </div>
               </button>
@@ -1108,7 +1108,7 @@ function AddLotRow({
   }
 
   return (
-    <tr className="bg-muted text-xs">
+    <tr className="bg-secondary text-xs">
       <td colSpan={2} className="py-2 pl-4 pr-2">
         <SmartDateInput
           value={date}
@@ -2481,7 +2481,7 @@ function SellModal({
                 </div>
                 <div className="max-h-52 overflow-y-auto rounded border border-border">
                   <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-muted z-10">
+                    <thead className="sticky top-0 bg-secondary z-10">
                       <tr>
                         <th className="py-2 px-3 text-left tp-table-header">Acquired</th>
                         <th className="py-2 px-3 text-right tp-table-header">Available</th>
@@ -4381,7 +4381,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
                         onClick={() => toggleTicker(ticker)}
                         className={`rounded-full border px-2.5 py-0.5 text-xs font-mono font-medium transition-colors ${
                           active
-                            ? "bg-muted text-foreground border-foreground/30"
+                            ? "bg-secondary text-foreground border-foreground/30"
                             : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
                         }`}
                       >
