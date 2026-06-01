@@ -796,7 +796,7 @@ export function WithdrawalsPage() {
             </Button>
           </div>
           <Button onClick={() => { setEditingEvent(null); setTransferModalOpen(true); }}>
-            <Plus className="h-4 w-4 mr-1.5" />
+            <Plus className="h-4 w-4" />
             Add Transfer
           </Button>
         </div>
@@ -871,7 +871,7 @@ export function WithdrawalsPage() {
             brokerage withdrawal.
           </p>
           <Button onClick={() => { setEditingEvent(null); setTransferModalOpen(true); }}>
-            <Plus className="h-4 w-4 mr-1.5" />
+            <Plus className="h-4 w-4" />
             Add Transfer
           </Button>
         </Card>

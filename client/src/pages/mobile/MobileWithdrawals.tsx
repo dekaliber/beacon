@@ -850,7 +850,7 @@ export function MobileWithdrawals() {
             size="sm"
             onClick={() => { setEditingEvent(null); setTransferOpen(true); }}
           >
-            <Plus className="h-4 w-4 mr-1.5" />
+            <Plus className="h-4 w-4" />
             Add Transfer
           </Button>
         </div>

@@ -42,7 +42,7 @@ import { useNotifications } from "@/context/NotificationContext";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
-import { Plus, ChevronDown, ChevronUp, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, Filter, BookmarkPlus, BookmarkCheck } from "lucide-react";
+import { Plus, ChevronDown, ChevronUp, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, Filter, BookmarkPlus, BookmarkCheck, Info } from "lucide-react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { SectionLabel, ColumnHeader, StatValue } from "@/components/Typography";
@@ -4108,6 +4108,115 @@ function CapitalDistributionBar({
   );
 }
 
+// ── Market calendar helpers ─────────────────────────────────────────────────
+// Uses Intl.DateTimeFormat("America/New_York") throughout so DST is handled
+// correctly — no hardcoded UTC-4/UTC-5 offsets.
+
+const _etFmt = {
+  date: new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric", month: "2-digit", day: "2-digit", weekday: "short",
+  }),
+  offset: new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", timeZoneName: "shortOffset",
+  }),
+};
+const _WDAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+// Get ET date components + weekday (0=Sun…6=Sat) for any UTC timestamp.
+// Pass a midday-ish UTC time (not midnight) so the ET date matches the intended
+// calendar day for all US timezones.
+function _etDate(utcMs: number) {
+  const parts = _etFmt.date.formatToParts(new Date(utcMs));
+  const g = (t: string) => Number(parts.find(p => p.type === t)!.value);
+  return {
+    year: g("year"), month: g("month"), day: g("day"),
+    dow: _WDAYS.indexOf(parts.find(p => p.type === "weekday")!.value),
+  };
+}
+
+// Convert an ET clock time (year, month, day, hour, minute) to a UTC timestamp,
+// accounting for DST automatically via the shortOffset trick from priceUtils.ts.
+function _etToUTC(year: number, month: number, day: number, hour: number, minute = 0): number {
+  const ref = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)); // noon UTC same calendar day
+  const tzStr = _etFmt.offset.formatToParts(ref).find(p => p.type === "timeZoneName")!.value;
+  const m = tzStr.match(/GMT([+-])(\d+)/)!;
+  const offsetStr = `${m[1]}${m[2].padStart(2, "0")}:00`;
+  const hh = String(hour).padStart(2, "0"), mm = String(minute).padStart(2, "0");
+  const mo = String(month).padStart(2, "0"), dd = String(day).padStart(2, "0");
+  return new Date(`${year}-${mo}-${dd}T${hh}:${mm}:00${offsetStr}`).getTime();
+}
+
+// ET weekday (0=Sun…6=Sat) for a calendar date (pass noon UTC to avoid day boundary).
+function _etDOW(year: number, month: number, day: number): number {
+  return _etDate(Date.UTC(year, month - 1, day, 12, 0, 0)).dow;
+}
+
+// [year, month, day] of the observed holiday for a calendar date.
+function _observed(y: number, mo: number, d: number): [number, number, number] {
+  const dow = _etDOW(y, mo, d);
+  if (dow === 6) { const t = new Date(Date.UTC(y, mo - 1, d - 1, 12)); return [t.getUTCFullYear(), t.getUTCMonth()+1, t.getUTCDate()]; }
+  if (dow === 0) { const t = new Date(Date.UTC(y, mo - 1, d + 1, 12)); return [t.getUTCFullYear(), t.getUTCMonth()+1, t.getUTCDate()]; }
+  return [y, mo, d];
+}
+
+// [year, month, day] of the nth occurrence (n<0 = from end) of a weekday in a month.
+function _nthWD(year: number, month: number, weekday: number, n: number): [number, number, number] {
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (n > 0) {
+    for (let d = 1; d <= daysInMonth; d++) {
+      if (_etDOW(year, month, d) === weekday) {
+        const target = new Date(Date.UTC(year, month - 1, d + (n - 1) * 7, 12));
+        return [target.getUTCFullYear(), target.getUTCMonth()+1, target.getUTCDate()];
+      }
+    }
+  } else {
+    let count = 0;
+    for (let d = daysInMonth; d >= 1; d--) {
+      if (_etDOW(year, month, d) === weekday) {
+        count--;
+        if (count === n) return [year, month, d];
+      }
+    }
+  }
+  throw new Error(`_nthWD: not found ${year}/${month} wd=${weekday} n=${n}`);
+}
+
+// [year, month, day] of Easter Sunday (Gregorian algorithm).
+function _easter(y: number): [number, number, number] {
+  const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25);
+  const g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4;
+  const l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451);
+  const mo=Math.floor((h+l-7*m+114)/31), dy=((h+l-7*m+114)%31)+1;
+  return [y, mo, dy];
+}
+
+// Returns true if (etYear, etMonth, etDay) is a US market holiday.
+function isUSMarketHoliday(etYear: number, etMonth: number, etDay: number): boolean {
+  const [eY, eM, eD] = _easter(etYear);
+  const goodFri = new Date(Date.UTC(eY, eM-1, eD-2, 12));
+  const holidays: Array<[number,number,number]> = [
+    _observed(etYear, 1, 1),                                              // New Year's Day
+    _nthWD(etYear, 1, 1, 3),                                             // MLK Day
+    _nthWD(etYear, 2, 1, 3),                                             // Presidents Day
+    [goodFri.getUTCFullYear(), goodFri.getUTCMonth()+1, goodFri.getUTCDate()], // Good Friday
+    _nthWD(etYear, 5, 1, -1),                                            // Memorial Day
+    ...(etYear >= 2021 ? [_observed(etYear, 6, 19)] : []),               // Juneteenth
+    _observed(etYear, 7, 4),                                             // Independence Day
+    _nthWD(etYear, 9, 1, 1),                                             // Labor Day
+    _nthWD(etYear, 11, 4, 4),                                            // Thanksgiving
+    _observed(etYear, 12, 25),                                           // Christmas
+  ];
+  return holidays.some(([y,m,d]) => y===etYear && m===etMonth && d===etDay);
+}
+
+// Returns true if the calendar day containing utcMs (evaluated in ET) is a
+// weekend or US market holiday.  Pass a midday-ish UTC timestamp per _etDate's contract.
+function isNonTradingDay(utcMs: number): boolean {
+  const { year, month, day, dow } = _etDate(utcMs + 12 * 3600_000);
+  return dow === 0 || dow === 6 || isUSMarketHoliday(year, month, day);
+}
+
 // ── Summary Cards ──────────────────────────────────────────────────────────────
 
 function SummaryCards({
@@ -4121,6 +4230,272 @@ function SummaryCards({
   settings: OptionsSettings | null;
   capitalChanges: OptionsCapitalChange[];
 }) {
+  // ── Capital utilization series ────────────────────────────────────────────
+  const utilizationData = useMemo(() => {
+    if (!settings?.startingWeek || !settings?.startingBasis) return null;
+
+    const windowStartMs = getWeekStart(new Date(settings.startingWeek + "T12:00:00")).getTime();
+    const windowEndMs = Date.now();
+    if (windowEndMs <= windowStartMs) return null;
+
+    // Build basis step-function: same period boundaries as the annualized return calc
+    const changesAfterStart = capitalChanges
+      .filter((c) => new Date(c.effectiveDate + "T12:00:00").getTime() > windowStartMs)
+      .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
+
+    const basisPeriods: { startMs: number; basis: number }[] = [
+      { startMs: windowStartMs, basis: Number(settings.startingBasis) },
+    ];
+    for (const c of changesAfterStart) {
+      const changeMs = new Date(c.effectiveDate + "T12:00:00").getTime();
+      const prevBasis = basisPeriods[basisPeriods.length - 1].basis;
+      basisPeriods.push({ startMs: changeMs, basis: prevBasis + Number(c.delta) });
+    }
+
+    const getBasis = (dayStartMs: number): number => {
+      let basis = basisPeriods[0].basis;
+      for (const period of basisPeriods) {
+        if (period.startMs <= dayStartMs) basis = period.basis;
+        else break;
+      }
+      return basis;
+    };
+
+    const allPositions = [...openPositions, ...closedPositions].filter(
+      (p) => !p.isDraft && p.isActive
+    );
+
+    const DAY_MS = 86_400_000;
+    const MINUTE_MS = 60_000;
+
+    // For closed/expired/assigned positions with no closedAt, use expiration at 4 pm ET
+    // rather than windowEndMs — otherwise they inflate utilization beyond their expiry date.
+    const getPosCloseMs = (pos: OptionsPosition): number => {
+      if (pos.closedAt) return new Date(pos.closedAt).getTime();
+      if (pos.status === "OPEN") return windowEndMs;
+      const [ey, em, ed] = pos.expirationDate.split("T")[0].split("-").map(Number);
+      return new Date(Date.UTC(ey, em - 1, ed, 20, 0, 0)).getTime();
+    };
+
+    type SeriesEntry = {
+      dayMs: number;
+      utilization: number;
+      basis: number;
+      capitalDeployed: number;
+      contributors: { label: string; capitalAtRisk: number; overlapMin: number }[];
+    };
+    const series: SeriesEntry[] = [];
+    let totalCapitalMinutes = 0;
+    let totalBasisMinutes = 0;
+
+    let dayMs = windowStartMs;
+    while (dayMs < windowEndMs) {
+      if (isNonTradingDay(dayMs)) { dayMs += DAY_MS; continue; }
+
+      const dayEndMs = Math.min(dayMs + DAY_MS, windowEndMs);
+      const dayDurationMin = (dayEndMs - dayMs) / MINUTE_MS;
+      const basis = getBasis(dayMs);
+
+      if (basis > 0) {
+        let capitalMin = 0;
+        const contributors: SeriesEntry["contributors"] = [];
+        for (const pos of allPositions) {
+          const openMs = new Date(pos.openedAt).getTime();
+          const closeMs = getPosCloseMs(pos);
+          const overlapStart = Math.max(openMs, dayMs);
+          const overlapEnd = Math.min(closeMs, dayEndMs);
+          if (overlapEnd > overlapStart) {
+            const overlapMin = (overlapEnd - overlapStart) / MINUTE_MS;
+            const car = calcPosition(pos).capitalAtRisk;
+            capitalMin += car * overlapMin;
+            const expStr = pos.expirationDate.split("T")[0].slice(5); // MM-DD
+            contributors.push({
+              label: `${pos.ticker.symbol} ${pos.status} ${pos.side} ${pos.optionType} $${pos.strikePrice} exp ${expStr} ×${pos.contracts}`,
+              capitalAtRisk: car,
+              overlapMin,
+            });
+          }
+        }
+        const capitalDeployed = capitalMin / dayDurationMin;
+        const utilization = capitalDeployed / basis;
+        series.push({ dayMs, utilization, basis, capitalDeployed, contributors });
+        totalCapitalMinutes += capitalMin;
+        totalBasisMinutes += basis * dayDurationMin;
+      }
+
+      dayMs += DAY_MS;
+    }
+
+    const overallRate = totalBasisMinutes > 0 ? (totalCapitalMinutes / totalBasisMinutes) * 100 : null;
+    const yMax = Math.max(1.0, ...series.map((d) => d.utilization));
+
+    return { series, overallRate, yMax };
+  }, [openPositions, closedPositions, settings, capitalChanges]);
+  void utilizationData; // 24hr version kept for reference; panel render removed
+
+  // ── Capital utilization (market hours only: 9:30–4:00 ET) ─────────────────
+  const utilizationDataTrading = useMemo(() => {
+    if (!settings?.startingWeek || !settings?.startingBasis) return null;
+
+    const windowStartMs = getWeekStart(new Date(settings.startingWeek + "T12:00:00")).getTime();
+    const windowEndMs = Date.now();
+    if (windowEndMs <= windowStartMs) return null;
+
+    const changesAfterStart = capitalChanges
+      .filter((c) => new Date(c.effectiveDate + "T12:00:00").getTime() > windowStartMs)
+      .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
+
+    const basisPeriods: { startMs: number; basis: number }[] = [
+      { startMs: windowStartMs, basis: Number(settings.startingBasis) },
+    ];
+    for (const c of changesAfterStart) {
+      const changeMs = new Date(c.effectiveDate + "T12:00:00").getTime();
+      const prevBasis = basisPeriods[basisPeriods.length - 1].basis;
+      basisPeriods.push({ startMs: changeMs, basis: prevBasis + Number(c.delta) });
+    }
+
+    const getBasis = (dayStartMs: number): number => {
+      let basis = basisPeriods[0].basis;
+      for (const period of basisPeriods) {
+        if (period.startMs <= dayStartMs) basis = period.basis;
+        else break;
+      }
+      return basis;
+    };
+
+    const allPositions = [...openPositions, ...closedPositions].filter(
+      (p) => !p.isDraft && p.isActive
+    );
+
+    const DAY_MS = 86_400_000;
+    const MINUTE_MS = 60_000;
+
+    const getPosCloseMs = (pos: OptionsPosition): number => {
+      if (pos.closedAt) return new Date(pos.closedAt).getTime();
+      if (pos.status === "OPEN") return windowEndMs;
+      const [ey, em, ed] = pos.expirationDate.split("T")[0].split("-").map(Number);
+      return new Date(Date.UTC(ey, em - 1, ed, 20, 0, 0)).getTime();
+    };
+
+    type TradingSeriesEntry = {
+      dayMs: number;
+      utilization: number;
+      basis: number;
+      capitalDeployed: number;
+      tradingDurationMin: number;
+      contributors: { label: string; capitalAtRisk: number; overlapMin: number }[];
+    };
+    const series: TradingSeriesEntry[] = [];
+    let totalCapitalMinutes = 0;
+    let totalBasisMinutes = 0;
+
+    let dayMs = windowStartMs;
+    while (dayMs < windowEndMs) {
+      // Anchor to UTC midnight so ET clock times are timezone-independent
+      if (isNonTradingDay(dayMs)) { dayMs += DAY_MS; continue; }
+      const { year: etY, month: etMo, day: etD } = _etDate(dayMs + 12 * 3600_000);
+      const tradingOpenMs  = _etToUTC(etY, etMo, etD, 9, 30);
+      const tradingCloseMs = Math.min(_etToUTC(etY, etMo, etD, 16, 0), windowEndMs);
+
+      if (tradingOpenMs < windowEndMs && tradingCloseMs > tradingOpenMs) {
+        const tradingDurationMin = (tradingCloseMs - tradingOpenMs) / MINUTE_MS;
+        const basis = getBasis(dayMs);
+
+        if (basis > 0) {
+          let capitalMin = 0;
+          const contributors: TradingSeriesEntry["contributors"] = [];
+          for (const pos of allPositions) {
+            const openMs = new Date(pos.openedAt).getTime();
+            const closeMs = getPosCloseMs(pos);
+            const overlapStart = Math.max(openMs, tradingOpenMs);
+            const overlapEnd = Math.min(closeMs, tradingCloseMs);
+            if (overlapEnd > overlapStart) {
+              const overlapMin = (overlapEnd - overlapStart) / MINUTE_MS;
+              const car = calcPosition(pos).capitalAtRisk;
+              capitalMin += car * overlapMin;
+              const expStr = pos.expirationDate.split("T")[0].slice(5);
+              contributors.push({
+                label: `${pos.ticker.symbol} ${pos.status} ${pos.side} ${pos.optionType} $${pos.strikePrice} exp ${expStr} ×${pos.contracts}`,
+                capitalAtRisk: car,
+                overlapMin,
+              });
+            }
+          }
+          const capitalDeployed = capitalMin / tradingDurationMin;
+          const utilization = capitalDeployed / basis;
+          series.push({ dayMs, utilization, basis, capitalDeployed, tradingDurationMin, contributors });
+          totalCapitalMinutes += capitalMin;
+          totalBasisMinutes += basis * tradingDurationMin;
+        }
+      }
+
+      dayMs += DAY_MS;
+    }
+
+    const overallRate = totalBasisMinutes > 0 ? (totalCapitalMinutes / totalBasisMinutes) * 100 : null;
+    const yMax = Math.max(1.0, ...series.map((d) => d.utilization));
+
+    return { series, overallRate, yMax };
+  }, [openPositions, closedPositions, settings, capitalChanges]);
+
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const [chartWidth, setChartWidth] = useState(0);
+  useEffect(() => {
+    const el = chartContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => setChartWidth(Math.floor(entries[0].contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Pre-compute display bars (past trading days + future bars to fill available width)
+  // with x positions that include a 2px gap at each week boundary.
+  const displayBars = useMemo(() => {
+    if (!utilizationDataTrading || chartWidth === 0) return null;
+    const td = utilizationDataTrading;
+    const BAR_W = 5, GAP = 2, DAY_MS = 86_400_000;
+    type Bar = { dayMs: number; seriesIdx: number | null; utilization: number; isFuture: boolean; x: number };
+    const bars: Bar[] = [];
+    let x = 0;
+
+    for (let i = 0; i < td.series.length; i++) {
+      const s = td.series[i];
+      // Gap before any bar that is ≥3 calendar days after the previous bar — this
+      // correctly marks week boundaries even when Monday is a market holiday.
+      if (i > 0 && s.dayMs - td.series[i - 1].dayMs >= 3 * DAY_MS) x += GAP;
+      bars.push({ dayMs: s.dayMs, seriesIdx: i, utilization: s.utilization, isFuture: false, x });
+      x += BAR_W;
+    }
+
+    let prevDayMs = td.series.length > 0 ? td.series.at(-1)!.dayMs : null;
+    let dayMs = td.series.length > 0 ? td.series.at(-1)!.dayMs + DAY_MS : Date.now();
+    while (dayMs < Date.now() + 400 * DAY_MS) {
+      if (!isNonTradingDay(dayMs)) {
+        const gap = prevDayMs !== null && dayMs - prevDayMs >= 3 * DAY_MS ? GAP : 0;
+        if (x + gap + BAR_W > chartWidth) break;
+        x += gap;
+        bars.push({ dayMs, seriesIdx: null, utilization: 0, isFuture: true, x });
+        prevDayMs = dayMs;
+        x += BAR_W;
+      }
+      dayMs += DAY_MS;
+    }
+
+    return { bars, vbWidth: x };
+  }, [utilizationDataTrading, chartWidth]);
+
+  const [hoveredBarIdxTrading, setHoveredBarIdxTrading] = useState<number | null>(null);
+  const [showUtilModal, setShowUtilModal] = useState(false);
+
+  const handleChartMouseMoveTrading = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!displayBars) return;
+    const { bars } = displayBars;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const xVB = e.clientX - rect.left;
+    const bar = bars.find(b => xVB >= b.x && xVB < b.x + 5);
+    setHoveredBarIdxTrading(bar && !bar.isFuture ? bar.seriesIdx : null);
+  };
+
   const totalCapitalAtRisk = openPositions.reduce((sum, p) => {
     return sum + calcPosition(p).capitalAtRisk;
   }, 0);
@@ -4214,6 +4589,7 @@ function SummaryCards({
   })();
 
   return (
+    <>
     <div className="grid grid-cols-4 gap-4">
       {/* Capital at Risk */}
       <Card className="p-6">
@@ -4283,6 +4659,133 @@ function SummaryCards({
         </p>
       </Card>
     </div>
+
+    {/* Capital Utilization Panel (24hr) — render removed; utilizationData useMemo + hover state kept above */}
+
+    {/* Capital Utilization Panel (market hours) */}
+    {utilizationDataTrading && utilizationDataTrading.series.length > 0 && (
+      <Card className="p-6 flex items-start">
+        <div className="shrink-0 w-1/4">
+          <span className="flex items-center gap-1">
+            <SectionLabel as="span">Capital Utilization Rate</SectionLabel>
+            <button
+              onClick={() => setShowUtilModal(true)}
+              className="inline-flex items-center text-muted-foreground hover:text-foreground"
+              title="How is this calculated?"
+            >
+              <Info className="h-3 w-3" />
+            </button>
+          </span>
+          <p className="tp-stat mt-1">
+            {utilizationDataTrading.overallRate != null ? fmtPct(utilizationDataTrading.overallRate) : "—"}
+          </p>
+          {settings?.startingWeek && (() => {
+            const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" });
+            const start = getWeekStart(new Date(settings.startingWeek + "T12:00:00"));
+            return <p className="tp-caption mt-0.5">{fmt(start)} to {fmt(new Date())}</p>;
+          })()}
+        </div>
+        {/* ref always mounts so ResizeObserver can measure before displayBars computes */}
+        <div className="flex-1 relative" ref={chartContainerRef}>
+          {displayBars && (
+            <svg
+              viewBox={`0 0 ${displayBars.vbWidth} 66`}
+              width={displayBars.vbWidth}
+              height="66"
+              onMouseMove={handleChartMouseMoveTrading}
+              onMouseLeave={() => setHoveredBarIdxTrading(null)}
+            >
+              {displayBars.bars.map((bar, i) => {
+                const bgH = (1 / utilizationDataTrading.yMax) * 66;
+                const fillH = bar.isFuture ? 0 : Math.min((bar.utilization / utilizationDataTrading.yMax) * 66, 66);
+                const isHovered = bar.seriesIdx !== null && hoveredBarIdxTrading === bar.seriesIdx;
+                return (
+                  <g key={i}>
+                    <rect x={bar.x} y={66 - bgH} width={5} height={bgH} fill="var(--color-border)" opacity={bar.isFuture ? 0.5 : 1} />
+                    {!bar.isFuture && bar.utilization > 0 && (
+                      <rect x={bar.x} y={66 - fillH} width={5} height={fillH}
+                        fill={bar.utilization > 1 ? "var(--color-warn)" : "var(--color-primary)"}
+                        opacity={hoveredBarIdxTrading !== null && !isHovered ? 0.4 : 1}
+                      />
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
+          )}
+          {displayBars && hoveredBarIdxTrading !== null && utilizationDataTrading.series[hoveredBarIdxTrading] && (() => {
+            const bar = utilizationDataTrading.series[hoveredBarIdxTrading];
+            const hovBar = displayBars.bars.find(b => b.seriesIdx === hoveredBarIdxTrading)!;
+            const leftPx = `${hovBar.x + 2}px`;
+            const label = new Date(bar.dayMs).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+            return (
+              <div
+                className="absolute bottom-[calc(100%+6px)] pointer-events-none z-[60] flex flex-col items-center"
+                style={{ left: leftPx, transform: "translateX(-50%)" }}
+              >
+                <div className="rounded border border-border bg-background p-2 text-xs shadow-md whitespace-nowrap">
+                  <p className="font-medium mb-1">{label} — {fmtPct(bar.utilization * 100)}</p>
+                  <p className="text-muted-foreground">Deployed: ${Math.round(bar.capitalDeployed).toLocaleString()}</p>
+                  <p className="text-muted-foreground mb-1">Basis: ${Math.round(bar.basis).toLocaleString()} · {bar.tradingDurationMin.toFixed(0)} min window</p>
+                  {bar.contributors.map((c, ci) => (
+                    <p key={ci} className="text-muted-foreground">{c.label} — ${Math.round(c.capitalAtRisk).toLocaleString()} × {(c.overlapMin / 60).toFixed(1)}h</p>
+                  ))}
+                </div>
+                <div className="w-px h-1.5 bg-border" />
+              </div>
+            );
+          })()}
+        </div>
+      </Card>
+    )}
+
+    {showUtilModal && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
+        onClick={() => setShowUtilModal(false)}
+      >
+        <div
+          className="relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => setShowUtilModal(false)}
+            className="absolute right-4 top-4 rounded-sm p-1 text-muted-foreground opacity-70 hover:opacity-100 hover:bg-accent"
+          >
+            <X className="h-4 w-4" />
+          </button>
+
+          <h3 className="mb-1 tp-panel-title">How Capital Utilization Rate is calculated</h3>
+          <p className="mb-5 tp-caption">
+            Measures how actively your available options capital was deployed in positions, counting only NYSE trading hours (9:30 AM – 4:00 PM ET, excluding weekends and market holidays).
+          </p>
+
+          <div className="space-y-5 text-sm">
+            <section>
+              <h4 className="mb-1.5 font-semibold text-foreground">The formula</h4>
+              <p className="text-muted-foreground leading-relaxed">
+                For each trading day: (Σ capital × minutes deployed per position) ÷ (available basis × trading minutes that day). The overall percentage aggregates this ratio across the full period since your Starting Week.
+              </p>
+            </section>
+
+            <section>
+              <h4 className="mb-1.5 font-semibold text-foreground">Available basis</h4>
+              <p className="text-muted-foreground leading-relaxed">
+                Uses your Starting Basis from Settings, adjusted over time by any dated Basis Adjustments you've recorded.
+              </p>
+            </section>
+
+            <section>
+              <h4 className="mb-1.5 font-semibold text-foreground">Above 100%</h4>
+              <p className="text-muted-foreground leading-relaxed">
+                A day exceeds 100% when capital deployed exceeds your available basis — for example, when using margin. Those bars appear in amber.
+              </p>
+            </section>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   );
 }
 
@@ -4554,7 +5057,7 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
                   onClick={handleRun}
                   disabled={loading || params.tickers.length === 0}
                 >
-                  <Search className="h-4 w-4 mr-1.5" />
+                  <Search className="h-4 w-4" />
                   {loading ? "Scanning…" : "Run Screener"}
                 </Button>
               </div>
@@ -4823,7 +5326,7 @@ export function OptionsTrading() {
               <Upload className="h-4 w-4" /> Import
             </Button>
             <Button onClick={() => setPositionModal("new")}>
-              <Plus className="h-4 w-4 mr-1.5" />
+              <Plus className="h-4 w-4" />
               Open Position
             </Button>
           </div>
