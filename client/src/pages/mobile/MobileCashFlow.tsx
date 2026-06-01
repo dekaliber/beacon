@@ -85,8 +85,8 @@ function BalanceChart({ data }: { data: DailyBalance[] }) {
             <stop offset={zeroGradientPct} stopColor="#3b82f6" stopOpacity={0.05} />
             {hasNegative && (
               <>
-                <stop offset={zeroGradientPct} stopColor="#ef4444" stopOpacity={0.05} />
-                <stop offset="100%" stopColor="#ef4444" stopOpacity={0.25} />
+                <stop offset={zeroGradientPct} stopColor="var(--color-down)" stopOpacity={0.05} />
+                <stop offset="100%" stopColor="var(--color-down)" stopOpacity={0.25} />
               </>
             )}
           </linearGradient>
@@ -110,12 +110,12 @@ function BalanceChart({ data }: { data: DailyBalance[] }) {
         />
         <RechartsTooltip content={<BalanceTooltip />} />
         {hasNegative && (
-          <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="4 2" strokeWidth={1.5} />
+          <ReferenceLine y={0} stroke="var(--color-down)" strokeDasharray="4 2" strokeWidth={1.5} />
         )}
         <Area
           type="monotone"
           dataKey="balance"
-          stroke="#94a3b8"
+          stroke="var(--color-chart-axis)"
           strokeWidth={1.5}
           fill="url(#balGradMobile)"
           dot={false}

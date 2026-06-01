@@ -238,9 +238,9 @@ function effectiveYearCost(rule: {
 
 // ── Annual cost chart ─────────────────────────────────────────────────────────
 
-const CHART_EXPENSE_COLOR = "#6366f1";
-const CHART_CREDIT_COLOR  = "#16a34a";
-const CHART_PRIOR_PERIOD_COLOR = "rgba(99, 102, 241, 0.3)";
+const CHART_EXPENSE_COLOR = "var(--color-chart-1)";
+const CHART_CREDIT_COLOR  = "var(--color-up)";
+const CHART_PRIOR_PERIOD_COLOR = "color-mix(in oklab, var(--color-chart-1) 30%, transparent)";
 const CHART_LABEL_STYLE = { fontSize: 10, fill: "currentColor" } as const;
 
 interface AnnualCostItem { description: string; annualized: number; isCredit: boolean; proratedNote: string | null; }

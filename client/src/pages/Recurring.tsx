@@ -336,16 +336,16 @@ function effectiveYearCost(rule: {
 
 const EMPTY_CATEGORIES: Category[] = [];
 
-const CHART_EXPENSE_COLOR = "#6366f1"; // indigo-500
-const CHART_CREDIT_COLOR  = "#16a34a"; // green-600
+const CHART_EXPENSE_COLOR = "var(--color-chart-1)"; // chart series 1
+const CHART_CREDIT_COLOR  = "var(--color-up)"; // positive / credit
 // Semantic tokens shared across all multi-period charts in the app.
 // Prior-period series: primary accent hue at 30% opacity, baked directly into
 // the color value so recharts legend icons inherit the same appearance as the
 // bars (fillOpacity is not forwarded to legend icons by recharts).
 // Matches the "last year" line style used in the Budget page monthly chart.
-const CHART_PRIOR_PERIOD_COLOR = "rgba(99, 102, 241, 0.3)"; // #6366f1 @ 30%
+const CHART_PRIOR_PERIOD_COLOR = "color-mix(in oklab, var(--color-chart-1) 30%, transparent)"; // chart-1 @ 30%
 // Hover highlight: matches the cursor fill used in Dashboard trend / category charts.
-const CHART_HOVER_FILL = "#F8FAFC";
+const CHART_HOVER_FILL = "var(--color-chart-hover)";
 const CHART_LABEL_STYLE   = { fontSize: 11, fill: "currentColor" } as const;
 
 interface AnnualCostItem {

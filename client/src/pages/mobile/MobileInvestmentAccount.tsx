@@ -145,8 +145,8 @@ function GhostMobileGrowthChart() {
         >
           <defs>
             <linearGradient id="ghost-grad-mobile" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.6} />
-              <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+              <stop offset="5%" stopColor="var(--color-chart-1)" stopOpacity={0.6} />
+              <stop offset="95%" stopColor="var(--color-chart-1)" stopOpacity={0} />
             </linearGradient>
           </defs>
           <path
@@ -156,7 +156,7 @@ function GhostMobileGrowthChart() {
           <path
             d="M 0,75 C 8,70 12,60 20,55 C 28,50 32,65 42,52 C 52,39 56,48 68,32 C 78,18 88,22 100,12"
             fill="none"
-            stroke="#6366f1"
+            stroke="var(--color-chart-1)"
             strokeWidth="2"
             vectorEffect="non-scaling-stroke"
           />
@@ -241,8 +241,8 @@ function MobileGrowthChart({ accountId }: { accountId: string }) {
           <AreaChart data={points} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="mv-grad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                <stop offset="5%" stopColor="var(--color-chart-1)" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="var(--color-chart-1)" stopOpacity={0} />
               </linearGradient>
             </defs>
             <YAxis
@@ -253,7 +253,7 @@ function MobileGrowthChart({ accountId }: { accountId: string }) {
               ]}
             />
             <Tooltip
-              cursor={{ stroke: "#6366f1", strokeWidth: 1, strokeDasharray: "3 3" }}
+              cursor={{ stroke: "var(--color-chart-cursor)", strokeWidth: 1, strokeDasharray: "3 3" }}
               content={({ active, payload }) => {
                 if (!active || !payload?.length) return null;
                 const pt = payload[0].payload as GrowthPoint;
@@ -268,7 +268,7 @@ function MobileGrowthChart({ accountId }: { accountId: string }) {
             <Area
               type="monotone"
               dataKey="marketValue"
-              stroke="#6366f1"
+              stroke="var(--color-chart-1)"
               strokeWidth={1.5}
               fill="url(#mv-grad)"
               dot={false}

@@ -2060,13 +2060,13 @@ function EmptyPortfolio({
     <div className="flex flex-col items-center justify-center py-16 gap-5">
       <div className="relative w-60 h-40">
         <svg viewBox="0 0 211 141" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-          <ellipse cx="106" cy="71" rx="88" ry="66" fill="#f1f5f9" />
-          <line x1="39" y1="79" x2="173" y2="79" stroke="#cbd5e1" strokeWidth="1" />
+          <ellipse cx="106" cy="71" rx="88" ry="66" fill="var(--color-muted)" />
+          <line x1="39" y1="79" x2="173" y2="79" stroke="var(--color-ink-5)" strokeWidth="1" />
           <path d="M39 79 C56 43 72 43 89 79 C97 108 114 108 122 79 C139 17 155 17 173 79" stroke="#93c5fd" strokeWidth="1" strokeDasharray="4 3" fill="none" />
-          <circle cx="39" cy="79" r="4" fill="#94a3b8" />
-          <circle cx="89" cy="79" r="4" fill="#94a3b8" />
-          <circle cx="122" cy="79" r="4" fill="#94a3b8" />
-          <circle cx="173" cy="79" r="4" fill="#94a3b8" />
+          <circle cx="39" cy="79" r="4" fill="var(--color-ink-4)" />
+          <circle cx="89" cy="79" r="4" fill="var(--color-ink-4)" />
+          <circle cx="122" cy="79" r="4" fill="var(--color-ink-4)" />
+          <circle cx="173" cy="79" r="4" fill="var(--color-ink-4)" />
         </svg>
       </div>
       <div className="text-center">
@@ -5258,9 +5258,9 @@ function easternTZAbbr(dateStr: string): string {
 function eventDotColor(events: GrowthEvent[]) {
   const hasBuy = events.some((e) => e.type === "BUY");
   const hasSell = events.some((e) => e.type === "SELL");
-  if (hasBuy && hasSell) return "#6366f1"; // indigo — mixed date
-  if (hasSell) return "#f59e0b";           // amber — sell
-  return "#22c55e";                        // green — buy
+  if (hasBuy && hasSell) return "var(--color-chart-1)"; // chart-1 — mixed date
+  if (hasSell) return "var(--color-warn)";              // warn — sell
+  return "var(--color-up)";                             // up — buy
 }
 
 function GhostGrowthChart() {
@@ -5280,8 +5280,8 @@ function GhostGrowthChart() {
         >
           <defs>
             <linearGradient id="ghost-grad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.6} />
-              <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
+              <stop offset="5%" stopColor="var(--color-chart-1)" stopOpacity={0.6} />
+              <stop offset="95%" stopColor="var(--color-chart-1)" stopOpacity={0} />
             </linearGradient>
           </defs>
           <path
@@ -5291,7 +5291,7 @@ function GhostGrowthChart() {
           <path
             d="M 0,75 C 8,70 12,60 20,55 C 28,50 32,65 42,52 C 52,39 56,48 68,32 C 78,18 88,22 100,12"
             fill="none"
-            stroke="#4f46e5"
+            stroke="var(--color-chart-1)"
             strokeWidth="2"
             vectorEffect="non-scaling-stroke"
           />
@@ -5534,8 +5534,8 @@ function GrowthChart({ accountId, isManaged, onImportClick, onDayGain }: { accou
   const gradDefs = (
     <defs>
       <linearGradient id="growthGradient" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.18} />
-        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
+        <stop offset="5%" stopColor="var(--color-chart-1)" stopOpacity={0.18} />
+        <stop offset="95%" stopColor="var(--color-chart-1)" stopOpacity={0} />
       </linearGradient>
     </defs>
   );
@@ -5561,9 +5561,9 @@ function GrowthChart({ accountId, isManaged, onImportClick, onDayGain }: { accou
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis dataKey="date" hide />
           <YAxis {...yAxisProps} domain={[mvMin - mvPad, mvMax + mvPad]} />
-          <RechartsTooltip content={<GrowthChartTooltip />} cursor={{ stroke: "#e2e8f0", strokeWidth: 1 }} />
-          <Area type="monotone" dataKey="marketValue" stroke="#4f46e5" strokeWidth={2}
-            fill="url(#growthGradient)" dot={mvDots} activeDot={{ r: 4, fill: "#4f46e5" }} />
+          <RechartsTooltip content={<GrowthChartTooltip />} cursor={{ stroke: "var(--color-chart-cursor)", strokeWidth: 1 }} />
+          <Area type="monotone" dataKey="marketValue" stroke="var(--color-chart-1)" strokeWidth={2}
+            fill="url(#growthGradient)" dot={mvDots} activeDot={{ r: 4, fill: "var(--color-chart-1)" }} />
         </ComposedChart>
       </ResponsiveContainer>
       </div>
@@ -5583,9 +5583,9 @@ function GrowthChart({ accountId, isManaged, onImportClick, onDayGain }: { accou
               <XAxis dataKey="date" ticks={ticks} tickFormatter={formatAxisDate}
                 tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis {...yAxisProps} domain={[cbMin - cbPad, cbMax + cbPad]} />
-              <RechartsTooltip cursor={{ stroke: "#e2e8f0", strokeWidth: 1 }} content={() => null} />
-              <Line type="monotone" dataKey="costBasis" stroke="#94a3b8"
-                strokeWidth={1.5} strokeDasharray="5 4" dot={false} activeDot={{ r: 4, fill: "#94a3b8" }} />
+              <RechartsTooltip cursor={{ stroke: "var(--color-chart-cursor)", strokeWidth: 1 }} content={() => null} />
+              <Line type="monotone" dataKey="costBasis" stroke="var(--color-chart-axis)"
+                strokeWidth={1.5} strokeDasharray="5 4" dot={false} activeDot={{ r: 4, fill: "var(--color-chart-axis)" }} />
             </ComposedChart>
           </ResponsiveContainer>
         </>
