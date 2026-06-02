@@ -884,7 +884,7 @@ export function TaxEstimatorPage() {
                             />
                           </div>
                         </td>
-                        <td className={`py-2.5 text-right tabular-nums font-mono font-medium ${balance < -0.005 ? "text-up" : balance > 0.005 && isPast ? "text-warn" : ""}`}>
+ <td className={`py-2.5 text-right tp-numeric ${balance < -0.005 ? "text-up" : balance > 0.005 && isPast ? "text-warn" : ""}`}>
                           {balance < -0.005
                             ? <span className="inline-flex items-center justify-end gap-1" title="Quarter satisfied — overpayment reduces final balance"><Check className="h-3 w-3" />{formatCurrency(0)}</span>
                             : formatCurrency(Math.max(0, balance))}
@@ -1018,7 +1018,7 @@ export function TaxEstimatorPage() {
                             </div>
                           )}
                         </td>
-                        <td className={`py-2.5 text-right tabular-nums font-mono font-medium ${!q.noDue && balance < -0.005 ? "text-up" : !q.noDue && balance > 0.005 && isPast ? "text-warn" : ""}`}>
+ <td className={`py-2.5 text-right tp-numeric ${!q.noDue && balance < -0.005 ? "text-up" : !q.noDue && balance > 0.005 && isPast ? "text-warn" : ""}`}>
                           {q.noDue ? (
                             <span className="text-muted-foreground">—</span>
                           ) : balance < -0.005 ? (
@@ -1417,7 +1417,7 @@ export function TaxEstimatorPage() {
                 <td className="py-2 text-right text-muted-foreground">
                   up to {fmtPct(calc.marginalOrdRate)}
                 </td>
-                <td className="py-2 text-right font-medium font-mono tabular-nums">{formatCurrency(calc.ordinaryTax)}</td>
+ <td className="py-2 text-right tp-numeric">{formatCurrency(calc.ordinaryTax)}</td>
               </tr>
               {calc.taxablePreferential > 0 && (
                 <tr>
@@ -1431,7 +1431,7 @@ export function TaxEstimatorPage() {
                   <td className="py-2 text-right text-muted-foreground">
                     up to {fmtPct(calc.marginalPrefRate)}
                   </td>
-                  <td className="py-2 text-right font-medium font-mono tabular-nums">{formatCurrency(calc.preferentialTax)}</td>
+ <td className="py-2 text-right tp-numeric">{formatCurrency(calc.preferentialTax)}</td>
                 </tr>
               )}
               {calc.collectibleContrib > 0 && (
@@ -1446,7 +1446,7 @@ export function TaxEstimatorPage() {
                   <td className="py-2 text-right text-muted-foreground">
                     {fmtPct(calc.collectibleRate)}
                   </td>
-                  <td className="py-2 text-right font-medium font-mono tabular-nums">{formatCurrency(calc.collectibleTax)}</td>
+ <td className="py-2 text-right tp-numeric">{formatCurrency(calc.collectibleTax)}</td>
                 </tr>
               )}
               {calc.niitBase > 0 && (
@@ -1471,7 +1471,7 @@ export function TaxEstimatorPage() {
                     <div className="ml-[1.375rem] tp-caption">{formatCurrency(calc.niitBase)} subject to NIIT</div>
                   </td>
                   <td className="py-2 text-right text-muted-foreground">3.8%</td>
-                  <td className="py-2 text-right font-medium font-mono tabular-nums">{formatCurrency(calc.niitTax)}</td>
+ <td className="py-2 text-right tp-numeric">{formatCurrency(calc.niitTax)}</td>
                 </tr>
               )}
               <tr className="border-t-2 border-border font-bold text-base">
@@ -1503,7 +1503,7 @@ export function TaxEstimatorPage() {
                       <div className="ml-[1.375rem] tp-caption">{formatCurrency(amtCalc.amtiOrdinary)} taxable</div>
                     </td>
                     <td className="py-2 text-right text-muted-foreground">up to {fmtPct(amtCalc.amtMargOrdRate)}</td>
-                    <td className="py-2 text-right font-medium font-mono tabular-nums">{formatCurrency(amtCalc.amtOrdTax)}</td>
+ <td className="py-2 text-right tp-numeric">{formatCurrency(amtCalc.amtOrdTax)}</td>
                   </tr>
                 )}
                 {amtCalc.amtiPreferential > 0 && (
@@ -1516,7 +1516,7 @@ export function TaxEstimatorPage() {
                       <div className="ml-[1.375rem] tp-caption">{formatCurrency(amtCalc.amtiPreferential)} taxable</div>
                     </td>
                     <td className="py-2 text-right text-muted-foreground">up to {fmtPct(marginalLTCGRate(amtCalc.amtiOrdinary + amtCalc.amtiPreferential, LTCG_BRACKETS[filingStatus]))}</td>
-                    <td className="py-2 text-right font-medium font-mono tabular-nums">{formatCurrency(amtCalc.amtPrefTax)}</td>
+ <td className="py-2 text-right tp-numeric">{formatCurrency(amtCalc.amtPrefTax)}</td>
                   </tr>
                 )}
                 {amtCalc.amtiCollectible > 0 && (
@@ -1529,7 +1529,7 @@ export function TaxEstimatorPage() {
                       <div className="ml-[1.375rem] tp-caption">{formatCurrency(amtCalc.amtiCollectible)} taxable</div>
                     </td>
                     <td className="py-2 text-right text-muted-foreground">{fmtPct(amtCalc.amtCollRate)}</td>
-                    <td className="py-2 text-right font-medium font-mono tabular-nums">{formatCurrency(amtCalc.amtCollTax)}</td>
+ <td className="py-2 text-right tp-numeric">{formatCurrency(amtCalc.amtCollTax)}</td>
                   </tr>
                 )}
                 {calc.niitBase > 0 && (
@@ -1556,7 +1556,7 @@ export function TaxEstimatorPage() {
                       <div className="ml-[1.375rem] tp-caption">{formatCurrency(calc.niitBase)} subject to NIIT</div>
                     </td>
                     <td className="py-2 text-right text-muted-foreground">3.8%</td>
-                    <td className="py-2 text-right font-medium font-mono tabular-nums">{formatCurrency(calc.niitTax)}</td>
+ <td className="py-2 text-right tp-numeric">{formatCurrency(calc.niitTax)}</td>
                   </tr>
                 )}
                 <tr className="border-t-2 border-border font-bold text-base">
@@ -1632,7 +1632,7 @@ export function TaxEstimatorPage() {
                   <td className="py-2 text-right text-muted-foreground">
                     up to {fmtPct(marginalOrdinaryRate(caCalc.caTaxable, CA_ORDINARY_BRACKETS[filingStatus]))}
                   </td>
-                  <td className="py-2 text-right font-medium font-mono tabular-nums">{formatCurrency(caCalc.caOrdTax)}</td>
+ <td className="py-2 text-right tp-numeric">{formatCurrency(caCalc.caOrdTax)}</td>
                 </tr>
                 {caCalc.caMhstBase > 0 && (
                   <tr>
@@ -1644,7 +1644,7 @@ export function TaxEstimatorPage() {
                       <div className="ml-[1.375rem] tp-caption">{formatCurrency(caCalc.caMhstBase)} above $1M threshold</div>
                     </td>
                     <td className="py-2 text-right text-muted-foreground">1%</td>
-                    <td className="py-2 text-right font-medium font-mono tabular-nums">{formatCurrency(caCalc.caMhstTax)}</td>
+ <td className="py-2 text-right tp-numeric">{formatCurrency(caCalc.caMhstTax)}</td>
                   </tr>
                 )}
                 <tr className="border-t-2 border-border font-bold text-base">
@@ -1678,7 +1678,7 @@ export function TaxEstimatorPage() {
                       </div>
                     </td>
                     <td className="py-2 text-right text-muted-foreground">7%</td>
-                    <td className="py-2 text-right font-medium font-mono tabular-nums">{formatCurrency(caTmtCalc.caTmt)}</td>
+ <td className="py-2 text-right tp-numeric">{formatCurrency(caTmtCalc.caTmt)}</td>
                   </tr>
                   <tr className="border-t-2 border-border font-bold text-base">
                     <td className="pt-2">Tentative Minimum Tax</td>
@@ -1873,7 +1873,7 @@ export function TaxEstimatorPage() {
                                         </td>
                                       </>
                                     )}
-                                    <td className={`py-1.5 text-right font-medium font-mono tabular-nums ${taxable < 0 ? "text-down" : taxable === 0 && group.bucket !== "capital_gain" ? "text-muted-foreground" : ""}`}>
+ <td className={`py-1.5 text-right tp-numeric ${taxable < 0 ? "text-down" : taxable === 0 && group.bucket !== "capital_gain" ? "text-muted-foreground" : ""}`}>
                                       {taxable === 0 && (group.bucket === "exempt" || group.bucket === "return_of_capital")
                                         ? "—"
                                         : (taxable < 0 ? "-" : "") + formatCurrency(Math.abs(taxable))}

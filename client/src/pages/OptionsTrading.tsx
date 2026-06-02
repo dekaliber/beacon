@@ -5145,7 +5145,7 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
                           </td>
                           <td className="px-2 py-2 text-muted-foreground">{fmtDate(r.expiration)}</td>
                           <td className="px-2 py-2 text-right tabular-nums font-mono">{r.dte}d</td>
-                          <td className="px-2 py-2 text-right tabular-nums font-mono font-medium">${r.strike.toFixed(2)}</td>
+ <td className="px-2 py-2 text-right tp-numeric">${r.strike.toFixed(2)}</td>
                           <td className="px-2 py-2 text-right tabular-nums font-mono text-muted-foreground">
                             {r.underlyingPrice != null ? `$${r.underlyingPrice.toFixed(2)}` : "—"}
                           </td>
@@ -5158,13 +5158,13 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
                           <td className="px-2 py-2 text-right tabular-nums font-mono text-muted-foreground">
                             {r.iv != null ? `${(r.iv * 100).toFixed(1)}%` : "—"}
                           </td>
-                          <td className="px-2 py-2 text-right tabular-nums font-mono font-medium">
+ <td className="px-2 py-2 text-right tp-numeric">
                             {r.last != null ? `$${r.last.toFixed(2)}` : "—"}
                           </td>
                           <td className="px-2 py-2 text-right tabular-nums font-mono text-muted-foreground">
                             {r.bid != null ? `$${r.bid.toFixed(2)}` : "—"} / {r.ask != null ? `$${r.ask.toFixed(2)}` : "—"}
                           </td>
-                          <td className={cn("px-2 py-2 text-right tabular-nums font-mono font-medium", annReturn != null ? "text-up" : "")}>
+ <td className={cn("px-2 py-2 text-right tp-numeric", annReturn != null ? "text-up" : "")}>
                             {annReturn != null ? `${annReturn.toFixed(1)}%` : "—"}
                           </td>
                           <td className="px-2 py-2 text-right tabular-nums font-mono text-muted-foreground">

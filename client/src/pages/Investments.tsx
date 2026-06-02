@@ -68,7 +68,7 @@ function StackedBar({ segments }: { segments: BarSegment[] }) {
           <div className="space-y-1">
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">Target</span>
-              <span className="font-medium tabular-nums font-mono">
+ <span className="tp-numeric">
                 {tooltip.segment.targetPct != null
                   ? `${tooltip.segment.targetPct.toFixed(1)}%`
                   : "—"}
@@ -81,7 +81,7 @@ function StackedBar({ segments }: { segments: BarSegment[] }) {
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">Actual</span>
-              <span className="font-medium tabular-nums font-mono">
+ <span className="tp-numeric">
                 {tooltip.segment.actualPct.toFixed(1)}%
                 <span className="text-muted-foreground ml-1.5">
                   {formatCurrency(tooltip.segment.actualValue)}
@@ -142,7 +142,7 @@ function DeviationBar({ actualPct, targetPct, scale, color, name, targetValue, a
           <div className="space-y-1">
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">Target</span>
-              <span className="font-medium tabular-nums font-mono">
+ <span className="tp-numeric">
                 {targetPct != null ? `${targetPct.toFixed(1)}%` : "—"}
                 {targetValue != null && (
                   <span className="text-muted-foreground ml-1.5">{formatCurrency(targetValue)}</span>
@@ -151,7 +151,7 @@ function DeviationBar({ actualPct, targetPct, scale, color, name, targetValue, a
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-muted-foreground">Actual</span>
-              <span className="font-medium tabular-nums font-mono">
+ <span className="tp-numeric">
                 {actualPct.toFixed(1)}%
                 <span className="text-muted-foreground ml-1.5">{formatCurrency(actualValue)}</span>
               </span>

@@ -1848,7 +1848,7 @@ function ImportModal({
                     <td className="px-2 py-1.5 max-w-[120px] truncate">{row.source || "—"}</td>
                     <td className="px-2 py-1.5">{row.categoryId ? (categories.find((c) => c.id === row.categoryId)?.name ?? row.categoryName) : row.categoryName}</td>
                     <td className="px-2 py-1.5 max-w-[100px] truncate">{row.accountName}</td>
-                    <td className="px-2 py-1.5 text-right font-medium font-mono tabular-nums text-up">
+ <td className="px-2 py-1.5 text-right tp-numeric text-up">
                       {row.amount === 0 ? "—" : `+${formatCurrency(row.amount)}`}
                     </td>
                     <td className="px-2 py-1.5">

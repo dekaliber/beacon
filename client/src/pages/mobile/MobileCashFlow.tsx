@@ -742,7 +742,7 @@ function MobileEventsLedger({
                 <p className="truncate font-medium">{event.description}</p>
               </div>
               <span className={cn(
-                "shrink-0 tabular-nums font-mono font-medium",
+ "shrink-0 tp-numeric",
                 event.amount > 0 ? "text-up" : "text-down",
               )}>
                 {event.amount > 0 ? "+" : ""}{formatCurrency(event.amount)}

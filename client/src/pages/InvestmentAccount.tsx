@@ -144,7 +144,7 @@ function GainCell({
   const Icon = pos ? TrendingUp : TrendingDown;
   const cell = (
     <span
-      className={`inline-flex font-medium tabular-nums font-mono ${
+ className={`inline-flex tp-numeric ${
         pos ? "text-up" : "text-down"
       } ${size === "base" ? "text-base" : "text-13"} ${size === "base" && pct != null ? "flex-col items-start" : "flex-row items-center gap-1"}`}
     >
@@ -2611,7 +2611,7 @@ function SellModal({
                     </td>
                     <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.proceeds)}</td>
                     <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.costBasis)}</td>
-                    <td className={`py-2 px-3 text-right tabular-nums font-mono font-medium ${gainColor(lot.gain)}`}>
+ <td className={`py-2 px-3 text-right tp-numeric ${gainColor(lot.gain)}`}>
                       {lot.gain >= 0 ? "+" : ""}{formatCurrency(lot.gain)}
                     </td>
                   </tr>
@@ -2637,7 +2637,7 @@ function SellModal({
             {preview!.stShares > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Short-Term Gain</span>
-                <span className={`tabular-nums font-mono font-medium ${gainColor(preview!.stGain)}`}>
+ <span className={`tp-numeric ${gainColor(preview!.stGain)}`}>
                   {preview!.stGain >= 0 ? "+" : ""}{formatCurrency(preview!.stGain)}
                 </span>
               </div>
@@ -2645,7 +2645,7 @@ function SellModal({
             {preview!.ltShares > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Long-Term Gain</span>
-                <span className={`tabular-nums font-mono font-medium ${gainColor(preview!.ltGain)}`}>
+ <span className={`tp-numeric ${gainColor(preview!.ltGain)}`}>
                   {preview!.ltGain >= 0 ? "+" : ""}{formatCurrency(preview!.ltGain)}
                 </span>
               </div>
@@ -2856,7 +2856,7 @@ function EditSaleActivityModal({
           </div>
           <div>
             <p className="text-muted-foreground mb-0.5">Gain / Loss</p>
-            <p className={`font-medium tabular-nums font-mono ${gain >= 0 ? "text-up" : "text-down"}`}>
+ <p className={`tp-numeric ${gain >= 0 ? "text-up" : "text-down"}`}>
               {gain >= 0 ? "+" : ""}{formatCurrency(gain)}
             </p>
           </div>
@@ -3937,7 +3937,7 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
                         </td>
                         <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.netProceeds)}</td>
                         <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.costBasis)}</td>
-                        <td className={`py-2 px-3 text-right tabular-nums font-mono font-medium ${gainColor(lot.netGain)}`}>
+ <td className={`py-2 px-3 text-right tp-numeric ${gainColor(lot.netGain)}`}>
                           {lot.netGain >= 0 ? "+" : ""}{formatCurrency(lot.netGain)}
                         </td>
                       </tr>
@@ -3963,7 +3963,7 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
                 {preview!.stShares > 0 && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Short-Term Gain</span>
-                    <span className={`tabular-nums font-mono font-medium ${gainColor(stTaxableGain)}`}>
+ <span className={`tp-numeric ${gainColor(stTaxableGain)}`}>
                       {stTaxableGain >= 0 ? "+" : ""}{formatCurrency(stTaxableGain)}
                     </span>
                   </div>
@@ -3971,7 +3971,7 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
                 {preview!.ltShares > 0 && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Long-Term Gain</span>
-                    <span className={`tabular-nums font-mono font-medium ${gainColor(ltTaxableGain)}`}>
+ <span className={`tp-numeric ${gainColor(ltTaxableGain)}`}>
                       {ltTaxableGain >= 0 ? "+" : ""}{formatCurrency(ltTaxableGain)}
                     </span>
                   </div>
@@ -4440,11 +4440,11 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
                         {!isPurchase && fees > 0 ? `(${formatCurrency(fees)})` : "—"}
                       </td>
                       {/* Net proceeds — show for sales; show cost for purchases */}
-                      <td className="py-3 px-2 text-right tabular-nums font-mono font-medium">
+ <td className="py-3 px-2 text-right tp-numeric">
                         {isPurchase ? formatCurrency(a.amount) : formatCurrency(net)}
                       </td>
                       {/* Gain / loss — only for sales */}
-                      <td className={`py-3 px-2 text-right tabular-nums font-mono font-medium ${
+ <td className={`py-3 px-2 text-right tp-numeric ${
                         isSale
                           ? isGainPositive
                             ? "text-up"
@@ -4644,19 +4644,19 @@ function RealizedGainSnapshotPanel({
               <tbody className="divide-y divide-border">
                 <tr>
                   <td className="py-1.5 pr-8 text-muted-foreground">Gains</td>
-                  <td className="py-1.5 pr-6 text-right tabular-nums font-mono text-up font-medium">
+ <td className="py-1.5 pr-6 text-right tp-numeric text-up">
                     {snapshot.longTermGain != null ? formatCurrency(snapshot.longTermGain) : "—"}
                   </td>
-                  <td className="py-1.5 text-right tabular-nums font-mono text-up font-medium">
+ <td className="py-1.5 text-right tp-numeric text-up">
                     {snapshot.shortTermGain != null ? formatCurrency(snapshot.shortTermGain) : "—"}
                   </td>
                 </tr>
                 <tr>
                   <td className="py-1.5 pr-8 text-muted-foreground">Losses</td>
-                  <td className="py-1.5 pr-6 text-right tabular-nums font-mono text-down font-medium">
+ <td className="py-1.5 pr-6 text-right tp-numeric text-down">
                     {snapshot.longTermLoss != null ? formatCurrency(snapshot.longTermLoss) : "—"}
                   </td>
-                  <td className="py-1.5 text-right tabular-nums font-mono text-down font-medium">
+ <td className="py-1.5 text-right tp-numeric text-down">
                     {snapshot.shortTermLoss != null ? formatCurrency(snapshot.shortTermLoss) : "—"}
                   </td>
                 </tr>
@@ -5280,7 +5280,7 @@ function GrowthChartTooltip({ active, payload, label }: any) {
           </div>
           <div className="flex justify-between gap-4 pt-1 border-t border-border">
             <span className="text-muted-foreground">Unrealized gain</span>
-            <span className={`font-medium tabular-nums font-mono ${pos ? "text-up" : "text-down"}`}>
+ <span className={`tp-numeric ${pos ? "text-up" : "text-down"}`}>
               {pos ? "+" : ""}{formatCurrency(d.unrealizedGain!)} ({pos ? "+" : ""}{d.unrealizedGainPct!.toFixed(2)}%)
             </span>
           </div>
@@ -5309,7 +5309,7 @@ function GrowthChartTooltip({ active, payload, label }: any) {
                   <span className="text-muted-foreground">
                     {isSell ? "Sold" : "Bought"} {sharesStr} {ev.ticker}
                   </span>
-                  <span className={`font-medium tabular-nums font-mono ${isSell ? "text-warn" : "text-up"}`}>
+ <span className={`tp-numeric ${isSell ? "text-warn" : "text-up"}`}>
                     {isSell ? "-" : "+"}{formatCurrency(ev.netAmount)}
                   </span>
                 </div>

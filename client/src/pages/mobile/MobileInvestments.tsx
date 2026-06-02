@@ -515,7 +515,7 @@ function RebalanceModal({
                       <div className="flex items-center gap-1.5 pl-[18px] mt-1 text-xs">
                         <StatValue className="text-muted-foreground">{item.actualPct.toFixed(1)}%</StatValue>
                         <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-                        <span className={`tabular-nums font-mono font-medium ${
+ <span className={`tp-numeric ${
                           delta == null ? "text-muted-foreground" : Math.abs(delta) < 0.5 ? "text-up" : delta > 0 ? "text-warn" : "text-blue"
                         }`}>{newPct.toFixed(1)}%</span>
                         {delta != null && (
@@ -617,7 +617,7 @@ function RebalanceModal({
                       <div className="flex items-center gap-1.5 pl-[18px] mt-1 text-xs">
                         <StatValue className="text-muted-foreground">{item.actualPct.toFixed(1)}%</StatValue>
                         <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-                        <span className={`tabular-nums font-mono font-medium ${deltaColor}`}>{newPct.toFixed(1)}%</span>
+ <span className={`tp-numeric ${deltaColor}`}>{newPct.toFixed(1)}%</span>
                         {delta != null && (
                           <span className={`tabular-nums font-mono ${deltaColor}`}>
                             ({delta >= 0 ? "+" : ""}{delta.toFixed(1)}%)

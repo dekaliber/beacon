@@ -610,7 +610,7 @@ function RuleTable({
             <td className="py-3 pr-4 truncate text-muted-foreground">
               {accountMap.get(rule.accountId) ?? "—"}
             </td>
-            <td className={`py-3 pr-3 text-right font-medium font-mono tabular-nums${parseFloat(rule.amount) < 0 ? " text-up" : ""}`}>
+ <td className={`py-3 pr-3 text-right tp-numeric${parseFloat(rule.amount) < 0 ? " text-up" : ""}`}>
               {displayAmount(rule.amount)}
             </td>
             <td className="py-3">
@@ -1271,7 +1271,7 @@ export function Recurring() {
                           <span className="truncate">{rule.toAccount.name}</span>
                         </span>
                       </td>
-                      <td className="py-3 pr-3 text-right tabular-nums font-mono font-medium">
+ <td className="py-3 pr-3 text-right tp-numeric">
                         {formatCurrency(parseFloat(rule.amount))}
                       </td>
                       <td className="py-3">

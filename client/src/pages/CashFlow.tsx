@@ -217,7 +217,7 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
     return (
       <>
         {/* Amount cell */}
-        <td className={cn("py-2 pr-2 text-right tabular-nums font-mono font-medium", amountClassName)}>
+ <td className={cn("py-2 pr-2 text-right tp-numeric", amountClassName)}>
           {event.amount > 0 ? "+" : event.amount === 0 ? "-" : ""}
           {formatCurrency(event.amount)}
         </td>
@@ -452,7 +452,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
             <span className="font-medium">{event.description}</span>
           </div>
         </td>
-        <td className="py-2 pr-2 text-right tabular-nums font-mono font-medium text-up">
+ <td className="py-2 pr-2 text-right tp-numeric text-up">
           +{formatCurrency(event.amount)}
         </td>
         <td className="py-2 pr-4">
@@ -765,7 +765,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                     ) : (
                       <>
                         <td className={cn(
-                          "py-2 pr-2 text-right tabular-nums font-mono font-medium",
+ "py-2 pr-2 text-right tp-numeric",
                           event.amount > 0 ? "text-up" : "text-down",
                         )}>
                           {event.amount > 0 ? "+" : event.amount === 0 ? "-" : ""}

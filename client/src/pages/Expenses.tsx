@@ -2855,7 +2855,7 @@ function ImportModal({
                     <td className="px-2 py-1.5 max-w-[120px] truncate">{row.vendor}</td>
                     <td className="px-2 py-1.5 max-w-[120px] truncate">{row.categoryName || "—"}</td>
                     <td className="px-2 py-1.5 max-w-[100px] truncate">{row.accountName}</td>
-                    <td className={`px-2 py-1.5 text-right font-medium font-mono tabular-nums ${row.amount < 0 ? "text-up" : ""}`}>
+ <td className={`px-2 py-1.5 text-right tp-numeric ${row.amount < 0 ? "text-up" : ""}`}>
                       {row.amount === 0 ? "—" : row.amount < 0 ? `+${formatCurrency(Math.abs(row.amount))}` : formatCurrency(row.amount)}
                     </td>
                     <td className="px-2 py-1.5">
