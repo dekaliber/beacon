@@ -348,10 +348,10 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved, variant = "warning"
     <tr className={cn("border-b border-dashed", variant === "warning" ? "border-down-line bg-down-soft/50" : "border-border bg-muted/20")}>
       <td className="py-2 pl-4 pr-4">
         <DatePicker
+          compact
           value={date}
           min={today}
           onChange={setDate}
-          className="w-[136px]"
         />
       </td>
       <td className="py-2 pr-4">
@@ -488,10 +488,10 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
     <tr className="border-b border-border/50 bg-warn-soft last:border-b-0">
       <td className="py-2 pl-4 pr-4">
         <DatePicker
+          compact
           value={date}
           min={today}
           onChange={setDate}
-          className="w-[136px]"
         />
       </td>
       <td className="py-2 pr-4">

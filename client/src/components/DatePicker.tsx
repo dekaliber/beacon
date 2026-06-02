@@ -42,6 +42,11 @@ interface DatePickerProps {
   confirmOnEnter?: boolean;
   /** Hide the trailing calendar icon (e.g. inline cells where it auto-opens). */
   hideIcon?: boolean;
+  /**
+   * Compact display: format as m/d/yy and shrink the field to its content
+   * width (instead of filling its container). Works with any variant.
+   */
+  compact?: boolean;
   required?: boolean;
   /** Render a red border for externally-managed validation errors. */
   invalid?: boolean;
@@ -122,19 +127,23 @@ export function DatePicker({
   onDismiss,
   confirmOnEnter,
   hideIcon,
+  compact,
   required,
   invalid,
   variant = "input",
 }: DatePickerProps) {
   const ghost = variant === "ghost";
-  const effectivePlaceholder = placeholder ?? (ghost ? "m/d/yy" : "mm/dd/yyyy");
+  // Ghost cells are always compact; `compact` enables it for other variants too.
+  const compactFmt = compact || ghost;
+  const fitContent = compact || ghost; // shrink to content rather than fill container
+  const effectivePlaceholder = placeholder ?? (compactFmt ? "m/d/yy" : "mm/dd/yyyy");
 
   const [open, setOpen] = useState(false);
   const [flipUp, setFlipUp] = useState(false);
   const [panelPos, setPanelPos] = useState({ top: 0, left: 0 });
   const [mode, setMode] = useState<"days" | "months">("days");
   const [viewDate, setViewDate] = useState(() => parseYMD(value) ?? new Date());
-  const [text, setText] = useState(() => ymdToDisplay(value, ghost));
+  const [text, setText] = useState(() => ymdToDisplay(value, compactFmt));
   const [focused, setFocused] = useState(false);
   const [rangeError, setRangeError] = useState<string | null>(null);
 
@@ -148,8 +157,8 @@ export function DatePicker({
   // Keep the text field in sync with external value changes — but never while the
   // user is mid-edit, or we'd fight their cursor.
   useEffect(() => {
-    if (!focused) setText(ymdToDisplay(value, ghost));
-  }, [value, focused, ghost]);
+    if (!focused) setText(ymdToDisplay(value, compactFmt));
+  }, [value, focused, compactFmt]);
 
   // Close on outside click — panel is portalled to <body> (separate subtree), so
   // check both refs. Mirrors MultiSelectDropdown.
@@ -213,7 +222,7 @@ export function DatePicker({
     }
     setRangeError(null);
     onChange(ymd);
-    setText(ymdToDisplay(ymd, ghost));
+    setText(ymdToDisplay(ymd, compactFmt));
   };
 
   const pickFromCalendar = (d: Date) => {
@@ -225,7 +234,7 @@ export function DatePicker({
   // ── Text-field handlers ──────────────────────────────────────────────
   const handleTextChange = (raw: string) => {
     // Compact (ghost) cells allow free m/d/yy typing; standalone fields auto-mask.
-    const next = ghost ? raw : maskDate(raw);
+    const next = compactFmt ? raw : maskDate(raw);
     setText(next);
     if (next.trim() === "") {
       setRangeError(null);
@@ -248,7 +257,7 @@ export function DatePicker({
     setFocused(false);
     if (confirmOnEnter) {
       // Discard the unconfirmed edit and restore the committed value.
-      setText(ymdToDisplay(value, ghost));
+      setText(ymdToDisplay(value, compactFmt));
       setRangeError(null);
       return;
     }
@@ -270,7 +279,7 @@ export function DatePicker({
     }
     setRangeError(null);
     onChange(ymd);
-    setText(ymdToDisplay(ymd, ghost));
+    setText(ymdToDisplay(ymd, compactFmt));
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
@@ -281,7 +290,7 @@ export function DatePicker({
       e.preventDefault();
       const msg = rangeMessage(ymd);
       setRangeError(msg);
-      setText(ymdToDisplay(ymd, ghost));
+      setText(ymdToDisplay(ymd, compactFmt));
       // In confirm mode, paste only fills the field — Enter commits it.
       if (!msg && !confirmOnEnter) onChange(ymd);
     }
@@ -314,7 +323,7 @@ export function DatePicker({
     } else if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
-      setText(ymdToDisplay(value, ghost));
+      setText(ymdToDisplay(value, compactFmt));
       setRangeError(null);
       setOpen(false);
       onDismiss?.();
@@ -494,7 +503,7 @@ export function DatePicker({
   const showError = invalid || rangeError !== null;
 
   return (
-    <div ref={wrapRef} className={cn(ghost ? "inline-flex flex-col" : "flex flex-col", className)}>
+    <div ref={wrapRef} className={cn(fitContent ? "inline-flex flex-col" : "flex flex-col", className)}>
       <div
         className={cn(
           "group relative flex items-center",
@@ -518,7 +527,7 @@ export function DatePicker({
           autoFocus={autoFocus}
           required={required}
           disabled={disabled}
-          size={ghost ? 8 : undefined}
+          size={ghost ? 8 : compact ? 5 : undefined}
           placeholder={effectivePlaceholder}
           value={text}
           onChange={(e) => handleTextChange(e.target.value)}
@@ -538,7 +547,9 @@ export function DatePicker({
           onPaste={handlePaste}
           className={cn(
             "datepicker-field text-13 text-foreground outline-none placeholder:text-ink-4 disabled:cursor-not-allowed",
-            ghost ? "w-auto px-0" : cn("w-full py-2 pl-2", hideIcon ? "pr-2" : "pr-1"),
+            ghost
+              ? "w-auto px-0"
+              : cn(fitContent ? "w-auto" : "w-full", "py-2 pl-2", hideIcon ? "pr-2" : "pr-1"),
           )}
         />
         {!hideIcon && (
