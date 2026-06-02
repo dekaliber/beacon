@@ -2746,7 +2746,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
             <td className={ctd} />
             <td className={ctd}>
               {chainCurAnnRet != null && (
-                <span className={cn("font-medium", chainCurAnnRet >= 0 ? "text-up" : "text-down")}>
+                <span className={cn(chainCurAnnRet >= 0 ? "text-up" : "text-down")}>
                   {fmtPctLive(chainCurAnnRet)}
                 </span>
               )}
@@ -3496,7 +3496,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                 {/* Ann. Return */}
                 <td className={ctd}>
                   {cs.chainAnnReturn != null ? (
-                    <span className={cn("font-medium", cs.chainAnnReturn >= 0 ? "text-up" : "text-down")}>
+                    <span className={cn(cs.chainAnnReturn >= 0 ? "text-up" : "text-down")}>
                       {fmtPct(cs.chainAnnReturn)}
                     </span>
                   ) : "—"}
