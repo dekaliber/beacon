@@ -244,6 +244,17 @@ input[type="month"] {
   font-size: 12px;
 }
 
+/* DatePicker: the typeable <input> is chrome-less — its wrapper draws the
+   field border/fill/focus, so neutralize the base + focus input styling here
+   (overrides the high-specificity input:not(...) rules above). */
+input.datepicker-field,
+input.datepicker-field:focus {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
 /* ── Disabled ──────────────────────────────────────────────────────── */
 input:disabled,
 textarea:disabled,

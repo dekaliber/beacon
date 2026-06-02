@@ -15,6 +15,7 @@ import {
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
+import { DatePicker } from "@/components/DatePicker";
 import { useApi } from "@/hooks/useApi";
 import {
   getWithdrawals,
@@ -401,12 +402,11 @@ function TransferModal({
           </div>
           <div>
             <label className="block text-xs font-medium mb-1">Date</label>
-            <input
-              type="date"
+            <DatePicker
               value={form.date}
-              onChange={set("date")}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              style={errors.date ? { borderColor: "var(--color-down)" } : undefined}
+              onChange={(v) => { setForm((f) => ({ ...f, date: v })); setErrors((er) => ({ ...er, date: undefined })); }}
+              invalid={!!errors.date}
+              className="w-full"
             />
             {errors.date && <p className="mt-1 text-xs text-down">{errors.date}</p>}
           </div>
@@ -615,7 +615,7 @@ function MonthSection({
             {formatRate(rate)} annualized
           </StatValue>
         )}
-        <StatValue className="w-[110px] text-right tp-stat">{formatCurrency(total)}</StatValue>
+        <StatValue className="w-[110px] text-right">{formatCurrency(total)}</StatValue>
         <span className="w-[72px] flex items-center justify-center">
           <ChevronIcon className="h-3.5 w-3.5 text-muted-foreground" />
         </span>
