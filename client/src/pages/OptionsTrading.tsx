@@ -2422,6 +2422,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
     const priorPnl = p.groupId ? (chainPnlMap.get(p.groupId) ?? 0) : 0;
     const hasChain = p.groupId != null && priorPnl !== 0;
     const tdClass     = hasChain ? "px-2 pt-2 pb-1 text-13 font-mono tabular-nums whitespace-nowrap" : "px-2 py-2 text-13 font-mono tabular-nums whitespace-nowrap";
+    const tdNum       = hasChain ? "px-2 pt-2 pb-1 tp-numeric whitespace-nowrap" : "px-2 py-2 tp-numeric whitespace-nowrap";
     const tdTextClass = hasChain ? "px-2 pt-2 pb-1 text-13 whitespace-nowrap" : "px-2 py-2 text-13 whitespace-nowrap";
     const chainNet = hasChain ? priorPnl + c.totalPremiumNet : null;
 
@@ -2620,25 +2621,25 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
                 ? <span className={cn(curAnnRet >= 0 ? "text-up" : "text-down")}>{fmtPctLive(curAnnRet)}</span>
                 : <span className="text-muted-foreground">—</span>}
             </td>
-            <td className={tdClass}>
+            <td className={tdNum}>
               {livePnl != null
-                ? <span className={cn("font-medium", livePnl >= 0 ? "text-up" : "text-down")}>
+                ? <span className={cn(livePnl >= 0 ? "text-up" : "text-down")}>
                     {livePnl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(livePnl))}
                   </span>
                 : <span className="text-muted-foreground">—</span>}
             </td>
-            <td className={tdClass}>
+            <td className={tdNum}>
               {livePnl != null && c.totalPremiumNet !== 0
-                ? <span className={cn("font-medium", livePnl >= 0 ? "text-up" : "text-down")}>
+                ? <span className={cn(livePnl >= 0 ? "text-up" : "text-down")}>
                     {fmtPct(livePnl / c.totalPremiumNet * 100)}
                   </span>
                 : <span className="text-muted-foreground">—</span>}
             </td>
           </>
         ) : (
-          <td className={cn(tdClass, "border-l border-border/50")}>
+          <td className={cn(tdNum, "border-l border-border/50")}>
             {livePnl != null
-              ? <span className={cn("font-medium", livePnl >= 0 ? "text-up" : "text-down")}>
+              ? <span className={cn(livePnl >= 0 ? "text-up" : "text-down")}>
                   {livePnl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(livePnl))}
                 </span>
               : <span className="text-muted-foreground">—</span>}
@@ -3227,6 +3228,8 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
   const thClass = "px-2 py-2 text-left font-mono text-10 font-medium tracking-[0.11em] uppercase text-[var(--color-ink-3)] whitespace-nowrap";
   const tdClass = "px-2 py-2 text-13 font-mono tabular-nums whitespace-nowrap";
   const tdClassChained = "px-2 pt-2 pb-1 text-13 font-mono tabular-nums whitespace-nowrap";
+  const tdNumClass = "px-2 py-2 tp-numeric whitespace-nowrap";
+  const tdNumChained = "px-2 pt-2 pb-1 tp-numeric whitespace-nowrap";
 
   return (
     <>
@@ -3345,6 +3348,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
             const ctd = "px-2 pb-2 text-xs font-mono tabular-nums whitespace-nowrap text-muted-foreground";
             const cs = chainSummaryByFinalLegId.get(p.id);
             const td = cs ? tdClassChained : tdClass;
+            const tdNum = cs ? tdNumChained : tdNumClass;
             const tdText = cs ? "px-2 pt-2 pb-1 text-13 whitespace-nowrap" : "px-2 py-2 text-13 whitespace-nowrap";
 
             const positionRow = (
@@ -3391,18 +3395,18 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
                       {p.outcome === "EXPIRED_WORTHLESS" || p.outcome === "ASSIGNED" ? "—" : fmt(p.closePremiumPerShare, 2, "$")}
                     </td>
                     <td className={td}>${fmtUSD(c.totalFees)}</td>
-                    <td className={td}>
+                    <td className={tdNum}>
                       {c.pnl != null ? (
-                        <span className={cn("font-medium", c.pnl >= 0 ? "text-up" : "text-down")}>
+                        <span className={cn(c.pnl >= 0 ? "text-up" : "text-down")}>
                           {c.pnl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(c.pnl))}
                         </span>
                       ) : "—"}
                     </td>
                   </>
                 ) : (
-                  <td className={cn(td, "border-l border-border/50")}>
+                  <td className={cn(tdNum, "border-l border-border/50")}>
                     {c.pnl != null ? (
-                      <span className={cn("font-medium", c.pnl >= 0 ? "text-up" : "text-down")}>
+                      <span className={cn(c.pnl >= 0 ? "text-up" : "text-down")}>
                         {c.pnl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(c.pnl))}
                       </span>
                     ) : "—"}
