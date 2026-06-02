@@ -475,7 +475,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
           </div>
         </td>
         <td className={cn(
-          "py-2 pr-4 text-right tabular-nums font-mono font-semibold",
+          "py-2 pr-4 text-right tp-numeric",
           event.runningBalance < 0 ? "text-down" : "text-foreground",
         )}>
           {formatCurrency(event.runningBalance)}
@@ -536,7 +536,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
         </div>
       </td>
       <td className={cn(
-        "py-2 pr-4 text-right tabular-nums font-mono font-semibold",
+        "py-2 pr-4 text-right tp-numeric",
         event.runningBalance < 0 ? "text-down" : "text-foreground",
       )}>
         {formatCurrency(event.runningBalance)}
@@ -799,7 +799,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                       </>
                     )}
                     <td className={cn(
-                      "py-2 pr-4 text-right tabular-nums font-mono font-semibold",
+                      "py-2 pr-4 text-right tp-numeric",
                       event.runningBalance < 0 ? "text-down" : "text-foreground",
                     )}>
                       {formatCurrency(event.runningBalance)}

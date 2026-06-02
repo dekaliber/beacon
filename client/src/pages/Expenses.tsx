@@ -2387,7 +2387,7 @@ function OffsetRow({
           {offset.account.isJoint ? "J" : "P"}
         </span>
       </td>
-      <td className="w-[90px] py-2 text-right font-semibold font-mono tabular-nums text-up">
+      <td className="w-[90px] py-2 text-right tp-numeric text-up">
         <EditableAmountCell value={offset.amount} onSave={(v) => onInlineUpdate(offset.id, "amount", v)} isOffset />
       </td>
       <td className="w-[60px] py-2 text-right">
@@ -2526,7 +2526,7 @@ function ExpenseRowWithOffsets({
             {expense.account.isJoint ? "J" : "P"}
           </span>
         </td>
-        <td className={`w-[90px] py-2 text-right font-semibold font-mono tabular-nums ${parseFloat(expense.amount) < 0 ? "text-up" : ""}`}>
+        <td className={`w-[90px] py-2 text-right tp-numeric ${parseFloat(expense.amount) < 0 ? "text-up" : ""}`}>
           <EditableAmountCell value={expense.amount} onSave={(v) => onInlineUpdate(expense.id, "amount", v)} />
         </td>
         <td className="w-[60px] py-2 text-right">

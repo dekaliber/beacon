@@ -1170,7 +1170,7 @@ export function IncomePage() {
                         {income.account.isJoint ? "J" : "P"}
                       </span>
                     </td>
-                    <td className="w-[90px] py-2 text-right font-semibold font-mono tabular-nums text-up">
+                    <td className="w-[90px] py-2 text-right tp-numeric text-up">
                       <EditableAmountCell
                         value={income.amount}
                         positive
@@ -1287,7 +1287,7 @@ export function IncomePage() {
                           {income.account.isJoint ? "J" : "P"}
                         </span>
                       </td>
-                      <td className={`w-[90px] py-2 text-right font-semibold font-mono tabular-nums ${!income.isCashReceived ? "text-muted-foreground" : "text-up"}`}>
+                      <td className={`w-[90px] py-2 text-right tp-numeric ${!income.isCashReceived ? "text-muted-foreground" : "text-up"}`}>
                         <EditableAmountCell
                           value={income.amount}
                           positive
