@@ -912,6 +912,11 @@ export const getOptionQuote = (params: {
 export const getUnderlyingQuote = (symbol: string) =>
   api.get<{ price: number; priceDate: string }>(`/options/stock-quote/${encodeURIComponent(symbol)}`);
 
+export const getUnderlyingQuotes = (symbols: string[]) =>
+  api.get<Record<string, { price: number; priceDate: string }>>(
+    `/options/stock-quotes?symbols=${symbols.map(encodeURIComponent).join(",")}`
+  );
+
 export const getStockPriceAtOpen = (symbol: string, openedAt: string) =>
   api.get<{ price: number; timeLabel: string }>(
     `/options/stock-price-at-open?symbol=${encodeURIComponent(symbol)}&openedAt=${encodeURIComponent(openedAt)}`

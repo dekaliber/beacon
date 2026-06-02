@@ -631,6 +631,41 @@ optionsRoutes.get("/stock-quote/:symbol", async (req, res) => {
   }
 });
 
+// ── Batch Stock Quotes ────────────────────────────────────────────────────────
+// GET /stock-quotes?symbols=CCJ,PYPL,GLW  →  { CCJ: { price, priceDate }, … }
+
+optionsRoutes.get("/stock-quotes", async (req, res) => {
+  const { symbols } = req.query;
+  if (!symbols || typeof symbols !== "string") {
+    return res.status(400).json({ error: "Missing symbols" });
+  }
+  const symbolList = symbols.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+  if (symbolList.length === 0) {
+    return res.status(400).json({ error: "No valid symbols provided" });
+  }
+  try {
+    const url = `${TRADIER_BASE}/markets/quotes?symbols=${symbolList.map(encodeURIComponent).join(",")}`;
+    const tradierRes = await fetch(url, { headers: tradierHeaders() });
+    if (!tradierRes.ok) {
+      return res.status(502).json({ error: `Tradier returned ${tradierRes.status}` });
+    }
+    const data = await tradierRes.json() as any;
+    const raw = data?.quotes?.quote;
+    if (!raw) return res.status(404).json({ error: "No quote data found" });
+    const quotesArr: any[] = Array.isArray(raw) ? raw : [raw];
+    const result: Record<string, { price: number; priceDate: string }> = {};
+    for (const q of quotesArr) {
+      if (q?.symbol && q.last != null) {
+        result[q.symbol] = { price: Number(q.last), priceDate: q.trade_date ?? new Date().toISOString() };
+      }
+    }
+    res.json(result);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    res.status(500).json({ error: message });
+  }
+});
+
 // ── Stock Price at Open (Tradier timesales) ───────────────────────────────────
 
 optionsRoutes.get("/stock-price-at-open", async (req, res) => {

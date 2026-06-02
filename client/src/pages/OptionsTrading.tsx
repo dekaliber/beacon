@@ -19,6 +19,7 @@ import {
   importOptionsPositions,
   getOptionQuote,
   getUnderlyingQuote,
+  getUnderlyingQuotes,
   getStockPriceAtOpen,
   searchTickers,
   getTickerPrice,
@@ -2238,11 +2239,14 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
 
   const fetchAllStockPrices = () => {
     const uniqueTickers = [...new Set([...positions, ...draftPositions].map((p) => p.ticker.symbol))];
-    for (const ticker of uniqueTickers) {
-      getUnderlyingQuote(ticker)
-        .then((r) => updateLivePrice(ticker, r.price))
-        .catch(() => {});
-    }
+    if (uniqueTickers.length === 0) return;
+    getUnderlyingQuotes(uniqueTickers)
+      .then((results) => {
+        for (const [ticker, data] of Object.entries(results)) {
+          updateLivePrice(ticker, data.price);
+        }
+      })
+      .catch(() => {});
   };
 
   const tickerKey = [...positions, ...draftPositions].map((p) => p.ticker.symbol).join(",");
