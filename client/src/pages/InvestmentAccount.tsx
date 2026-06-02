@@ -36,6 +36,7 @@ import {
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
+import { DatePicker } from "@/components/DatePicker";
 import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
 import {
@@ -174,50 +175,6 @@ function tickerBadgeColor(ticker: string) {
   return BADGE_COLORS[Math.abs(h) % BADGE_COLORS.length];
 }
 
-// ── Smart date input ──────────────────────────────────────────────────────────
-// Keeps the native datepicker but also handles pasting MM/DD/YYYY wholesale.
-
-function SmartDateInput({
-  value,
-  onChange,
-  max,
-  required,
-  autoFocus,
-  className,
-  style,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  max?: string;
-  required?: boolean;
-  autoFocus?: boolean;
-  className?: string;
-  style?: React.CSSProperties;
-}) {
-  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    const text = e.clipboardData.getData("text").trim();
-    // MM/DD/YYYY or M/D/YYYY → YYYY-MM-DD
-    const m = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (m) {
-      e.preventDefault();
-      onChange(`${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`);
-    }
-  };
-
-  return (
-    <input
-      type="date"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      onPaste={handlePaste}
-      max={max}
-      required={required}
-      autoFocus={autoFocus}
-      className={className}
-      style={style}
-    />
-  );
-}
 
 // ── Dollar-prefix input ───────────────────────────────────────────────────────
 // Absolute-positioned $ so it visually lines up with other inputs' left padding.
@@ -450,12 +407,12 @@ function LotFormEntry({
       {!hideDate && (
         <div className="flex-1 min-w-0">
           <label className="block text-xs font-medium mb-1">Acquired Date</label>
-          <SmartDateInput
+          <DatePicker
             value={lot.acquiredDate}
             onChange={(v) => onChange("acquiredDate", v)}
             max={localToday()}
-            className="w-full rounded border border-border px-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            style={errors.acquiredDate ? { borderColor: "var(--color-down)" } : undefined}
+            invalid={!!errors.acquiredDate}
+            className="w-full"
           />
           {errors.acquiredDate && <p className="mt-1 text-xs text-down">{errors.acquiredDate}</p>}
         </div>
@@ -870,11 +827,11 @@ function LotRow({
       <tr className="bg-primary/5 text-xs">
         {/* Cols 1-2: date spans Symbol + Name */}
         <td colSpan={2} className="py-2 pl-4 pr-2">
-          <SmartDateInput
+          <DatePicker
             value={date}
             max={localToday()}
             onChange={setDate}
-            className="rounded border border-border px-2 py-1 text-xs w-[120px] focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-[136px]"
           />
         </td>
         {/* Col 3: cost/share */}
@@ -1110,12 +1067,12 @@ function AddLotRow({
   return (
     <tr className="bg-secondary text-xs">
       <td colSpan={2} className="py-2 pl-4 pr-2">
-        <SmartDateInput
+        <DatePicker
           value={date}
           max={localToday()}
           onChange={setDate}
           autoFocus
-          className="rounded border border-border px-2 py-1 text-xs w-[120px] focus:outline-none focus:ring-1 focus:ring-primary"
+          className="w-[136px]"
         />
       </td>
       <td className="py-2 px-2">
@@ -2565,11 +2522,11 @@ function SellModal({
           <div className={`grid gap-3 ${mode === "sell" ? "grid-cols-2" : "grid-cols-1"}`}>
             <div>
               <label className="block text-xs font-medium mb-1">{mode === "sell" ? "Sale Date" : "Transfer Date"}</label>
-              <SmartDateInput
+              <DatePicker
                 value={actionDate}
                 max={localToday()}
                 onChange={setActionDate}
-                className="w-full rounded border border-border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full"
               />
             </div>
             {mode === "sell" && (
@@ -3190,11 +3147,10 @@ function ReviewDividendModal({
           <>
             <div>
               <label className="block text-xs font-medium mb-1">Payment Date</label>
-              <input
-                type="date"
+              <DatePicker
                 value={paymentDate}
-                onChange={(e) => setPaymentDate(e.target.value)}
-                className={inputCls}
+                onChange={setPaymentDate}
+                className="w-full"
               />
             </div>
             <div>
@@ -3223,11 +3179,10 @@ function ReviewDividendModal({
           <>
             <div>
               <label className="block text-xs font-medium mb-1">Reinvest Date</label>
-              <input
-                type="date"
+              <DatePicker
                 value={reinvestDate}
-                onChange={(e) => setReinvestDate(e.target.value)}
-                className={inputCls}
+                onChange={setReinvestDate}
+                className="w-full"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -3577,10 +3532,10 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
         {/* Acquired Date */}
         <div>
           <label className="block text-xs font-medium mb-1">Acquired Date</label>
-          <input
-            type="date" required
-            value={acquiredDate} onChange={(e) => setAcquiredDate(e.target.value)}
-            className={inputClass}
+          <DatePicker
+            required
+            value={acquiredDate} onChange={setAcquiredDate}
+            className="w-full"
           />
         </div>
 
@@ -3809,10 +3764,10 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium mb-1">Sale Date</label>
-              <input
-                type="date" required
-                value={saleDate} onChange={e => setSaleDate(e.target.value)}
-                className={inputClass}
+              <DatePicker
+                required
+                value={saleDate} onChange={setSaleDate}
+                className="w-full"
               />
             </div>
             <div>
@@ -5156,11 +5111,10 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
               {importDividends && (
                 <label className="flex items-center gap-1.5 text-muted-foreground">
                   Starting
-                  <input
-                    type="date"
+                  <DatePicker
                     value={dividendStartDate}
-                    onChange={(e) => setDividendStartDate(e.target.value)}
-                    className="h-6 rounded border border-border bg-background px-1.5 text-xs text-foreground"
+                    onChange={setDividendStartDate}
+                    className="w-[136px]"
                   />
                 </label>
               )}

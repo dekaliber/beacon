@@ -31,6 +31,7 @@ import {
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
+import { DatePicker } from "@/components/DatePicker";
 import { useApi } from "@/hooks/useApi";
 import { ToastContainer, useToast } from "@/components/Toast";
 import {
@@ -346,12 +347,11 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved, variant = "warning"
   return (
     <tr className={cn("border-b border-dashed", variant === "warning" ? "border-down-line bg-down-soft/50" : "border-border bg-muted/20")}>
       <td className="py-2 pl-4 pr-4">
-        <input
-          type="date"
+        <DatePicker
           value={date}
           min={today}
-          onChange={(e) => setDate(e.target.value)}
-          className="rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary w-[80px]"
+          onChange={setDate}
+          className="w-[136px]"
         />
       </td>
       <td className="py-2 pr-4">
@@ -487,12 +487,11 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
   return (
     <tr className="border-b border-border/50 bg-warn-soft last:border-b-0">
       <td className="py-2 pl-4 pr-4">
-        <input
-          type="date"
+        <DatePicker
           value={date}
           min={today}
-          onChange={(e) => setDate(e.target.value)}
-          className="rounded border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary w-[80px]"
+          onChange={setDate}
+          className="w-[136px]"
         />
       </td>
       <td className="py-2 pr-4">
@@ -945,11 +944,10 @@ function EditTransferModal({
         </div>
         <div>
           <label className="block text-xs font-medium mb-1">Date</label>
-          <input
-            type="date"
+          <DatePicker
             value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            onChange={setDate}
+            className="w-full"
           />
         </div>
         <div>

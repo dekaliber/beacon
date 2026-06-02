@@ -17,6 +17,7 @@ import { Card } from "@/components/Card";
 import { EmptyState } from "@/components/EmptyState";
 import { Modal } from "@/components/Modal";
 import { Button } from "@/components/Button";
+import { DatePicker } from "@/components/DatePicker";
 import { useApi } from "@/hooks/useApi";
 import {
   getRecurrenceRules,
@@ -867,11 +868,11 @@ function TransferRuleModal({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium mb-1">Start Date</label>
-            <input
-              type="date"
+            <DatePicker
               value={form.startDate ?? ""}
-              onChange={(e) => { set({ startDate: e.target.value }); setErrors((er) => ({ ...er, startDate: undefined })); }}
-              className={errors.startDate ? errCls : inputCls}
+              onChange={(v) => { set({ startDate: v }); setErrors((er) => ({ ...er, startDate: undefined })); }}
+              invalid={!!errors.startDate}
+              className="w-full"
             />
             {errors.startDate && <p className="mt-1 text-xs text-down">{errors.startDate}</p>}
           </div>
@@ -879,11 +880,10 @@ function TransferRuleModal({
             <label className="block text-xs font-medium mb-1">
               End Date <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
-            <input
-              type="date"
+            <DatePicker
               value={form.endDate ?? ""}
-              onChange={(e) => set({ endDate: e.target.value })}
-              className={inputCls}
+              onChange={(v) => set({ endDate: v })}
+              className="w-full"
             />
           </div>
         </div>
@@ -1590,11 +1590,10 @@ export function Recurring() {
               End date{" "}
               <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
-            <input
-              type="date"
+            <DatePicker
               value={editForm.endDate}
-              onChange={(e) => setEditForm((f) => ({ ...f, endDate: e.target.value }))}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              onChange={(v) => setEditForm((f) => ({ ...f, endDate: v }))}
+              className="w-full"
             />
             {endDateIsRetroactive && (
               <p className="mt-1.5 rounded-md bg-warn-soft px-3 py-2 text-xs text-warn-deep">

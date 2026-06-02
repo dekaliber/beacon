@@ -11,6 +11,7 @@ import { BulkEditBar } from "@/components/BulkEditBar";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
+import { DatePicker } from "@/components/DatePicker";
 import { EmptyState } from "@/components/EmptyState";
 import { MultiSelectDropdown } from "@/components/MultiSelectDropdown";
 import type { MultiSelectOption, MultiSelectGroup } from "@/components/MultiSelectDropdown";
@@ -98,12 +99,35 @@ function EditableCell({ value, onSave, type = "text", className = "" }: { value:
 
   const commit = () => { setEditing(false); if (editValue !== value) onSave(editValue); };
 
+  if (type === "date") {
+    if (editing) {
+      return (
+        <DatePicker
+          variant="ghost"
+          autoFocus
+          autoOpen
+          confirmOnEnter
+          hideIcon
+          value={toDateInputValue(value)}
+          onChange={(v) => { if (v && v !== toDateInputValue(value)) onSave(v); }}
+          onDismiss={() => setEditing(false)}
+          className={className}
+        />
+      );
+    }
+    return (
+      <span onClick={() => setEditing(true)} className={`cursor-pointer border-b border-dotted border-transparent hover:border-ink-4 ${className}`}>
+        {formatDate(value)}
+      </span>
+    );
+  }
+
   if (editing) {
     return (
       <input
         ref={inputRef}
         type={type}
-        value={type === "date" ? toDateInputValue(editValue) : editValue}
+        value={editValue}
         onChange={(e) => setEditValue(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") { setEditValue(value); setEditing(false); } }}
@@ -114,7 +138,7 @@ function EditableCell({ value, onSave, type = "text", className = "" }: { value:
 
   return (
     <span onClick={() => { setEditValue(value); setEditing(true); }} className={`cursor-pointer border-b border-dotted border-transparent hover:border-ink-4 ${className}`}>
-      {type === "date" ? formatDate(value) : (value || <span className="text-muted-foreground italic">—</span>)}
+      {value || <span className="text-muted-foreground italic">—</span>}
     </span>
   );
 }
@@ -1041,9 +1065,9 @@ export function IncomePage() {
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
                 </div>
-                <input type="date" value={staged.startDate} onChange={(e) => setStaged((s) => ({ ...s, startDate: e.target.value, datePreset: "Custom" }))} className="rounded-md border border-border px-2 py-2 text-sm" />
+                <DatePicker value={staged.startDate} onChange={(v) => setStaged((s) => ({ ...s, startDate: v, datePreset: "Custom" }))} className="w-[136px]" />
                 <span className="tp-caption">→</span>
-                <input type="date" value={staged.endDate || todayStr} onChange={(e) => setStaged((s) => ({ ...s, endDate: e.target.value, datePreset: "Custom" }))} className="rounded-md border border-border px-2 py-2 text-sm" />
+                <DatePicker value={staged.endDate || todayStr} onChange={(v) => setStaged((s) => ({ ...s, endDate: v, datePreset: "Custom" }))} className="w-[136px]" />
               </div>
             </div>
             <div>
@@ -1398,6 +1422,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showOptional, setShowOptional] = useState(false);
   const [taxClassification, setTaxClassification] = useState<string>("");
+  const [dateVal, setDateVal] = useState("");
   const [errors, setErrors] = useState<{ amount?: string; accountId?: string; date?: string }>({});
   const categoryTriggerRef = useRef<HTMLButtonElement>(null);
   const accountTriggerRef = useRef<HTMLButtonElement>(null);
@@ -1408,6 +1433,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
       setConfirmDelete(false);
       setTaxClassification(income?.taxClassification ?? "");
       setShowOptional(!!(income?.notes || income?.taxClassification));
+      setDateVal(toDateInputValue(income?.date));
       setErrors({});
     }
   }, [open, income]);
@@ -1482,7 +1508,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
 
         <div>
           <label className="block text-xs font-medium mb-1">Date</label>
-          <input name="date" type="date" defaultValue={toDateInputValue(income?.date)} onChange={() => setErrors((er) => ({ ...er, date: undefined }))} className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-1 ${errors.date ? "border-down focus:border-down focus:ring-down/30" : "border-border focus:border-primary focus:ring-primary"}`} />
+          <DatePicker name="date" value={dateVal} onChange={(v) => { setDateVal(v); setErrors((er) => ({ ...er, date: undefined })); }} invalid={!!errors.date} className="w-full" />
           {errors.date && <p className="mt-1 text-xs text-down">{errors.date}</p>}
           {/* Relay: captures focus as it exits the date field and forwards to Category, but not on Shift+Tab backwards from Category */}
           <span tabIndex={0} className="sr-only" onFocus={(e) => { if (e.relatedTarget !== categoryTriggerRef.current) categoryTriggerRef.current?.focus(); }} />

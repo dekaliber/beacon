@@ -42,6 +42,7 @@ import { useNotifications } from "@/context/NotificationContext";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
+import { DatePicker } from "@/components/DatePicker";
 import { Plus, ChevronDown, ChevronUp, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info } from "lucide-react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
@@ -883,10 +884,10 @@ function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerC
           </div>
           <div>
             <label className="block text-xs font-medium mb-1">Expiration Date</label>
-            <input
-              type="date" required
-              value={expirationDate} onChange={(e) => setExpirationDate(e.target.value)}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            <DatePicker
+              required
+              value={expirationDate} onChange={setExpirationDate}
+              className="w-full"
             />
           </div>
         </div>
@@ -1433,10 +1434,10 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
                   </div>
                   <div>
                     <label className="block text-xs font-medium mb-1">Expiration Date</label>
-                    <input
-                      type="date" required
-                      value={newExpirationDate} onChange={(e) => setNewExpirationDate(e.target.value)}
-                      className={inputClass}
+                    <DatePicker
+                      required
+                      value={newExpirationDate} onChange={setNewExpirationDate}
+                      className="w-full"
                     />
                   </div>
                 </div>
@@ -1954,10 +1955,9 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
               <div className="flex gap-2">
                 <div className="flex-1">
                   <label className="block tp-caption mb-1">Date</label>
-                  <input
-                    type="date"
-                    value={adjustDate} onChange={(e) => setAdjustDate(e.target.value)}
-                    className="w-full rounded-md border border-border px-2 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  <DatePicker
+                    value={adjustDate} onChange={setAdjustDate}
+                    className="w-full"
                   />
                 </div>
                 <div className="flex-1">
