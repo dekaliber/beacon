@@ -3444,7 +3444,7 @@ investmentRoutes.post("/transfer", async (req, res) => {
       return res.status(400).json({ error: { message: "Source and destination accounts must be different" } });
 
     // Determine which lots to transfer and how many shares from each
-    type LotShare = { lotId: string; shares: number; costPerShare: number; acquiredDate: Date | null };
+    type LotShare = { lotId: string; shares: number; costPerShare: number; acquiredDate: Date | null; fromOptionsPositionId: string | null };
     let lotAllocations: LotShare[];
 
     if (body.lotAllocations) {
@@ -3457,7 +3457,7 @@ investmentRoutes.post("/transfer", async (req, res) => {
         const available = parseFloat(lot.quantity.toString());
         if (a.shares > available + 0.000001)
           throw Object.assign(new Error(`Lot ${a.lotId}: cannot transfer ${a.shares} shares, only ${available} available`), { status: 400 });
-        return { lotId: lot.id, shares: a.shares, costPerShare: parseFloat(lot.costPerShare.toString()), acquiredDate: lot.acquiredDate };
+        return { lotId: lot.id, shares: a.shares, costPerShare: parseFloat(lot.costPerShare.toString()), acquiredDate: lot.acquiredDate, fromOptionsPositionId: lot.fromOptionsPositionId };
       });
     } else {
       const sharesToTransfer = body.sharesToTransfer!;
@@ -3482,7 +3482,7 @@ investmentRoutes.post("/transfer", async (req, res) => {
       for (const lot of sorted) {
         if (remaining <= 0.000001) break;
         const shares = Math.min(parseFloat(lot.quantity.toString()), remaining);
-        lotAllocations.push({ lotId: lot.id, shares, costPerShare: parseFloat(lot.costPerShare.toString()), acquiredDate: lot.acquiredDate });
+        lotAllocations.push({ lotId: lot.id, shares, costPerShare: parseFloat(lot.costPerShare.toString()), acquiredDate: lot.acquiredDate, fromOptionsPositionId: lot.fromOptionsPositionId });
         remaining -= shares;
       }
     }
@@ -3533,7 +3533,7 @@ investmentRoutes.post("/transfer", async (req, res) => {
         });
       }
 
-      // 4. Create destination lots with original cost basis and acquisition dates
+      // 4. Create destination lots with original cost basis, acquisition dates, and CSP link
       for (const alloc of lotAllocations) {
         await tx.investmentLot.create({
           data: {
@@ -3541,6 +3541,7 @@ investmentRoutes.post("/transfer", async (req, res) => {
             quantity: alloc.shares,
             costPerShare: alloc.costPerShare,
             acquiredDate: alloc.acquiredDate,
+            fromOptionsPositionId: alloc.fromOptionsPositionId ?? undefined,
           },
         });
       }

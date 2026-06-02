@@ -163,14 +163,20 @@ pendingBuyRoutes.get("/lots/by-assignment", async (req, res) => {
   const account = await prisma.account.findFirst({ where: { id: accountId, userId } });
   if (!account) return res.status(404).json({ error: "Account not found" });
 
-  // All assigned CSPs for this ticker + account (include id for lot lookup)
+  // All assigned CSPs for this ticker + account. Match either by the CSP's
+  // investmentAccountId (the original account) or by lot location (handles
+  // cases where shares were transferred to a different account after assignment).
   const assignedCsps = await prisma.optionsPosition.findMany({
     where: {
       userId,
+      optionType: "PUT",
       outcome: "ASSIGNED",
       isActive: true,
-      investmentAccountId: accountId,
       ticker: { symbol: ticker },
+      OR: [
+        { investmentAccountId: accountId },
+        { assignedLots: { some: { holding: { accountId, ticker } } } },
+      ],
     },
     select: {
       id: true,
@@ -241,16 +247,24 @@ pendingBuyRoutes.get("/lots/by-assignment", async (req, res) => {
 
       // Weighted average: SUM(qty * cost) / SUM(qty)
       let weightedCostPerShare: number | null = null;
+      let totalLotShares = 0;
       if (lots.length > 0) {
-        let totalQty = 0;
         let totalCost = 0;
         for (const lot of lots) {
           const qty = Number(lot.quantity);
-          totalQty += qty;
+          totalLotShares += qty;
           totalCost += qty * Number(lot.costPerShare);
         }
-        weightedCostPerShare = totalQty > 0 ? totalCost / totalQty : null;
+        weightedCostPerShare = totalLotShares > 0 ? totalCost / totalLotShares : null;
       }
+
+      // Use actual lot shares as the cap — shares sold outside the normal CC
+      // assignment flow (e.g. a CC that was subsequently assigned) will have
+      // reduced/deleted the lot, so lot quantity is ground truth for availability.
+      const lotBasedContracts = Math.floor(totalLotShares / 100);
+      const contractsRemaining = Math.max(0, Math.min(lotBasedContracts, batch.totalContracts) - contractsCovered);
+
+      if (contractsRemaining === 0 && contractsCovered === 0) return null;
 
       return {
         strikePrice: batch.strikePrice,
@@ -258,17 +272,18 @@ pendingBuyRoutes.get("/lots/by-assignment", async (req, res) => {
         totalContracts: batch.totalContracts,
         totalShares: batch.totalContracts * 100,
         contractsCovered,
-        contractsRemaining: Math.max(0, batch.totalContracts - contractsCovered),
+        contractsRemaining,
         weightedCostPerShare,
       };
     })
   );
 
-  // Sort by strikePrice desc, then expirationDate desc
-  batches.sort((a, b) =>
+  // Filter out batches with no shares remaining, then sort by strikePrice desc, expirationDate desc
+  const activeBatches = batches.filter((b) => b !== null);
+  activeBatches.sort((a, b) =>
     parseFloat(b.strikePrice) - parseFloat(a.strikePrice) ||
     b.expirationDate.localeCompare(a.expirationDate)
   );
 
-  res.json(batches);
+  res.json(activeBatches);
 });
