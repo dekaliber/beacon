@@ -251,9 +251,11 @@ export function Accounts() {
 
 // ── Account color palette ──
 
+// §06 design-system swatch palette (hex mirrors of --color-swatch-1..10, kept as
+// hex because account.color is persisted and compared with selectedColor === color).
 const ACCOUNT_COLORS = [
-  "#e2e2df", "#d2d2cf", "#e2cfc4", "#f7d9c4", "#faedcb",
-  "#c9e4de", "#c6def1", "#dbcdf0", "#f2c6de", "#f9c6c9",
+  "#DEE1E7", "#F2D8CA", "#F7DCC3", "#F3E7C6", "#CCEAD8",
+  "#C9E6F9", "#E2D8F8", "#F7D2E2", "#FACECD", "#DEE6EC",
 ];
 
 interface AccountModalProps {

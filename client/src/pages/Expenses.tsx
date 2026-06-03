@@ -925,7 +925,7 @@ function EditableAccountCell({
         <span
           onClick={startEditing}
           className="inline-block cursor-pointer whitespace-nowrap rounded-md px-2 py-0.5 text-13 text-foreground"
-          style={{ backgroundColor: color ?? "#e2e2df" }}
+          style={{ backgroundColor: color ?? "var(--color-swatch-1)" }}
         >
           {label}
         </span>

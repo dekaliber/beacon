@@ -1013,7 +1013,7 @@ function CategoryPacingTable({ outliers, year }: { outliers: CategoryOutliersDat
               >
                 <td className="py-1.5 pr-2">
                   <span className="flex items-center gap-1.5 text-muted-foreground">
-                    <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.color ?? "#9CA3AF" }} />
+                    <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.color ?? "var(--color-ink-4)" }} />
                     {item.categoryName}
                   </span>
                 </td>

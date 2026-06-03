@@ -127,7 +127,7 @@ function AccountChip({ name, color }: { name: string | null; color: string | nul
   return (
     <span
       className="inline-block rounded-md px-2 py-0.5 text-13 text-foreground"
-      style={{ backgroundColor: color ?? "#e2e2df" }}
+      style={{ backgroundColor: color ?? "var(--color-swatch-1)" }}
     >
       {name ?? "—"}
     </span>

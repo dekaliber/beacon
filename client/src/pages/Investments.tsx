@@ -1220,7 +1220,7 @@ if (!displayAccounts) return <BeaconLoader />;
         <div className="flex items-center gap-3">
           <div
             className="h-8 w-8 flex-shrink-0 rounded-md flex items-center justify-center"
-            style={account.color ? { backgroundColor: account.color } : { backgroundColor: "#e2e2df" }}
+            style={account.color ? { backgroundColor: account.color } : { backgroundColor: "var(--color-swatch-1)" }}
           >
             <LineChart className="h-4 w-4 text-ink-4" />
           </div>

@@ -819,7 +819,7 @@ function CategoryPacingCard({ outliers, year }: CategoryPacingCardProps) {
         <div className="flex w-32 shrink-0 items-center gap-2">
           <span
             className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-            style={{ backgroundColor: item.color ?? "#9CA3AF" }}
+            style={{ backgroundColor: item.color ?? "var(--color-ink-4)" }}
           />
           <span className="truncate text-xs text-foreground">{item.categoryName}</span>
         </div>

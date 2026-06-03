@@ -96,6 +96,18 @@
   --color-chart-cursor: color-mix(in oklab, var(--color-primary) 45%, transparent);
   --color-chart-hover:  color-mix(in oklab, var(--color-ink) 4%, transparent);
 
+  /* ── Account/category swatches — §06; muted surfaces for dark text ───── */
+  --color-swatch-1:  oklch(0.91 0.008 260); /* stone */
+  --color-swatch-2:  oklch(0.90 0.035 50);  /* clay */
+  --color-swatch-3:  oklch(0.91 0.045 65);  /* peach */
+  --color-swatch-4:  oklch(0.93 0.045 90);  /* sand */
+  --color-swatch-5:  oklch(0.91 0.040 160); /* sage */
+  --color-swatch-6:  oklch(0.91 0.040 235); /* sky-mist */
+  --color-swatch-7:  oklch(0.90 0.045 300); /* lilac */
+  --color-swatch-8:  oklch(0.90 0.045 350); /* blush */
+  --color-swatch-9:  oklch(0.89 0.050 20);  /* rose-dust */
+  --color-swatch-10: oklch(0.92 0.012 240); /* fog */
+
   /* ── Brand / UI ──────────────────────────────────────────────────────── */
   --color-primary:          oklch(0.56 0.16 268);
   --color-primary-deep:     oklch(0.44 0.18 268);

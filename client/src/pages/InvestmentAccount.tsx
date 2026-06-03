@@ -5756,7 +5756,7 @@ export function InvestmentAccount() {
         <div className="flex items-center gap-2">
           <div
             className="h-8 w-8 rounded-md flex items-center justify-center"
-            style={account.color ? { backgroundColor: account.color } : { backgroundColor: "#e2e2df" }}
+            style={account.color ? { backgroundColor: account.color } : { backgroundColor: "var(--color-swatch-1)" }}
           >
             {isBanking ? (
               <Landmark className="h-4 w-4 text-ink-4" />
