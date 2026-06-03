@@ -14,7 +14,7 @@ import { FlatCard } from "@/components/Card";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import { useApi } from "@/hooks/useApi";
 import { getCashFlow, getInvestmentAccounts, updateAccount, createBalanceAdjustment, updateBalanceAdjustment, deleteBalanceAdjustment, upsertStatementOverride, getExpenses } from "@/api";
-import { formatCurrency, cn } from "@/lib/utils";
+import { formatCurrency, cn, parseAmount } from "@/lib/utils";
 import type { CashFlowProjection, CashFlowEvent, DailyBalance, InvestmentAccountSummary, Expense } from "@/types";
 import { SectionLabel, StatValue, DisplayStat } from "@/components/Typography";
 
@@ -153,7 +153,7 @@ function EditBalanceSheet({
     e.preventDefault();
     if (!account) return;
     setSaving(true);
-    await onSave(account.id, parseFloat(value.replace(/,/g, "")) || 0);
+    await onSave(account.id, parseAmount(value) || 0);
     setSaving(false);
   };
 
@@ -292,7 +292,7 @@ function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved,
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const amt = parseFloat(amount.replace(/,/g, ""));
+    const amt = parseAmount(amount);
     if (!amt || amt <= 0) return;
     setSaving(true);
     try {
@@ -480,7 +480,7 @@ function CCPaymentSheet({
         accountId: event.relatedAccountId ?? "",
         periodStart: event.periodStart,
         periodEnd: event.periodEnd,
-        amount: parseFloat(value.replace(/,/g, "")),
+        amount: parseAmount(value),
       });
       onSaved();
       onClose();

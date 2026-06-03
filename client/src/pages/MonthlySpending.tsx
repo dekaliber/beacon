@@ -163,7 +163,7 @@ function DayTooltip({
 
   return (
     <div
-      className="pointer-events-none fixed z-50 rounded-md border border-border bg-card px-3 py-2 text-xs shadow-lg"
+      className="pointer-events-none fixed z-50 rounded-md border border-border bg-background px-3 py-2 text-xs shadow-lg"
       style={{ left: x + 12, top: y - 8 }}
     >
       <div className="flex justify-between gap-4 mb-1 pb-1 border-b border-border">

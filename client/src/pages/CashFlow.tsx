@@ -47,7 +47,7 @@ import {
   updateTransfer,
   deleteTransfer,
 } from "@/api";
-import { formatCurrency, cn } from "@/lib/utils";
+import { formatCurrency, cn, parseAmount } from "@/lib/utils";
 import type { CashFlowProjection, CashFlowEvent, DailyBalance, InvestmentAccountSummary, Expense } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import { SectionLabel, ColumnHeader, StatValue, DisplayStat } from "@/components/Typography";
@@ -204,7 +204,7 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
         accountId,
         periodStart: event.periodStart,
         periodEnd: event.periodEnd,
-        amount: parseFloat(value),
+        amount: parseAmount(value),
       });
       onSaved();
       setOpen(false);
@@ -311,7 +311,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved, variant = "warning"
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
-    const amt = parseFloat(amount);
+    const amt = parseAmount(amount);
     if (!amt || amt <= 0) return;
     setSaving(true);
     try {
@@ -382,7 +382,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved, variant = "warning"
         <div className="flex items-center gap-1">
           <button
             onClick={handleSave}
-            disabled={saving || !amount || parseFloat(amount) <= 0}
+            disabled={saving || !amount || parseAmount(amount) <= 0}
             className="rounded p-0.5 hover:bg-accent text-up disabled:opacity-40"
             title="Save"
           >
@@ -421,7 +421,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
     try {
       await updateBalanceAdjustment(event.adjustmentId, {
         date,
-        amount: parseFloat(amount),
+        amount: parseAmount(amount),
         description,
       });
       onSaved();
@@ -926,7 +926,7 @@ function EditTransferModal({
     try {
       await updateTransfer(target.transferId, {
         date,
-        amount: parseFloat(amount.replace(/,/g, "")) || 0,
+        amount: parseAmount(amount) || 0,
       });
       onClose();
       onSaved();
@@ -1009,7 +1009,7 @@ function EditBalanceModal({
     e.preventDefault();
     if (!account) return;
     setSaving(true);
-    await onSave(account.id, parseFloat(value.replace(/,/g, "")) || 0);
+    await onSave(account.id, parseAmount(value) || 0);
     setSaving(false);
   };
 

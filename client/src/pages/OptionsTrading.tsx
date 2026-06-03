@@ -47,7 +47,7 @@ import { Modal } from "@/components/Modal";
 import { DatePicker } from "@/components/DatePicker";
 import { Plus, ChevronDown, ChevronUp, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info } from "lucide-react";
 import { createPortal } from "react-dom";
-import { cn } from "@/lib/utils";
+import { cn, parseAmount } from "@/lib/utils";
 import { SectionLabel, ColumnHeader, StatValue } from "@/components/Typography";
 import { optionsPricesAreFresh } from "@/lib/priceUtils";
 import { BeaconLoader } from "@/components/BeaconLoader";
@@ -548,7 +548,7 @@ function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerC
     }
 
     // Also fetch delta via option quote if we have all required option params
-    const strikeNum = parseFloat(strikePrice.replace(/,/g, ""));
+    const strikeNum = parseAmount(strikePrice);
     if (symbol && optionType && !isNaN(strikeNum) && strikeNum > 0 && expirationDate) {
       setDeltaAtOpenStatus("fetching");
       try {
@@ -575,7 +575,7 @@ function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerC
     // Don't auto-fill premium for existing open positions — the transaction already occurred
     if (editing) return;
     if (quoteDebounce.current) clearTimeout(quoteDebounce.current);
-    const strikeNum = parseFloat(strikePrice.replace(/,/g, ""));
+    const strikeNum = parseAmount(strikePrice);
     if (!selectedTicker || !strikePrice || isNaN(strikeNum) || strikeNum <= 0 || !expirationDate) {
       return;
     }
@@ -681,14 +681,14 @@ function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerC
         groupId: groupId || null,
         optionType,
         side: "SELL",
-        strikePrice: parseFloat(strikePrice.replace(/,/g, "")),
+        strikePrice: parseAmount(strikePrice),
         expirationDate,
         openedAt: etToUtc(openedAt),
         contracts: parseInt(contracts, 10),
-        premiumPerShare: parseFloat(premiumPerShare.replace(/,/g, "")),
-        feesOpen: feesOpen ? parseFloat(feesOpen.replace(/,/g, "")) : null,
-        shareCostBasis: isCoveredCall && shareCostBasis ? parseFloat(shareCostBasis.replace(/,/g, "")) : null,
-        stockPriceAtOpen: stockPriceAtOpen ? parseFloat(stockPriceAtOpen.replace(/,/g, "")) : null,
+        premiumPerShare: parseAmount(premiumPerShare),
+        feesOpen: feesOpen ? parseAmount(feesOpen) : null,
+        shareCostBasis: isCoveredCall && shareCostBasis ? parseAmount(shareCostBasis) : null,
+        stockPriceAtOpen: stockPriceAtOpen ? parseAmount(stockPriceAtOpen) : null,
         deltaAtOpen: deltaAtOpenStr ? parseFloat(deltaAtOpenStr) : null,
         deltaAtOpenCapturedAt: deltaAtOpenCapturedAt ?? null,
         notes: notes || null,
@@ -1190,13 +1190,13 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
       if (isRolled) {
         await rollOptionsPosition(position.id, {
           closedAt: closedAt ? etToUtc(closedAt) : null,
-          closePremiumPerShare: closePremiumPerShare ? parseFloat(closePremiumPerShare.replace(/,/g, "")) : null,
-          feesClose: feesClose ? parseFloat(feesClose.replace(/,/g, "")) : null,
-          newPremiumPerShare: parseFloat(newPremiumPerShare.replace(/,/g, "")),
-          newStrikePrice: parseFloat(newStrikePrice.replace(/,/g, "")),
+          closePremiumPerShare: closePremiumPerShare ? parseAmount(closePremiumPerShare) : null,
+          feesClose: feesClose ? parseAmount(feesClose) : null,
+          newPremiumPerShare: parseAmount(newPremiumPerShare),
+          newStrikePrice: parseAmount(newStrikePrice),
           newExpirationDate,
-          newStockPriceAtOpen: newStockPriceAtOpen ? parseFloat(newStockPriceAtOpen.replace(/,/g, "")) : null,
-          newFeesOpen: newFeesOpen ? parseFloat(newFeesOpen.replace(/,/g, "")) : null,
+          newStockPriceAtOpen: newStockPriceAtOpen ? parseAmount(newStockPriceAtOpen) : null,
+          newFeesOpen: newFeesOpen ? parseAmount(newFeesOpen) : null,
         });
       } else {
         const statusMap: Record<OptionOutcome, Exclude<import("@/api").OptionStatus, "OPEN">> = {
@@ -1209,10 +1209,10 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
           status: statusMap[outcome],
           outcome,
           closedAt: isExpired ? null : closedAt ? etToUtc(closedAt) : null,
-          closePremiumPerShare: isExpired || isAssigned ? null : closePremiumPerShare ? parseFloat(closePremiumPerShare.replace(/,/g, "")) : null,
-          feesClose: feesClose ? parseFloat(feesClose.replace(/,/g, "")) : null,
+          closePremiumPerShare: isExpired || isAssigned ? null : closePremiumPerShare ? parseAmount(closePremiumPerShare) : null,
+          feesClose: feesClose ? parseAmount(feesClose) : null,
           contractsAssigned: isAssigned && contractsAssigned ? parseInt(contractsAssigned, 10) : null,
-          stockPriceAtClose: isAssigned && stockPriceAtClose ? parseFloat(stockPriceAtClose.replace(/,/g, "")) : null,
+          stockPriceAtClose: isAssigned && stockPriceAtClose ? parseAmount(stockPriceAtClose) : null,
           investmentAccountId: isAssigned ? (investmentAccountId || null) : undefined,
           bankingAccountId: bankingAccountId || null,
         };
@@ -1573,10 +1573,10 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
         outcome,
         status: statusMap[outcome],
         closedAt: isExpired ? null : lockTimestamp ? undefined : closedAt ? etToUtc(closedAt) : null,
-        closePremiumPerShare: isExpired || isAssigned ? null : closePremiumPerShare ? parseFloat(closePremiumPerShare.replace(/,/g, "")) : null,
-        feesClose: feesClose ? parseFloat(feesClose.replace(/,/g, "")) : null,
+        closePremiumPerShare: isExpired || isAssigned ? null : closePremiumPerShare ? parseAmount(closePremiumPerShare) : null,
+        feesClose: feesClose ? parseAmount(feesClose) : null,
         contractsAssigned: isAssigned && contractsAssigned ? parseInt(contractsAssigned, 10) : null,
-        stockPriceAtClose: isAssigned && stockPriceAtClose ? parseFloat(stockPriceAtClose.replace(/,/g, "")) : null,
+        stockPriceAtClose: isAssigned && stockPriceAtClose ? parseAmount(stockPriceAtClose) : null,
         investmentAccountId: isAssigned ? (investmentAccountId || null) : undefined,
         bankingAccountId: isRolled ? undefined : (bankingAccountId || null),
       });
@@ -1835,7 +1835,7 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
   const [adjustError, setAdjustError] = useState("");
 
   const handleAddAdjustment = async () => {
-    const delta = parseFloat(adjustDelta.replace(/,/g, ""));
+    const delta = parseAmount(adjustDelta);
     if (isNaN(delta) || delta === 0) { setAdjustError("Enter a non-zero amount."); return; }
     setAdjustSaving(true);
     setAdjustError("");
@@ -1864,7 +1864,7 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
   );
 
   const runningBasisRows = useMemo(() => {
-    const basis = parseFloat(startingBasis.replace(/,/g, "")) || 0;
+    const basis = parseAmount(startingBasis) || 0;
     let running = basis;
     return sortedChanges.map((c) => {
       running += Number(c.delta);
@@ -1880,7 +1880,7 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
     setError("");
     try {
       await updateOptionsSettings({
-        startingBasis: parseFloat(startingBasis.replace(/,/g, "")),
+        startingBasis: parseAmount(startingBasis),
         targetReturn: parseFloat(targetReturn) / 100,
         startingWeek: startingWeek || null,
         defaultCashAccountId: defaultCashAccountId || null,
@@ -2093,9 +2093,9 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
         isDraft: false,
         openedAt: etToUtc(confirmedAt),
         contracts: parseInt(contracts, 10),
-        premiumPerShare: parseFloat(premiumPerShare.replace(/,/g, "")),
-        feesOpen: feesOpen ? parseFloat(feesOpen.replace(/,/g, "")) : null,
-        stockPriceAtOpen: stockPriceAtOpen ? parseFloat(stockPriceAtOpen.replace(/,/g, "")) : null,
+        premiumPerShare: parseAmount(premiumPerShare),
+        feesOpen: feesOpen ? parseAmount(feesOpen) : null,
+        stockPriceAtOpen: stockPriceAtOpen ? parseAmount(stockPriceAtOpen) : null,
       });
       onSaved();
     } catch {
@@ -2434,7 +2434,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
     // Live section
     const isEditingThisPrem = editingPremId === p.id;
     const curPrem = isEditingThisPrem
-      ? (editingPremValue !== "" ? parseFloat(editingPremValue.replace(/,/g, "")) : null)
+      ? (editingPremValue !== "" ? parseAmount(editingPremValue) : null)
       : p.currentPremiumPerShare ?? null;
     const stockNow = livePrices.get(p.ticker.symbol) ?? null;
     const livePnl = curPrem != null
@@ -2578,7 +2578,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
                     value={editingPremValue}
                     onChange={(e) => setEditingPremValue(e.target.value)}
                     onBlur={async () => {
-                      const val = editingPremValue !== "" ? parseFloat(editingPremValue.replace(/,/g, "")) : null;
+                      const val = editingPremValue !== "" ? parseAmount(editingPremValue) : null;
                       await updateOptionsPosition(p.id, { currentPremiumPerShare: val });
                       setEditingPremId(null);
                       onPositionUpdated();

@@ -16,7 +16,7 @@ import {
   getTransferRules, createTransfer, updateTransferRule, archiveTransferRule,
   type LinkedExpense,
 } from "@/api";
-import { formatCurrency, formatDate, toDateInputValue, cn } from "@/lib/utils";
+import { formatCurrency, formatDate, toDateInputValue, cn, parseAmount } from "@/lib/utils";
 import type {
   RecurrenceRule, Account, Category, TransferRule,
   UpcomingExpenseItem, RecurringHistoryMonth,
@@ -542,7 +542,7 @@ function EditRuleModal({
 
   const handleSave = async () => {
     if (!rule) return;
-    const amountVal = parseFloat(form.amount.replace(/,/g, ""));
+    const amountVal = parseAmount(form.amount);
     if (isNaN(amountVal) || amountVal === 0) { setError("Amount must be a non-zero number."); return; }
     setSaving(true);
     setError(null);
@@ -1442,11 +1442,11 @@ export function MobileRecurring() {
         onClose={() => { setTransferModalOpen(false); setEditingTransferRule(null); }}
         onSave={async (data) => {
           if (editingTransferRule) {
-            await updateTransferRule(editingTransferRule.id, { ...data, amount: parseFloat(data.amount!.replace(/,/g, "")) });
+            await updateTransferRule(editingTransferRule.id, { ...data, amount: parseAmount(data.amount!) });
           } else {
             await createTransfer({
               description: data.description!,
-              amount: parseFloat(data.amount!.replace(/,/g, "")),
+              amount: parseAmount(data.amount!),
               date: data.startDate!,
               fromAccountId: data.fromAccountId!,
               toAccountId: data.toAccountId!,

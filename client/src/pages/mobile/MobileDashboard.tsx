@@ -123,6 +123,35 @@ export function MobileDashboard() {
   const atMin = dataRange ? year * 12 + month <= dataRange.minYear * 12 + dataRange.minMonth : false;
   const atMax = dataRange ? year * 12 + month >= dataRange.maxYear * 12 + dataRange.maxMonth : false;
 
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [pickerOpen]);
+
+  const monthsByYear = useMemo(() => {
+    if (!dataRange) return [];
+    const groups = new Map<number, Array<{ month: number; label: string }>>();
+    let y = dataRange.maxYear, m = dataRange.maxMonth;
+    while (y > dataRange.minYear || (y === dataRange.minYear && m >= dataRange.minMonth)) {
+      if (!groups.has(y)) groups.set(y, []);
+      groups.get(y)!.push({
+        month: m,
+        label: new Date(y, m - 1).toLocaleDateString("en-US", { month: "long" }),
+      });
+      if (m === 1) { m = 12; y--; } else m--;
+    }
+    return Array.from(groups.entries()).sort(([a], [b]) => b - a);
+  }, [dataRange]);
+
   const abbrYear = (label: string) => label.replace(/\b(\d{2})(\d{2})\b/, "'$2");
 
   const monthLabel = new Date(year, month - 1).toLocaleDateString("en-US", {
@@ -186,9 +215,9 @@ export function MobileDashboard() {
   return (
     <div>
       {/* ── Page header ──────────────────────────────────────────────────────── */}
-      <div className="mb-6 flex items-center gap-3">
+      <div className="mb-6">
         <PageHeadingMenu title="Monthly Summary" items={[]} />
-        <div className="flex flex-1 items-center justify-end gap-1">
+        <div className="mt-3 flex items-center justify-center gap-1">
           <button
             onClick={prevMonth}
             disabled={atMin}
@@ -196,7 +225,35 @@ export function MobileDashboard() {
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <span className="min-w-[7.5rem] text-center text-sm font-semibold">{monthLabel}</span>
+          <div className="relative" ref={pickerRef}>
+            <button
+              onClick={() => setPickerOpen((o) => !o)}
+              className="min-w-[7.5rem] text-center text-sm font-semibold hover:text-primary transition-colors"
+            >
+              {monthLabel}
+            </button>
+            {pickerOpen && (
+              <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-[60] max-h-72 overflow-y-auto rounded-lg border border-border bg-background shadow-lg py-1 min-w-[7.5rem]">
+                {monthsByYear.map(([yr, months]) => (
+                  <div key={yr}>
+                    <div className="px-3 pt-2 pb-1.5 text-xs font-semibold text-muted-foreground">{yr}</div>
+                    {months.map((opt) => {
+                      const isSelected = opt.month === month && yr === year;
+                      return (
+                        <button
+                          key={opt.month}
+                          onClick={() => { setYear(yr); setMonth(opt.month); setPickerOpen(false); }}
+                          className={`w-full text-left px-4 py-1 text-sm transition-colors ${isSelected ? "bg-accent font-medium" : "hover:bg-accent/60"}`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             onClick={nextMonth}
             disabled={atMax}

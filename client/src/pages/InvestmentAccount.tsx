@@ -87,7 +87,7 @@ import {
 } from "@/api";
 import type { SellPreviewResult } from "@/api";
 import { ApiError } from "@/api/client";
-import { formatCurrency, formatDate, toDateInputValue, localToday } from "@/lib/utils";
+import { formatCurrency, formatDate, toDateInputValue, localToday, parseAmount } from "@/lib/utils";
 import { useNotifications } from "@/context/NotificationContext";
 import { isPriceRefreshNeeded } from "@/lib/priceUtils";
 import { useDemo } from "@/context/DemoContext";
@@ -556,8 +556,8 @@ function AddInvestmentModal({
     let hasErrors = false;
     for (let i = 0; i < lots.length; i++) {
       const lot = lots[i];
-      const qty = parseFloat(lot.quantity.replace(/,/g, ""));
-      const rawCost = parseFloat(lot.costPerShare.replace(/,/g, ""));
+      const qty = parseAmount(lot.quantity);
+      const rawCost = parseAmount(lot.costPerShare);
       if (!lot.quantity || isNaN(qty) || qty <= 0) {
         newLotErrors[i].quantity = "Enter a quantity greater than 0";
         hasErrors = true;
@@ -588,8 +588,8 @@ function AddInvestmentModal({
         coinGeckoId: selectedTicker.coinGeckoId ?? null,
       });
       for (const lot of lots) {
-        const qty = parseFloat(lot.quantity.replace(/,/g, ""));
-        const rawCost = parseFloat(lot.costPerShare.replace(/,/g, ""));
+        const qty = parseAmount(lot.quantity);
+        const rawCost = parseAmount(lot.costPerShare);
         // Managed mode: field holds total cost — derive cost-per-share automatically
         const costPerShare = managed ? rawCost / qty : rawCost;
         await createLot({
@@ -737,8 +737,8 @@ function computeLotGains(
   acquiredDate: string | null,
   currentPrice: number | null
 ) {
-  const qty = parseFloat(quantity.replace(/,/g, ""));
-  const cps = parseFloat(costPerShare.replace(/,/g, ""));
+  const qty = parseAmount(quantity);
+  const cps = parseAmount(costPerShare);
   const totalCost = qty * cps;
   if (currentPrice == null)
     return { totalCost, marketValue: null, totalGain: null, shortTermGain: null, longTermGain: null };
@@ -789,8 +789,8 @@ function LotRow({
     setSaving(true);
     try {
       await updateLot(lot.id, {
-        quantity: parseFloat(qty.replace(/,/g, "")),
-        costPerShare: parseFloat(cps.replace(/,/g, "")),
+        quantity: parseAmount(qty),
+        costPerShare: parseAmount(cps),
         acquiredDate: date || null,
       });
       setEditing(false);
@@ -822,7 +822,7 @@ function LotRow({
   const gains = computeLotGains(lot.quantity, lot.costPerShare, lot.acquiredDate, currentPrice);
 
   if (editing) {
-    const editTotalCost = parseFloat((qty || "0").replace(/,/g, "")) * parseFloat((cps || "0").replace(/,/g, ""));
+    const editTotalCost = parseAmount((qty || "0")) * parseAmount((cps || "0"));
     return (
       <tr className="bg-primary/5 text-xs">
         {/* Cols 1-2: date spans Symbol + Name */}
@@ -993,8 +993,8 @@ function AddLotRow({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    const quantity = parseFloat(qty.replace(/,/g, ""));
-    const rawCost = parseFloat(cps.replace(/,/g, ""));
+    const quantity = parseAmount(qty);
+    const rawCost = parseAmount(cps);
     if (isNaN(quantity) || isNaN(rawCost) || quantity <= 0) return;
     // Managed mode: field holds total cost — derive cost-per-share automatically
     const costPerShare = managed ? rawCost / quantity : rawCost;
@@ -1550,8 +1550,7 @@ function ImportInvestmentsModal({
         const price = parseFloat(cleanPrice);
         if (isNaN(price) || price < 0) errors.push("Invalid price");
 
-        const cleanQty = rawQty?.replace(/,/g, "") ?? "";
-        const quantity = parseFloat(cleanQty);
+        const quantity = parseAmount(rawQty ?? "");
         if (isNaN(quantity) || quantity <= 0) errors.push("Invalid quantity");
 
         parsed.push({
@@ -1801,8 +1800,8 @@ function AddManualInvestmentModal({
     }
   }, [open, editing]);
 
-  const parsedCost = totalCost !== "" ? parseFloat(totalCost.replace(/,/g, "")) : null;
-  const parsedMV = marketValue !== "" ? parseFloat(marketValue.replace(/,/g, "")) : NaN;
+  const parsedCost = totalCost !== "" ? parseAmount(totalCost) : null;
+  const parsedMV = marketValue !== "" ? parseAmount(marketValue) : NaN;
   const totalGain = parsedCost != null && !isNaN(parsedMV) ? parsedMV - parsedCost : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -2179,7 +2178,7 @@ function SellModal({
   });
 
   const lotAllocations = sortedLots
-    .map((lot) => ({ lotId: lot.id, shares: parseFloat((lotInputs[lot.id] || "0").replace(/,/g, "")) || 0 }))
+    .map((lot) => ({ lotId: lot.id, shares: parseAmount((lotInputs[lot.id] || "0")) || 0 }))
     .filter((a) => a.shares > 0);
   const lotTotalShares = lotAllocations.reduce((s, a) => s + a.shares, 0);
 
@@ -2192,7 +2191,7 @@ function SellModal({
         return { lotId: lot.id, acquiredDate: lot.acquiredDate, shares: a.shares, costPerShare: parseFloat(lot.costPerShare) };
       });
     }
-    const sharesToMove = parseFloat(shares.replace(/,/g, "")) || 0;
+    const sharesToMove = parseAmount(shares) || 0;
     const sorted = [...holding.lots].sort((a, b) => {
       const aCps = parseFloat(a.costPerShare);
       const bCps = parseFloat(b.costPerShare);
@@ -2224,13 +2223,13 @@ function SellModal({
     if (mode === "transfer") {
       if (!destAccountId) return setError("Select a destination account.");
       if (selectionMode === "method") {
-        const sharesToMove = parseFloat(shares.replace(/,/g, ""));
+        const sharesToMove = parseAmount(shares);
         if (isNaN(sharesToMove) || sharesToMove <= 0) return setError("Enter a valid number of shares.");
         if (sharesToMove > maxShares + 0.000001) return setError(`Cannot transfer more than ${maxShares.toLocaleString(undefined, { maximumFractionDigits: 8 })} shares.`);
       } else {
         if (lotAllocations.length === 0) return setError("Enter shares to transfer for at least one lot.");
         for (const lot of sortedLots) {
-          const requested = parseFloat((lotInputs[lot.id] || "0").replace(/,/g, "")) || 0;
+          const requested = parseAmount((lotInputs[lot.id] || "0")) || 0;
           const available = parseFloat(lot.quantity);
           if (requested > available + 0.000001) {
             return setError(`Lot ${lot.acquiredDate ? formatDate(lot.acquiredDate) : "unknown"}: cannot transfer ${requested} shares, only ${available} available.`);
@@ -2242,18 +2241,18 @@ function SellModal({
     }
 
     // Sell mode — compute preview via API
-    const pricePerShare = parseFloat(price.replace(/,/g, ""));
+    const pricePerShare = parseAmount(price);
     if (isNaN(pricePerShare) || pricePerShare <= 0) return setError("Enter a valid sale price.");
     if (!destAccountId) return setError("Select a destination account.");
     if (selectionMode === "method") {
-      const sharesToSell = parseFloat(shares.replace(/,/g, ""));
+      const sharesToSell = parseAmount(shares);
       if (isNaN(sharesToSell) || sharesToSell <= 0) return setError("Enter a valid number of shares.");
       if (sharesToSell > maxShares + 0.000001) return setError(`Cannot sell more than ${maxShares.toLocaleString(undefined, { maximumFractionDigits: 8 })} shares.`);
     } else {
       if (lotAllocations.length === 0) return setError("Enter shares to sell for at least one lot.");
       if (lotTotalShares > maxShares + 0.000001) return setError(`Total shares (${lotTotalShares.toLocaleString(undefined, { maximumFractionDigits: 8 })}) exceeds available ${maxShares.toLocaleString(undefined, { maximumFractionDigits: 8 })}.`);
       for (const lot of sortedLots) {
-        const requested = parseFloat((lotInputs[lot.id] || "0").replace(/,/g, "")) || 0;
+        const requested = parseAmount((lotInputs[lot.id] || "0")) || 0;
         const available = parseFloat(lot.quantity);
         if (requested > available + 0.000001) {
           return setError(`Lot ${lot.acquiredDate ? formatDate(lot.acquiredDate) : "unknown"}: cannot sell ${requested} shares, only ${available} available.`);
@@ -2265,10 +2264,10 @@ function SellModal({
     try {
       const baseRequest = {
         holdingId: holding.id,
-        sharesToSell: selectionMode === "method" ? parseFloat(shares.replace(/,/g, "")) : lotTotalShares,
+        sharesToSell: selectionMode === "method" ? parseAmount(shares) : lotTotalShares,
         pricePerShare,
         saleDate: actionDate,
-        fees: parseFloat(fees.replace(/,/g, "")) || 0,
+        fees: parseAmount(fees) || 0,
       };
       const result = await previewSell(
         selectionMode === "method"
@@ -2296,7 +2295,7 @@ function SellModal({
         };
         await executeTransfer(
           selectionMode === "method"
-            ? { ...baseRequest, sharesToTransfer: parseFloat(shares.replace(/,/g, "")), costBasisMethod: method }
+            ? { ...baseRequest, sharesToTransfer: parseAmount(shares), costBasisMethod: method }
             : { ...baseRequest, lotAllocations }
         );
         onTransferred();
@@ -2305,10 +2304,10 @@ function SellModal({
         if (!preview) return;
         const baseRequest = {
           holdingId: holding.id,
-          sharesToSell: selectionMode === "method" ? parseFloat(shares.replace(/,/g, "")) : lotTotalShares,
-          pricePerShare: parseFloat(price.replace(/,/g, "")),
+          sharesToSell: selectionMode === "method" ? parseAmount(shares) : lotTotalShares,
+          pricePerShare: parseAmount(price),
           saleDate: actionDate,
-          fees: parseFloat(fees.replace(/,/g, "")) || 0,
+          fees: parseAmount(fees) || 0,
           destinationAccountId: destAccountId,
         };
         await executeSell(
@@ -2762,15 +2761,15 @@ function EditSaleActivityModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const priceNum = parseFloat(price.replace(/,/g, "")) || 0;
-  const feesNum = parseFloat(fees.replace(/,/g, "")) || 0;
+  const priceNum = parseAmount(price) || 0;
+  const feesNum = parseAmount(fees) || 0;
   const grossProceeds = priceNum * (activity.shares ?? 0);
   const netProceeds = grossProceeds - feesNum;
   const gain = netProceeds - (activity.costBasis ?? 0);
 
   const handleSave = async () => {
-    const p = parseFloat(price.replace(/,/g, ""));
-    const f = parseFloat(fees.replace(/,/g, "")) || 0;
+    const p = parseAmount(price);
+    const f = parseAmount(fees) || 0;
     if (!p || p <= 0) { setError("Price per share must be a positive number."); return; }
     if (f < 0) { setError("Fees cannot be negative."); return; }
     setSaving(true);
@@ -2966,8 +2965,8 @@ function ReviewDividendModal({
   // ── Field change handlers ─────────────────────────────────────────────────
   const handlePerShareChange = (val: string) => {
     setPerShareAmount(val);
-    const psa = parseFloat(val.replace(/,/g, ""));
-    const sh = parseFloat(shares.replace(/,/g, ""));
+    const psa = parseAmount(val);
+    const sh = parseAmount(shares);
     if (!isNaN(psa) && psa > 0 && !isNaN(sh) && sh > 0) {
       setTotalAmount((psa * sh).toFixed(2));
     }
@@ -2975,8 +2974,8 @@ function ReviewDividendModal({
 
   const handleSharesChange = (val: string) => {
     setShares(val);
-    const sh = parseFloat(val.replace(/,/g, ""));
-    const psa = parseFloat(perShareAmount.replace(/,/g, ""));
+    const sh = parseAmount(val);
+    const psa = parseAmount(perShareAmount);
     if (!isNaN(sh) && sh > 0 && !isNaN(psa) && psa > 0) {
       setTotalAmount((psa * sh).toFixed(2));
     }
@@ -2984,8 +2983,8 @@ function ReviewDividendModal({
 
   const handleReinvestPriceChange = (val: string) => {
     setReinvestPrice(val);
-    const p = parseFloat(val.replace(/,/g, ""));
-    const total = parseFloat(totalAmount.replace(/,/g, ""));
+    const p = parseAmount(val);
+    const total = parseAmount(totalAmount);
     if (!isNaN(p) && p > 0 && !isNaN(total) && total > 0) {
       setReinvestQuantity((total / p).toFixed(8));
     }
@@ -2993,18 +2992,18 @@ function ReviewDividendModal({
 
   // Discrepancy between price × quantity and total (for reinvest path)
   const reinvestDiscrepancy = useMemo(() => {
-    const p = parseFloat(reinvestPrice.replace(/,/g, ""));
-    const q = parseFloat(reinvestQuantity.replace(/,/g, ""));
-    const total = parseFloat(totalAmount.replace(/,/g, ""));
+    const p = parseAmount(reinvestPrice);
+    const q = parseAmount(reinvestQuantity);
+    const total = parseAmount(totalAmount);
     if (isNaN(p) || isNaN(q) || isNaN(total)) return 0;
     return Math.abs(p * q - total);
   }, [reinvestPrice, reinvestQuantity, totalAmount]);
 
   // ── Confirm handlers ──────────────────────────────────────────────────────
   const handleConfirm = async () => {
-    const psa = parseFloat(perShareAmount.replace(/,/g, ""));
-    const sh = parseFloat(shares.replace(/,/g, ""));
-    const total = parseFloat(totalAmount.replace(/,/g, ""));
+    const psa = parseAmount(perShareAmount);
+    const sh = parseAmount(shares);
+    const total = parseAmount(totalAmount);
     setError(null);
 
     if (isNaN(psa) || psa <= 0 || isNaN(sh) || sh <= 0 || isNaN(total) || total <= 0) {
@@ -3027,8 +3026,8 @@ function ReviewDividendModal({
           source: dividend.ticker,
         });
       } else {
-        const rPrice = parseFloat(reinvestPrice.replace(/,/g, ""));
-        const rQty = parseFloat(reinvestQuantity.replace(/,/g, ""));
+        const rPrice = parseAmount(reinvestPrice);
+        const rQty = parseAmount(reinvestQuantity);
         if (!reinvestDate || isNaN(rPrice) || rPrice <= 0 || isNaN(rQty) || rQty <= 0) {
           setError("Please fill in reinvest date, price, and quantity.");
           setSaving(false);
@@ -3327,7 +3326,7 @@ function EditConfirmedDividendModal({
 
   const handleSave = async () => {
     if (!dividendInfo) return;
-    const parsedAmount = parseFloat(amount.replace(/,/g, ""));
+    const parsedAmount = parseAmount(amount);
     if (!paymentDate || isNaN(parsedAmount) || parsedAmount <= 0) {
       setError("Please enter a valid payment date and amount.");
       return;
@@ -3462,7 +3461,7 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const totalCost = (parseFloat(quantity.replace(/,/g, "")) || 0) * (parseFloat(costPerShare.replace(/,/g, "")) || 0);
+  const totalCost = (parseAmount(quantity) || 0) * (parseAmount(costPerShare) || 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -3471,8 +3470,8 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
     try {
       await confirmPendingBuy(pendingBuy.id, {
         acquiredDate,
-        quantity: parseFloat(quantity.replace(/,/g, "")),
-        costPerShare: parseFloat(costPerShare.replace(/,/g, "")),
+        quantity: parseAmount(quantity),
+        costPerShare: parseAmount(costPerShare),
         notes: notes || undefined,
       });
       onSaved();
@@ -3635,7 +3634,7 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
   }, [sortedLots, hasSuggestedLots, pendingSale.suggestedLotIds, suggestedApplied]);
 
   const lotAllocations = sortedLots
-    .map(lot => ({ lotId: lot.id, shares: parseFloat((lotInputs[lot.id] || "0").replace(/,/g, "")) || 0 }))
+    .map(lot => ({ lotId: lot.id, shares: parseAmount((lotInputs[lot.id] || "0")) || 0 }))
     .filter(a => a.shares > 0);
   const lotTotalShares = lotAllocations.reduce((s, a) => s + a.shares, 0);
 
@@ -3644,9 +3643,9 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
   const handleNext = async () => {
     setError("");
     if (!destAccountId) { setError("Select an account to receive proceeds."); return; }
-    const sharesVal = parseFloat(shares.replace(/,/g, ""));
+    const sharesVal = parseAmount(shares);
     if (isNaN(sharesVal) || sharesVal <= 0) { setError("Enter a valid number of shares."); return; }
-    const salePriceVal = parseFloat(salePrice.replace(/,/g, ""));
+    const salePriceVal = parseAmount(salePrice);
     if (isNaN(salePriceVal) || salePriceVal <= 0) { setError("Enter a valid sale price per share."); return; }
     if (selectionMode === "lots" && lotAllocations.length === 0) {
       setError("Specify shares for at least one lot."); return;
@@ -3655,7 +3654,7 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
 
     setLoading(true);
     try {
-      const feesVal = parseFloat(fees.replace(/,/g, "")) || 0;
+      const feesVal = parseAmount(fees) || 0;
       // Use strike price only — the option premium is added to the gain separately
       // in the display, matching what the server will record.
       const baseRequest = {
@@ -3684,8 +3683,8 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
     setSaving(true);
     setError("");
     try {
-      const salePriceVal = parseFloat(salePrice.replace(/,/g, ""));
-      const feesVal = parseFloat(fees.replace(/,/g, "")) || 0;
+      const salePriceVal = parseAmount(salePrice);
+      const feesVal = parseAmount(fees) || 0;
       const base = {
         saleDate,
         pricePerShare: salePriceVal + premiumNetPerShare,
@@ -3887,7 +3886,7 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
       ) : (() => {
           // Per-lot net proceeds: distribute fees proportionally across lots
           const totalPreviewShares = preview!.stShares + preview!.ltShares;
-          const feesVal = parseFloat(fees.replace(/,/g, "")) || 0;
+          const feesVal = parseAmount(fees) || 0;
           const lotsWithNet = preview!.lotBreakdown.map(lot => {
             const lotFees = totalPreviewShares > 0 ? feesVal * (lot.shares / totalPreviewShares) : 0;
             const netProceeds = lot.proceeds - lotFees;
@@ -4606,10 +4605,10 @@ function RealizedGainSnapshotPanel({
       await upsertGainSnapshot({
         accountId,
         year,
-        longTermGain: form.longTermGain !== "" ? parseFloat(form.longTermGain.replace(/,/g, "")) : null,
-        shortTermGain: form.shortTermGain !== "" ? parseFloat(form.shortTermGain.replace(/,/g, "")) : null,
-        longTermLoss: form.longTermLoss !== "" ? parseFloat(form.longTermLoss.replace(/,/g, "")) : null,
-        shortTermLoss: form.shortTermLoss !== "" ? parseFloat(form.shortTermLoss.replace(/,/g, "")) : null,
+        longTermGain: form.longTermGain !== "" ? parseAmount(form.longTermGain) : null,
+        shortTermGain: form.shortTermGain !== "" ? parseAmount(form.shortTermGain) : null,
+        longTermLoss: form.longTermLoss !== "" ? parseAmount(form.longTermLoss) : null,
+        shortTermLoss: form.shortTermLoss !== "" ? parseAmount(form.shortTermLoss) : null,
         snapshotDate: new Date().toISOString(),
         notes: form.notes.trim() || null,
       });
@@ -5725,7 +5724,7 @@ export function InvestmentAccount() {
   const handleSaveCash = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingCash(true);
-    const parsed = parseFloat(cashInput.replace(/,/g, ""));
+    const parsed = parseAmount(cashInput);
     const value = cashInput.trim() === "" || isNaN(parsed) ? null : parsed;
     await updateAccount(account.id, { cashBalance: value } as Partial<Account>);
     setSavingCash(false);

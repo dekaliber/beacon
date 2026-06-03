@@ -5,7 +5,7 @@ import { Card } from "@/components/Card";
 import { Modal } from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
 import { getInvestmentAccounts, getAllocationSummary, getWithdrawalSummary, getInvestmentSettings } from "@/api";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, parseAmount } from "@/lib/utils";
 import { formatNextUpdateTime } from "@/lib/priceUtils";
 import { usePriceRefresh } from "@/hooks/usePriceRefresh";
 import { useNotifications } from "@/context/NotificationContext";
@@ -275,7 +275,7 @@ function RebalanceModal({
   }, [isOpen]);
 
   // ── Manual ────────────────────────────────────────────────────────────────
-  const manualDelta = items.reduce((s, item) => s + (parseFloat(manualAdj[item.id] ?? "0") || 0), 0);
+  const manualDelta = items.reduce((s, item) => s + (parseAmount(manualAdj[item.id] ?? "0") || 0), 0);
   const manualNewTotal = classifiedValue + manualDelta;
 
   // Base scale is anchored to the static current + target percentages so it
@@ -292,7 +292,7 @@ function RebalanceModal({
   const manualScale = Math.max(
     Math.ceil(Math.max(
       ...items.map((item) => {
-        const adj = parseFloat(manualAdj[item.id] ?? "0") || 0;
+        const adj = parseAmount(manualAdj[item.id] ?? "0") || 0;
         const v = Math.max(0, item.actualValue + adj);
         return manualNewTotal > 0 ? (v / manualNewTotal) * 100 : 0;
       }),
@@ -344,7 +344,7 @@ function RebalanceModal({
   const currentSegments = items.map((item, idx) => toSeg(item, idx, item.actualPct));
 
   const manualProjectedSegments = items.map((item, idx) => {
-    const adj = parseFloat(manualAdj[item.id] ?? "0") || 0;
+    const adj = parseAmount(manualAdj[item.id] ?? "0") || 0;
     const newValue = Math.max(0, item.actualValue + adj);
     const newPct = manualNewTotal > 0 ? (newValue / manualNewTotal) * 100 : 0;
     return toSeg(item, idx, Math.max(newPct, 0));
@@ -418,7 +418,7 @@ function RebalanceModal({
           {/* Data rows */}
           <div className="py-2 space-y-1.5">
             {items.map((item, idx) => {
-              const adj = parseFloat(manualAdj[item.id] ?? "0") || 0;
+              const adj = parseAmount(manualAdj[item.id] ?? "0") || 0;
               const newValue = Math.max(0, item.actualValue + adj);
               const newPct = manualNewTotal > 0 ? (newValue / manualNewTotal) * 100 : 0;
               const delta = item.targetPct != null ? newPct - item.targetPct : null;

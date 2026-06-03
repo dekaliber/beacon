@@ -29,7 +29,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
 import { getBudgetOverview, getCategoryOutliersYtd, setAnnualBudget, getDataRange, getCategoryTrend, getCategoryYearTrends } from "@/api";
 import { SpendingOverTimeChart } from "@/components/SpendingOverTimeChart";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, parseAmount } from "@/lib/utils";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import type { BudgetPanel, CategoryOutliersData, CategoryOutlier, MonthlyTotal } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
@@ -88,8 +88,8 @@ function BudgetSettingsModal({
   }, [open, personalBudget, jointBudget]);
 
   const handleSave = async () => {
-    const p = personal.trim() === "" ? null : parseFloat(personal);
-    const j = joint.trim() === ""    ? null : parseFloat(joint);
+    const p = personal.trim() === "" ? null : parseAmount(personal);
+    const j = joint.trim() === ""    ? null : parseAmount(joint);
     if ((p !== null && (isNaN(p) || p < 0)) || (j !== null && (isNaN(j) || j < 0))) return;
     setSaving(true);
     try {

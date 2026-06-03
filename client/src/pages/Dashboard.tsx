@@ -39,6 +39,8 @@ export function Dashboard() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [outlierComparison, setOutlierComparison] = useState<"mom" | "yoy">("mom");
   const [chartView, setChartView] = useState<ChartView>("total");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   const { data, loading } = useApi(() => getDashboard(year, month), [year, month]);
@@ -113,12 +115,39 @@ export function Dashboard() {
         || target.tagName === "SELECT"
         || target.isContentEditable;
       if (isTextInput) return;
+      if (e.key === "Escape") { setPickerOpen(false); return; }
       if (e.key === "ArrowLeft")  { if (!atMin) prevMonth(); }
       else if (e.key === "ArrowRight") { if (!atMax) nextMonth(); }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [atMin, atMax, month, year]);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [pickerOpen]);
+
+  const monthsByYear = useMemo(() => {
+    if (!dataRange) return [];
+    const groups = new Map<number, Array<{ month: number; label: string }>>();
+    let y = dataRange.maxYear, m = dataRange.maxMonth;
+    while (y > dataRange.minYear || (y === dataRange.minYear && m >= dataRange.minMonth)) {
+      if (!groups.has(y)) groups.set(y, []);
+      groups.get(y)!.push({
+        month: m,
+        label: new Date(y, m - 1).toLocaleDateString("en-US", { month: "long" }),
+      });
+      if (m === 1) { m = 12; y--; } else m--;
+    }
+    return Array.from(groups.entries()).sort(([a], [b]) => b - a);
+  }, [dataRange]);
 
   const monthLabel = new Date(year, month - 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
@@ -232,7 +261,35 @@ export function Dashboard() {
           <Button variant="ghost" size="sm" onClick={prevMonth} disabled={atMin}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="min-w-[8rem] text-center font-display font-semibold text-17 text-ink">{monthLabel}</span>
+          <div className="relative" ref={pickerRef}>
+            <button
+              onClick={() => setPickerOpen((o) => !o)}
+              className="min-w-[8rem] text-center font-display font-semibold text-17 text-ink hover:text-primary transition-colors"
+            >
+              {monthLabel}
+            </button>
+            {pickerOpen && (
+              <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-[60] max-h-72 overflow-y-auto rounded-lg border border-border bg-background shadow-lg py-1 min-w-[7.5rem]">
+                {monthsByYear.map(([yr, months]) => (
+                  <div key={yr}>
+                    <div className="px-3 pt-2 pb-1.5 text-xs font-semibold text-muted-foreground">{yr}</div>
+                    {months.map((opt) => {
+                      const isSelected = opt.month === month && yr === year;
+                      return (
+                        <button
+                          key={opt.month}
+                          onClick={() => { setYear(yr); setMonth(opt.month); setPickerOpen(false); }}
+                          className={`w-full text-left px-4 py-1 text-sm transition-colors ${isSelected ? "bg-accent font-medium" : "hover:bg-accent/60"}`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <Button variant="ghost" size="sm" onClick={nextMonth} disabled={atMax}>
             <ChevronRight className="h-4 w-4" />
           </Button>
