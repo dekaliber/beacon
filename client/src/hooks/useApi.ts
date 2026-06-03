@@ -6,6 +6,12 @@ export function getApiCache<T>(key: string): T | undefined {
   return apiCache.get(key) as T | undefined;
 }
 
+export function invalidateApiCache(prefix: string) {
+  for (const key of apiCache.keys()) {
+    if (key.startsWith(prefix)) apiCache.delete(key);
+  }
+}
+
 export function useApi<T>(fetcher: () => Promise<T>, deps: unknown[] = [], cacheKey?: string) {
   const cached = cacheKey !== undefined ? (apiCache.get(cacheKey) as T | undefined) : undefined;
   const [data, setData] = useState<T | null>(cached ?? null);

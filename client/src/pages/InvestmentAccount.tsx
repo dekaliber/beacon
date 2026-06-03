@@ -38,7 +38,7 @@ import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { DatePicker } from "@/components/DatePicker";
 import { EmptyState } from "@/components/EmptyState";
-import { useApi } from "@/hooks/useApi";
+import { useApi, invalidateApiCache } from "@/hooks/useApi";
 import {
   getInvestmentHoldings,
   getInvestmentActivity,
@@ -3046,6 +3046,7 @@ function ReviewDividendModal({
           notes: notes || null,
         });
       }
+      if (disposition !== "reinvest") invalidateApiCache("income");
       onConfirmed(disposition === "reinvest");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to confirm dividend");
@@ -3335,6 +3336,7 @@ function EditConfirmedDividendModal({
     setError(null);
     try {
       await updateConfirmedDividend(dividendInfo.pendingDividendId, { paymentDate, amount: parsedAmount, notes: notes || null });
+      invalidateApiCache("income");
       onSaved();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save changes.");
