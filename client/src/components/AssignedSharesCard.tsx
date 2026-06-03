@@ -245,7 +245,7 @@ export function AssignedSharesCard() {
                       </td>
                       <td className={cn(tdClass, "text-right")}>${fmtUSD(g.assignmentStrike)}</td>
                       <td className={cn(tdClass, "text-right")}>{fmtShares(g.shares)}</td>
-                      <td className={tdBody}>
+                      <td className={tdClass}>
                         {coveredShares > 0 ? (
                           <span>
                             {fmtShares(Math.min(coveredShares, g.shares))} / {fmtShares(g.shares)} sh
