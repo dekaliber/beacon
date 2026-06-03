@@ -23,12 +23,14 @@ const fmtMDY = (iso: string) =>
     year: "2-digit",
   });
 
-const pnlColor = (n: number) =>
-  n > 0 ? "text-emerald-600" : n < 0 ? "text-rose-600" : "text-muted-foreground";
+// >= 0 is a positive outcome (selling assigned stock at/above the strike).
+const pnlColor = (n: number) => (n < 0 ? "text-down" : "text-up");
 
 const thClass =
   "px-3 py-2 text-left font-mono text-10 font-medium tracking-[0.11em] uppercase text-[var(--color-ink-3)] whitespace-nowrap";
 const tdClass = "px-3 py-2 text-13 font-mono tabular-nums whitespace-nowrap";
+// Body-text cell (non-mono) for account, dates, and the Via badge.
+const tdBody = "px-3 py-2 text-13 whitespace-nowrap";
 
 interface ActiveGroup {
   key: string;
@@ -212,8 +214,8 @@ export function AssignedSharesCard() {
                   <th className={thClass}>Ticker</th>
                   <th className={thClass}>Account</th>
                   <th className={thClass}>Assigned</th>
-                  <th className={cn(thClass, "text-right")}>Shares</th>
                   <th className={cn(thClass, "text-right")}>Assign Strike</th>
+                  <th className={cn(thClass, "text-right")}>Shares</th>
                   <th className={thClass}>Open CC</th>
                   <th className={cn(thClass, "text-right")}>Current</th>
                   <th className={cn(thClass, "text-right")}>Mkt Value</th>
@@ -235,17 +237,17 @@ export function AssignedSharesCard() {
                   return (
                     <tr key={g.key} className="border-b border-border/50 hover:bg-[#F5F8FC]">
                       <td className={cn(tdClass, "tp-row-label")}>{g.ticker}</td>
-                      <td className={tdClass}>
+                      <td className={tdBody}>
                         <AccountChip name={g.accountName} color={g.accountColor} />
                       </td>
-                      <td className={cn(tdClass, "text-muted-foreground text-xs")}>
+                      <td className={tdBody}>
                         {g.acquiredDate ? fmtMDY(g.acquiredDate) : "—"}
                       </td>
-                      <td className={cn(tdClass, "text-right")}>{fmtShares(g.shares)}</td>
                       <td className={cn(tdClass, "text-right")}>${fmtUSD(g.assignmentStrike)}</td>
-                      <td className={tdClass}>
+                      <td className={cn(tdClass, "text-right")}>{fmtShares(g.shares)}</td>
+                      <td className={tdBody}>
                         {coveredShares > 0 ? (
-                          <span className="text-xs">
+                          <span>
                             {fmtShares(Math.min(coveredShares, g.shares))} / {fmtShares(g.shares)} sh
                           </span>
                         ) : (
@@ -270,11 +272,11 @@ export function AssignedSharesCard() {
               </tbody>
               <tfoot>
                 <tr className="border-t border-border">
-                  <td className={cn(tdClass, "tp-row-label")} colSpan={7}>
+                  <td className="px-3 py-2 whitespace-nowrap tp-row-label" colSpan={7}>
                     Total
                   </td>
-                  <td className={cn(tdClass, "text-right tp-row-label")}>${fmtUSD(totalMarketValue)}</td>
-                  <td className={cn(tdClass, "text-right tp-row-label", pnlColor(totalUnrealized))}>
+                  <td className={cn(tdClass, "text-right font-semibold")}>${fmtUSD(totalMarketValue)}</td>
+                  <td className={cn(tdClass, "text-right font-semibold", pnlColor(totalUnrealized))}>
                     {fmtSigned(totalUnrealized)}
                   </td>
                   <td className={tdClass} />
@@ -290,8 +292,8 @@ export function AssignedSharesCard() {
               <tr className="border-b border-border">
                 <th className={thClass}>Ticker</th>
                 <th className={thClass}>Assigned</th>
-                <th className={cn(thClass, "text-right")}>Shares Sold</th>
                 <th className={cn(thClass, "text-right")}>Assign Strike</th>
+                <th className={cn(thClass, "text-right")}>Shares Sold</th>
                 <th className={cn(thClass, "text-right")}>Avg Sale Price</th>
                 <th className={cn(thClass, "text-right")}>Realized</th>
                 <th className={cn(thClass, "text-right")}>% Gain</th>
@@ -307,28 +309,24 @@ export function AssignedSharesCard() {
                 return (
                   <tr key={g.key} className="border-b border-border/50 hover:bg-[#F5F8FC]">
                     <td className={cn(tdClass, "tp-row-label")}>{g.ticker}</td>
-                    <td className={cn(tdClass, "text-muted-foreground text-xs")}>
-                      {fmtMDY(g.assignmentExpiration)}
-                    </td>
-                    <td className={cn(tdClass, "text-right")}>{fmtShares(g.shares)}</td>
+                    <td className={tdBody}>{fmtMDY(g.assignmentExpiration)}</td>
                     <td className={cn(tdClass, "text-right")}>${fmtUSD(g.assignmentStrike)}</td>
+                    <td className={cn(tdClass, "text-right")}>{fmtShares(g.shares)}</td>
                     <td className={cn(tdClass, "text-right")}>${fmtUSD(avgSale)}</td>
                     <td className={cn(tdClass, "text-right", pnlColor(g.realizedPnl))}>
                       {fmtSigned(g.realizedPnl)}
                     </td>
                     <td className={cn(tdClass, "text-right", pnlColor(pct))}>{fmtPct(pct)}</td>
-                    <td className={cn(tdClass, "text-right text-muted-foreground text-xs")}>
-                      {fmtMDY(g.latestSaleDate)}
-                    </td>
-                    <td className={tdClass}>
+                    <td className={cn(tdBody, "text-right")}>{fmtMDY(g.latestSaleDate)}</td>
+                    <td className={tdBody}>
                       <span
                         className={cn(
                           "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
                           g.via === "CC"
-                            ? "bg-primary/10 text-primary"
+                            ? "bg-blue-soft text-blue-deep"
                             : g.via === "Direct"
-                            ? "bg-border text-muted-foreground"
-                            : "bg-amber-100 text-amber-700"
+                            ? "bg-secondary text-muted-foreground"
+                            : "bg-warn-soft text-warn-deep"
                         )}
                       >
                         {g.via === "CC" ? "Covered call" : g.via}
@@ -340,13 +338,13 @@ export function AssignedSharesCard() {
             </tbody>
             <tfoot>
               <tr className="border-t border-border">
-                <td className={cn(tdClass, "tp-row-label")} colSpan={5}>
+                <td className="px-3 py-2 whitespace-nowrap tp-row-label" colSpan={5}>
                   Net realized
                 </td>
                 <td
                   className={cn(
                     tdClass,
-                    "text-right tp-row-label",
+                    "text-right font-semibold",
                     pnlColor(realized?.netRealizedPnl ?? 0)
                   )}
                 >
