@@ -130,6 +130,7 @@ model Account {
   pendingBuys           PendingBuy[]
   pendingSales          PendingSale[]
   optionsPositions      OptionsPosition[]     @relation("OptionsInvestmentAccount")
+  optionsPositionsBanking OptionsPosition[]   @relation("OptionsBankingAccount")
   statementOverrides    StatementOverride[]
   transfersFrom         Transfer[]     @relation("TransferFrom")
   transfersTo           Transfer[]     @relation("TransferTo")
@@ -989,6 +990,9 @@ model OptionsPosition {
   // Investment account where shares land on assignment (optional)
   investmentAccountId String?
 
+  // Banking account where premium income is deposited (optional; used to create Income record on close)
+  bankingAccountId    String?
+
   // Contract terms
   optionType      OptionType
   side            OptionSide @default(SELL)
@@ -1025,6 +1029,7 @@ model OptionsPosition {
   ticker              OptionsTicker        @relation(fields: [tickerId], references: [id])
   group               OptionsPositionGroup? @relation(fields: [groupId], references: [id])
   investmentAccount   Account?             @relation("OptionsInvestmentAccount", fields: [investmentAccountId], references: [id], onDelete: SetNull)
+  bankingAccount      Account?             @relation("OptionsBankingAccount", fields: [bankingAccountId], references: [id], onDelete: SetNull)
 
   // Assignment recovery: when a CC is written to recover a prior CSP assignment,
   // record the original strike + expiry so we can group and track remaining contracts.

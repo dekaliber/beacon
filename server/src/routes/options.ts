@@ -289,9 +289,10 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
   if (typeof data.deltaAtOpenCapturedAt === "string") {
     data.deltaAtOpenCapturedAt = new Date(data.deltaAtOpenCapturedAt);
   }
-  // bankingAccountId is not a position field — extract before updating
+  // Extract bankingAccountId: persist it on the position so edit modal can re-populate it,
+  // and also use it below to create/update the Income record.
   const bankingAccountId = typeof data.bankingAccountId === "string" ? data.bankingAccountId : null;
-  delete data.bankingAccountId;
+  // Keep it in `data` so Prisma saves it; it is a valid position field.
 
   if (Object.keys(data).length === 0) {
     return res.status(400).json({ error: "No valid fields provided" });
@@ -480,17 +481,21 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
       // them from the Tax Estimator while preserving the income record for cash-flow tracking.
       const taxableAmount = updated.outcome === "ASSIGNED" ? 0 : netAmount;
 
-      // Idempotency guard: Income has no FK back to the position, so re-saving a close
-      // (e.g. editing it later to set a destination account that was missed at close time)
-      // could create a duplicate. Skip creation if a matching income already exists —
-      // matched on the deterministic source string plus the net amount.
+      // Sync: Income has no FK back to the position, so we key on the deterministic
+      // source string. If a record already exists, update its amount/taxableAmount so
+      // that edits to fees on a closed position stay in sync. If none exists yet,
+      // create one — this covers the case where the user neglected to select a
+      // destination account at close time and adds one on a later edit.
       const existingIncome = await prisma.income.findFirst({
         where: { categoryId: category.id, source },
       });
-      const alreadyRecorded =
-        existingIncome != null && Math.abs(Number(existingIncome.amount) - netAmount) < 0.005;
 
-      if (!alreadyRecorded) {
+      if (existingIncome) {
+        await prisma.income.update({
+          where: { id: existingIncome.id },
+          data: { amount: netAmount, taxableAmount, accountId: bankingAccountId },
+        });
+      } else {
         await prisma.income.create({
           data: {
             amount: netAmount,

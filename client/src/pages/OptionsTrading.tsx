@@ -1528,7 +1528,7 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
     position.stockPriceAtClose?.toString() ?? ""
   );
   const [investmentAccountId, setInvestmentAccountId] = useState(position.investmentAccountId ?? "");
-  const [bankingAccountId, setBankingAccountId] = useState("");
+  const [bankingAccountId, setBankingAccountId] = useState(position.bankingAccountId ?? "");
   const [assignedPriceFetching, setAssignedPriceFetching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");

@@ -730,6 +730,7 @@ export interface OptionsPosition {
   assignedFromStrikePrice: number | null;
   assignedFromExpirationDate: string | null;
   investmentAccountId: string | null;
+  bankingAccountId: string | null;
   isDraft: boolean;
   isActive: boolean;
   createdAt: string;
