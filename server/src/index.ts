@@ -25,6 +25,7 @@ import { taxAssumptionsRoutes } from "./routes/taxAssumptions.js";
 import { optionsRoutes } from "./routes/options.js";
 import { pendingBuyRoutes } from "./routes/pendingBuys.js";
 import { pendingSaleRoutes } from "./routes/pendingSales.js";
+import { assignedSharesRoutes } from "./routes/assignedShares.js";
 import { jobRoutes } from "./routes/jobs.js";
 
 const app = express();
@@ -66,6 +67,7 @@ app.use("/api/tax-assumptions", taxAssumptionsRoutes);
 app.use("/api/options", optionsRoutes);
 app.use("/api/pending-buys", pendingBuyRoutes);
 app.use("/api/pending-sales", pendingSaleRoutes);
+app.use("/api/assigned-shares", assignedSharesRoutes);
 app.use("/api/jobs", jobRoutes);
 
 // Health check

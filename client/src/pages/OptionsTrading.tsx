@@ -41,6 +41,7 @@ import {
 import type { TickerSearchResult } from "@/types";
 import { useNotifications } from "@/context/NotificationContext";
 import { Card } from "@/components/Card";
+import { AssignedSharesCard } from "@/components/AssignedSharesCard";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { DatePicker } from "@/components/DatePicker";
@@ -5405,6 +5406,9 @@ export function OptionsTrading() {
           )}
         </div>
       </Card>
+
+      {/* Assigned stock (acquired via assigned CSPs) */}
+      <AssignedSharesCard />
 
       {/* Performance Charts */}
       <PerformanceCharts

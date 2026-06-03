@@ -3,7 +3,7 @@ import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { getUserId } from "../middleware/auth.js";
 import { deactivateIfOrphaned } from "./instruments.js";
-import { computeSell, serializeActivity } from "./investments.js";
+import { computeSell, serializeActivity, recordAssignedShareDispositions } from "./investments.js";
 
 export const pendingSaleRoutes = Router();
 
@@ -214,6 +214,21 @@ pendingSaleRoutes.post("/:id/confirm", async (req, res) => {
         notes: notes ?? null,
         updatedAt: new Date(),
       },
+    });
+
+    // 3b. Record assigned-share dispositions for any CSP-originated lots called
+    // away. Premium-excluded sale price = the covered-call strike (NOT
+    // pendingSale.pricePerShare, which is the composite incl. premium).
+    await recordAssignedShareDispositions(tx, {
+      userId,
+      saleActivityId: activity.id,
+      accountId: holding.accountId,
+      ticker: holding.ticker,
+      saleDate,
+      soldViaPositionId: pendingSale.optionsPositionId,
+      salePricePerShare: Number(pendingSale.optionsPosition.strikePrice),
+      lotBreakdown: calc.lotBreakdown,
+      lots: holding.lots,
     });
 
     // 4. Create Income record for taxable accounts.

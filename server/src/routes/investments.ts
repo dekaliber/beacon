@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { getMetadata as getTiingoMeta, getDividendScanResult } from "../services/tiingo.js";
 import { searchCoins, getPrices, getPrice as getCoinGeckoPrice, getMarketChart } from "../services/coingecko.js";
@@ -3181,6 +3182,68 @@ investmentRoutes.post("/sell/preview", async (req, res) => {
   }
 });
 
+// ── Helper: record assigned-share dispositions ─────────────────────────────
+// For each lot consumed by a sale that originated from an assigned CSP
+// (lot.fromOptionsPositionId set), append one AssignedShareDisposition row so
+// realized P&L on assigned stock survives lot deletion. Premium-excluded:
+// salePricePerShare is the raw sale price (direct sale) or the CC strike.
+// Must be called INSIDE the sale transaction, after the SALE activity exists.
+export async function recordAssignedShareDispositions(
+  tx: Prisma.TransactionClient,
+  params: {
+    userId: string;
+    saleActivityId: string;
+    accountId: string;
+    ticker: string;
+    saleDate: Date;
+    soldViaPositionId: string | null;
+    salePricePerShare: number;
+    lotBreakdown: { lotId: string; shares: number }[];
+    lots: { id: string; fromOptionsPositionId: string | null }[];
+  }
+): Promise<void> {
+  const cspByLot = new Map<string, string>();
+  for (const lot of params.lots) {
+    if (lot.fromOptionsPositionId) cspByLot.set(lot.id, lot.fromOptionsPositionId);
+  }
+  // Keep only consumed lots that came from a CSP assignment.
+  const consumed = params.lotBreakdown
+    .filter((b) => b.shares > 0 && cspByLot.has(b.lotId))
+    .map((b) => ({ shares: b.shares, cspId: cspByLot.get(b.lotId)! }));
+  if (consumed.length === 0) return;
+
+  const cspIds = [...new Set(consumed.map((c) => c.cspId))];
+  const csps = await tx.optionsPosition.findMany({
+    where: { id: { in: cspIds } },
+    select: { id: true, strikePrice: true, expirationDate: true },
+  });
+  const cspMap = new Map(csps.map((c) => [c.id, c]));
+
+  const rows = consumed
+    .map((c) => {
+      const csp = cspMap.get(c.cspId);
+      if (!csp) return null;
+      return {
+        userId: params.userId,
+        saleActivityId: params.saleActivityId,
+        fromOptionsPositionId: c.cspId,
+        soldViaPositionId: params.soldViaPositionId,
+        ticker: params.ticker,
+        accountId: params.accountId,
+        assignmentStrike: csp.strikePrice,
+        assignmentExpiration: csp.expirationDate,
+        shares: c.shares,
+        salePricePerShare: params.salePricePerShare,
+        saleDate: params.saleDate,
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+
+  if (rows.length > 0) {
+    await tx.assignedShareDisposition.createMany({ data: rows });
+  }
+}
+
 // ── POST /api/investments/sell ────────────────────────────────────────────
 // Commits a sale: reduces lots, creates InvestmentActivity, creates Income record
 
@@ -3307,6 +3370,20 @@ investmentRoutes.post("/sell", async (req, res) => {
           notes: body.notes ?? null,
           updatedAt: new Date(),
         },
+      });
+
+      // 3b. Record assigned-share dispositions for any CSP-originated lots sold.
+      // Direct sale: salePricePerShare is the real (premium-free) sale price.
+      await recordAssignedShareDispositions(tx, {
+        userId,
+        saleActivityId: activity.id,
+        accountId: holding.accountId,
+        ticker: holding.ticker,
+        saleDate: body.saleDate,
+        soldViaPositionId: null,
+        salePricePerShare: body.pricePerShare,
+        lotBreakdown: calc.lotBreakdown,
+        lots: holding.lots,
       });
 
       // 4. Create Income record only for taxable accounts

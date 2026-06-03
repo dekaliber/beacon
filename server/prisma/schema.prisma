@@ -563,6 +563,7 @@ model InvestmentActivity {
   incomes          Income[]
   pendingDividend  PendingDividend?
   pendingSale      PendingSale?
+  assignedShareDispositions AssignedShareDisposition[]
 
   @@index([accountId])
   @@index([date])
@@ -1034,8 +1035,37 @@ model OptionsPosition {
   pendingBuy         PendingBuy?
   pendingSale        PendingSale?
   assignedLots       InvestmentLot[] @relation("LotFromAssignment")
+  dispositionsFromCsp AssignedShareDisposition[] @relation("DispositionFromCsp")
+  dispositionsViaCall AssignedShareDisposition[] @relation("DispositionViaCall")
 
   @@index([userId, status])
   @@index([tickerId])
   @@map("options_positions")
+}
+
+// Append-only ledger: one row per sale of a CSP-originated lot (covered-call
+// assignment OR direct sale). Premium-excluded realized P&L on assigned stock =
+// (salePricePerShare - assignmentStrike) * shares. Survives lot deletion.
+model AssignedShareDisposition {
+  id                    String   @id @default(cuid())
+  userId                String
+  saleActivityId        String
+  fromOptionsPositionId String?
+  soldViaPositionId     String?
+  ticker                String
+  accountId             String
+  assignmentStrike      Decimal  @db.Decimal(12, 2)
+  assignmentExpiration  DateTime @db.Date
+  shares                Decimal  @db.Decimal(18, 8)
+  salePricePerShare     Decimal  @db.Decimal(18, 8)
+  saleDate              DateTime @db.Date
+  createdAt             DateTime @default(now())
+
+  saleActivity        InvestmentActivity @relation(fields: [saleActivityId], references: [id], onDelete: Cascade)
+  fromOptionsPosition OptionsPosition?   @relation("DispositionFromCsp", fields: [fromOptionsPositionId], references: [id], onDelete: SetNull)
+  soldViaPosition     OptionsPosition?   @relation("DispositionViaCall", fields: [soldViaPositionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, ticker])
+  @@index([saleActivityId])
+  @@map("assigned_share_dispositions")
 }

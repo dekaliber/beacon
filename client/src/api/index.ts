@@ -1014,3 +1014,38 @@ export const runOptionsScreener = (params: ScreenerParams) => {
   });
   return api.get<ScreenerResult[]>(`/options/screener?${qs}`);
 };
+
+// ── Assigned shares (stock acquired via assigned CSPs) ──────────────────────
+
+export interface ActiveAssignedHolding {
+  lotId: string;
+  ticker: string;
+  accountId: string;
+  accountName: string | null;
+  shares: number;
+  assignmentStrike: number;
+  assignmentExpiration: string; // YYYY-MM-DD
+  acquiredDate: string | null;
+  fromOptionsPositionId: string | null;
+}
+
+export interface RealizedDisposition {
+  id: string;
+  ticker: string;
+  accountId: string;
+  shares: number;
+  assignmentStrike: number;
+  assignmentExpiration: string; // YYYY-MM-DD
+  salePricePerShare: number;
+  realizedPnl: number;
+  saleDate: string; // YYYY-MM-DD
+  viaCoveredCall: boolean;
+}
+
+export const getActiveAssignedHoldings = () =>
+  api.get<ActiveAssignedHolding[]>("/assigned-shares/active");
+
+export const getRealizedDispositions = () =>
+  api.get<{ rows: RealizedDisposition[]; netRealizedPnl: number }>(
+    "/assigned-shares/realized"
+  );
