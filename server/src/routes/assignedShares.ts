@@ -12,45 +12,89 @@ export const assignedSharesRoutes = Router();
 assignedSharesRoutes.get("/active", async (req, res) => {
   const userId = getUserId(req);
 
-  const lots = await prisma.investmentLot.findMany({
-    where: {
-      fromOptionsPositionId: { not: null },
-      holding: { account: { userId } },
-    },
-    select: {
-      id: true,
-      quantity: true,
-      acquiredDate: true,
-      fromOptionsPositionId: true,
-      holding: {
-        select: {
-          ticker: true,
-          accountId: true,
-          account: { select: { name: true } },
+  const [lots, openCalls] = await Promise.all([
+    prisma.investmentLot.findMany({
+      where: {
+        fromOptionsPositionId: { not: null },
+        holding: { account: { userId } },
+      },
+      select: {
+        id: true,
+        quantity: true,
+        acquiredDate: true,
+        fromOptionsPositionId: true,
+        holding: {
+          select: {
+            ticker: true,
+            accountId: true,
+            account: { select: { name: true, color: true } },
+          },
+        },
+        fromOptionsPosition: {
+          select: { strikePrice: true, expirationDate: true },
         },
       },
-      fromOptionsPosition: {
-        select: { strikePrice: true, expirationDate: true },
+      orderBy: { acquiredDate: "asc" },
+    }),
+    // Open covered calls written against an assigned batch, keyed by the original
+    // CSP strike/expiry they recover (assignedFrom*). Used to show how much of a
+    // lot is currently covered by an outstanding CC.
+    prisma.optionsPosition.findMany({
+      where: {
+        userId,
+        optionType: "CALL",
+        status: "OPEN",
+        isActive: true,
+        assignedFromStrikePrice: { not: null },
+        assignedFromExpirationDate: { not: null },
       },
-    },
-    orderBy: { acquiredDate: "asc" },
-  });
+      select: {
+        contracts: true,
+        investmentAccountId: true,
+        assignedFromStrikePrice: true,
+        assignedFromExpirationDate: true,
+        ticker: { select: { symbol: true } },
+      },
+    }),
+  ]);
+
+  // batchKey = ticker | strike | expiry(YYYY-MM-DD) | accountId
+  const batchKey = (ticker: string, strike: number, expiry: string, accountId: string) =>
+    `${ticker}|${strike}|${expiry}|${accountId}`;
+
+  const openCallContractsByBatch = new Map<string, number>();
+  for (const cc of openCalls) {
+    if (cc.assignedFromStrikePrice == null || cc.assignedFromExpirationDate == null) continue;
+    if (cc.investmentAccountId == null) continue;
+    const key = batchKey(
+      cc.ticker.symbol,
+      Number(cc.assignedFromStrikePrice),
+      cc.assignedFromExpirationDate.toISOString().slice(0, 10),
+      cc.investmentAccountId
+    );
+    openCallContractsByBatch.set(key, (openCallContractsByBatch.get(key) ?? 0) + cc.contracts);
+  }
 
   const rows = lots
     .filter((l) => l.fromOptionsPosition !== null)
-    .map((l) => ({
-      lotId: l.id,
-      ticker: l.holding.ticker,
-      accountId: l.holding.accountId,
-      accountName: l.holding.account?.name ?? null,
-      shares: Number(l.quantity),
-      assignmentStrike: Number(l.fromOptionsPosition!.strikePrice),
-      assignmentExpiration: l.fromOptionsPosition!.expirationDate
-        .toISOString()
-        .slice(0, 10),
-      acquiredDate: l.acquiredDate ? l.acquiredDate.toISOString().slice(0, 10) : null,
-      fromOptionsPositionId: l.fromOptionsPositionId,
-    }));
+    .map((l) => {
+      const assignmentStrike = Number(l.fromOptionsPosition!.strikePrice);
+      const assignmentExpiration = l.fromOptionsPosition!.expirationDate.toISOString().slice(0, 10);
+      const key = batchKey(l.holding.ticker, assignmentStrike, assignmentExpiration, l.holding.accountId);
+      return {
+        lotId: l.id,
+        ticker: l.holding.ticker,
+        accountId: l.holding.accountId,
+        accountName: l.holding.account?.name ?? null,
+        accountColor: l.holding.account?.color ?? null,
+        shares: Number(l.quantity),
+        assignmentStrike,
+        assignmentExpiration,
+        acquiredDate: l.acquiredDate ? l.acquiredDate.toISOString().slice(0, 10) : null,
+        openCallContracts: openCallContractsByBatch.get(key) ?? 0,
+        fromOptionsPositionId: l.fromOptionsPositionId,
+      };
+    });
 
   res.json(rows);
 });

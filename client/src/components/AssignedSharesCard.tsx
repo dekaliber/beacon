@@ -16,9 +16,9 @@ const fmtShares = (n: number) =>
   n.toLocaleString("en-US", { maximumFractionDigits: 4 });
 const fmtSigned = (n: number) => `${n < 0 ? "−" : ""}$${fmtUSD(Math.abs(n))}`;
 const fmtPct = (n: number) => `${n < 0 ? "−" : "+"}${Math.abs(n).toFixed(1)}%`;
-const fmtDate = (iso: string) =>
+const fmtMDY = (iso: string) =>
   new Date(iso + "T00:00:00").toLocaleDateString("en-US", {
-    month: "short",
+    month: "numeric",
     day: "numeric",
     year: "2-digit",
   });
@@ -34,8 +34,11 @@ interface ActiveGroup {
   key: string;
   ticker: string;
   accountName: string | null;
+  accountColor: string | null;
   assignmentStrike: number;
   assignmentExpiration: string;
+  acquiredDate: string | null;
+  openCallContracts: number;
   shares: number;
 }
 
@@ -58,13 +61,21 @@ function groupActive(rows: ActiveAssignedHolding[]): ActiveGroup[] {
     const existing = map.get(key);
     if (existing) {
       existing.shares += r.shares;
+      // Keep the earliest acquisition date (server already sorts asc).
+      if (r.acquiredDate && (!existing.acquiredDate || r.acquiredDate < existing.acquiredDate)) {
+        existing.acquiredDate = r.acquiredDate;
+      }
     } else {
       map.set(key, {
         key,
         ticker: r.ticker,
         accountName: r.accountName,
+        accountColor: r.accountColor,
         assignmentStrike: r.assignmentStrike,
         assignmentExpiration: r.assignmentExpiration,
+        acquiredDate: r.acquiredDate,
+        // Same across the batch (matched by ticker|strike|expiry|account).
+        openCallContracts: r.openCallContracts,
         shares: r.shares,
       });
     }
@@ -108,6 +119,17 @@ function groupRealized(rows: RealizedDisposition[]): RealizedGroup[] {
       via: (g.hasCC && g.hasDirect ? "Mixed" : g.hasCC ? "CC" : "Direct") as RealizedGroup["via"],
     }))
     .sort((a, b) => (a.latestSaleDate < b.latestSaleDate ? 1 : -1));
+}
+
+function AccountChip({ name, color }: { name: string | null; color: string | null }) {
+  return (
+    <span
+      className="inline-block rounded-md px-2 py-0.5 text-13 text-foreground"
+      style={{ backgroundColor: color ?? "#e2e2df" }}
+    >
+      {name ?? "—"}
+    </span>
+  );
 }
 
 export function AssignedSharesCard() {
@@ -160,26 +182,23 @@ export function AssignedSharesCard() {
 
   return (
     <Card>
-      <div className="flex items-center justify-between border-b border-border px-4">
-        <div className="flex">
-          <button className={tabClass(tab === "active")} onClick={() => setTab("active")}>
-            Assigned Holdings
-            {activeCount > 0 && (
-              <span className="ml-2 inline-flex items-center justify-center rounded-full bg-primary/10 text-primary text-xs px-1.5 py-0.5 font-medium">
-                {activeCount}
-              </span>
-            )}
-          </button>
-          <button className={tabClass(tab === "realized")} onClick={() => setTab("realized")}>
-            Realized
-            {realizedCount > 0 && (
-              <span className="ml-2 inline-flex items-center justify-center rounded-full bg-border text-muted-foreground text-xs px-1.5 py-0.5 font-medium">
-                {realizedCount}
-              </span>
-            )}
-          </button>
-        </div>
-        <span className="text-xs text-muted-foreground pr-1">Premium excluded · vs. assignment strike</span>
+      <div className="flex border-b border-border px-4">
+        <button className={tabClass(tab === "active")} onClick={() => setTab("active")}>
+          Assigned Lots
+          {activeCount > 0 && (
+            <span className="ml-2 inline-flex items-center justify-center rounded-full bg-primary/10 text-primary text-xs px-1.5 py-0.5 font-medium">
+              {activeCount}
+            </span>
+          )}
+        </button>
+        <button className={tabClass(tab === "realized")} onClick={() => setTab("realized")}>
+          Closed Lots
+          {realizedCount > 0 && (
+            <span className="ml-2 inline-flex items-center justify-center rounded-full bg-border text-muted-foreground text-xs px-1.5 py-0.5 font-medium">
+              {realizedCount}
+            </span>
+          )}
+        </button>
       </div>
 
       <div className="p-0 overflow-x-auto">
@@ -192,12 +211,14 @@ export function AssignedSharesCard() {
                 <tr className="border-b border-border">
                   <th className={thClass}>Ticker</th>
                   <th className={thClass}>Account</th>
+                  <th className={thClass}>Assigned</th>
                   <th className={cn(thClass, "text-right")}>Shares</th>
                   <th className={cn(thClass, "text-right")}>Assign Strike</th>
+                  <th className={thClass}>Open CC</th>
                   <th className={cn(thClass, "text-right")}>Current</th>
                   <th className={cn(thClass, "text-right")}>Mkt Value</th>
-                  <th className={cn(thClass, "text-right")}>Unrealized</th>
-                  <th className={cn(thClass, "text-right")}>%</th>
+                  <th className={cn(thClass, "text-right")}>Unrealized P&amp;L</th>
+                  <th className={cn(thClass, "text-right")}>% Gain</th>
                 </tr>
               </thead>
               <tbody>
@@ -210,14 +231,27 @@ export function AssignedSharesCard() {
                     price != null
                       ? ((price - g.assignmentStrike) / g.assignmentStrike) * 100
                       : null;
+                  const coveredShares = g.openCallContracts * 100;
                   return (
                     <tr key={g.key} className="border-b border-border/50 hover:bg-[#F5F8FC]">
-                      <td className={cn(tdClass, "font-semibold")}>{g.ticker}</td>
+                      <td className={cn(tdClass, "tp-row-label")}>{g.ticker}</td>
+                      <td className={tdClass}>
+                        <AccountChip name={g.accountName} color={g.accountColor} />
+                      </td>
                       <td className={cn(tdClass, "text-muted-foreground text-xs")}>
-                        {g.accountName ?? "—"}
+                        {g.acquiredDate ? fmtMDY(g.acquiredDate) : "—"}
                       </td>
                       <td className={cn(tdClass, "text-right")}>{fmtShares(g.shares)}</td>
                       <td className={cn(tdClass, "text-right")}>${fmtUSD(g.assignmentStrike)}</td>
+                      <td className={tdClass}>
+                        {coveredShares > 0 ? (
+                          <span className="text-xs">
+                            {fmtShares(Math.min(coveredShares, g.shares))} / {fmtShares(g.shares)} sh
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
                       <td className={cn(tdClass, "text-right")}>
                         {price != null ? `$${fmtUSD(price)}` : "—"}
                       </td>
@@ -235,12 +269,12 @@ export function AssignedSharesCard() {
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t border-border font-semibold">
-                  <td className={tdClass} colSpan={5}>
+                <tr className="border-t border-border">
+                  <td className={cn(tdClass, "tp-row-label")} colSpan={7}>
                     Total
                   </td>
-                  <td className={cn(tdClass, "text-right")}>${fmtUSD(totalMarketValue)}</td>
-                  <td className={cn(tdClass, "text-right", pnlColor(totalUnrealized))}>
+                  <td className={cn(tdClass, "text-right tp-row-label")}>${fmtUSD(totalMarketValue)}</td>
+                  <td className={cn(tdClass, "text-right tp-row-label", pnlColor(totalUnrealized))}>
                     {fmtSigned(totalUnrealized)}
                   </td>
                   <td className={tdClass} />
@@ -255,11 +289,12 @@ export function AssignedSharesCard() {
             <thead>
               <tr className="border-b border-border">
                 <th className={thClass}>Ticker</th>
+                <th className={thClass}>Assigned</th>
                 <th className={cn(thClass, "text-right")}>Shares Sold</th>
                 <th className={cn(thClass, "text-right")}>Assign Strike</th>
-                <th className={cn(thClass, "text-right")}>Avg Sale</th>
+                <th className={cn(thClass, "text-right")}>Avg Sale Price</th>
                 <th className={cn(thClass, "text-right")}>Realized</th>
-                <th className={cn(thClass, "text-right")}>%</th>
+                <th className={cn(thClass, "text-right")}>% Gain</th>
                 <th className={cn(thClass, "text-right")}>Last Sale</th>
                 <th className={thClass}>Via</th>
               </tr>
@@ -271,7 +306,10 @@ export function AssignedSharesCard() {
                 const pct = costBasis > 0 ? (g.realizedPnl / costBasis) * 100 : 0;
                 return (
                   <tr key={g.key} className="border-b border-border/50 hover:bg-[#F5F8FC]">
-                    <td className={cn(tdClass, "font-semibold")}>{g.ticker}</td>
+                    <td className={cn(tdClass, "tp-row-label")}>{g.ticker}</td>
+                    <td className={cn(tdClass, "text-muted-foreground text-xs")}>
+                      {fmtMDY(g.assignmentExpiration)}
+                    </td>
                     <td className={cn(tdClass, "text-right")}>{fmtShares(g.shares)}</td>
                     <td className={cn(tdClass, "text-right")}>${fmtUSD(g.assignmentStrike)}</td>
                     <td className={cn(tdClass, "text-right")}>${fmtUSD(avgSale)}</td>
@@ -280,7 +318,7 @@ export function AssignedSharesCard() {
                     </td>
                     <td className={cn(tdClass, "text-right", pnlColor(pct))}>{fmtPct(pct)}</td>
                     <td className={cn(tdClass, "text-right text-muted-foreground text-xs")}>
-                      {fmtDate(g.latestSaleDate)}
+                      {fmtMDY(g.latestSaleDate)}
                     </td>
                     <td className={tdClass}>
                       <span
@@ -301,14 +339,14 @@ export function AssignedSharesCard() {
               })}
             </tbody>
             <tfoot>
-              <tr className="border-t border-border font-semibold">
-                <td className={tdClass} colSpan={4}>
+              <tr className="border-t border-border">
+                <td className={cn(tdClass, "tp-row-label")} colSpan={5}>
                   Net realized
                 </td>
                 <td
                   className={cn(
                     tdClass,
-                    "text-right",
+                    "text-right tp-row-label",
                     pnlColor(realized?.netRealizedPnl ?? 0)
                   )}
                 >

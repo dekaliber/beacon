@@ -1022,10 +1022,12 @@ export interface ActiveAssignedHolding {
   ticker: string;
   accountId: string;
   accountName: string | null;
+  accountColor: string | null;
   shares: number;
   assignmentStrike: number;
   assignmentExpiration: string; // YYYY-MM-DD
   acquiredDate: string | null;
+  openCallContracts: number; // outstanding CC contracts against this batch
   fromOptionsPositionId: string | null;
 }
 
