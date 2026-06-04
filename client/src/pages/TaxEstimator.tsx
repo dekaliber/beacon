@@ -6,7 +6,7 @@ import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { useApi } from "@/hooks/useApi";
 import { getIncome, getAllGainSnapshots, getTaxAssumptions, updateTaxAssumptions, updateTaxQuarterlyPayments, getDataRange } from "@/api";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, parseAmount } from "@/lib/utils";
 import type { Income, RealizedGainSnapshotWithAccount } from "@/types";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import { SectionLabel, StatValue, DisplayStat } from "@/components/Typography";
@@ -273,6 +273,12 @@ function NumberInput({
             const pattern = allowNegative ? /^-?\d*\.?\d{0,2}$/ : /^\d*\.?\d{0,2}$/;
             if (v === "" || v === "-" || pattern.test(v)) onChange(v);
           }}
+          onPaste={(e) => {
+            e.preventDefault();
+            const cleaned = e.clipboardData.getData("text").replace(/[$,\s]/g, "");
+            const pattern = allowNegative ? /^-?\d*\.?\d{0,2}$/ : /^\d*\.?\d{0,2}$/;
+            if (cleaned === "" || cleaned === "-" || pattern.test(cleaned)) onChange(cleaned);
+          }}
           placeholder={placeholder ?? "0"}
           className="w-full rounded-md border border-border pl-7 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         />
@@ -375,10 +381,10 @@ export function TaxEstimatorPage() {
   const saveAssumptions = () => {
     updateTaxAssumptions(year, {
       filingStatus,
-      otherOrdinary:   otherOrdinary.trim() ? parseFloat(otherOrdinary)   : null,
-      federalWithheld: withheld.trim()      ? parseFloat(withheld)        : null,
-      otherLtcg:       otherLTCG.trim()     ? parseFloat(otherLTCG)      : null,
-      caWithheld:      caWithheld.trim()    ? parseFloat(caWithheld)      : null,
+      otherOrdinary:   otherOrdinary.trim() ? parseAmount(otherOrdinary)   : null,
+      federalWithheld: withheld.trim()      ? parseAmount(withheld)        : null,
+      otherLtcg:       otherLTCG.trim()     ? parseAmount(otherLTCG)      : null,
+      caWithheld:      caWithheld.trim()    ? parseAmount(caWithheld)      : null,
       useTmt,
       useCaTmt,
     });
@@ -386,8 +392,8 @@ export function TaxEstimatorPage() {
 
   const saveQuarterlyPayments = () => {
     updateTaxQuarterlyPayments(year, {
-      federal: qPaid.map((v)    => v.trim()    ? parseFloat(v)    : null),
-      ca:      caQPaid.map((v)  => v.trim()    ? parseFloat(v)    : null),
+      federal: qPaid.map((v)    => v.trim()    ? parseAmount(v)    : null),
+      ca:      caQPaid.map((v)  => v.trim()    ? parseAmount(v)    : null),
     });
   };
 
@@ -416,13 +422,13 @@ export function TaxEstimatorPage() {
 
   const { data: dataRange } = useApi(() => getDataRange(), []);
 
-  const otherOrdinaryNum = parseFloat(otherOrdinary) || 0;
-  const otherLTCGNum = parseFloat(otherLTCG) || 0;
-  const withheldNum = parseFloat(withheld) || 0;
-  const qPaidNums = qPaid.map((v) => parseFloat(v) || 0) as [number, number, number, number];
+  const otherOrdinaryNum = parseAmount(otherOrdinary) || 0;
+  const otherLTCGNum = parseAmount(otherLTCG) || 0;
+  const withheldNum = parseAmount(withheld) || 0;
+  const qPaidNums = qPaid.map((v) => parseAmount(v) || 0) as [number, number, number, number];
   const totalQPaid = qPaidNums.reduce((s, v) => s + v, 0);
-  const caWithheldNum = parseFloat(caWithheld) || 0;
-  const caQPaidNums = caQPaid.map((v) => parseFloat(v) || 0) as [number, number, number, number];
+  const caWithheldNum = parseAmount(caWithheld) || 0;
+  const caQPaidNums = caQPaid.map((v) => parseAmount(v) || 0) as [number, number, number, number];
   const totalCAQPaid = caQPaidNums.reduce((s, v) => s + v, 0);
 
   // Federal quarterly schedule: equal 25/25/25/25 installments
