@@ -134,28 +134,27 @@ function AccountChip({ name, color }: { name: string | null; color: string | nul
   );
 }
 
-export function AssignedSharesCard() {
+export function AssignedSharesCard({ externalQuotes }: { externalQuotes?: Record<string, { price: number }> }) {
   const [tab, setTab] = useState<"active" | "realized">("active");
   const { data: active } = useApi(getActiveAssignedHoldings, []);
   const { data: realized } = useApi(getRealizedDispositions, []);
 
-  const [quotes, setQuotes] = useState<Record<string, { price: number }>>({});
+  const [ownQuotes, setOwnQuotes] = useState<Record<string, { price: number }>>({});
   const activeTickers = useMemo(
     () => [...new Set((active ?? []).map((r) => r.ticker))],
     [active]
   );
+  // Only fetch independently when the parent hasn't supplied prices.
   useEffect(() => {
-    if (activeTickers.length === 0) return;
+    if (externalQuotes !== undefined || activeTickers.length === 0) return;
     let cancelled = false;
     getUnderlyingQuotes(activeTickers)
-      .then((q) => {
-        if (!cancelled) setQuotes(q);
-      })
+      .then((q) => { if (!cancelled) setOwnQuotes(q); })
       .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTickers.join(",")]);
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalQuotes, activeTickers.join(",")]);
+  const quotes = externalQuotes ?? ownQuotes;
 
   const activeGroups = useMemo(() => groupActive(active ?? []), [active]);
   const realizedGroups = useMemo(() => groupRealized(realized?.rows ?? []), [realized]);
@@ -170,17 +169,6 @@ export function AssignedSharesCard() {
 
   const activeCount = activeGroups.length;
   const realizedCount = realizedGroups.length;
-
-  // Active portfolio totals (only for groups with a known quote)
-  let totalUnrealized = 0;
-  let totalMarketValue = 0;
-  for (const g of activeGroups) {
-    const price = quotes[g.ticker]?.price;
-    if (price != null) {
-      totalMarketValue += price * g.shares;
-      totalUnrealized += (price - g.assignmentStrike) * g.shares;
-    }
-  }
 
   return (
     <Card>
@@ -270,18 +258,6 @@ export function AssignedSharesCard() {
                   );
                 })}
               </tbody>
-              <tfoot>
-                <tr className="border-t border-border">
-                  <td className="px-3 py-2 whitespace-nowrap tp-row-label" colSpan={7}>
-                    Total
-                  </td>
-                  <td className={cn(tdClass, "text-right font-semibold")}>${fmtUSD(totalMarketValue)}</td>
-                  <td className={cn(tdClass, "text-right font-semibold", pnlColor(totalUnrealized))}>
-                    {fmtSigned(totalUnrealized)}
-                  </td>
-                  <td className={tdClass} />
-                </tr>
-              </tfoot>
             </table>
           )
         ) : realizedGroups.length === 0 ? (
@@ -336,23 +312,6 @@ export function AssignedSharesCard() {
                 );
               })}
             </tbody>
-            <tfoot>
-              <tr className="border-t border-border">
-                <td className="px-3 py-2 whitespace-nowrap tp-row-label" colSpan={5}>
-                  Net realized
-                </td>
-                <td
-                  className={cn(
-                    tdClass,
-                    "text-right font-semibold",
-                    pnlColor(realized?.netRealizedPnl ?? 0)
-                  )}
-                >
-                  {fmtSigned(realized?.netRealizedPnl ?? 0)}
-                </td>
-                <td className={tdClass} colSpan={3} />
-              </tr>
-            </tfoot>
           </table>
         )}
       </div>

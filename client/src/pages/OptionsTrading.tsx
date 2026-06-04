@@ -27,6 +27,8 @@ import {
   getInvestmentAccounts,
   getOptionAssignedBatches,
   runOptionsScreener,
+  getActiveAssignedHoldings,
+  getRealizedDispositions,
   type OptionsPosition,
   type OptionsTicker,
   type OptionsPositionGroup,
@@ -2200,6 +2202,8 @@ interface OpenPositionsTableProps {
   onClose: (p: OptionsPosition) => void;
   onConfirm: (p: OptionsPosition) => void;
   onPositionUpdated: () => void;
+  extraTickers?: string[];
+  onPricesUpdated?: (prices: Map<string, number>) => void;
 }
 
 const COL_GROUPS = [
@@ -2210,7 +2214,7 @@ const COL_GROUPS = [
 ] as const;
 type ColGroupKey = (typeof COL_GROUPS)[number]["key"];
 
-function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, chainMaxCapitalAtRiskMap, onEdit, onClose, onConfirm, onPositionUpdated }: OpenPositionsTableProps) {
+function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, chainMaxCapitalAtRiskMap, onEdit, onClose, onConfirm, onPositionUpdated, extraTickers, onPricesUpdated }: OpenPositionsTableProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [openColGroups, setOpenColGroups] = useState<Set<ColGroupKey>>(new Set(["live"]));
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -2239,13 +2243,19 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
   };
 
   const fetchAllStockPrices = () => {
-    const uniqueTickers = [...new Set([...positions, ...draftPositions].map((p) => p.ticker.symbol))];
+    const uniqueTickers = [...new Set([
+      ...[...positions, ...draftPositions].map((p) => p.ticker.symbol),
+      ...(extraTickers ?? []),
+    ])];
     if (uniqueTickers.length === 0) return;
     getUnderlyingQuotes(uniqueTickers)
       .then((results) => {
+        const priceMap = new Map<string, number>();
         for (const [ticker, data] of Object.entries(results)) {
           updateLivePrice(ticker, data.price);
+          priceMap.set(ticker, data.price);
         }
+        onPricesUpdated?.(priceMap);
       })
       .catch(() => {});
   };
@@ -4241,11 +4251,15 @@ function SummaryCards({
   closedPositions,
   settings,
   capitalChanges,
+  totalUnrealizedPnl,
+  totalRealizedPnl,
 }: {
   openPositions: OptionsPosition[];
   closedPositions: OptionsPosition[];
   settings: OptionsSettings | null;
   capitalChanges: OptionsCapitalChange[];
+  totalUnrealizedPnl: number | null;
+  totalRealizedPnl: number | null;
 }) {
   // ── Capital utilization series ────────────────────────────────────────────
   const utilizationData = useMemo(() => {
@@ -4513,6 +4527,7 @@ function SummaryCards({
     setHoveredBarIdxTrading(bar && !bar.isFuture ? bar.seriesIdx : null);
   };
 
+
   const totalCapitalAtRisk = openPositions.reduce((sum, p) => {
     return sum + calcPosition(p).capitalAtRisk;
   }, 0);
@@ -4654,26 +4669,50 @@ function SummaryCards({
         </div>
       </Card>
 
-      {/* Cumulative Premium */}
+      {/* Cumulative Premium — split cumulative total / annualized ROR */}
       <Card className="p-6">
         <SectionLabel>Cumulative Premium</SectionLabel>
-        <p className={`tp-stat mt-1 truncate ${cumulativePremium >= 0 ? "text-up" : "text-down"}`}>
-          {`$${fmtUSD(cumulativePremium)}`}
-        </p>
-        <p className="tp-caption mt-0.5 truncate">
-          {annReturnFirstDate != null ? `since ${fmtDateTimeShort(new Date(annReturnFirstDate).toISOString())}` : "—"}
-        </p>
+        <div className="flex items-end mt-1">
+          <div className="flex-1 min-w-0">
+            <p className={`tp-stat truncate ${cumulativePremium >= 0 ? "text-up" : "text-down"}`}>
+              {`$${fmtUSD(cumulativePremium)}`}
+            </p>
+            <p className="tp-caption mt-0.5 truncate">
+              {annReturnFirstDate != null ? `since ${fmtDateTimeShort(new Date(annReturnFirstDate).toISOString())}` : "—"}
+            </p>
+          </div>
+          <div className="w-px bg-border self-stretch shrink-0" />
+          <div className="flex-1 min-w-0 pl-3">
+            <p className={`tp-stat truncate ${annReturn != null ? (annReturn >= (settings?.targetReturn ?? 0) * 100 ? "text-up" : "text-warn") : ""}`}>
+              {annReturn != null ? fmtPct(annReturn) : "—"}
+            </p>
+            <p className="tp-caption mt-0.5">Annualized ROR</p>
+          </div>
+        </div>
       </Card>
 
-      {/* Ann. Rate of Return */}
+      {/* Underlying P&L — unrealized and realized from assigned lots */}
       <Card className="p-6">
-        <SectionLabel>Ann. Rate of Return</SectionLabel>
-        <p className={`tp-stat mt-1 truncate ${annReturn != null ? (annReturn >= (settings?.targetReturn ?? 0) * 100 ? "text-up" : "text-warn") : ""}`}>
-          {annReturn != null ? fmtPct(annReturn) : "—"}
-        </p>
-        <p className="tp-caption mt-0.5 truncate">
-          {settings?.targetReturn != null ? `target: ${fmtPct(settings.targetReturn * 100)}` : "—"}
-        </p>
+        <SectionLabel>Underlying P&L</SectionLabel>
+        <div className="flex items-end mt-1">
+          <div className="flex-1 min-w-0">
+            <p className={`tp-stat truncate ${totalUnrealizedPnl != null && totalUnrealizedPnl !== 0 ? (totalUnrealizedPnl >= 0 ? "text-up" : "text-down") : ""}`}>
+              {totalUnrealizedPnl != null
+                ? `${totalUnrealizedPnl >= 0 ? "+" : "−"}$${fmtUSD(Math.abs(totalUnrealizedPnl))}`
+                : "—"}
+            </p>
+            <p className="tp-caption mt-0.5">Unrealized</p>
+          </div>
+          <div className="w-px bg-border self-stretch shrink-0" />
+          <div className="flex-1 min-w-0 pl-3">
+            <p className={`tp-stat truncate ${totalRealizedPnl != null && totalRealizedPnl !== 0 ? (totalRealizedPnl >= 0 ? "text-up" : "text-down") : ""}`}>
+              {totalRealizedPnl != null
+                ? `${totalRealizedPnl >= 0 ? "+" : "−"}$${fmtUSD(Math.abs(totalRealizedPnl))}`
+                : "—"}
+            </p>
+            <p className="tp-caption mt-0.5">Realized</p>
+          </div>
+        </div>
       </Card>
     </div>
 
@@ -5286,6 +5325,34 @@ export function OptionsTrading() {
   const tradingWeekLabel = getTradingWeekLabel();
   const tickerEntries = Array.from(openTickerMap.entries());
 
+  // ── Assigned lot prices (shared across SummaryCards, OpenPositionsTable, AssignedSharesCard) ──
+  const { data: activeHoldings } = useApi(getActiveAssignedHoldings, []);
+  const { data: realizedAssignedData } = useApi(getRealizedDispositions, []);
+  const activeLotTickers = useMemo(
+    () => [...new Set((activeHoldings ?? []).map((r) => r.ticker))],
+    [activeHoldings]
+  );
+  const [assignedQuotes, setAssignedQuotes] = useState<Record<string, { price: number }>>({});
+  const handlePricesUpdated = useCallback((prices: Map<string, number>) => {
+    setAssignedQuotes((prev) => {
+      const next = { ...prev };
+      for (const [ticker, price] of prices) {
+        next[ticker] = { price };
+      }
+      return next;
+    });
+  }, []);
+  const totalUnrealizedPnl = useMemo(() => {
+    if (activeHoldings == null) return null;
+    let total = 0;
+    for (const h of activeHoldings) {
+      const price = assignedQuotes[h.ticker]?.price;
+      if (price != null) total += (price - h.assignmentStrike) * h.shares;
+    }
+    return total;
+  }, [activeHoldings, assignedQuotes]);
+  const totalRealizedPnl = realizedAssignedData != null ? (realizedAssignedData.netRealizedPnl ?? 0) : null;
+
   const refetchAll = useCallback(() => {
     refetchPositions();
     refetchTickers();
@@ -5361,6 +5428,8 @@ export function OptionsTrading() {
         closedPositions={closedPositions}
         settings={settings ?? null}
         capitalChanges={capitalChanges ?? []}
+        totalUnrealizedPnl={totalUnrealizedPnl}
+        totalRealizedPnl={totalRealizedPnl}
       />
 
       {/* Tabs */}
@@ -5395,6 +5464,8 @@ export function OptionsTrading() {
               onClose={(p) => setCloseModal(p)}
               onConfirm={(p) => setConfirmDraftModal(p)}
               onPositionUpdated={refetchPositions}
+              extraTickers={activeLotTickers}
+              onPricesUpdated={handlePricesUpdated}
             />
           ) : (
             <ClosedPositionsTable
@@ -5408,7 +5479,7 @@ export function OptionsTrading() {
       </Card>
 
       {/* Assigned stock (acquired via assigned CSPs) */}
-      <AssignedSharesCard />
+      <AssignedSharesCard externalQuotes={assignedQuotes} />
 
       {/* Performance Charts */}
       <PerformanceCharts
