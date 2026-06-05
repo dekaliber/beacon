@@ -47,19 +47,19 @@ export function ReimbursementsPage() {
               <table className="w-full text-13">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="pb-3 font-medium">Date</th>
+                    <th className="pb-3 pl-3 font-medium">Date</th>
                     <th className="pb-3 font-medium">Description</th>
                     <th className="pb-3 font-medium">Category</th>
                     <th className="pb-3 font-medium">Account</th>
                     <th className="pb-3 font-medium">Note</th>
                     <th className="pb-3 text-right font-medium">Amount</th>
-                    <th className="pb-3 text-right font-medium">Action</th>
+                    <th className="pb-3 pr-3 text-right font-medium">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {expenses.map((expense) => (
                     <tr key={expense.id} className="hover:bg-muted/50">
-                      <td className="py-3">{formatDate(expense.date)}</td>
+                      <td className="py-3 pl-3">{formatDate(expense.date)}</td>
                       <td className="py-3">
                         <div className="flex items-center gap-2">
                           <AlertCircle className="h-4 w-4 flex-shrink-0 text-warn" />
@@ -74,7 +74,7 @@ export function ReimbursementsPage() {
                       <td className="py-3 text-right font-semibold text-down">
                         -{formatCurrency(expense.amount)}
                       </td>
-                      <td className="py-3 text-right">
+                      <td className="py-3 pr-3 text-right">
                         <button
                           onClick={() => handleResolve(expense.id)}
                           className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent"
@@ -117,7 +117,7 @@ export function ReimbursementsPage() {
               ))}
             </div>
 
-            <div className="border-t border-border pt-4 text-sm text-muted-foreground">
+            <div className="border-t border-border pt-4 pl-3 text-sm text-muted-foreground">
               {expenses.length} pending reimbursement{expenses.length !== 1 ? "s" : ""}
             </div>
           </>
