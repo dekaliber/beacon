@@ -5434,7 +5434,18 @@ export function OptionsTrading() {
     () => [...new Set((activeHoldings ?? []).map((r) => r.ticker))],
     [activeHoldings]
   );
-  const [assignedQuotes, setAssignedQuotes] = useState<Record<string, { price: number }>>({});
+  const [assignedQuotes, setAssignedQuotes] = useState<Record<string, { price: number }>>(() => {
+    // Seed from the same localStorage cache that OpenPositionsTable uses for livePrices,
+    // so assigned-lot prices are available even when the staleness guard skips the fetch.
+    try {
+      const stored = localStorage.getItem("options_live_prices");
+      if (stored) {
+        const raw = JSON.parse(stored) as Record<string, number>;
+        return Object.fromEntries(Object.entries(raw).map(([t, p]) => [t, { price: p }]));
+      }
+    } catch {}
+    return {};
+  });
   const handlePricesUpdated = useCallback((prices: Map<string, number>) => {
     setAssignedQuotes((prev) => {
       const next = { ...prev };
