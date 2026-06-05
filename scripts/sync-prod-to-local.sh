@@ -56,6 +56,7 @@ if [[ -n "${LOCAL_CLERK_USER_ID:-}" ]]; then
       UPDATE options_tickers    SET "userId" = :'local' WHERE "userId" = :'prod';
       UPDATE options_position_groups SET "userId" = :'local' WHERE "userId" = :'prod';
       UPDATE options_positions  SET "userId" = :'local' WHERE "userId" = :'prod';
+      UPDATE assigned_share_dispositions SET "userId" = :'local' WHERE "userId" = :'prod';
 SQL
     echo "userId replacement complete."
   fi
