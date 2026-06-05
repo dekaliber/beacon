@@ -5489,7 +5489,7 @@ export function OptionsTrading() {
   return (
     <div className="space-y-6">
       {/* Header + Capital Distribution Bar */}
-      <div className="space-y-3">
+      <div>
         <div className="flex items-start justify-between">
           <h2 className="tp-page-title">Options Trading</h2>
           <div className="flex items-center gap-3">
@@ -5510,7 +5510,7 @@ export function OptionsTrading() {
             </Button>
           </div>
         </div>
-        <p className="tp-caption flex items-center flex-wrap gap-x-6">
+        <p className="tp-caption mt-0.5 mb-3 flex items-center flex-wrap gap-x-6">
           <span>{tradingWeekLabel}</span>
           {tickerEntries.length > 0 && (
             <span className="flex items-center gap-x-4">
