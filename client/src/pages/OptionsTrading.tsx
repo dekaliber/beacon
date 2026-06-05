@@ -5491,25 +5491,7 @@ export function OptionsTrading() {
       {/* Header + Capital Distribution Bar */}
       <div className="space-y-3">
         <div className="flex items-start justify-between">
-          <div>
-            <h2 className="tp-page-title">Options Trading</h2>
-            <p className="tp-caption mt-0.5 flex items-center flex-wrap gap-x-6">
-              <span>{tradingWeekLabel}</span>
-              {tickerEntries.length > 0 && (
-                <span className="flex items-center gap-x-4">
-                  {tickerEntries.map(([sym, ct]) => (
-                    <span key={sym} className="flex items-center gap-1.5">
-                      <span
-                        className="inline-block w-2 h-2 rounded-sm flex-shrink-0"
-                        style={{ backgroundColor: tickerColorMap.get(sym) }}
-                      />
-                      {sym} x{ct}
-                    </span>
-                  ))}
-                </span>
-              )}
-            </p>
-          </div>
+          <h2 className="tp-page-title">Options Trading</h2>
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -5528,6 +5510,22 @@ export function OptionsTrading() {
             </Button>
           </div>
         </div>
+        <p className="tp-caption flex items-center flex-wrap gap-x-6">
+          <span>{tradingWeekLabel}</span>
+          {tickerEntries.length > 0 && (
+            <span className="flex items-center gap-x-4">
+              {tickerEntries.map(([sym, ct]) => (
+                <span key={sym} className="flex items-center gap-1.5">
+                  <span
+                    className="inline-block w-2 h-2 rounded-sm flex-shrink-0"
+                    style={{ backgroundColor: tickerColorMap.get(sym) }}
+                  />
+                  {sym} x{ct}
+                </span>
+              ))}
+            </span>
+          )}
+        </p>
         <CapitalDistributionBar
           openPositions={openPositions}
           settings={settings ?? null}
