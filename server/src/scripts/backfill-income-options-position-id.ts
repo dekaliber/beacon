@@ -10,14 +10,16 @@
  * Idempotent: positions already linked are skipped. Income rows with no backing
  * position (orphan historical premium) are left unlinked.
  *
- * Dry run:  npx tsx src/scripts/backfill-income-options-position-id.ts --dry
- * Apply:    npx tsx src/scripts/backfill-income-options-position-id.ts
+ * Run (dry-run by default):
+ *   npx tsx src/scripts/backfill-income-options-position-id.ts
+ * Apply:
+ *   npx tsx src/scripts/backfill-income-options-position-id.ts --apply
  */
 
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
-const DRY = process.argv.includes("--dry");
+const DRY = !process.argv.includes("--apply");
 
 function legNet(pos: {
   outcome: string | null;
@@ -64,6 +66,8 @@ function buildSource(pos: {
 }
 
 async function main() {
+  console.log(DRY ? "DRY RUN — pass --apply to write changes.\n" : "APPLY MODE — changes will be committed.\n");
+
   const positions = await prisma.optionsPosition.findMany({
     where: {
       isActive: true,
