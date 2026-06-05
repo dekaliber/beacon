@@ -229,16 +229,23 @@ model Income {
   isCashReceived  Boolean             @default(true)
   activityId      String?
 
+  // Stable link to the OptionsPosition leg that generated this premium income.
+  // Used as the sync key for options-premium income (the human-readable `source`
+  // string is display-only). Null for non-options income and orphan historical rows.
+  optionsPositionId String?
+
   category         Category?          @relation(fields: [categoryId], references: [id])
   transactionGroup TransactionGroup?  @relation(fields: [transactionGroupId], references: [id])
   account          Account            @relation(fields: [accountId], references: [id])
   activity         InvestmentActivity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  optionsPosition  OptionsPosition?   @relation("IncomeFromOptionsPosition", fields: [optionsPositionId], references: [id], onDelete: SetNull)
   tags             IncomeTag[]
 
   @@index([date])
   @@index([accountId])
   @@index([categoryId])
   @@index([activityId])
+  @@index([optionsPositionId])
   @@map("incomes")
 }
 
@@ -1018,6 +1025,11 @@ model OptionsPosition {
   contractsAssigned Int?
   stockPriceAtClose Decimal? @db.Decimal(12, 4) // underlying price at market close on assignment date
 
+  // Partial-close splits: all legs spun off from one original open share this cuid.
+  // Kept distinct from groupId (roll chains) so chain-rollup stats never confuse
+  // parallel split legs with sequential roll legs.
+  splitGroupId String?
+
   // Draft positions (planned/limit orders not yet executed)
   isDraft   Boolean  @default(false)
 
@@ -1042,9 +1054,11 @@ model OptionsPosition {
   assignedLots       InvestmentLot[] @relation("LotFromAssignment")
   dispositionsFromCsp AssignedShareDisposition[] @relation("DispositionFromCsp")
   dispositionsViaCall AssignedShareDisposition[] @relation("DispositionViaCall")
+  incomeRecords      Income[] @relation("IncomeFromOptionsPosition")
 
   @@index([userId, status])
   @@index([tickerId])
+  @@index([userId, splitGroupId])
   @@map("options_positions")
 }
 

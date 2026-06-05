@@ -731,6 +731,7 @@ export interface OptionsPosition {
   assignedFromExpirationDate: string | null;
   investmentAccountId: string | null;
   bankingAccountId: string | null;
+  splitGroupId: string | null;
   isDraft: boolean;
   isActive: boolean;
   createdAt: string;
@@ -794,6 +795,19 @@ export type OptionsRollInput = {
   newExpirationDate: string;
   newStockPriceAtOpen?: number | null;
   newFeesOpen?: number | null;
+  // Partial roll: roll only N of the position's contracts (omit to roll all).
+  contracts?: number;
+};
+
+export type OptionsPartialCloseInput = {
+  contracts: number;
+  outcome: Exclude<OptionOutcome, "ROLLED">;
+  closedAt?: string | null;
+  closePremiumPerShare?: number | null;
+  feesClose?: number | null;
+  stockPriceAtClose?: number | null;
+  investmentAccountId?: string | null;
+  bankingAccountId?: string | null;
 };
 
 // Settings
@@ -858,6 +872,9 @@ export const closeOptionsPosition = (id: string, data: OptionsCloseInput) =>
 
 export const rollOptionsPosition = (id: string, data: OptionsRollInput) =>
   api.post<{ closed: OptionsPosition; opened: OptionsPosition }>(`/options/positions/${id}/roll`, data);
+
+export const partialCloseOptionsPosition = (id: string, data: OptionsPartialCloseInput) =>
+  api.post<OptionsPosition>(`/options/positions/${id}/partial-close`, data);
 
 export type OptionsCloseEditInput = {
   outcome?: OptionOutcome;

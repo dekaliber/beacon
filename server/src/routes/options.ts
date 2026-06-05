@@ -1,10 +1,248 @@
 import { Router } from "express";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { getUserId } from "../middleware/auth.js";
 import { nextBusinessDay } from "../lib/businessDays.js";
 
 export const optionsRoutes = Router();
+
+// Position with the includes needed by the close side-effects routine.
+type ClosedPositionWithRelations = Prisma.OptionsPositionGetPayload<{
+  include: { ticker: true; group: true; pendingBuy: true; pendingSale: true };
+}>;
+
+// Effective contract count used in the income source string (assigned legs key
+// on the assigned count).
+function effectiveContracts(leg: { outcome: string | null; contracts: number; contractsAssigned: number | null }) {
+  return leg.outcome === "ASSIGNED"
+    ? Number(leg.contractsAssigned ?? leg.contracts)
+    : Number(leg.contracts);
+}
+
+// Clean, human-readable "Options Premium" income source for a closed leg, e.g.
+// "QXO 26.06.05 Put $16 x3". This is display-only — income rows are synced by
+// the stable optionsPositionId FK, not by this string.
+function optionsBaseSource(leg: {
+  ticker: { symbol: string };
+  expirationDate: Date;
+  optionType: string;
+  strikePrice: unknown;
+  outcome: string | null;
+  contracts: number;
+  contractsAssigned: number | null;
+}) {
+  const exp = leg.expirationDate;
+  const yy = String(exp.getUTCFullYear()).slice(2);
+  const mm = String(exp.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(exp.getUTCDate()).padStart(2, "0");
+  const expStr = `${yy}.${mm}.${dd}`;
+  const strike = Number(leg.strikePrice);
+  const strikeStr = strike === Math.floor(strike) ? `$${Math.floor(strike)}` : `$${strike}`;
+  const optionType = leg.optionType === "CALL" ? "Call" : "Put";
+  return `${leg.ticker.symbol} ${expStr} ${optionType} ${strikeStr} x${effectiveContracts(leg)}`;
+}
+
+// Apply the income / PendingBuy / PendingSale side-effects of closing (or
+// assigning) a position leg. Shared by the full-close PUT handler and the
+// partial-close split endpoint so both produce identical accounting records.
+async function applyCloseSideEffects(
+  userId: string,
+  updated: ClosedPositionWithRelations,
+  bankingAccountId: string | null,
+) {
+  // When a PUT is assigned and has an investment account linked,
+  // create a PendingBuy (if one doesn't already exist for this position).
+  if (
+    updated.outcome === "ASSIGNED" &&
+    updated.optionType === "PUT" &&
+    updated.investmentAccountId &&
+    !updated.pendingBuy
+  ) {
+    const shares = (updated.contractsAssigned ?? updated.contracts) * 100;
+    const totalFees = (Number(updated.feesOpen) || 0) + (Number(updated.feesClose) || 0);
+    const costPerShare =
+      Number(updated.strikePrice) -
+      Number(updated.premiumPerShare) +
+      totalFees / shares;
+
+    await prisma.pendingBuy.upsert({
+      where: { optionsPositionId: updated.id },
+      create: {
+        userId,
+        accountId: updated.investmentAccountId,
+        optionsPositionId: updated.id,
+        ticker: updated.ticker.symbol,
+        quantity: shares,
+        costPerShare: Math.max(0, costPerShare),
+        acquiredDate: updated.expirationDate,
+      },
+      update: {},
+    });
+  }
+
+  // If a PENDING buy already exists but the investment account changed, redirect it to the new account.
+  if (
+    updated.pendingBuy &&
+    updated.pendingBuy.status === "PENDING" &&
+    updated.investmentAccountId &&
+    updated.pendingBuy.accountId !== updated.investmentAccountId
+  ) {
+    await prisma.pendingBuy.update({
+      where: { id: updated.pendingBuy.id },
+      data: { accountId: updated.investmentAccountId },
+    });
+  }
+
+  // When a CALL is assigned and has an investment account linked,
+  // create a PendingSale so the user can review and confirm the lot disposition.
+  // pricePerShare = strike + premium − fees/share (the full "amount realized" per share
+  // for tax purposes; the premium's own income record has taxableAmount = 0).
+  if (
+    updated.outcome === "ASSIGNED" &&
+    updated.optionType === "CALL" &&
+    updated.investmentAccountId &&
+    !updated.pendingSale
+  ) {
+    const shares = (updated.contractsAssigned ?? updated.contracts) * 100;
+    const totalFees = (Number(updated.feesOpen) || 0) + (Number(updated.feesClose) || 0);
+    const pricePerShare =
+      Number(updated.strikePrice) +
+      Number(updated.premiumPerShare) -
+      totalFees / shares;
+
+    await prisma.pendingSale.upsert({
+      where: { optionsPositionId: updated.id },
+      create: {
+        userId,
+        accountId: updated.investmentAccountId,
+        optionsPositionId: updated.id,
+        ticker: updated.ticker.symbol,
+        quantity: shares,
+        pricePerShare: Math.max(0, pricePerShare),
+        saleDate: updated.expirationDate,
+      },
+      update: {},
+    });
+  }
+
+  // If a PENDING sale already exists but the investment account changed, redirect it.
+  if (
+    updated.pendingSale &&
+    updated.pendingSale.status === "PENDING" &&
+    updated.investmentAccountId &&
+    updated.pendingSale.accountId !== updated.investmentAccountId
+  ) {
+    await prisma.pendingSale.update({
+      where: { id: updated.pendingSale.id },
+      data: { accountId: updated.investmentAccountId },
+    });
+  }
+
+  // Auto-create an Income record for income-generating close outcomes
+  if (
+    bankingAccountId &&
+    (updated.outcome === "EXPIRED_WORTHLESS" ||
+      updated.outcome === "CLOSED_EARLY" ||
+      updated.outcome === "ASSIGNED")
+  ) {
+    // Helper: net premium for a single position leg
+    const legNet = (pos: {
+      outcome: string | null;
+      premiumPerShare: unknown;
+      closePremiumPerShare: unknown;
+      contracts: number;
+      contractsAssigned: number | null;
+      feesOpen: unknown;
+      feesClose: unknown;
+    }) => {
+      const c = pos.outcome === "ASSIGNED"
+        ? Number(pos.contractsAssigned ?? pos.contracts)
+        : Number(pos.contracts);
+      return (Number(pos.premiumPerShare) - Number(pos.closePremiumPerShare ?? 0)) * c * 100
+        - Number(pos.feesOpen ?? 0)
+        - Number(pos.feesClose ?? 0);
+    };
+
+    // For roll chains, sum net premium across all legs so the income record
+    // reflects the economics of the entire chain, not just the final leg.
+    let netAmount: number;
+    if (updated.groupId) {
+      const allLegs = await prisma.optionsPosition.findMany({
+        where: { groupId: updated.groupId },
+      });
+      netAmount = allLegs.reduce((sum, leg) => sum + legNet(leg), 0);
+    } else {
+      netAmount = legNet(updated);
+    }
+
+    if (netAmount > 0) {
+      // Find or create "Options Premium" income category for this user
+      let category = await prisma.category.findFirst({
+        where: { userId, name: "Options Premium", kind: "INCOME" },
+      });
+      if (!category) {
+        category = await prisma.category.create({
+          data: { userId, name: "Options Premium", kind: "INCOME" },
+        });
+      }
+
+      // Display-only source string. Income rows are synced by the stable
+      // optionsPositionId FK, so split siblings sharing ticker/expiry/strike/count
+      // may legitimately render identical strings — that's fine for the user.
+      const source = optionsBaseSource(updated);
+
+      // Settlement date = T+1 business day after close (OCC equity option settlement rule).
+      // Fall back to expiration date for EXPIRED_WORTHLESS (no explicit closedAt).
+      // Skip weekends and US Federal Reserve bank holidays so the settlement date always
+      // lands on a valid banking day.
+      const rawDate = updated.closedAt ?? updated.expirationDate;
+      const closeDay = new Date(Date.UTC(rawDate.getUTCFullYear(), rawDate.getUTCMonth(), rawDate.getUTCDate()));
+      const incomeDate = nextBusinessDay(closeDay);
+
+      // Assigned premiums fold into cost basis (puts) or sale proceeds (calls),
+      // so they are not independently taxable — zero out taxableAmount to exclude
+      // them from the Tax Estimator while preserving the income record for cash-flow tracking.
+      const taxableAmount = updated.outcome === "ASSIGNED" ? 0 : netAmount;
+
+      // Sync key: the stable optionsPositionId FK. Fall back to a legacy match by
+      // clean source + amount (only on rows not yet linked) so any position whose
+      // income predates the backfill self-heals on edit instead of duplicating;
+      // the amount guard avoids hijacking an unrelated orphan income row.
+      let existingIncome = await prisma.income.findFirst({
+        where: { categoryId: category.id, optionsPositionId: updated.id },
+      });
+      if (!existingIncome) {
+        const legacy = await prisma.income.findFirst({
+          where: { categoryId: category.id, source, optionsPositionId: null },
+        });
+        if (legacy && Math.abs(Number(legacy.amount) - netAmount) < 0.005) {
+          existingIncome = legacy;
+        }
+      }
+
+      if (existingIncome) {
+        await prisma.income.update({
+          where: { id: existingIncome.id },
+          data: { amount: netAmount, taxableAmount, accountId: bankingAccountId, source, optionsPositionId: updated.id },
+        });
+      } else {
+        await prisma.income.create({
+          data: {
+            amount: netAmount,
+            categoryId: category.id,
+            source,
+            date: incomeDate,
+            accountId: bankingAccountId,
+            taxClassification: "ORDINARY",
+            taxableAmount,
+            optionsPositionId: updated.id,
+          },
+        });
+      }
+    }
+  }
+}
 
 // ── Tradier API helpers ────────────────────────────────────────────────────────
 
@@ -309,209 +547,115 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
     include: { ticker: true, group: true, pendingBuy: true, pendingSale: true },
   });
 
-  // When a PUT is assigned and has an investment account linked,
-  // create a PendingBuy (if one doesn't already exist for this position).
-  if (
-    updated &&
-    updated.outcome === "ASSIGNED" &&
-    updated.optionType === "PUT" &&
-    updated.investmentAccountId &&
-    !updated.pendingBuy
-  ) {
-    const shares = (updated.contractsAssigned ?? updated.contracts) * 100;
-    const totalFees = (Number(updated.feesOpen) || 0) + (Number(updated.feesClose) || 0);
-    const costPerShare =
-      Number(updated.strikePrice) -
-      Number(updated.premiumPerShare) +
-      totalFees / shares;
-
-    await prisma.pendingBuy.upsert({
-      where: { optionsPositionId: updated.id },
-      create: {
-        userId,
-        accountId: updated.investmentAccountId,
-        optionsPositionId: updated.id,
-        ticker: updated.ticker.symbol,
-        quantity: shares,
-        costPerShare: Math.max(0, costPerShare),
-        acquiredDate: updated.expirationDate,
-      },
-      update: {},
-    });
-  }
-
-  // If a PENDING buy already exists but the investment account changed, redirect it to the new account.
-  if (
-    updated &&
-    updated.pendingBuy &&
-    updated.pendingBuy.status === "PENDING" &&
-    updated.investmentAccountId &&
-    updated.pendingBuy.accountId !== updated.investmentAccountId
-  ) {
-    await prisma.pendingBuy.update({
-      where: { id: updated.pendingBuy.id },
-      data: { accountId: updated.investmentAccountId },
-    });
-  }
-
-  // When a CALL is assigned and has an investment account linked,
-  // create a PendingSale so the user can review and confirm the lot disposition.
-  // pricePerShare = strike + premium − fees/share (the full "amount realized" per share
-  // for tax purposes; the premium's own income record has taxableAmount = 0).
-  if (
-    updated &&
-    updated.outcome === "ASSIGNED" &&
-    updated.optionType === "CALL" &&
-    updated.investmentAccountId &&
-    !updated.pendingSale
-  ) {
-    const shares = (updated.contractsAssigned ?? updated.contracts) * 100;
-    const totalFees = (Number(updated.feesOpen) || 0) + (Number(updated.feesClose) || 0);
-    const pricePerShare =
-      Number(updated.strikePrice) +
-      Number(updated.premiumPerShare) -
-      totalFees / shares;
-
-    await prisma.pendingSale.upsert({
-      where: { optionsPositionId: updated.id },
-      create: {
-        userId,
-        accountId: updated.investmentAccountId,
-        optionsPositionId: updated.id,
-        ticker: updated.ticker.symbol,
-        quantity: shares,
-        pricePerShare: Math.max(0, pricePerShare),
-        saleDate: updated.expirationDate,
-      },
-      update: {},
-    });
-  }
-
-  // If a PENDING sale already exists but the investment account changed, redirect it.
-  if (
-    updated &&
-    updated.pendingSale &&
-    updated.pendingSale.status === "PENDING" &&
-    updated.investmentAccountId &&
-    updated.pendingSale.accountId !== updated.investmentAccountId
-  ) {
-    await prisma.pendingSale.update({
-      where: { id: updated.pendingSale.id },
-      data: { accountId: updated.investmentAccountId },
-    });
-  }
-
-  // Auto-create an Income record for income-generating close outcomes
-  if (
-    updated &&
-    bankingAccountId &&
-    (updated.outcome === "EXPIRED_WORTHLESS" ||
-      updated.outcome === "CLOSED_EARLY" ||
-      updated.outcome === "ASSIGNED")
-  ) {
-    // Helper: net premium for a single position leg
-    const legNet = (pos: {
-      outcome: string | null;
-      premiumPerShare: unknown;
-      closePremiumPerShare: unknown;
-      contracts: number;
-      contractsAssigned: number | null;
-      feesOpen: unknown;
-      feesClose: unknown;
-    }) => {
-      const c = pos.outcome === "ASSIGNED"
-        ? Number(pos.contractsAssigned ?? pos.contracts)
-        : Number(pos.contracts);
-      return (Number(pos.premiumPerShare) - Number(pos.closePremiumPerShare ?? 0)) * c * 100
-        - Number(pos.feesOpen ?? 0)
-        - Number(pos.feesClose ?? 0);
-    };
-
-    // For roll chains, sum net premium across all legs so the income record
-    // reflects the economics of the entire chain, not just the final leg.
-    let netAmount: number;
-    if (updated.groupId) {
-      const allLegs = await prisma.optionsPosition.findMany({
-        where: { groupId: updated.groupId },
-      });
-      netAmount = allLegs.reduce((sum, leg) => sum + legNet(leg), 0);
-    } else {
-      netAmount = legNet(updated);
-    }
-
-    // contracts/source still reference the final (current) position
-    const contracts =
-      updated.outcome === "ASSIGNED"
-        ? Number(updated.contractsAssigned ?? updated.contracts)
-        : Number(updated.contracts);
-
-    if (netAmount > 0) {
-      // Find or create "Options Premium" income category for this user
-      let category = await prisma.category.findFirst({
-        where: { userId, name: "Options Premium", kind: "INCOME" },
-      });
-      if (!category) {
-        category = await prisma.category.create({
-          data: { userId, name: "Options Premium", kind: "INCOME" },
-        });
-      }
-
-      // Format expiration date as YY.MM.DD for the source string
-      const exp = updated.expirationDate;
-      const yy = String(exp.getUTCFullYear()).slice(2);
-      const mm = String(exp.getUTCMonth() + 1).padStart(2, "0");
-      const dd = String(exp.getUTCDate()).padStart(2, "0");
-      const expStr = `${yy}.${mm}.${dd}`;
-
-      const strike = Number(updated.strikePrice);
-      const strikeStr = strike === Math.floor(strike) ? `$${Math.floor(strike)}` : `$${strike}`;
-      const optionType = updated.optionType === "CALL" ? "Call" : "Put";
-      const source = `${updated.ticker.symbol} ${expStr} ${optionType} ${strikeStr} x${contracts}`;
-
-      // Settlement date = T+1 business day after close (OCC equity option settlement rule).
-      // Fall back to expiration date for EXPIRED_WORTHLESS (no explicit closedAt).
-      // Skip weekends and US Federal Reserve bank holidays so the settlement date always
-      // lands on a valid banking day.
-      const rawDate = updated.closedAt ?? updated.expirationDate;
-      const closeDay = new Date(Date.UTC(rawDate.getUTCFullYear(), rawDate.getUTCMonth(), rawDate.getUTCDate()));
-      const incomeDate = nextBusinessDay(closeDay);
-
-      // Assigned premiums fold into cost basis (puts) or sale proceeds (calls),
-      // so they are not independently taxable — zero out taxableAmount to exclude
-      // them from the Tax Estimator while preserving the income record for cash-flow tracking.
-      const taxableAmount = updated.outcome === "ASSIGNED" ? 0 : netAmount;
-
-      // Sync: Income has no FK back to the position, so we key on the deterministic
-      // source string. If a record already exists, update its amount/taxableAmount so
-      // that edits to fees on a closed position stay in sync. If none exists yet,
-      // create one — this covers the case where the user neglected to select a
-      // destination account at close time and adds one on a later edit.
-      const existingIncome = await prisma.income.findFirst({
-        where: { categoryId: category.id, source },
-      });
-
-      if (existingIncome) {
-        await prisma.income.update({
-          where: { id: existingIncome.id },
-          data: { amount: netAmount, taxableAmount, accountId: bankingAccountId },
-        });
-      } else {
-        await prisma.income.create({
-          data: {
-            amount: netAmount,
-            categoryId: category.id,
-            source,
-            date: incomeDate,
-            accountId: bankingAccountId,
-            taxClassification: "ORDINARY",
-            taxableAmount,
-          },
-        });
-      }
-    }
+  if (updated) {
+    await applyCloseSideEffects(userId, updated, bankingAccountId);
   }
 
   res.json(updated);
+});
+
+// Partial close: split N contracts off an OPEN position into a new closed leg,
+// leaving the remainder open. Supports EXPIRED_WORTHLESS / CLOSED_EARLY / ASSIGNED.
+// Rolls go through the roll endpoint (which opens a replacement leg). Splitting a
+// position that is already part of a roll chain is rejected (see below).
+const partialCloseSchema = z.object({
+  contracts: z.coerce.number().int().positive(),
+  outcome: z.enum(["EXPIRED_WORTHLESS", "CLOSED_EARLY", "ASSIGNED"]),
+  closedAt: z.string().nullable().optional(),
+  closePremiumPerShare: z.coerce.number().nonnegative().nullable().optional(),
+  feesClose: z.coerce.number().nonnegative().nullable().optional(),
+  stockPriceAtClose: z.coerce.number().positive().nullable().optional(),
+  investmentAccountId: z.string().nullable().optional(),
+  bankingAccountId: z.string().nullable().optional(),
+});
+
+const OUTCOME_STATUS: Record<"EXPIRED_WORTHLESS" | "CLOSED_EARLY" | "ASSIGNED", "EXPIRED" | "CLOSED" | "ASSIGNED"> = {
+  EXPIRED_WORTHLESS: "EXPIRED",
+  CLOSED_EARLY: "CLOSED",
+  ASSIGNED: "ASSIGNED",
+};
+
+optionsRoutes.post("/positions/:id/partial-close", async (req, res) => {
+  const userId = getUserId(req);
+  const parsed = partialCloseSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const {
+    contracts: n, outcome, closedAt, closePremiumPerShare, feesClose,
+    stockPriceAtClose, investmentAccountId, bankingAccountId,
+  } = parsed.data;
+
+  const original = await prisma.optionsPosition.findFirst({
+    where: { id: req.params.id, userId, isActive: true, status: "OPEN", isDraft: false },
+  });
+  if (!original) return res.status(404).json({ error: "Position not found or already closed" });
+
+  // Splitting a leg that participates in a roll chain would break the chain-rollup
+  // stats (which assume every leg shares one contract count and one final outcome).
+  // Rare in practice; disallow for now and require a full-position action instead.
+  if (original.groupId) {
+    return res.status(409).json({ error: "Cannot partially close a rolled position. Close or roll the full position instead." });
+  }
+  if (n >= original.contracts) {
+    return res.status(409).json({ error: "Use a full close when closing all contracts." });
+  }
+
+  const newLeg = await prisma.$transaction(async (tx) => {
+    // Stamp a split group on the original the first time it is split so all
+    // siblings (and the shrinking original) can be grouped in the UI.
+    const splitGroupId = original.splitGroupId ?? `split_${original.id}`;
+    if (!original.splitGroupId) {
+      await tx.optionsPosition.update({
+        where: { id: original.id },
+        data: { splitGroupId },
+      });
+    }
+
+    // Reduce the original to the remaining open contracts. Per design, all open
+    // fees stay on the original (no proration); the new leg carries feesOpen=null.
+    await tx.optionsPosition.update({
+      where: { id: original.id },
+      data: { contracts: original.contracts - n },
+    });
+
+    // Spin off the closed leg, copying the original's open-side terms.
+    return tx.optionsPosition.create({
+      data: {
+        userId,
+        tickerId: original.tickerId,
+        splitGroupId,
+        optionType: original.optionType,
+        side: original.side,
+        strikePrice: original.strikePrice,
+        expirationDate: original.expirationDate,
+        openedAt: original.openedAt,
+        contracts: n,
+        premiumPerShare: original.premiumPerShare,
+        feesOpen: null,
+        shareCostBasis: original.shareCostBasis,
+        stockPriceAtOpen: original.stockPriceAtOpen,
+        deltaAtOpen: original.deltaAtOpen,
+        deltaAtOpenCapturedAt: original.deltaAtOpenCapturedAt,
+        assignedFromStrikePrice: original.assignedFromStrikePrice,
+        assignedFromExpirationDate: original.assignedFromExpirationDate,
+        investmentAccountId: outcome === "ASSIGNED" ? (investmentAccountId ?? original.investmentAccountId) : original.investmentAccountId,
+        bankingAccountId: bankingAccountId ?? null,
+        // Close fields
+        status: OUTCOME_STATUS[outcome],
+        outcome,
+        closedAt: outcome === "EXPIRED_WORTHLESS" ? null : closedAt ? new Date(closedAt) : new Date(),
+        closePremiumPerShare: outcome === "ASSIGNED" ? null : closePremiumPerShare ?? null,
+        feesClose: feesClose ?? null,
+        contractsAssigned: outcome === "ASSIGNED" ? n : null,
+        stockPriceAtClose: outcome === "ASSIGNED" ? stockPriceAtClose ?? null : null,
+      },
+      include: { ticker: true, group: true, pendingBuy: true, pendingSale: true },
+    });
+  });
+
+  await applyCloseSideEffects(userId, newLeg, bankingAccountId ?? null);
+
+  res.status(201).json(newLeg);
 });
 
 // Roll a position: close it with outcome=ROLLED, open a new one, link both via a group
@@ -526,6 +670,9 @@ const rollSchema = z.object({
   newExpirationDate: z.string(), // YYYY-MM-DD
   newStockPriceAtOpen: z.coerce.number().positive().nullable().optional(),
   newFeesOpen: z.coerce.number().nonnegative().nullable().optional(),
+  // Partial roll: roll only N of the position's contracts, leaving the rest open.
+  // Omitted or equal to the full size = roll the whole position (legacy behavior).
+  contracts: z.coerce.number().int().positive().optional(),
 });
 
 optionsRoutes.post("/positions/:id/roll", async (req, res) => {
@@ -541,9 +688,92 @@ optionsRoutes.post("/positions/:id/roll", async (req, res) => {
   const {
     closedAt, closePremiumPerShare, feesClose,
     newPremiumPerShare, newStrikePrice, newExpirationDate, newStockPriceAtOpen, newFeesOpen,
+    contracts: rollContracts,
   } = parsed.data;
 
+  const isPartial = rollContracts != null && rollContracts < existing.contracts;
+  if (rollContracts != null && rollContracts > existing.contracts) {
+    return res.status(409).json({ error: "Cannot roll more contracts than the position holds." });
+  }
+  // A partial roll splits the position; like partial-close, that is incompatible
+  // with a position that is already part of a roll chain (breaks chain stats).
+  if (isPartial && existing.groupId) {
+    return res.status(409).json({ error: "Cannot partially roll a position that is already part of a roll chain." });
+  }
+
+  const closeAt = closedAt ? new Date(closedAt) : new Date();
+  const openAt = closedAt ? new Date(closedAt) : new Date();
+  const newExpiry = new Date(newExpirationDate + "T20:00:00.000Z");
+
   const result = await prisma.$transaction(async (tx) => {
+    if (isPartial) {
+      const n = rollContracts!;
+      // Fresh roll chain for the rolled-off slice. The original stays OPEN with the
+      // remaining contracts and is NOT placed in the chain, so it can still be
+      // partially closed/rolled later.
+      const group = await tx.optionsPositionGroup.create({ data: { userId } });
+      const splitGroupId = existing.splitGroupId ?? `split_${existing.id}`;
+
+      // Reduce the original; stamp split group so the UI can relate the slices.
+      await tx.optionsPosition.update({
+        where: { id: existing.id },
+        data: { contracts: existing.contracts - n, splitGroupId },
+      });
+
+      // Spin off the rolled-closed leg (seq 1). All open fees stay on the original.
+      const closed = await tx.optionsPosition.create({
+        data: {
+          userId,
+          tickerId: existing.tickerId,
+          groupId: group.id,
+          sequenceInGroup: 1,
+          splitGroupId,
+          optionType: existing.optionType,
+          side: existing.side,
+          strikePrice: existing.strikePrice,
+          expirationDate: existing.expirationDate,
+          openedAt: existing.openedAt,
+          contracts: n,
+          premiumPerShare: existing.premiumPerShare,
+          feesOpen: null,
+          shareCostBasis: existing.shareCostBasis,
+          stockPriceAtOpen: existing.stockPriceAtOpen,
+          assignedFromStrikePrice: existing.assignedFromStrikePrice,
+          assignedFromExpirationDate: existing.assignedFromExpirationDate,
+          investmentAccountId: existing.investmentAccountId,
+          status: "CLOSED",
+          outcome: "ROLLED",
+          closedAt: closeAt,
+          closePremiumPerShare: closePremiumPerShare ?? null,
+          feesClose: feesClose ?? null,
+        },
+        include: { ticker: true, group: true },
+      });
+
+      // Open the replacement leg (seq 2) for the same N contracts.
+      const opened = await tx.optionsPosition.create({
+        data: {
+          userId,
+          tickerId: existing.tickerId,
+          groupId: group.id,
+          sequenceInGroup: 2,
+          optionType: existing.optionType,
+          side: existing.side,
+          strikePrice: newStrikePrice,
+          expirationDate: newExpiry,
+          openedAt: openAt,
+          contracts: n,
+          premiumPerShare: newPremiumPerShare,
+          feesOpen: newFeesOpen ?? null,
+          stockPriceAtOpen: newStockPriceAtOpen ?? null,
+        },
+        include: { ticker: true, group: true },
+      });
+
+      return { closed, opened };
+    }
+
+    // ── Full roll (legacy behavior) ──────────────────────────────────────────
     // Determine group: reuse existing or create a new one
     let groupId = existing.groupId;
     if (!groupId) {
@@ -571,7 +801,7 @@ optionsRoutes.post("/positions/:id/roll", async (req, res) => {
       data: {
         status: "CLOSED",
         outcome: "ROLLED",
-        closedAt: closedAt ? new Date(closedAt) : new Date(),
+        closedAt: closeAt,
         closePremiumPerShare: closePremiumPerShare ?? null,
         feesClose: feesClose ?? null,
       },
@@ -588,8 +818,8 @@ optionsRoutes.post("/positions/:id/roll", async (req, res) => {
         optionType: existing.optionType,
         side: existing.side,
         strikePrice: newStrikePrice,
-        expirationDate: new Date(newExpirationDate + "T20:00:00.000Z"),
-        openedAt: closedAt ? new Date(closedAt) : new Date(),
+        expirationDate: newExpiry,
+        openedAt: openAt,
         contracts: existing.contracts,
         premiumPerShare: newPremiumPerShare,
         feesOpen: newFeesOpen ?? null,
@@ -606,12 +836,54 @@ optionsRoutes.post("/positions/:id/roll", async (req, res) => {
 
 optionsRoutes.delete("/positions/:id", async (req, res) => {
   const userId = getUserId(req);
-  const result = await prisma.optionsPosition.updateMany({
-    where: { id: req.params.id, userId },
-    data: { isActive: false },
+
+  const leg = await prisma.optionsPosition.findFirst({
+    where: { id: req.params.id, userId, isActive: true },
+    include: { ticker: true, pendingBuy: true, pendingSale: true },
   });
-  if (result.count === 0) return res.status(404).json({ error: "Not found" });
-  res.status(204).send();
+  if (!leg) return res.status(404).json({ error: "Not found" });
+
+  // A closed split leg is "undone" by returning its contracts to the still-open
+  // original in the same split group and removing its accounting side-effects.
+  // Excludes rolled-off legs (groupId set): those have a downstream replacement
+  // in their roll chain, so a merge-back would orphan it — they delete plainly.
+  const mergeTarget = leg.splitGroupId && leg.status !== "OPEN" && !leg.groupId
+    ? await prisma.optionsPosition.findFirst({
+        where: { userId, splitGroupId: leg.splitGroupId, status: "OPEN", isActive: true },
+      })
+    : null;
+
+  if (mergeTarget) {
+    // Refuse to silently undo an assignment that has already been converted into a
+    // lot — the user must revert that downstream record first.
+    if (leg.pendingBuy && leg.pendingBuy.status !== "PENDING") {
+      return res.status(409).json({ error: "This assignment was already processed into a purchase. Revert the pending buy first." });
+    }
+    if (leg.pendingSale && leg.pendingSale.status !== "PENDING") {
+      return res.status(409).json({ error: "This assignment was already processed into a sale. Revert the pending sale first." });
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    if (mergeTarget) {
+      await tx.optionsPosition.update({
+        where: { id: mergeTarget.id },
+        data: { contracts: mergeTarget.contracts + leg.contracts },
+      });
+      if (leg.pendingBuy) await tx.pendingBuy.delete({ where: { id: leg.pendingBuy.id } });
+      if (leg.pendingSale) await tx.pendingSale.delete({ where: { id: leg.pendingSale.id } });
+
+      // Remove this leg's income row, keyed on the stable FK.
+      await tx.income.deleteMany({ where: { optionsPositionId: leg.id } });
+    }
+
+    await tx.optionsPosition.update({
+      where: { id: leg.id },
+      data: { isActive: false },
+    });
+  });
+
+  res.json({ merged: mergeTarget != null, returnedContracts: mergeTarget ? leg.contracts : 0 });
 });
 
 // ── Stock Quote (Tradier) ──────────────────────────────────────────────────────

@@ -14,6 +14,7 @@ import {
   updateOptionsPosition,
   closeOptionsPosition,
   rollOptionsPosition,
+  partialCloseOptionsPosition,
   editClosedPosition,
   deleteOptionsPosition,
   importOptionsPositions,
@@ -1107,6 +1108,13 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
   const [investmentAccountId, setInvestmentAccountId] = useState(position.investmentAccountId ?? "");
   const [bankingAccountId, setBankingAccountId] = useState(defaultBankingAccountId ?? "");
 
+  // Partial close (splitting): allowed for standalone (non-rolled) positions with
+  // more than one contract. Rolled-chain legs are excluded — splitting them would
+  // break the chain-rollup stats — so they always close the full position.
+  const isChained = position.groupId != null;
+  const showSplit = !isChained && position.contracts > 1;
+  const [contractsToClose, setContractsToClose] = useState(position.contracts.toString());
+
   const { data: investmentAccounts } = useApi(() => getInvestmentAccounts(), []);
   const { data: allAccounts } = useApi(() => getAccounts(), []);
   const bankingAccounts = (allAccounts ?? []).filter((a) => a.type === "CHECKING" || a.type === "SAVINGS");
@@ -1186,6 +1194,16 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Resolve how many contracts this action applies to. Splitting only happens
+    // when the user picks fewer than the full size on a splittable position.
+    const n = showSplit ? parseInt(contractsToClose, 10) : position.contracts;
+    if (showSplit && (!Number.isInteger(n) || n < 1 || n > position.contracts)) {
+      setError(`Enter between 1 and ${position.contracts} contracts.`);
+      return;
+    }
+    const isPartial = showSplit && n < position.contracts;
+
     setSaving(true);
     setError("");
     try {
@@ -1199,6 +1217,19 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
           newExpirationDate,
           newStockPriceAtOpen: newStockPriceAtOpen ? parseAmount(newStockPriceAtOpen) : null,
           newFeesOpen: newFeesOpen ? parseAmount(newFeesOpen) : null,
+          ...(isPartial ? { contracts: n } : {}),
+        });
+      } else if (isPartial) {
+        // Partial close → split N contracts off into a new closed leg.
+        await partialCloseOptionsPosition(position.id, {
+          contracts: n,
+          outcome: outcome as Exclude<OptionOutcome, "ROLLED">,
+          closedAt: isExpired ? null : closedAt ? etToUtc(closedAt) : null,
+          closePremiumPerShare: isExpired || isAssigned ? null : closePremiumPerShare ? parseAmount(closePremiumPerShare) : null,
+          feesClose: feesClose ? parseAmount(feesClose) : null,
+          stockPriceAtClose: isAssigned && stockPriceAtClose ? parseAmount(stockPriceAtClose) : null,
+          investmentAccountId: isAssigned ? (investmentAccountId || null) : undefined,
+          bankingAccountId: bankingAccountId || null,
         });
       } else {
         const statusMap: Record<OptionOutcome, Exclude<import("@/api").OptionStatus, "OPEN">> = {
@@ -1207,13 +1238,19 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
           ROLLED: "CLOSED",
           ASSIGNED: "ASSIGNED",
         };
+        // Full close. For a splittable position the "contracts to close" field
+        // doubles as the assigned count; for a chained leg the legacy
+        // contractsAssigned field is used.
+        const assignedCount = isAssigned
+          ? (showSplit ? n : (contractsAssigned ? parseInt(contractsAssigned, 10) : null))
+          : null;
         const data: OptionsCloseInput = {
           status: statusMap[outcome],
           outcome,
           closedAt: isExpired ? null : closedAt ? etToUtc(closedAt) : null,
           closePremiumPerShare: isExpired || isAssigned ? null : closePremiumPerShare ? parseAmount(closePremiumPerShare) : null,
           feesClose: feesClose ? parseAmount(feesClose) : null,
-          contractsAssigned: isAssigned && contractsAssigned ? parseInt(contractsAssigned, 10) : null,
+          contractsAssigned: assignedCount,
           stockPriceAtClose: isAssigned && stockPriceAtClose ? parseAmount(stockPriceAtClose) : null,
           investmentAccountId: isAssigned ? (investmentAccountId || null) : undefined,
           bankingAccountId: bankingAccountId || null,
@@ -1265,6 +1302,32 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
           </div>
         </div>
 
+        {/* Contracts to close — splitting. Hidden for single-contract and chained
+            (rolled) positions, which always act on the full size. */}
+        {showSplit && (() => {
+          const n = parseInt(contractsToClose, 10);
+          const remaining = Number.isInteger(n) ? position.contracts - n : null;
+          const label = isRolled ? "Contracts to Roll" : isAssigned ? "Contracts Assigned" : "Contracts to Close";
+          return (
+            <div>
+              <label className="block text-xs font-medium mb-1">
+                {label}{" "}
+                <span className="text-muted-foreground font-normal">of {position.contracts}</span>
+              </label>
+              <input
+                type="number" min={1} max={position.contracts} inputMode="numeric"
+                value={contractsToClose} onChange={(e) => setContractsToClose(e.target.value)}
+                className={cn(inputClass, "[&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none")}
+              />
+              {remaining != null && remaining > 0 && (
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  {remaining} contract{remaining !== 1 ? "s" : ""} will stay open on this position.
+                </p>
+              )}
+            </div>
+          );
+        })()}
+
         {/* ── Close fields ── */}
         {!isExpired && (
           <div>
@@ -1298,14 +1361,18 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
 
         {isAssigned && (
           <>
-            <div>
-              <label className="block text-xs font-medium mb-1">Contracts Assigned</label>
-              <input
-                type="text" inputMode="numeric"
-                value={contractsAssigned} onChange={(e) => setContractsAssigned(e.target.value)}
-                className={inputClass}
-              />
-            </div>
+            {/* Legacy assigned-count field — only when the unified "Contracts
+                Assigned" split input above isn't shown (chained or single-contract). */}
+            {!showSplit && (
+              <div>
+                <label className="block text-xs font-medium mb-1">Contracts Assigned</label>
+                <input
+                  type="text" inputMode="numeric"
+                  value={contractsAssigned} onChange={(e) => setContractsAssigned(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+            )}
             <div>
               <label className="block text-xs font-medium mb-1">
                 Stock Price at Assignment{" "}
@@ -3066,6 +3133,9 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
 interface ClosedPositionsTableProps {
   positions: OptionsPosition[];
   openChainGroupIds: Set<string>;
+  // splitGroupIds that still have an open remainder — deleting a leg in one of
+  // these returns its contracts to that open position (undo-the-split).
+  openSplitGroupIds: Set<string>;
   onEdit: (p: OptionsPosition) => void;
   onDelete: (p: OptionsPosition) => void;
 }
@@ -3076,7 +3146,7 @@ const CLOSED_COL_GROUPS = [
 ] as const;
 type ClosedColGroupKey = (typeof CLOSED_COL_GROUPS)[number]["key"];
 
-function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }: ClosedPositionsTableProps) {
+function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds, onEdit, onDelete }: ClosedPositionsTableProps) {
   const [confirmDelete, setConfirmDelete] = useState<OptionsPosition | null>(null);
   const [openColGroups, setOpenColGroups] = useState<Set<ClosedColGroupKey>>(new Set(["pnl"]));
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -3599,19 +3669,26 @@ function ClosedPositionsTable({ positions, openChainGroupIds, onEdit, onDelete }
       document.body
     )}
 
-    {confirmDelete && createPortal(
+    {confirmDelete && createPortal((() => {
+      const isUndo = confirmDelete.splitGroupId != null && confirmDelete.groupId == null && openSplitGroupIds.has(confirmDelete.splitGroupId);
+      const n = confirmDelete.contractsAssigned ?? confirmDelete.contracts;
+      return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
         <div className="w-full max-w-sm rounded-lg bg-background text-foreground p-6 shadow-xl">
-          <h3 className="tp-panel-title">Delete position?</h3>
+          <h3 className="tp-panel-title">{isUndo ? "Undo this partial close?" : "Delete position?"}</h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            Delete {confirmDelete.ticker.symbol} ${confirmDelete.strikePrice} {confirmDelete.optionType}? This cannot be undone.
+            {isUndo
+              ? `This will return ${n} contract${n !== 1 ? "s" : ""} to the open ${confirmDelete.ticker.symbol} $${confirmDelete.strikePrice} ${confirmDelete.optionType} position and remove the associated income and pending records. This cannot be undone.`
+              : `Delete ${confirmDelete.ticker.symbol} $${confirmDelete.strikePrice} ${confirmDelete.optionType}? This cannot be undone.`}
           </p>
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setConfirmDelete(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => { onDelete(confirmDelete); setConfirmDelete(null); }}>Delete</Button>
+            <Button variant="destructive" onClick={() => { onDelete(confirmDelete); setConfirmDelete(null); }}>{isUndo ? "Undo Split" : "Delete"}</Button>
           </div>
         </div>
-      </div>,
+      </div>
+      );
+    })(),
       document.body
     )}
     </>
@@ -5473,7 +5550,10 @@ export function OptionsTrading() {
 
   const handleDelete = async (p: OptionsPosition) => {
     await deleteOptionsPosition(p.id);
+    // Undoing a split returns contracts to the open original and removes its
+    // income/pending records, so refresh notifications alongside positions.
     refetchPositions();
+    refetchNotifications();
   };
 
   const tabClass = (active: boolean) =>
@@ -5582,6 +5662,7 @@ export function OptionsTrading() {
             <ClosedPositionsTable
               positions={closedPositions}
               openChainGroupIds={new Set(openPositions.filter((p) => p.groupId).map((p) => p.groupId as string))}
+              openSplitGroupIds={new Set(openPositions.filter((p) => p.splitGroupId).map((p) => p.splitGroupId as string))}
               onEdit={(p) => setEditCloseModal(p)}
               onDelete={handleDelete}
             />
