@@ -58,7 +58,7 @@ export function ReimbursementsPage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {expenses.map((expense) => (
-                    <tr key={expense.id} className="bg-warn-soft/50 hover:bg-warn-soft">
+                    <tr key={expense.id} className="hover:bg-muted/50">
                       <td className="py-3">{formatDate(expense.date)}</td>
                       <td className="py-3">
                         <div className="flex items-center gap-2">
@@ -117,7 +117,7 @@ export function ReimbursementsPage() {
               ))}
             </div>
 
-            <div className="mt-4 border-t border-border pt-4 text-sm text-muted-foreground">
+            <div className="border-t border-border pt-4 text-sm text-muted-foreground">
               {expenses.length} pending reimbursement{expenses.length !== 1 ? "s" : ""}
             </div>
           </>
