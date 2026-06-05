@@ -37,27 +37,16 @@ if [[ -n "${LOCAL_CLERK_USER_ID:-}" ]]; then
   if [[ -z "$PROD_USER_ID" ]]; then
     echo "Warning: could not detect production userId — skipping userId replacement."
   else
-    echo "Replacing userId '$PROD_USER_ID' with '$LOCAL_CLERK_USER_ID'..."
-    psql "$LOCAL_DATABASE_URL" -v prod="$PROD_USER_ID" -v local="$LOCAL_CLERK_USER_ID" <<'SQL'
-      UPDATE accounts           SET "userId" = :'local' WHERE "userId" = :'prod';
-      UPDATE categories         SET "userId" = :'local' WHERE "userId" = :'prod';
-      UPDATE tags               SET "userId" = :'local' WHERE "userId" = :'prod';
-      UPDATE recurrence_rules   SET "userId" = :'local' WHERE "userId" = :'prod';
-      UPDATE annual_budgets     SET "userId" = :'local' WHERE "userId" = :'prod';
-      UPDATE budget_settings    SET "userId" = :'local' WHERE "userId" = :'prod';
-      UPDATE investment_settings SET "userId" = :'local' WHERE "userId" = :'prod';
-      UPDATE transfer_rules     SET "userId" = :'local' WHERE "userId" = :'prod';
-      UPDATE tax_assumptions    SET "userId" = :'local' WHERE "userId" = :'prod';
-      UPDATE pending_buys       SET "userId" = :'local' WHERE "userId" = :'prod';
-      UPDATE pending_sales      SET "userId" = :'local' WHERE "userId" = :'prod';
-      UPDATE asset_classes      SET "userId" = :'local' WHERE "userId" = :'prod';
-      UPDATE asset_class_targets SET "userId" = :'local' WHERE "userId" = :'prod';
-      UPDATE options_settings   SET "userId" = :'local' WHERE "userId" = :'prod';
-      UPDATE options_tickers    SET "userId" = :'local' WHERE "userId" = :'prod';
-      UPDATE options_position_groups SET "userId" = :'local' WHERE "userId" = :'prod';
-      UPDATE options_positions  SET "userId" = :'local' WHERE "userId" = :'prod';
-      UPDATE assigned_share_dispositions SET "userId" = :'local' WHERE "userId" = :'prod';
-SQL
+    echo "Replacing userId '$PROD_USER_ID' with '$LOCAL_CLERK_USER_ID' across all user-scoped tables..."
+    # Data-driven: remap every table that has a "userId" column. This is
+    # introspected from the live schema, so newly added user-scoped tables are
+    # covered automatically — do NOT maintain a hardcoded table list here.
+    USERID_TABLES="$(psql "$LOCAL_DATABASE_URL" -At -c \
+      "SELECT table_name FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'userId' ORDER BY table_name;")"
+    for tbl in $USERID_TABLES; do
+      psql "$LOCAL_DATABASE_URL" -v prod="$PROD_USER_ID" -v local="$LOCAL_CLERK_USER_ID" \
+        -c "UPDATE \"$tbl\" SET \"userId\" = :'local' WHERE \"userId\" = :'prod';"
+    done
     echo "userId replacement complete."
   fi
 fi
