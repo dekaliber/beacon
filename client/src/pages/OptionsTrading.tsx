@@ -3634,6 +3634,11 @@ function weekFridayLabel(mondayMs: number): string {
   return `${fri.getMonth() + 1}/${fri.getDate()}`;
 }
 
+// SVG path for a rect with per-corner radii (tl/tr/br/bl = top-left/top-right/bottom-right/bottom-left)
+function barPath(x: number, y: number, w: number, h: number, tl: number, tr: number, br: number, bl: number) {
+  return `M${x + tl},${y} H${x + w - tr} Q${x + w},${y} ${x + w},${y + tr} V${y + h - br} Q${x + w},${y + h} ${x + w - br},${y + h} H${x + bl} Q${x},${y + h} ${x},${y + h - bl} V${y + tl} Q${x},${y} ${x + tl},${y} Z`;
+}
+
 function PerformanceCharts({
   openPositions,
   closedPositions,
@@ -3646,26 +3651,32 @@ function PerformanceCharts({
   const targetAnnual = settings ? settings.startingBasis * settings.targetReturn : null;
   const targetWeekly = targetAnnual != null ? targetAnnual / 52 : null;
 
-  // Shared week-bucketed PnL map used by both charts
+  // Shared week-bucketed PnL maps split by option type (CC = CALL, CSP = PUT)
   const weekPnlMap = useMemo(() => {
-    const map = new Map<number, number>(); // weekStartMs -> total pnl
+    const cc = new Map<number, number>();
+    const csp = new Map<number, number>();
     for (const p of closedPositions) {
       const closeDate = p.closedAt ? new Date(p.closedAt) : new Date(p.expirationDate.split("T")[0]);
       const ms = getWeekStart(closeDate).getTime();
-      map.set(ms, (map.get(ms) ?? 0) + (calcPosition(p).pnl ?? 0));
+      const pnl = calcPosition(p).pnl ?? 0;
+      if (p.optionType === "CALL") cc.set(ms, (cc.get(ms) ?? 0) + pnl);
+      else csp.set(ms, (csp.get(ms) ?? 0) + pnl);
     }
-    return map;
+    return { cc, csp };
   }, [closedPositions]);
 
-  // Pending premium per week: max profit for open positions bucketed by expiration week
+  // Pending premium per week split by option type
   const pendingPnlMap = useMemo(() => {
-    const map = new Map<number, number>();
+    const cc = new Map<number, number>();
+    const csp = new Map<number, number>();
     for (const p of openPositions) {
       const expDate = new Date(p.expirationDate.split("T")[0] + "T20:00:00Z");
       const ms = getWeekStart(expDate).getTime();
-      map.set(ms, (map.get(ms) ?? 0) + calcPosition(p).totalPremiumNet);
+      const net = calcPosition(p).totalPremiumNet;
+      if (p.optionType === "CALL") cc.set(ms, (cc.get(ms) ?? 0) + net);
+      else csp.set(ms, (csp.get(ms) ?? 0) + net);
     }
-    return map;
+    return { cc, csp };
   }, [openPositions]);
 
   // First trade week: use the setting if provided, otherwise first week with a close
@@ -3673,8 +3684,9 @@ function PerformanceCharts({
     if (settings?.startingWeek) {
       return getWeekStart(new Date(settings.startingWeek + "T12:00:00")).getTime();
     }
-    if (weekPnlMap.size === 0) return null;
-    return Math.min(...weekPnlMap.keys());
+    const allMs = [...weekPnlMap.cc.keys(), ...weekPnlMap.csp.keys()];
+    if (allMs.length === 0) return null;
+    return Math.min(...allMs);
   }, [settings?.startingWeek, weekPnlMap]);
 
   const currentWeekMs = getWeekStart(new Date()).getTime();
@@ -3683,14 +3695,16 @@ function PerformanceCharts({
   // Bar chart: W1 → current week + 12
   const weeklyData = useMemo(() => {
     if (firstTradeWeekMs == null) return [];
-    const weeks: { week: string; premium: number; pending: number; isFuture: boolean }[] = [];
+    const weeks: { week: string; premiumCSP: number; premiumCC: number; pendingCSP: number; pendingCC: number; isFuture: boolean }[] = [];
     let weekNum = 0;
     for (let ms = firstTradeWeekMs; ms <= projectionEndMs; ms += 7 * 86_400_000) {
       weekNum++;
       weeks.push({
         week: weekFridayLabel(ms),
-        premium: weekPnlMap.get(ms) ?? 0,
-        pending: pendingPnlMap.get(ms) ?? 0,
+        premiumCSP: weekPnlMap.csp.get(ms) ?? 0,
+        premiumCC: weekPnlMap.cc.get(ms) ?? 0,
+        pendingCSP: pendingPnlMap.csp.get(ms) ?? 0,
+        pendingCC: pendingPnlMap.cc.get(ms) ?? 0,
         isFuture: ms > currentWeekMs,
       });
     }
@@ -3708,7 +3722,7 @@ function PerformanceCharts({
     for (let ms = firstTradeWeekMs; ms <= projectionEndMs; ms += 7 * 86_400_000) {
       weekNum++;
       const isPast = ms <= currentWeekMs;
-      if (isPast) cumulative += weekPnlMap.get(ms) ?? 0;
+      if (isPast) cumulative += (weekPnlMap.cc.get(ms) ?? 0) + (weekPnlMap.csp.get(ms) ?? 0);
       points.push({
         week: weekFridayLabel(ms),
         actual: isPast ? cumulative : null,
@@ -3761,13 +3775,27 @@ function PerformanceCharts({
               cursor={{ fill: "var(--color-muted)" }}
               content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null;
-                const realized = (payload.find((p) => p.dataKey === "premium")?.value ?? 0) as number;
-                const pending = (payload.find((p) => p.dataKey === "pending")?.value ?? 0) as number;
+                const csp = (payload.find((p) => p.dataKey === "premiumCSP")?.value ?? 0) as number;
+                const cc = (payload.find((p) => p.dataKey === "premiumCC")?.value ?? 0) as number;
+                const pendingCSP = (payload.find((p) => p.dataKey === "pendingCSP")?.value ?? 0) as number;
+                const pendingCC = (payload.find((p) => p.dataKey === "pendingCC")?.value ?? 0) as number;
+                const realized = csp + cc;
+                const pending = pendingCSP + pendingCC;
                 return (
                   <div className="rounded border border-border bg-background p-2 text-xs shadow-md">
                     <p className="mb-1 font-medium">{label}</p>
-                    {realized !== 0 && <p className="text-primary">Realized: ${fmtUSD(realized)}</p>}
-                    {pending > 0 && <p className="text-muted-foreground">Pending: ${fmtUSD(pending)}</p>}
+                    {realized !== 0 && (
+                      <>
+                        <p className="font-medium" style={{ color: "var(--color-blue)" }}>CC: ${fmtUSD(cc)}</p>
+                        <p className="font-medium" style={{ color: "var(--color-violet)" }}>CSP: ${fmtUSD(csp)}</p>
+                      </>
+                    )}
+                    {pending > 0 && (
+                      <p className="text-muted-foreground mt-0.5">
+                        Pending: ${fmtUSD(pending)}
+                        {pendingCC > 0 && pendingCSP > 0 && ` (CC $${fmtUSD(pendingCC)} / CSP $${fmtUSD(pendingCSP)})`}
+                      </p>
+                    )}
                     {realized === 0 && pending === 0 && <p className="text-primary">$0.00</p>}
                     {targetWeekly != null && (
                       <p className="mt-0.5 text-muted-foreground">Target: ${fmtUSD(targetWeekly)}</p>
@@ -3776,36 +3804,59 @@ function PerformanceCharts({
                 );
               }}
             />
-            {/* Realized premium — solid bar */}
+            {/* CSP realized — solid violet, bottom of stack */}
             <Bar
-              dataKey="premium"
+              dataKey="premiumCSP"
               stackId="a"
               maxBarSize={32}
-              fill="var(--color-primary)"
               shape={(props: any) => {
-                const { x, y, width, height, pending } = props as {
-                  x: number; y: number; width: number; height: number; pending: number;
+                const { x, y, width, height, premiumCC, pendingCSP, pendingCC } = props as {
+                  x: number; y: number; width: number; height: number;
+                  premiumCC: number; pendingCSP: number; pendingCC: number;
                 };
-                const hasRadius = (pending ?? 0) <= 0;
                 if (!height || height <= 0) return <g />;
-                return <rect x={x} y={y} width={width} height={height} fill="var(--color-primary)" rx={hasRadius ? 3 : 0} style={{ borderRadius: hasRadius ? "3px 3px 0 0" : undefined }} />;
+                const isTop = (premiumCC ?? 0) <= 0 && (pendingCSP ?? 0) <= 0 && (pendingCC ?? 0) <= 0;
+                const r = 3;
+                return <path d={barPath(x, y, width, height, isTop ? r : 0, isTop ? r : 0, r, r)} fill="var(--color-violet)" />;
               }}
             />
-            {/* Pending premium — diagonal stripe bar stacked on top */}
+            {/* CC realized — solid blue, above CSP */}
             <Bar
-              dataKey="pending"
+              dataKey="premiumCC"
               stackId="a"
               maxBarSize={32}
               shape={(props: any) => {
-                const { x, y, width, height } = props as { x: number; y: number; width: number; height: number };
+                const { x, y, width, height, premiumCSP, pendingCSP, pendingCC } = props as {
+                  x: number; y: number; width: number; height: number;
+                  premiumCSP: number; pendingCSP: number; pendingCC: number;
+                };
+                if (!height || height <= 0) return <g />;
+                const isTop = (pendingCSP ?? 0) <= 0 && (pendingCC ?? 0) <= 0;
+                const isBottom = (premiumCSP ?? 0) <= 0;
+                const r = 3;
+                return <path d={barPath(x, y, width, height, isTop ? r : 0, isTop ? r : 0, isBottom ? r : 0, isBottom ? r : 0)} fill="var(--color-blue)" />;
+              }}
+            />
+            {/* CSP pending — striped violet, above CC realized */}
+            <Bar
+              dataKey="pendingCSP"
+              stackId="a"
+              maxBarSize={32}
+              shape={(props: any) => {
+                const { x, y, width, height, premiumCSP, premiumCC, pendingCC } = props as {
+                  x: number; y: number; width: number; height: number;
+                  premiumCSP: number; premiumCC: number; pendingCC: number;
+                };
                 if (!height || height <= 0 || !width || width <= 0) return <g />;
-                const clipId = `pending-clip-${Math.round(x * 10)}`;
-                const step = 5;
+                const isTop = (pendingCC ?? 0) <= 0;
+                const isBottom = (premiumCSP ?? 0) <= 0 && (premiumCC ?? 0) <= 0;
+                const r = 3;
+                const d = barPath(x, y, width, height, isTop ? r : 0, isTop ? r : 0, isBottom ? r : 0, isBottom ? r : 0);
+                const clipId = `pending-csp-${Math.round(x * 10)}`;
                 const lines: React.ReactElement[] = [];
-                for (let offset = -height; offset < width + height; offset += step) {
+                for (let offset = -height; offset < width + height; offset += 5) {
                   lines.push(
-                    <line
-                      key={offset}
+                    <line key={offset}
                       x1={x + offset} y1={y + height}
                       x2={x + offset + height} y2={y}
                       stroke="white" strokeOpacity={0.55} strokeWidth={2}
@@ -3815,12 +3866,43 @@ function PerformanceCharts({
                 }
                 return (
                   <g>
-                    <defs>
-                      <clipPath id={clipId}>
-                        <rect x={x} y={y} width={width} height={height} rx={3} />
-                      </clipPath>
-                    </defs>
-                    <rect x={x} y={y} width={width} height={height} fill="var(--color-primary)" fillOpacity={0.3} rx={3} />
+                    <defs><clipPath id={clipId}><path d={d} /></clipPath></defs>
+                    <path d={d} fill="var(--color-violet)" fillOpacity={0.3} />
+                    {lines}
+                  </g>
+                );
+              }}
+            />
+            {/* CC pending — striped blue, top of stack */}
+            <Bar
+              dataKey="pendingCC"
+              stackId="a"
+              maxBarSize={32}
+              shape={(props: any) => {
+                const { x, y, width, height, premiumCSP, premiumCC, pendingCSP } = props as {
+                  x: number; y: number; width: number; height: number;
+                  premiumCSP: number; premiumCC: number; pendingCSP: number;
+                };
+                if (!height || height <= 0 || !width || width <= 0) return <g />;
+                const isBottom = (premiumCSP ?? 0) <= 0 && (premiumCC ?? 0) <= 0 && (pendingCSP ?? 0) <= 0;
+                const r = 3;
+                const d = barPath(x, y, width, height, r, r, isBottom ? r : 0, isBottom ? r : 0);
+                const clipId = `pending-cc-${Math.round(x * 10)}`;
+                const lines: React.ReactElement[] = [];
+                for (let offset = -height; offset < width + height; offset += 5) {
+                  lines.push(
+                    <line key={offset}
+                      x1={x + offset} y1={y + height}
+                      x2={x + offset + height} y2={y}
+                      stroke="white" strokeOpacity={0.55} strokeWidth={2}
+                      clipPath={`url(#${clipId})`}
+                    />
+                  );
+                }
+                return (
+                  <g>
+                    <defs><clipPath id={clipId}><path d={d} /></clipPath></defs>
+                    <path d={d} fill="var(--color-blue)" fillOpacity={0.3} />
                     {lines}
                   </g>
                 );
@@ -4413,8 +4495,10 @@ function SummaryCards({
       utilization: number;
       basis: number;
       capitalDeployed: number;
+      ccDeployed: number;
+      cspDeployed: number;
       tradingDurationMin: number;
-      contributors: { label: string; capitalAtRisk: number; overlapMin: number }[];
+      contributors: { label: string; capitalAtRisk: number; overlapMin: number; optionType: string }[];
     };
     const series: TradingSeriesEntry[] = [];
     let totalCapitalMinutes = 0;
@@ -4434,6 +4518,8 @@ function SummaryCards({
 
         if (basis > 0) {
           let capitalMin = 0;
+          let ccCapitalMin = 0;
+          let cspCapitalMin = 0;
           const contributors: TradingSeriesEntry["contributors"] = [];
           for (const pos of allPositions) {
             const openMs = new Date(pos.openedAt).getTime();
@@ -4444,17 +4530,22 @@ function SummaryCards({
               const overlapMin = (overlapEnd - overlapStart) / MINUTE_MS;
               const car = calcPosition(pos).capitalAtRisk;
               capitalMin += car * overlapMin;
+              if (pos.optionType === "CALL") ccCapitalMin += car * overlapMin;
+              else cspCapitalMin += car * overlapMin;
               const expStr = pos.expirationDate.split("T")[0].slice(5);
               contributors.push({
                 label: `${pos.ticker.symbol} ${pos.status} ${pos.side} ${pos.optionType} $${pos.strikePrice} exp ${expStr} ×${pos.contracts}`,
                 capitalAtRisk: car,
                 overlapMin,
+                optionType: pos.optionType,
               });
             }
           }
           const capitalDeployed = capitalMin / tradingDurationMin;
+          const ccDeployed = ccCapitalMin / tradingDurationMin;
+          const cspDeployed = cspCapitalMin / tradingDurationMin;
           const utilization = capitalDeployed / basis;
-          series.push({ dayMs, utilization, basis, capitalDeployed, tradingDurationMin, contributors });
+          series.push({ dayMs, utilization, basis, capitalDeployed, ccDeployed, cspDeployed, tradingDurationMin, contributors });
           totalCapitalMinutes += capitalMin;
           totalBasisMinutes += basis * tradingDurationMin;
         }
@@ -4755,13 +4846,27 @@ function SummaryCards({
                 const bgH = (1 / utilizationDataTrading.yMax) * 66;
                 const fillH = bar.isFuture ? 0 : Math.min((bar.utilization / utilizationDataTrading.yMax) * 66, 66);
                 const isHovered = bar.seriesIdx !== null && hoveredBarIdxTrading === bar.seriesIdx;
+                const isOver = bar.utilization > 1;
+                const dimmed = hoveredBarIdxTrading !== null && !isHovered;
+                const s = bar.seriesIdx !== null ? utilizationDataTrading.series[bar.seriesIdx] : null;
+                const cspH = s && !isOver ? Math.min((s.cspDeployed / s.basis) / utilizationDataTrading.yMax * 66, fillH) : 0;
+                const ccH = fillH - cspH;
                 return (
                   <g key={i}>
                     <rect x={bar.x} y={66 - bgH} width={5} height={bgH} fill="var(--color-border)" opacity={bar.isFuture ? 0.5 : 1} />
-                    {!bar.isFuture && bar.utilization > 0 && (
+                    {!bar.isFuture && fillH > 0 && isOver && (
                       <rect x={bar.x} y={66 - fillH} width={5} height={fillH}
-                        fill={bar.utilization > 1 ? "var(--color-warn)" : "var(--color-primary)"}
-                        opacity={hoveredBarIdxTrading !== null && !isHovered ? 0.4 : 1}
+                        fill="var(--color-warn)" opacity={dimmed ? 0.4 : 1}
+                      />
+                    )}
+                    {!bar.isFuture && !isOver && cspH > 0 && (
+                      <rect x={bar.x} y={66 - cspH} width={5} height={cspH}
+                        fill="var(--color-violet)" opacity={dimmed ? 0.4 : 1}
+                      />
+                    )}
+                    {!bar.isFuture && !isOver && ccH > 0 && (
+                      <rect x={bar.x} y={66 - fillH} width={5} height={ccH}
+                        fill="var(--color-blue)" opacity={dimmed ? 0.4 : 1}
                       />
                     )}
                   </g>
@@ -4780,12 +4885,9 @@ function SummaryCards({
                 style={{ left: leftPx, transform: "translateX(-50%)" }}
               >
                 <div className="rounded border border-border bg-background p-2 text-xs shadow-md whitespace-nowrap">
-                  <p className="font-medium mb-1">{label} — {fmtPct(bar.utilization * 100)}</p>
-                  <p className="text-muted-foreground">Deployed: ${Math.round(bar.capitalDeployed).toLocaleString()}</p>
-                  <p className="text-muted-foreground mb-1">Basis: ${Math.round(bar.basis).toLocaleString()} · {bar.tradingDurationMin.toFixed(0)} min window</p>
-                  {bar.contributors.map((c, ci) => (
-                    <p key={ci} className="text-muted-foreground">{c.label} — ${Math.round(c.capitalAtRisk).toLocaleString()} × {(c.overlapMin / 60).toFixed(1)}h</p>
-                  ))}
+                  <p className="font-medium mb-1">{label} — {(bar.utilization * 100).toFixed(1)}%</p>
+                  {bar.ccDeployed > 0 && <p style={{ color: "var(--color-blue)" }}>CC: ${Math.round(bar.ccDeployed).toLocaleString()} ({(bar.ccDeployed / bar.basis * 100).toFixed(1)}%)</p>}
+                  {bar.cspDeployed > 0 && <p style={{ color: "var(--color-violet)" }}>CSP: ${Math.round(bar.cspDeployed).toLocaleString()} ({(bar.cspDeployed / bar.basis * 100).toFixed(1)}%)</p>}
                 </div>
                 <div className="w-px h-1.5 bg-border" />
               </div>
