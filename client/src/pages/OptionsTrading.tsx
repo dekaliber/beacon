@@ -2552,13 +2552,15 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
     const ctd = "px-2 pb-2 text-xs font-mono tabular-nums whitespace-nowrap text-muted-foreground";
 
     // Opaque equivalents of the tr's semi-transparent bg colors over the page base (#FAFCFE):
-    //   bg-warn-soft/50 → #FFFDF5; bg-muted/10 → #FAFCFE; bg-muted/30 → #F5F8FC
-    const stickyBg = isExpired ? "bg-[#FFFDF5]" : "bg-[#FAFCFE]";
+    //   bg-row-reimbursement → #F7F3EE; bg-row-reimbursement-hover → #F4EEE4
+    //   bg-muted/10 → #FAFCFE; bg-muted/30 → #F5F8FC
+    const stickyBg = isExpired ? "bg-[#F7F3EE]" : "bg-[#FAFCFE]";
+    const stickyHover = isExpired ? "group-hover:bg-[#F4EEE4]" : "group-hover:bg-[#F5F8FC]";
     const stickyTd = (_leftPx: number, extra?: string, textOnly = false) =>
-      cn(textOnly ? tdTextClass : tdClass, "sticky z-[2] group-hover:bg-[#F5F8FC]", stickyBg, extra);
+      cn(textOnly ? tdTextClass : tdClass, "sticky z-[2]", stickyHover, stickyBg, extra);
 
     const primaryRow = (
-      <tr key={p.id} className={cn("group", hasChain ? "" : "border-b border-border", "hover:bg-muted/30", isGrouped && "bg-muted/10", isExpired && "bg-warn-soft/50", isDraftRow && "italic opacity-60")}>
+      <tr key={p.id} className={cn("group", hasChain ? "" : "border-b border-border", isExpired ? "hover:bg-row-reimbursement-hover" : "hover:bg-muted/30", isGrouped && "bg-muted/10", isExpired ? "bg-row-reimbursement" : "", isDraftRow && "italic opacity-60")}>
         {/* ── Group 1: Position (always visible, frozen) ── */}
         <td style={{ left: 0 }}   className={stickyTd(0, isGrouped ? "pl-8 pr-2" : "pl-4 pr-2", true)}>
           <div className="flex items-center gap-1.5">
