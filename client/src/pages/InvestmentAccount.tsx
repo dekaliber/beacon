@@ -3461,7 +3461,12 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const totalCost = (parseAmount(quantity) || 0) * (parseAmount(costPerShare) || 0);
+  const shares = parseAmount(quantity) || 0;
+  // Cost basis folds in the option premium and fees (via costPerShare); the cash
+  // actually removed from the settlement balance at assignment is strike × shares,
+  // which is slightly higher since the collected premium reduced the basis.
+  const totalCostBasis = shares * (parseAmount(costPerShare) || 0);
+  const amountDeductedFromCash = shares * Number(pos.strikePrice);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -3540,10 +3545,16 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
           />
         </div>
 
-        {/* Total cost */}
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Total Cost</span>
-          <span className="font-semibold">{formatCurrency(totalCost)}</span>
+        {/* Cost basis vs. actual cash impact */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Total Cost Basis</span>
+            <span className="font-semibold">{formatCurrency(totalCostBasis)}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Amount Deducted from Cash</span>
+            <span className="font-medium">{formatCurrency(amountDeductedFromCash)}</span>
+          </div>
         </div>
 
         {/* Notes */}

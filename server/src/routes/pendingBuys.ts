@@ -107,7 +107,9 @@ pendingBuyRoutes.post("/:id/confirm", async (req, res) => {
     });
 
     // Adjust settlement balance if it predates the assignment date.
-    // Use strike × shares (not cost basis) since the premium is already captured on the options side.
+    // Use strike × shares (not cost basis) since the premium is already captured on
+    // the options side. Use the user-confirmed share count so the deduction matches
+    // the "Amount Deducted from Cash" figure shown in the review modal.
     const account = await tx.account.findUnique({
       where: { id: pendingBuy.accountId },
       select: { cashBalance: true, cashBalanceUpdatedAt: true },
@@ -118,8 +120,7 @@ pendingBuyRoutes.post("/:id/confirm", async (req, res) => {
       account.cashBalanceUpdatedAt != null &&
       account.cashBalanceUpdatedAt < pos.expirationDate
     ) {
-      const shares = (pos.contractsAssigned ?? pos.contracts) * 100;
-      const deduction = Number(pos.strikePrice) * shares;
+      const deduction = Number(pos.strikePrice) * quantity;
       await tx.account.update({
         where: { id: pendingBuy.accountId },
         data: { cashBalance: { decrement: deduction } },
