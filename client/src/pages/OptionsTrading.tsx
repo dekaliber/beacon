@@ -4205,10 +4205,18 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
 
 // ── Capital Distribution Bar ───────────────────────────────────────────────────
 
+// Ordered to maximise minimum hue distance between adjacent entries (≥108°).
 const TICKER_COLORS = [
-  "#e05c5c", "#5b8dd9", "#7ab83f", "#9372cc",
-  "#d97a45", "#3aafc4", "#cc5c94", "#2fa878",
-  "#c99b3a", "#3a9fd4",
+  "var(--color-chart-4)",  // 12°  red-orange
+  "var(--color-chart-9)",  // 220° steel-blue
+  "var(--color-chart-10)", // 330° pink
+  "var(--color-chart-6)",  // 158° green
+  "var(--color-chart-1)",  // 268° blue
+  "var(--color-chart-3)",  // 75°  yellow-green
+  "var(--color-chart-2)",  // 192° cyan
+  "var(--color-chart-7)",  // 300° purple
+  "var(--color-chart-8)",  // 50°  orange
+  "var(--color-chart-5)",  // 245° blue-purple
 ];
 
 function CapitalDistributionBar({
