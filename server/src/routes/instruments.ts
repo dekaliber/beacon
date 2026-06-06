@@ -128,6 +128,28 @@ async function backfillUnlinkedManualInvestments() {
   }
 }
 
+// ── Self-heal helper ───────────────────────────────────────────────────────
+// Reactivates any instrument that is marked inactive but still has live holdings
+// or manual investments. This repairs records left in a bad state by an earlier
+// transfer bug that could deactivate an instrument while it was still held (the
+// orphan check ran before the destination holding was created). Safe to call
+// repeatedly; only touches instruments that are genuinely mislinked.
+
+async function reactivateMislinkedInstruments() {
+  const mislinked = await prisma.instrument.findMany({
+    where: {
+      isActive: false,
+      OR: [{ holdings: { some: {} } }, { manualInvestments: { some: {} } }],
+    },
+    select: { id: true },
+  });
+  if (mislinked.length === 0) return;
+  await prisma.instrument.updateMany({
+    where: { id: { in: mislinked.map((i) => i.id) } },
+    data: { isActive: true },
+  });
+}
+
 // ── GET /api/instruments ───────────────────────────────────────────────────
 // Returns all instruments. Lazily backfills any holdings that pre-date this
 // feature so the list is always complete without a separate migration step.
@@ -136,6 +158,7 @@ instrumentRoutes.get("/", async (_req, res) => {
   try {
     await backfillUnlinkedHoldings();
     await backfillUnlinkedManualInvestments();
+    await reactivateMislinkedInstruments();
     const instruments = await prisma.instrument.findMany({
       where: { isActive: true },
       include: instrumentInclude,

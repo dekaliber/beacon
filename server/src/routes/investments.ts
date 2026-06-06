@@ -3590,7 +3590,6 @@ investmentRoutes.post("/transfer", async (req, res) => {
       const sourceHoldingDeleted = remainingLots === 0;
       if (sourceHoldingDeleted) {
         await tx.investmentHolding.delete({ where: { id: holding.id } });
-        await deactivateIfOrphaned(tx, holding.instrumentId);
       }
 
       // 3. Upsert destination holding (create if ticker not yet held there)
@@ -3608,6 +3607,14 @@ investmentRoutes.post("/transfer", async (req, res) => {
             instrumentId,
           },
         });
+      }
+
+      // Deactivate the instrument only if it is now truly orphaned. This must run
+      // AFTER the destination holding is created — otherwise transferring an entire
+      // position would momentarily drop the holding count to 0 and wrongly soft-delete
+      // the instrument, hiding the still-held ticker from the Securities page.
+      if (sourceHoldingDeleted) {
+        await deactivateIfOrphaned(tx, holding.instrumentId);
       }
 
       // 4. Create destination lots with original cost basis, acquisition dates, and CSP link
