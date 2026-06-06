@@ -915,6 +915,7 @@ function ActivityDetailSheet({
   const a = activity;
   const isPurchase = a?.type === "PURCHASE";
   const isSale = a?.type === "SALE";
+  const isTransfer = a?.type === "TRANSFER";
   const fees = a?.fees ?? 0;
   const net = a ? a.amount - fees : 0;
   const gain = a ? (a.shortTermGain ?? 0) + (a.longTermGain ?? 0) : 0;
@@ -923,8 +924,10 @@ function ActivityDetailSheet({
     ? "bg-blue-soft text-blue-deep"
     : isPurchase
     ? "bg-up-soft text-up-deep"
+    : isTransfer
+    ? "bg-warn-soft text-warn-deep"
     : "bg-violet-soft text-violet-deep";
-  const badgeLabel = isSale ? "Sale" : isPurchase ? "Purchase" : "Dividend";
+  const badgeLabel = isSale ? "Sale" : isPurchase ? "Purchase" : isTransfer ? "Transfer" : "Dividend";
 
   return (
     <>
@@ -1879,12 +1882,14 @@ export function MobileInvestmentAccount() {
               <div className="space-y-2">
                 {/* Type filter chips */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  {(["PURCHASE", "SALE", "DIVIDEND"] as const).filter((t) => presentTypes.has(t)).map((type) => {
+                  {(["PURCHASE", "SALE", "DIVIDEND", "TRANSFER"] as const).filter((t) => presentTypes.has(t)).map((type) => {
                     const active = selectedTypes.has(type);
                     const cls = type === "PURCHASE"
                       ? active ? "bg-up-soft text-up-deep border-up-line" : "border-border text-muted-foreground"
                       : type === "SALE"
                       ? active ? "bg-blue-soft text-blue-deep border-blue-soft" : "border-border text-muted-foreground"
+                      : type === "TRANSFER"
+                      ? active ? "bg-warn-soft text-warn-deep border-warn-line" : "border-border text-muted-foreground"
                       : active ? "bg-violet-soft text-violet-deep border-violet-soft" : "border-border text-muted-foreground";
                     return (
                       <button
@@ -1892,7 +1897,7 @@ export function MobileInvestmentAccount() {
                         onClick={() => toggleType(type)}
                         className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${cls}`}
                       >
-                        {type === "PURCHASE" ? "Purchase" : type === "SALE" ? "Sale" : "Dividend"}
+                        {type === "PURCHASE" ? "Purchase" : type === "SALE" ? "Sale" : type === "TRANSFER" ? "Transfer" : "Dividend"}
                       </button>
                     );
                   })}
@@ -1930,12 +1935,15 @@ export function MobileInvestmentAccount() {
               {filteredActivities.map((a) => {
                 const isPurchase = a.type === "PURCHASE";
                 const isSale = a.type === "SALE";
+                const isTransfer = a.type === "TRANSFER";
                 const badgeClass = isSale
                   ? "bg-blue-soft text-blue-deep"
                   : isPurchase
                   ? "bg-up-soft text-up-deep"
+                  : isTransfer
+                  ? "bg-warn-soft text-warn-deep"
                   : "bg-violet-soft text-violet-deep";
-                const badgeLabel = isSale ? "Sale" : isPurchase ? "Purchase" : "Dividend";
+                const badgeLabel = isSale ? "Sale" : isPurchase ? "Purchase" : isTransfer ? "Transfer" : "Dividend";
                 const gain = (a.shortTermGain ?? 0) + (a.longTermGain ?? 0);
 
                 return (
