@@ -619,7 +619,7 @@ function RuleTable({
                   {onEdit && (
                     <button
                       onClick={() => onEdit(rule)}
-                      className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+                      className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
                       title="Edit recurring transaction"
                     >
                       <Pencil className="h-4 w-4" />
@@ -628,7 +628,7 @@ function RuleTable({
                   {onArchive && (
                     <button
                       onClick={() => onArchive(rule)}
-                      className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+                      className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
                       title="Archive recurring transaction"
                     >
                       <Archive className="h-4 w-4" />
@@ -1253,7 +1253,7 @@ export function Recurring() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {transferRules.map((rule) => (
-                    <tr key={rule.id} className="hover:bg-muted/30 transition-colors">
+                    <tr key={rule.id} className="hover:bg-muted transition-colors">
                       <td className="py-3 pr-4 font-medium truncate">{rule.description}</td>
                       <td className="py-3 pr-4 whitespace-nowrap text-muted-foreground">
                         {formatFrequency(rule.frequency, rule.interval)}
@@ -1278,14 +1278,14 @@ export function Recurring() {
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => { setEditingTransferRule(rule); setTransferModalOpen(true); }}
-                            className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+                            className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
                             title="Edit"
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
                           <button
                             onClick={() => setArchiveTransferTarget(rule)}
-                            className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+                            className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
                             title="Archive"
                           >
                             <Archive className="h-3.5 w-3.5" />
@@ -1442,7 +1442,7 @@ export function Recurring() {
                 <button
                   onClick={handleSwitchToArchive}
                   disabled={actionLoading}
-                  className="flex items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
+                  className="flex items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
                 >
                   <Archive className="h-3.5 w-3.5" />
                   Archive
@@ -1469,7 +1469,7 @@ export function Recurring() {
               {linkedExpenses === "loading" ? (
                 <p className="tp-caption italic">Loading linked transactions…</p>
               ) : totalLinked === 0 ? (
-                <p className="rounded-md bg-muted/50 px-3 py-2 text-xs">
+                <p className="rounded-md bg-muted px-3 py-2 text-xs">
                   No transactions are linked to this recurring transaction — deleting it will not affect any expenses.
                 </p>
               ) : (

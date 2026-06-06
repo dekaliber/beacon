@@ -127,7 +127,7 @@ function BudgetSettingsSheet({
   return (
     <>
       {open && (
-        <div className="fixed inset-0 z-[55] bg-black/40" onClick={onClose} />
+        <div className="fixed inset-0 z-[55] bg-black/50" onClick={onClose} />
       )}
       <div className={cn(
         "fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl bg-background border-t border-border transition-transform duration-300",
@@ -234,7 +234,7 @@ function ProjectionModal({ onClose }: { onClose: () => void }) {
       >
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 rounded-sm p-1 text-muted-foreground opacity-70 hover:opacity-100 hover:bg-accent"
+          className="absolute right-4 top-4 rounded-sm p-1 text-muted-foreground opacity-70 hover:opacity-100 hover:bg-muted"
         >
           <X className="h-4 w-4" />
         </button>
@@ -331,7 +331,7 @@ function ForecastRangeModal({ onClose }: { onClose: () => void }) {
       >
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 rounded-sm p-1 text-muted-foreground opacity-70 hover:opacity-100 hover:bg-accent"
+          className="absolute right-4 top-4 rounded-sm p-1 text-muted-foreground opacity-70 hover:opacity-100 hover:bg-muted"
         >
           <X className="h-4 w-4" />
         </button>
@@ -382,7 +382,7 @@ function Metric({
   plain?: boolean;
 }) {
   return (
-    <div className={plain ? "py-2.5" : "rounded-lg bg-muted/40 px-3 py-2.5"}>
+    <div className={plain ? "py-2.5" : "rounded-lg bg-muted px-3 py-2.5"}>
       <p className="tp-caption">{label}</p>
       <p className={`mt-0.5 tp-stat leading-tight whitespace-nowrap ${valueClass ?? ""}`}>{value}</p>
       {sub && <p className="mt-0.5 tp-caption">{sub}</p>}
@@ -1009,7 +1009,7 @@ function CategoryPacingTable({ outliers, year }: { outliers: CategoryOutliersDat
             return (
               <tr
                 key={item.categoryId ?? `__cat${i}__`}
-                className={`border-b border-border last:border-0 ${i % 2 === 0 ? "bg-muted/15" : ""}`}
+                className={`border-b border-border last:border-0 ${i % 2 === 0 ? "bg-muted" : ""}`}
               >
                 <td className="py-1.5 pr-2">
                   <span className="flex items-center gap-1.5 text-muted-foreground">
@@ -1095,7 +1095,7 @@ function CategoryAvgMonthlyGrid({ year, completedMonths }: { year: number; compl
       </CardHeader>
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
         {items.map((item: { categoryId: string; name: string; color: string; avgMonthly: number; trend: { avgByYear: number[] } | undefined }) => (
-          <div key={item.categoryId} className="bg-muted/40 px-3 py-2.5 border-t border-border">
+          <div key={item.categoryId} className="bg-muted px-3 py-2.5 border-t border-border">
             <div className="flex items-center gap-1.5 mb-1">
               <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
               <p className="truncate tp-caption">{item.name}</p>
@@ -1212,7 +1212,7 @@ export function MobileBudgets() {
           </button>
           <button
             onClick={() => setBudgetModalOpen(true)}
-            className="ml-1 rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            className="ml-1 rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             <Settings2 className="h-4.5 w-4.5" />
           </button>
@@ -1251,7 +1251,7 @@ export function MobileBudgets() {
           <div className="flex flex-col gap-2">
             <button
               onClick={toggleBreakdown}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-ink transition-colors"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-ink transition-colors"
             >
               <span>{showBreakdown ? "Hide" : "Show"} Personal & Joint breakdown</span>
               <ChevronDown

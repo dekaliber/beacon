@@ -241,7 +241,7 @@ function EditableTypeaheadCell({
                   <button
                     key={item.id}
                     type="button"
-                    className={`block w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                    className={`block w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted"}`}
                     onMouseDown={() => selectItem(item.id)}
                   >
                     {item.name}
@@ -390,7 +390,7 @@ function EditableCategoryCell({
                 <button
                   key={o.id}
                   type="button"
-                  className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted"}`}
                   onMouseDown={() => selectItem(o.id)}
                 >
                   {o.parentLabel && <span className="text-muted-foreground">{o.parentLabel} &gt; </span>}
@@ -538,7 +538,7 @@ function EditableTaxStatusCell({ value, onSave }: { value: string | null; onSave
             <button
               key={opt.value}
               type="button"
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-muted/50 ${opt.value === (value ?? "") ? "bg-primary/10" : ""}`}
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-muted ${opt.value === (value ?? "") ? "bg-primary/10" : ""}`}
               onClick={() => selectValue(opt.value)}
             >
               {opt.value ? <TaxStatusBadge taxClassification={opt.value} /> : <span className="text-muted-foreground italic">Not specified</span>}
@@ -987,7 +987,7 @@ export function IncomePage() {
         <div className="flex items-center gap-2">
           <Link
             to="/income/tax-estimator"
-            className="tp-nav-link hover:bg-accent hover:text-ink"
+            className="tp-nav-link hover:bg-muted hover:text-ink"
           >
             <Calculator className="h-4 w-4" />
             Tax Estimator
@@ -1116,7 +1116,7 @@ export function IncomePage() {
                           setSelectedIds((prev) => { const next = new Set(prev); allUpcomingIncomeIds.forEach((id) => next.delete(id)); return next; });
                         }
                       }}
-                      className="h-4 w-4 rounded border-border"
+                      className="h-4 w-4 rounded border-border align-text-top"
                     />
                   </th>
                   <ColumnHeader className="w-[70px] pb-3 pr-3">Date</ColumnHeader>
@@ -1137,7 +1137,7 @@ export function IncomePage() {
                         type="checkbox"
                         checked={selectedIds.has(income.id)}
                         onChange={(e) => handleUpcomingCheckboxChange(income.id, idx, e)}
-                        className="h-4 w-4 rounded border-border"
+                        className="h-4 w-4 rounded border-border align-text-top"
                       />
                     </td>
                     <td className="w-[70px] py-2 pr-3">
@@ -1178,7 +1178,7 @@ export function IncomePage() {
                       />
                     </td>
                     <td className="w-[40px] py-2 text-right">
-                      <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors">
+                      <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors">
                         <Pencil className="h-4 w-4" />
                       </button>
                     </td>
@@ -1197,7 +1197,7 @@ export function IncomePage() {
                 </div>
                 <div className="ml-4 flex items-center gap-2">
                   <span className="font-semibold text-up">+{formatCurrency(income.amount)}</span>
-                  <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"><Pencil className="h-4 w-4" /></button>
+                  <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"><Pencil className="h-4 w-4" /></button>
                 </div>
               </div>
             ))}
@@ -1224,7 +1224,7 @@ export function IncomePage() {
                             setSelectedIds((prev) => { const next = new Set(prev); incomes.forEach((i) => next.delete(i.id)); return next; });
                           }
                         }}
-                        className="h-4 w-4 rounded border-border"
+                        className="h-4 w-4 rounded border-border align-text-top"
                       />
                     </th>
                     <ColumnHeader className="w-[70px] cursor-pointer select-none pb-3 pr-3" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></ColumnHeader>
@@ -1239,13 +1239,13 @@ export function IncomePage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {incomes.map((income, idx) => (
-                    <tr key={income.id} className={`hover:bg-muted/50 ${selectedIds.has(income.id) ? "bg-primary/5" : !income.isCashReceived ? "bg-muted/40" : ""}`}>
+                    <tr key={income.id} className={`${selectedIds.has(income.id) ? "bg-primary/5" : !income.isCashReceived ? "bg-muted hover:bg-muted-hover" : "hover:bg-muted"}`}>
                       <td className="w-[44px] py-2 pr-2 text-center">
                         <input
                           type="checkbox"
                           checked={selectedIds.has(income.id)}
                           onChange={(e) => handleCheckboxChange(income.id, idx, e)}
-                          className="h-4 w-4 rounded border-border"
+                          className="h-4 w-4 rounded border-border align-text-top"
                         />
                       </td>
                       <td className={`w-[70px] py-2 pr-3 ${!income.isCashReceived ? "text-muted-foreground" : ""}`}>
@@ -1295,7 +1295,7 @@ export function IncomePage() {
                         />
                       </td>
                       <td className="w-[40px] py-2 text-right">
-                        <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors">
+                        <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors">
                           <Pencil className="h-4 w-4" />
                         </button>
                       </td>
@@ -1307,7 +1307,7 @@ export function IncomePage() {
 
             <div className="divide-y divide-border md:hidden">
               {incomes.map((income) => (
-                <div key={income.id} className={`flex items-center gap-2 py-3 ${!income.isCashReceived ? "bg-muted/40" : ""}`}>
+                <div key={income.id} className={`flex items-center gap-2 py-3 ${!income.isCashReceived ? "bg-muted" : ""}`}>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 truncate">
                       <p className={`truncate font-medium ${!income.isCashReceived ? "text-muted-foreground" : ""}`}>{income.category?.name ?? "—"}{income.source ? ` · ${income.source}` : ""}</p>
@@ -1325,7 +1325,7 @@ export function IncomePage() {
                   </div>
                   <div className="ml-2 flex items-center gap-2">
                     <span className={`font-semibold ${!income.isCashReceived ? "text-muted-foreground" : "text-up"}`}>+{formatCurrency(income.amount)}</span>
-                    <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"><Pencil className="h-4 w-4" /></button>
+                    <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"><Pencil className="h-4 w-4" /></button>
                   </div>
                 </div>
               ))}
@@ -1779,7 +1779,7 @@ function ImportModal({
           <p className="text-sm text-muted-foreground">
             Upload a CSV or TSV file with these columns in order:
           </p>
-          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono">
+          <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs font-mono">
             Date, Source, Category, Account, Amount
           </div>
           <p className="tp-caption">
@@ -1886,7 +1886,7 @@ function ImportModal({
 
       {step === "result" && result && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-4">
+          <div className="flex items-center gap-3 rounded-md border border-border bg-muted p-4">
             <CheckCircle2 className="h-6 w-6 text-up shrink-0" />
             <div>
               <p className="text-sm font-medium">

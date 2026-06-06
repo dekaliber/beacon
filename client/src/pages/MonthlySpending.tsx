@@ -379,7 +379,7 @@ export function MonthlySpending() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate("/budgets")}
-            className="rounded p-1 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            className="rounded p-1 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>

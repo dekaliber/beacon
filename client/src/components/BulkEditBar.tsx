@@ -373,7 +373,7 @@ export function BulkEditBar({
                     className={`block w-full px-3 py-1.5 text-left text-sm transition-colors ${
                       categoryId === o.id
                         ? "bg-primary/10 font-medium text-primary"
-                        : "hover:bg-muted/50"
+                        : "hover:bg-muted"
                     }`}
                   >
                     {o.id === null ? (
@@ -420,7 +420,7 @@ export function BulkEditBar({
                     type="button"
                     onMouseDown={() => setTaxStatusValue(opt.value)}
                     className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
-                      taxStatusValue === opt.value ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted/50"
+                      taxStatusValue === opt.value ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted"
                     }`}
                   >
                     {opt.value
@@ -473,7 +473,7 @@ export function BulkEditBar({
               {showTagCreate ? (
                 <button
                   type="button"
-                  className="block w-full px-3 py-1.5 text-left text-sm hover:bg-muted/50"
+                  className="block w-full px-3 py-1.5 text-left text-sm hover:bg-muted"
                   onMouseDown={handleCreateTag}
                   disabled={tagCreating}
                 >
@@ -488,7 +488,7 @@ export function BulkEditBar({
                     type="button"
                     onMouseDown={() => toggleTagId(t.id)}
                     className={`flex items-center gap-2 w-full px-3 py-1.5 text-left text-sm transition-colors ${
-                      tagIds.includes(t.id) ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted/50"
+                      tagIds.includes(t.id) ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted"
                     }`}
                   >
                     <span className={`h-4 w-4 flex-shrink-0 rounded border flex items-center justify-center ${tagIds.includes(t.id) ? "bg-primary border-primary" : "border-border"}`}>
@@ -593,7 +593,7 @@ export function BulkEditBar({
               type="button"
               onClick={() => setShowDeleteConfirm(false)}
               disabled={deleteLoading}
-              className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 transition-colors disabled:opacity-50"
+              className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
             >
               Cancel
             </button>

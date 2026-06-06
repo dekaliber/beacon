@@ -10,7 +10,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 const base =
   "inline-flex items-center justify-center gap-[6px] rounded-md font-normal whitespace-nowrap " +
   "h-9 px-[14px] text-13 " +
-  "border border-border bg-white/[.62] text-foreground " +
+  "border border-border bg-card text-foreground " +
   "backdrop-blur-[14px] backdrop-saturate-[130%] shadow-soft " +
   "transition-[background-color,transform,filter] duration-[120ms] " +
   "hover:bg-white/[.88] " +

@@ -144,7 +144,7 @@ function SettingsSheet({
     <>
       {open && (
         <div
-          className="fixed inset-0 z-[55] bg-black/40"
+          className="fixed inset-0 z-[55] bg-black/50"
           onClick={onClose}
         />
       )}
@@ -263,7 +263,7 @@ function MonthDetailSheet({
 
   return (
     <>
-      {open && <div className="fixed inset-0 z-[55] bg-black/40" onClick={onClose} />}
+      {open && <div className="fixed inset-0 z-[55] bg-black/50" onClick={onClose} />}
       <div className={cn(
         "fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl bg-background border-t border-border transition-transform duration-300 max-h-[85vh] flex flex-col",
         open ? "translate-y-0" : "translate-y-full",
@@ -276,7 +276,7 @@ function MonthDetailSheet({
             <p className="font-semibold">{label}</p>
             <StatValue as="p" className="tp-caption">{formatCurrency(total)} total</StatValue>
           </div>
-          <button onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
+          <button onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-muted" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -650,7 +650,7 @@ function DeleteConfirmSheet({
 
   return (
     <>
-      {open && <div className="fixed inset-0 z-[55] bg-black/40" onClick={onClose} />}
+      {open && <div className="fixed inset-0 z-[55] bg-black/50" onClick={onClose} />}
       <div className={cn(
         "fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl bg-background border-t border-border transition-transform duration-300",
         open ? "translate-y-0" : "translate-y-full",
@@ -787,7 +787,7 @@ export function MobileWithdrawals() {
           </button>
           <button
             onClick={() => setSettingsOpen(true)}
-            className="ml-1 rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            className="ml-1 rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             <Settings2 className="h-4.5 w-4.5" />
           </button>
@@ -860,7 +860,7 @@ export function MobileWithdrawals() {
           <button
             type="button"
             onClick={() => { setEditingEvent(null); setTransferOpen(true); }}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-muted-foreground hover:bg-accent/50 transition-colors border-b border-dashed"
+            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-muted-foreground hover:bg-muted transition-colors border-b border-dashed"
           >
             <Plus className="h-4 w-4" />
             <span>Record withdrawal transfer</span>
@@ -886,8 +886,8 @@ export function MobileWithdrawals() {
                 type="button"
                 onClick={() => setSelectedMonth(month)}
                 className={cn(
-                  "w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-accent/40 transition-colors",
-                  isCurrent && "bg-muted/30",
+                  "w-full flex items-center justify-between px-4 py-3.5 text-left hover:bg-muted transition-colors",
+                  isCurrent && "bg-muted",
                 )}
               >
                 <div className="min-w-0">

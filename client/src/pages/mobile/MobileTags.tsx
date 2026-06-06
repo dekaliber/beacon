@@ -116,7 +116,7 @@ function TagRow({
   return (
     <div>
       <div
-        className="flex cursor-pointer items-center gap-3 px-4 py-3 active:bg-accent/50"
+        className="flex cursor-pointer items-center gap-3 px-4 py-3 active:bg-muted"
         onClick={handleToggle}
       >
         {/* Color swatch + name */}
@@ -146,7 +146,7 @@ function TagRow({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onEdit(tag); }}
-          className="shrink-0 rounded p-1.5 text-muted-foreground/50 hover:bg-accent hover:text-muted-foreground"
+          className="shrink-0 rounded p-1.5 text-muted-foreground/50 hover:bg-muted hover:text-muted-foreground"
         >
           <Pencil className="h-3.5 w-3.5" />
         </button>
@@ -155,7 +155,7 @@ function TagRow({
 
       {/* Inline expense list */}
       {expanded && (
-        <div className="border-t border-border/50 bg-muted/30">
+        <div className="border-t border-border/50 bg-muted">
           {loading ? (
             <p className="py-4 text-center tp-caption">Loading…</p>
           ) : rows.length === 0 ? (
@@ -341,7 +341,7 @@ function MobileTagModal({
       <div className="fixed inset-0 z-[60] flex flex-col bg-background">
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
           <h2 className="tp-panel-title">Delete Tag</h2>
-          <button type="button" onClick={() => setConfirmDelete(false)} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
+          <button type="button" onClick={() => setConfirmDelete(false)} className="rounded-md p-2 text-muted-foreground hover:bg-muted">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -354,7 +354,7 @@ function MobileTagModal({
           <button
             type="button"
             onClick={() => setConfirmDelete(false)}
-            className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
+            className="flex-1 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
           >
             Cancel
           </button>
@@ -380,7 +380,7 @@ function MobileTagModal({
     <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
         <h2 className="tp-panel-title">{tag ? "Edit Tag" : "Add Tag"}</h2>
-        <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
+        <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-muted" aria-label="Close">
           <X className="h-5 w-5" />
         </button>
       </div>
@@ -447,7 +447,7 @@ function MobileTagModal({
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
+          className="flex-1 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
         >
           Cancel
         </button>

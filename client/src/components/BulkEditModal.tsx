@@ -197,7 +197,7 @@ export function BulkEditModal({
                     className={`rounded px-2 py-0.5 text-xs font-medium capitalize transition-colors ${
                       tagMode === mode
                         ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground hover:bg-muted/70"
+                        : "bg-muted text-muted-foreground hover:bg-muted-hover"
                     }`}
                   >
                     {mode}

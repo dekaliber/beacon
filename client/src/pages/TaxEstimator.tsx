@@ -737,7 +737,7 @@ export function TaxEstimatorPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
-            className="rounded p-1 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            className="rounded p-1 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
@@ -747,7 +747,7 @@ export function TaxEstimatorPage() {
           <button
             type="button"
             onClick={() => setAssumptionsOpen(true)}
-            className="tp-nav-link hover:bg-accent hover:text-ink"
+            className="tp-nav-link hover:bg-muted hover:text-ink"
           >
             <Settings className="h-4 w-4" />
             Tax Assumptions
@@ -912,7 +912,7 @@ export function TaxEstimatorPage() {
               </table>
 
               {/* Summary */}
-              <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-1.5 text-sm">
+              <div className="rounded-lg border border-border bg-muted p-4 space-y-1.5 text-sm">
                 {withheldNum > 0 && (
                   <div className="flex justify-between text-muted-foreground">
                     <span>Tax Withheld (W-2 / other)</span>
@@ -1052,7 +1052,7 @@ export function TaxEstimatorPage() {
               </table>
 
               {/* Summary */}
-              <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-1.5 text-sm">
+              <div className="rounded-lg border border-border bg-muted p-4 space-y-1.5 text-sm">
                 {caWithheldNum > 0 && (
                   <div className="flex justify-between text-muted-foreground">
                     <span>CA Tax Withheld</span>
@@ -1774,7 +1774,7 @@ export function TaxEstimatorPage() {
                 <button
                   type="button"
                   onClick={() => toggleSection(sectionKey)}
-                  className="flex w-full items-center gap-4 px-6 py-3 hover:bg-muted/40 transition-colors text-left"
+                  className="flex w-full items-center gap-4 px-6 py-3 hover:bg-muted transition-colors text-left"
                 >
                   <span className="flex-1 font-semibold">{section.categoryName}</span>
                   {(anyOrdinaryInSections || (anyCollectibleInSections && !showCollectibleSeparately)) && (
@@ -1853,7 +1853,7 @@ export function TaxEstimatorPage() {
                                   ? (split!.stcg + split!.ltcg + split!.collectibleLtcg)
                                   : getTaxableAmt(inc);
                                 return (
-                                  <tr key={inc.id} className="hover:bg-muted/30">
+                                  <tr key={inc.id} className="hover:bg-muted">
                                     <td className="py-1.5 text-muted-foreground">{formatDate(inc.date)}</td>
                                     <td className="py-1.5">
                                       <span className="flex items-center gap-1.5 flex-wrap">
@@ -1982,7 +1982,7 @@ export function TaxEstimatorPage() {
                 <button
                   type="button"
                   onClick={() => toggleSection(managedKey)}
-                  className="flex w-full items-center gap-4 px-6 py-3 hover:bg-muted/40 transition-colors text-left"
+                  className="flex w-full items-center gap-4 px-6 py-3 hover:bg-muted transition-colors text-left"
                 >
                   <span className="flex-1 font-semibold">Managed Accounts</span>
                   {(anyOrdinaryInSections || (anyCollectibleInSections && !showCollectibleSeparately)) && (
@@ -2032,7 +2032,7 @@ export function TaxEstimatorPage() {
                             const netST = (snap.shortTermGain ?? 0) - (snap.shortTermLoss ?? 0);
                             const netLT = (snap.longTermGain ?? 0) - (snap.longTermLoss ?? 0);
                             return (
-                              <tr key={snap.id} className="hover:bg-muted/30">
+                              <tr key={snap.id} className="hover:bg-muted">
                                 <td className="py-1.5">
                                   <span className="flex items-center gap-2">
                                     {snap.account.color && (

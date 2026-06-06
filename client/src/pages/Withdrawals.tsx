@@ -486,9 +486,9 @@ function WithdrawalRow({
   const isIncome = !event.isEditable;
 
   return (
-    <tr className={`group ${isIncome ? "bg-muted/40" : "bg-white"}`}>
+    <tr className="group bg-white hover:bg-muted">
       {/* Date */}
-      <td className="py-2.5 pl-4 pr-2 text-13 whitespace-nowrap">
+      <td className="py-2.5 pl-6 pr-2 text-13 whitespace-nowrap">
         <span className={isIncome ? "text-muted-foreground" : ""}>
           {formatDate(event.date)}
         </span>
@@ -541,7 +541,7 @@ function WithdrawalRow({
             <Link
               to="/income"
               title="Recorded in Income — click to view"
-              className="inline-flex items-center justify-center rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent opacity-0 group-hover:opacity-100 transition-opacity"
+              className="inline-flex items-center justify-center rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity"
             >
               <ExternalLink className="h-3.5 w-3.5" />
             </Link>
@@ -550,14 +550,14 @@ function WithdrawalRow({
           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               onClick={() => onEdit(event)}
-              className="rounded p-1 hover:bg-accent text-muted-foreground hover:text-foreground"
+              className="rounded p-1 hover:bg-muted text-muted-foreground hover:text-foreground"
               title="Edit transfer"
             >
               <Pencil className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={() => onDelete(event)}
-              className="rounded p-1 hover:bg-accent text-muted-foreground hover:text-down"
+              className="rounded p-1 hover:bg-muted text-muted-foreground hover:text-down"
               title="Delete transfer"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -607,7 +607,7 @@ function MonthSection({
       {/* Month header */}
       <button
         onClick={() => setCollapsed((c) => !c)}
-        className="w-full flex items-center pl-4 pr-2 py-2 bg-muted/50 border-b border-border hover:bg-muted/70 transition-colors text-left"
+        className="w-full flex items-center pl-6 pr-2 py-2 bg-muted border-b border-border hover:bg-muted-hover transition-colors text-left"
       >
         <span className="tp-panel-title flex-1">{label}</span>
         {rate !== null && (
@@ -779,13 +779,21 @@ export function WithdrawalsPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate("/investments")}
-            className="rounded p-1 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            className="rounded p-1 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
           <h2 className="tp-page-title">Withdrawals</h2>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setSettingsModalOpen(true)}
+            className="tp-nav-link hover:bg-muted hover:text-ink"
+            title="Withdrawal rate settings"
+          >
+            <Settings2 className="h-4 w-4" />
+            Settings
+          </button>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)} disabled={dataRange ? year <= dataRange.minYear : false}>
               <ChevronLeft className="h-4 w-4" />
@@ -803,7 +811,7 @@ export function WithdrawalsPage() {
       </div>
 
       {/* Summary row */}
-      <Card className="p-4">
+      <Card className="p-6">
         <div className="flex items-start gap-9 flex-wrap">
           <div>
             <SectionLabel className="mb-0.5">
@@ -836,15 +844,6 @@ export function WithdrawalsPage() {
               </p>
             )}
           </div>
-          <div className="flex-1" />
-          <button
-            onClick={() => setSettingsModalOpen(true)}
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            title="Withdrawal rate settings"
-          >
-            <Settings2 className="h-4 w-4" />
-            Settings
-          </button>
         </div>
         {effectiveDenominator === 0 && investmentAccountsData !== undefined && (
           <p className="mt-2 tp-caption">
@@ -878,9 +877,9 @@ export function WithdrawalsPage() {
       ) : (
         <Card className="p-0 overflow-hidden divide-y divide-border">
           {/* Table header */}
-          <SectionLabel as="div" className="hidden md:grid py-2 bg-muted/30"
+          <SectionLabel as="div" className="hidden md:grid py-2"
             style={{ gridTemplateColumns: "90px 130px 1fr 320px 110px 72px" }}>
-            <span className="pl-4 pr-2">Date</span>
+            <span className="pl-6 pr-2">Date</span>
             <span className="px-2">Type</span>
             <span className="px-2">Description</span>
             <span className="px-2">Account</span>

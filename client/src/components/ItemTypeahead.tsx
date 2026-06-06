@@ -191,7 +191,7 @@ export function ItemTypeahead({
                   key={item.id}
                   type="button"
                   tabIndex={-1}
-                  className={`block w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  className={`block w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted"}`}
                   onMouseDown={() => selectItem(item.id)}
                 >
                   {item.name}

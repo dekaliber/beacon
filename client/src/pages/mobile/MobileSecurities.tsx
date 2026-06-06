@@ -228,7 +228,7 @@ export function MobileSecurities() {
   const renderSection = (slug: string, ac: AssetClass | null, insts: Instrument[], isFirst = false) => (
     <div key={`section-${slug}`}>
       <div
-        className={cn("flex items-center gap-2 pl-[13px] pr-4 py-2 bg-muted/40 border-border", isFirst ? "border-b" : "border-y")}
+        className={cn("flex items-center gap-2 pl-[13px] pr-4 py-2 bg-muted border-border", isFirst ? "border-b" : "border-y")}
         style={{ borderLeft: `3px solid ${ac?.color ?? "transparent"}` }}
       >
         <SectionLabel as="span" className="text-foreground">
@@ -441,7 +441,7 @@ function EditOverlay({ instrument, allInstruments, assetClasses, onClose, onSave
         <button
           type="button"
           onClick={onClose}
-          className="rounded-md p-2 text-muted-foreground hover:bg-accent"
+          className="rounded-md p-2 text-muted-foreground hover:bg-muted"
         >
           <X className="h-5 w-5" />
         </button>
@@ -694,7 +694,7 @@ function InstrumentSelect({
           {value || <span className="text-muted-foreground">Select symbol…</span>}
         </button>
       )}
-      <button onClick={onRemove} className="shrink-0 rounded p-1 hover:bg-accent" title="Remove">
+      <button onClick={onRemove} className="shrink-0 rounded p-1 hover:bg-muted" title="Remove">
         <X className="h-3.5 w-3.5 text-muted-foreground" />
       </button>
       {editing && createPortal(
@@ -717,7 +717,7 @@ function InstrumentSelect({
                 key={inst.id}
                 onMouseDown={(e) => { e.preventDefault(); select(inst.primaryTicker); }}
                 className={cn(
-                  "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent",
+                  "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-muted",
                   i === focusIdx && "bg-accent",
                 )}
               >

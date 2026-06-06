@@ -195,7 +195,7 @@ export function MobileAccounts() {
                 "flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isDemoMode
                   ? "bg-warn-soft text-warn-deep"
-                  : "text-muted-foreground hover:bg-accent hover:text-ink"
+                  : "text-muted-foreground hover:bg-muted hover:text-ink"
               )}
             >
               {isDemoMode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -399,7 +399,7 @@ function MobileAccountModal({
       <div className="fixed inset-0 z-[60] flex flex-col bg-background">
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
           <h2 className="tp-panel-title">Hide Account</h2>
-          <button type="button" onClick={() => setHideWarning(null)} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
+          <button type="button" onClick={() => setHideWarning(null)} className="rounded-md p-2 text-muted-foreground hover:bg-muted">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -416,7 +416,7 @@ function MobileAccountModal({
             <button
               type="button"
               onClick={() => setHideWarning(null)}
-              className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
+              className="flex-1 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
             >
               Cancel
             </button>
@@ -439,7 +439,7 @@ function MobileAccountModal({
       {/* Header */}
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
         <h2 className="tp-panel-title">{account ? "Edit Account" : "Add Account"}</h2>
-        <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
+        <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-muted" aria-label="Close">
           <X className="h-5 w-5" />
         </button>
       </div>
@@ -723,7 +723,7 @@ function MobileAccountModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
+            className="flex-1 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
           >
             Cancel
           </button>

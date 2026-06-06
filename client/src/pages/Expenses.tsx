@@ -268,7 +268,7 @@ function VendorAutocomplete({
               key={v}
               type="button"
               tabIndex={-1}
-              className={`block w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+              className={`block w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted"}`}
               onMouseDown={() => selectItem(v)}
             >
               {v}
@@ -473,7 +473,7 @@ function TagTypeahead({
               <button
                 type="button"
                 tabIndex={-1}
-                className={`block w-full px-3 py-1.5 text-left text-13 ${focusIdx === 0 ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                className={`block w-full px-3 py-1.5 text-left text-13 ${focusIdx === 0 ? "bg-primary/10" : "hover:bg-muted"}`}
                 onMouseDown={handleCreate}
                 disabled={creating}
               >
@@ -487,7 +487,7 @@ function TagTypeahead({
                   key={t.id}
                   type="button"
                   tabIndex={-1}
-                  className={`flex items-center gap-2 w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  className={`flex items-center gap-2 w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted"}`}
                   onMouseDown={() => toggleTag(t.id)}
                 >
                   <span className={`h-4 w-4 flex-shrink-0 rounded border flex items-center justify-center ${selectedIds.includes(t.id) ? "bg-primary border-primary" : "border-border"}`}>
@@ -675,7 +675,7 @@ function EditableVendorCell({
             <button
               key={v}
               type="button"
-              className={`block w-full px-2 py-1 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+              className={`block w-full px-2 py-1 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted"}`}
               onMouseDown={() => commit(v)}
             >
               {v}
@@ -814,7 +814,7 @@ function EditableCategoryCell({
                 <button
                   key={o.id}
                   type="button"
-                  className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  className={`block w-full px-3 py-1.5 text-left text-sm ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted"}`}
                   onMouseDown={() => selectItem(o.id)}
                 >
                   {o.parentLabel && <span className="text-muted-foreground">{o.parentLabel} &gt; </span>}
@@ -944,7 +944,7 @@ function EditableAccountCell({
                 <button
                   key={a.id}
                   type="button"
-                  className={`block w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                  className={`block w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ? "bg-primary/10" : "hover:bg-muted"}`}
                   onMouseDown={() => selectItem(a.id)}
                 >
                   {a.name}
@@ -1857,14 +1857,14 @@ export function Expenses() {
           )}
           <Link
             to="/expenses/reimbursements"
-            className="tp-nav-link hover:bg-accent hover:text-ink"
+            className="tp-nav-link hover:bg-muted hover:text-ink"
           >
             <AlertCircle className="h-4 w-4" />
             Reimbursements
           </Link>
           <Link
             to="/expenses/tags"
-            className="tp-nav-link hover:bg-accent hover:text-ink"
+            className="tp-nav-link hover:bg-muted hover:text-ink"
           >
             <TagIcon className="h-4 w-4" />
             Tags
@@ -1987,7 +1987,7 @@ export function Expenses() {
                     <table className="w-full table-fixed text-13">
                       <thead>
                         <tr className="border-b border-border text-left text-muted-foreground">
-                          <th className="w-[44px] pb-3 pr-2 border-l-[3px] border-l-transparent text-center">
+                          <th className="w-[44px] pb-3 pr-2 text-center">
                             <input
                               type="checkbox"
                               ref={(el) => { if (el) { el.indeterminate = allUpcomingExpenseIds.some((id) => selectedIds.has(id)) && !allUpcomingExpenseIds.every((id) => selectedIds.has(id)); } }}
@@ -1999,7 +1999,7 @@ export function Expenses() {
                                   setSelectedIds((prev) => { const next = new Set(prev); allUpcomingExpenseIds.forEach((id) => next.delete(id)); return next; });
                                 }
                               }}
-                              className="h-4 w-4 rounded accent-primary"
+                              className="h-4 w-4 rounded accent-primary align-text-top"
                             />
                           </th>
                           <ColumnHeader className="w-[70px] pb-3 pr-3">Date</ColumnHeader>
@@ -2051,7 +2051,7 @@ export function Expenses() {
                           </div>
                           <div className="ml-4 flex items-center gap-2">
                             <span className={`font-semibold ${parseFloat(expense.amount) < 0 ? "text-up" : ""}`}>{formatCurrency(expense.amount)}</span>
-                            <button onClick={() => openEdit(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"><Pencil className="h-4 w-4" /></button>
+                            <button onClick={() => openEdit(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"><Pencil className="h-4 w-4" /></button>
                           </div>
                         </div>
                       ))}
@@ -2086,7 +2086,7 @@ export function Expenses() {
               <table className="w-full table-fixed text-13">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="w-[44px] pb-3 pr-2 border-l-[3px] border-l-transparent text-center">
+                    <th className="w-[44px] pb-3 pr-2 text-center">
                       <input
                         type="checkbox"
                         ref={(el) => { if (el) { el.indeterminate = allRegularExpenseIds.some((id) => selectedIds.has(id)) && !allRegularExpenseIds.every((id) => selectedIds.has(id)); } }}
@@ -2098,7 +2098,7 @@ export function Expenses() {
                             setSelectedIds((prev) => { const next = new Set(prev); allRegularExpenseIds.forEach((id) => next.delete(id)); return next; });
                           }
                         }}
-                        className="h-4 w-4 rounded accent-primary"
+                        className="h-4 w-4 rounded accent-primary align-text-top"
                       />
                     </th>
                     <ColumnHeader className="w-[70px] cursor-pointer select-none pb-3 pr-3" onClick={() => toggleSort("date")}>Date <SortIcon field="date" /></ColumnHeader>
@@ -2159,7 +2159,7 @@ export function Expenses() {
                         ? `+${formatCurrency(Math.abs(parseFloat(expense.amount)))}`
                         : formatCurrency(parseFloat(expense.amount))}
                     </span>
-                    <button onClick={() => openEdit(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"><Pencil className="h-4 w-4" /></button>
+                    <button onClick={() => openEdit(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"><Pencil className="h-4 w-4" /></button>
                   </div>
                 </div>
               ))}
@@ -2343,7 +2343,7 @@ function OffsetRow({
 
   return (
     <tr
-      className={`bg-muted/20 hover:bg-muted/30 ${upcomingClass} ${isDraggable ? "cursor-grab" : ""} ${isBeingDragged ? "opacity-40" : ""}`}
+      className={`hover:bg-muted ${upcomingClass} ${isDraggable ? "cursor-grab" : ""} ${isBeingDragged ? "opacity-40" : ""}`}
       onMouseDown={isDraggable ? (e) => onDragStart?.(e, offset, "offset") : undefined}
     >
       <td className={`relative w-[44px] py-2 pr-2 text-center ${isGrouped ? "before:absolute before:top-0 before:-bottom-px before:left-0 before:w-[3px] before:bg-primary/30" : ""}`}></td>
@@ -2391,7 +2391,7 @@ function OffsetRow({
         <EditableAmountCell value={offset.amount} onSave={(v) => onInlineUpdate(offset.id, "amount", v)} isOffset />
       </td>
       <td className="w-[60px] py-2 text-right">
-        <button onClick={() => onEdit(offset)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors">
+        <button onClick={() => onEdit(offset)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors">
           <Pencil className="h-3.5 w-3.5" />
         </button>
       </td>
@@ -2440,7 +2440,7 @@ function ExpenseRowWithOffsets({
     ? "bg-row-recurring hover:bg-row-recurring-hover"
     : expense.isReimbursementExpected && !isFullyReimbursed
     ? "bg-row-reimbursement hover:bg-row-reimbursement-hover"
-    : "hover:bg-muted/50";
+    : "hover:bg-muted";
 
   const upcomingClass = isUpcoming ? "italic opacity-60" : "";
   const dragTargetClass = isDragTarget ? "ring-2 ring-primary ring-inset bg-primary/10" : "";
@@ -2479,7 +2479,7 @@ function ExpenseRowWithOffsets({
             checked={isSelected ?? false}
             onChange={(e) => onToggleSelect?.(expense.id, e)}
             onClick={(e) => e.stopPropagation()}
-            className="h-4 w-4 rounded accent-primary"
+            className="h-4 w-4 rounded accent-primary align-text-top"
           />
         </td>
         <td className={`w-[70px] py-2 pr-3 ${isFullyOffset ? "text-ink-4" : (groupMeta && !groupMeta.isPrimary) ? "text-muted-foreground" : ""}`}>
@@ -2532,11 +2532,11 @@ function ExpenseRowWithOffsets({
         <td className="w-[60px] py-2 text-right">
           <div className="flex items-center justify-end gap-0.5">
             {parseFloat(expense.amount) >= 0 && (
-              <button onClick={() => onCreateOffset(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors" title="Add offset / reimbursement">
+              <button onClick={() => onCreateOffset(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors" title="Add offset / reimbursement">
                 <Undo2 className="h-3.5 w-3.5" />
               </button>
             )}
-            <button onClick={() => onEdit(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors">
+            <button onClick={() => onEdit(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors">
               <Pencil className="h-4 w-4" />
             </button>
           </div>
@@ -2776,7 +2776,7 @@ function ImportModal({
           <p className="text-sm text-muted-foreground">
             Upload a CSV or TSV file with these columns in order:
           </p>
-          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono">
+          <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs font-mono">
             Date, Description, Vendor, Category, Account, Amount
           </div>
           <p className="tp-caption">
@@ -2894,7 +2894,7 @@ function ImportModal({
 
       {step === "result" && result && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-4">
+          <div className="flex items-center gap-3 rounded-md border border-border bg-muted p-4">
             <CheckCircle2 className="h-6 w-6 text-up shrink-0" />
             <div>
               <p className="text-sm font-medium">
@@ -3114,7 +3114,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
     <Modal open={open} onClose={onClose} title={isOffsetMode ? "Add Offset" : expense ? "Edit Expense" : "Add Expense"}>
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
         {isOffsetMode && (
-          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+          <div className="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
             Offset for: <span className="font-medium text-foreground">{offsetParent.description}</span> ({formatCurrency(offsetParent.amount)})
           </div>
         )}
@@ -3358,7 +3358,7 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
         )}
 
         {showRecurringConfirm ? (
-          <div className="rounded-md border border-border bg-muted/30 p-4 space-y-3">
+          <div className="rounded-md border border-border bg-muted p-4 space-y-3">
             <p className="text-sm font-medium">Update Recurring Expense</p>
             <p className="text-sm text-muted-foreground">
               Would you like to update only this instance, or all future pending instances?

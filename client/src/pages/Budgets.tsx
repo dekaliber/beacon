@@ -208,7 +208,7 @@ function ProjectionModal({ onClose }: { onClose: () => void }) {
       >
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 rounded-sm p-1 text-muted-foreground opacity-70 hover:opacity-100 hover:bg-accent"
+          className="absolute right-4 top-4 rounded-sm p-1 text-muted-foreground opacity-70 hover:opacity-100 hover:bg-muted"
         >
           <X className="h-4 w-4" />
         </button>
@@ -305,7 +305,7 @@ function ForecastRangeModal({ onClose }: { onClose: () => void }) {
       >
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 rounded-sm p-1 text-muted-foreground opacity-70 hover:opacity-100 hover:bg-accent"
+          className="absolute right-4 top-4 rounded-sm p-1 text-muted-foreground opacity-70 hover:opacity-100 hover:bg-muted"
         >
           <X className="h-4 w-4" />
         </button>
@@ -366,7 +366,7 @@ function Metric({
   valueClass?: string;
 }) {
   return (
-    <div className="rounded-lg bg-muted/40 px-3 py-2.5">
+    <div className="rounded-lg bg-muted px-3 py-2.5">
       <p className="tp-caption">{label}</p>
       <p className={`mt-0.5 tp-stat leading-tight ${valueClass ?? ""}`}>{value}</p>
       {sub && <p className="mt-0.5 tp-caption">{sub}</p>}
@@ -605,7 +605,7 @@ function BudgetPanelCard({
       </BandLabel>
 
       {/* Row 1: Annual projection + forecast range */}
-      <div className="rounded-lg bg-muted/40 px-3 py-2.5">
+      <div className="rounded-lg bg-muted px-3 py-2.5">
         <div className="flex gap-4 items-start">
           {/* Left 1/3: projection metric */}
           <div className="w-1/3 shrink-0">
@@ -1129,7 +1129,7 @@ function CategoryAvgMonthlyGrid({ year, completedMonths }: { year: number; compl
       </CardHeader>
       <div className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
         {items.map((item) => (
-          <div key={item.categoryId} className="bg-muted/40 px-3 py-2.5 border-t border-border">
+          <div key={item.categoryId} className="bg-muted px-3 py-2.5 border-t border-border">
             <div className="flex items-center gap-1.5 mb-1">
               <span
                 className="inline-block h-2 w-2 shrink-0 rounded-full"
@@ -1244,14 +1244,14 @@ export function Budgets() {
         <div className="flex items-center gap-3">
           <Link
             to="/budgets/monthly-spending"
-            className="tp-nav-link hover:bg-accent hover:text-ink"
+            className="tp-nav-link hover:bg-muted hover:text-ink"
           >
             <CalendarDays className="h-4 w-4" />
             Monthly Spending
           </Link>
           <button
             onClick={() => setBudgetModalOpen(true)}
-            className="tp-nav-link hover:bg-accent hover:text-ink"
+            className="tp-nav-link hover:bg-muted hover:text-ink"
           >
             <Pencil className="h-4 w-4" />
             Edit Budget
@@ -1312,7 +1312,7 @@ export function Budgets() {
           {/* Personal & Joint breakdown toggle */}
           <button
             onClick={toggleBreakdown}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-ink transition-colors"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-ink transition-colors"
           >
             <span>{showBreakdown ? "Hide" : "Show"} Personal & Joint breakdown</span>
             <ChevronDown

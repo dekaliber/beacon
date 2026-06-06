@@ -226,7 +226,7 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
           <div className="flex items-center gap-1">
             <button
               onClick={() => { setValue(Math.abs(event.amount).toFixed(2)); setOpen(true); }}
-              className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+              className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
               title="Override statement amount"
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -238,7 +238,7 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
                   onDetailClick(rect.top + rect.height / 2);
                 }}
                 className={cn(
-                  "rounded p-1.5 hover:bg-accent transition-colors",
+                  "rounded p-1.5 hover:bg-muted transition-colors",
                   isDetailOpen ? "text-primary" : "text-muted-foreground/40 hover:text-muted-foreground",
                 )}
                 title="View statement transactions"
@@ -275,14 +275,14 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
           <button
             onClick={handleSave}
             disabled={saving}
-            className="rounded p-0.5 hover:bg-accent text-up"
+            className="rounded p-0.5 hover:bg-muted text-up"
             title="Save"
           >
             <Check className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={() => setOpen(false)}
-            className="rounded p-0.5 hover:bg-accent text-muted-foreground"
+            className="rounded p-0.5 hover:bg-muted text-muted-foreground"
             title="Cancel"
           >
             <X className="h-3.5 w-3.5" />
@@ -345,7 +345,7 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved, variant = "warning"
   }
 
   return (
-    <tr className={cn("border-b border-dashed", variant === "warning" ? "border-down-line bg-down-soft/50" : "border-border bg-muted/20")}>
+    <tr className={cn("border-b border-dashed", variant === "warning" ? "border-down-line bg-down-soft/50" : "border-border bg-muted")}>
       <td className="py-2 pl-4 pr-4">
         <DatePicker
           compact
@@ -383,14 +383,14 @@ function NewAdjustmentRow({ defaultDate, accountId, onSaved, variant = "warning"
           <button
             onClick={handleSave}
             disabled={saving || !amount || parseAmount(amount) <= 0}
-            className="rounded p-0.5 hover:bg-accent text-up disabled:opacity-40"
+            className="rounded p-0.5 hover:bg-muted text-up disabled:opacity-40"
             title="Save"
           >
             <Check className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={() => setOpen(false)}
-            className="rounded p-0.5 hover:bg-accent text-muted-foreground"
+            className="rounded p-0.5 hover:bg-muted text-muted-foreground"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -459,7 +459,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
           <div className="flex items-center gap-1 h-[26px]">
             <button
               onClick={() => setEditing(true)}
-              className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+              className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
               title="Edit"
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -522,14 +522,14 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="rounded p-0.5 hover:bg-accent text-up disabled:opacity-40"
+            className="rounded p-0.5 hover:bg-muted text-up disabled:opacity-40"
             title="Save"
           >
             <Check className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={() => setEditing(false)}
-            className="rounded p-0.5 hover:bg-accent text-muted-foreground"
+            className="rounded p-0.5 hover:bg-muted text-muted-foreground"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -631,7 +631,7 @@ function StatementDetailPanel({ event, rowMidY, onClose }: StatementDetailPanelP
           </SectionLabel>
           <button
             onClick={onClose}
-            className="rounded p-0.5 hover:bg-accent text-muted-foreground"
+            className="rounded p-0.5 hover:bg-muted text-muted-foreground"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -722,7 +722,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                 {event.type === "BALANCE_ADJUSTMENT" ? (
                   <AdjustmentEventRow event={event} onSaved={onRefetch} />
                 ) : (
-                  <tr className="group border-b border-border/50 hover:bg-muted/30 transition-colors last:border-b-0">
+                  <tr className="group border-b border-border/50 hover:bg-muted transition-colors last:border-b-0">
                     <td className="py-2 pl-4 pr-4 tp-fineprint whitespace-nowrap">{fmtDate(event.date)}</td>
                     <td className="py-2 pr-4">
                       <div className="flex items-center gap-2">
@@ -778,7 +778,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                               <>
                                 <button
                                   onClick={() => onEditTransfer?.(event)}
-                                  className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+                                  className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
                                   title="Edit transfer"
                                 >
                                   <Pencil className="h-3.5 w-3.5" />
@@ -786,7 +786,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
                                 {event.confidence === "PROJECTED" && (
                                   <button
                                     onClick={async () => { await confirmTransfer(event.transferId!); onRefetch(); }}
-                                    className="rounded p-1.5 text-muted-foreground/40 hover:text-up hover:bg-accent transition-colors"
+                                    className="rounded p-1.5 text-muted-foreground/40 hover:text-up hover:bg-muted transition-colors"
                                     title="Confirm transfer"
                                   >
                                     <SquareCheckBig className="h-3.5 w-3.5" />
@@ -1147,7 +1147,7 @@ export function CashFlow() {
           </div>
           <button
             onClick={() => setEditingBalance(account)}
-            className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors flex-shrink-0"
+            className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors flex-shrink-0"
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>

@@ -261,7 +261,7 @@ function AssetClassRow({
       {!isChild && (
         <button
           onClick={onToggle}
-          className={`rounded p-0.5 ${hasChildren ? "hover:bg-accent" : ""}`}
+          className={`rounded p-0.5 ${hasChildren ? "hover:bg-muted" : ""}`}
           disabled={!hasChildren}
         >
           {hasChildren ? (
@@ -317,13 +317,13 @@ function AssetClassRow({
         {!isChild && (
           <button
             onClick={onAddChild}
-            className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+            className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
             title="Add sub-class"
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
         )}
-        <button onClick={onEdit} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors" title="Edit">
+        <button onClick={onEdit} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors" title="Edit">
           <Pencil className="h-3.5 w-3.5" />
         </button>
       </div>
@@ -407,7 +407,7 @@ function AssetClassModal({ open, onClose, onSave, onDelete, editing, isChild }: 
         {showDerivedTarget && (
           <div>
             <label className="block text-xs font-medium mb-1">Target Allocation</label>
-            <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
               <span>{derivedVal != null ? `${derivedVal.toFixed(1)}%` : "—"}</span>
               <span className="opacity-60">∑ derived from sub-classes</span>
             </div>

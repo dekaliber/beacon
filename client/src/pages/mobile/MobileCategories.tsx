@@ -70,7 +70,7 @@ function CategorySection({
                 <button
                   type="button"
                   onClick={() => onAddChild(cat.id)}
-                  className="rounded p-1.5 hover:bg-accent"
+                  className="rounded p-1.5 hover:bg-muted"
                   aria-label="Add subcategory"
                 >
                   <Plus className="h-4 w-4 text-muted-foreground" />
@@ -78,7 +78,7 @@ function CategorySection({
                 <button
                   type="button"
                   onClick={() => onEdit(cat)}
-                  className="rounded pl-1.5 py-1.5 hover:bg-accent"
+                  className="rounded pl-1.5 py-1.5 hover:bg-muted"
                   aria-label="Edit category"
                 >
                   <Pencil className="h-4 w-4 text-muted-foreground/40" />
@@ -88,13 +88,13 @@ function CategorySection({
 
             {/* Children — tap to edit */}
             {isOpen && hasChildren && (
-              <div className="divide-y divide-border border-t border-border bg-muted/30">
+              <div className="divide-y divide-border border-t border-border bg-muted">
                 {cat.children!.map((child) => (
                   <button
                     key={child.id}
                     type="button"
                     onClick={() => onEdit(child)}
-                    className="flex w-full items-center gap-3 py-2.5 pl-12 pr-4 text-left hover:bg-muted/50"
+                    className="flex w-full items-center gap-3 py-2.5 pl-12 pr-4 text-left hover:bg-muted"
                   >
                     <span className="flex-1 text-sm">{child.name}</span>
                     {child.ignoreInBudget && <EyeOff className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />}
@@ -334,7 +334,7 @@ function MobileCategoryModal({
       <div className="fixed inset-0 z-[60] flex flex-col bg-background">
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
           <h2 className="tp-panel-title">Delete Category</h2>
-          <button type="button" onClick={() => setConfirmDelete(false)} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
+          <button type="button" onClick={() => setConfirmDelete(false)} className="rounded-md p-2 text-muted-foreground hover:bg-muted">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -379,7 +379,7 @@ function MobileCategoryModal({
             <button
               type="button"
               onClick={() => setConfirmDelete(false)}
-              className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
+              className="flex-1 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
             >
               Cancel
             </button>
@@ -406,7 +406,7 @@ function MobileCategoryModal({
     <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
         <h2 className="tp-panel-title">{title}</h2>
-        <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
+        <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-muted" aria-label="Close">
           <X className="h-5 w-5" />
         </button>
       </div>
@@ -497,7 +497,7 @@ function MobileCategoryModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
+            className="flex-1 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
           >
             Cancel
           </button>

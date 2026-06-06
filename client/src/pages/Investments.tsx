@@ -675,7 +675,7 @@ function AllocationCard({
           className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
             f.value === filter
               ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted"
           }`}
         >
           {f.label}
@@ -746,7 +746,7 @@ function AllocationCard({
         <div className="flex items-center gap-2">
           <button
             onClick={onRebalance}
-            className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             <Sliders className="h-3 w-3" />
             Rebalance
@@ -1260,7 +1260,7 @@ if (!displayAccounts) return <BeaconLoader />;
         <h2 className="tp-page-title">Investments</h2>
         <Link
           to="/investments/securities"
-          className="tp-nav-link hover:bg-accent hover:text-ink"
+          className="tp-nav-link hover:bg-muted hover:text-ink"
         >
           <Library className="h-4 w-4" />
           Securities

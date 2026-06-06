@@ -243,7 +243,7 @@ export function MobileDashboard() {
                         <button
                           key={opt.month}
                           onClick={() => { setYear(yr); setMonth(opt.month); setPickerOpen(false); }}
-                          className={`w-full text-left px-4 py-1 text-sm transition-colors ${isSelected ? "bg-accent font-medium" : "hover:bg-accent/60"}`}
+                          className={`w-full text-left px-4 py-1 text-sm transition-colors ${isSelected ? "bg-accent font-medium" : "hover:bg-muted"}`}
                         >
                           {opt.label}
                         </button>
@@ -678,7 +678,7 @@ export function MobileDashboard() {
                   return (
                     <tr
                       key={o.categoryId ?? `__cat${i}__`}
-                      className={`border-b border-border last:border-0 ${i % 2 === 0 ? "bg-muted/15" : ""}`}
+                      className={`border-b border-border last:border-0 ${i % 2 === 0 ? "bg-muted" : ""}`}
                     >
                       <td className="py-1.5 text-muted-foreground">{o.categoryName}</td>
                       <td className="py-1.5 text-right tabular-nums font-mono">{fmtWhole(o.currentAmount)}</td>

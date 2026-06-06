@@ -136,7 +136,7 @@ export function SecuritiesPage() {
       return (ai === -1 ? SLUG_ORDER.length : ai) - (bi === -1 ? SLUG_ORDER.length : bi);
     });
     return (
-      <tr key={instrument.id} className="hover:bg-muted/30">
+      <tr key={instrument.id} className="hover:bg-muted">
 
         {/* Symbol + linked equivalents */}
         <td className="py-2 pl-4 pr-2 align-middle">
@@ -219,7 +219,7 @@ export function SecuritiesPage() {
           <div className="flex items-center justify-end">
             <button
               onClick={() => setEditModal({ open: true, instrument })}
-              className="rounded p-1 hover:bg-accent"
+              className="rounded p-1 hover:bg-muted"
               title="Edit"
             >
               <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
@@ -240,7 +240,7 @@ export function SecuritiesPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate("/investments")}
-              className="rounded p-1 hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+              className="rounded p-1 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
@@ -275,7 +275,7 @@ export function SecuritiesPage() {
               <tbody className="divide-y divide-border">
                 {[
                   ...groups.flatMap(({ slug, ac, instruments: groupInsts }) => [
-                    <tr key={`section-${slug}`} className="bg-muted/40 border-b border-border">
+                    <tr key={`section-${slug}`} className="bg-muted border-b border-border">
                       <td
                         colSpan={5}
                         className="py-1.5 pl-3 pr-2"
@@ -290,7 +290,7 @@ export function SecuritiesPage() {
                   ]),
                   ...(unclassified.length > 0
                     ? [
-                        <tr key="section-unclassified" className="bg-muted/40 border-b border-border">
+                        <tr key="section-unclassified" className="bg-muted border-b border-border">
                           <td colSpan={5} className="py-1.5 pl-3 pr-2" style={{ borderLeft: "3px solid transparent" }}>
                             <SectionLabel as="span" className="text-foreground">
                               Not Classified
@@ -728,7 +728,7 @@ function InstrumentSelect({
           {value || <span className="text-muted-foreground">Select symbol…</span>}
         </button>
       )}
-      <button onClick={onRemove} className="shrink-0 rounded p-1 hover:bg-accent" title="Remove">
+      <button onClick={onRemove} className="shrink-0 rounded p-1 hover:bg-muted" title="Remove">
         <X className="h-3.5 w-3.5 text-muted-foreground" />
       </button>
       {editing && createPortal(
@@ -751,7 +751,7 @@ function InstrumentSelect({
                 key={inst.id}
                 onMouseDown={(e) => { e.preventDefault(); select(inst.primaryTicker); }}
                 className={cn(
-                  "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent",
+                  "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-muted",
                   i === focusIdx && "bg-accent",
                 )}
               >

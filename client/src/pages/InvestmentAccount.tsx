@@ -299,14 +299,14 @@ function TickerSearch({
         <button
           type="button"
           onClick={() => handleModeChange("stocks")}
-          className={`flex-1 px-3 py-1.5 font-medium transition-colors ${mode === "stocks" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-accent"}`}
+          className={`flex-1 px-3 py-1.5 font-medium transition-colors ${mode === "stocks" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
         >
           Stocks &amp; Funds
         </button>
         <button
           type="button"
           onClick={() => handleModeChange("crypto")}
-          className={`flex-1 px-3 py-1.5 font-medium transition-colors border-l border-border ${mode === "crypto" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-accent"}`}
+          className={`flex-1 px-3 py-1.5 font-medium transition-colors border-l border-border ${mode === "crypto" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
         >
           Crypto
         </button>
@@ -331,7 +331,7 @@ function TickerSearch({
             {results.map((r, i) => (
               <button
                 key={r.coinGeckoId ?? r.ticker}
-                className={`w-full flex items-center justify-between px-3 py-2 text-left hover:bg-accent transition-colors ${i === highlighted ? "bg-accent" : ""}`}
+                className={`w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted transition-colors ${i === highlighted ? "bg-accent" : ""}`}
                 onMouseEnter={() => setHighlighted(i)}
                 onClick={() => onSelect(r)}
               >
@@ -356,7 +356,7 @@ function TickerSearch({
               <button
                 onClick={handleResolve}
                 disabled={resolving}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-accent transition-colors disabled:opacity-60"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-muted transition-colors disabled:opacity-60"
               >
                 <Plus className="h-3.5 w-3.5 text-primary flex-shrink-0" />
                 <span className="text-sm">
@@ -634,7 +634,7 @@ function AddInvestmentModal({
       ) : (
         <form onSubmit={handleSave} noValidate className="space-y-5">
           {/* Ticker header card */}
-          <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/20">
+          <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted">
             <button
               type="button"
               onClick={resetToSearch}
@@ -674,7 +674,7 @@ function AddInvestmentModal({
           </div>
 
           {managed && (
-            <p className="tp-caption bg-muted/40 rounded px-3 py-2">
+            <p className="tp-caption bg-muted rounded px-3 py-2">
               Managed account: enter total shares and total cost basis — cost per share is calculated automatically. Short/long-term gain breakdown will come from the realized gains panel.
             </p>
           )}
@@ -876,7 +876,7 @@ function LotRow({
 
   return (
     <>
-      <tr className="tp-caption hover:bg-muted/30 group">
+      <tr className="tp-caption hover:bg-muted group">
         <td colSpan={2} className="py-2 pl-4 pr-2">
           {lot.acquiredDate ? formatDate(lot.acquiredDate) : <span className="italic text-muted-foreground/60">Managed</span>}
         </td>
@@ -893,7 +893,7 @@ function LotRow({
         </td>
         <td className="py-2 pr-3">
           <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => setEditing(true)} className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors">
+            <button onClick={() => setEditing(true)} className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors">
               <Pencil className="h-3.5 w-3.5" />
             </button>
             <button onClick={handleDeleteRequest} className="p-1.5 rounded text-muted-foreground/40 hover:text-down hover:bg-down/10 transition-colors">
@@ -1177,7 +1177,7 @@ function HoldingRow({
     <>
       <tr
         ref={rowRef}
-        className="hover:bg-muted/30 cursor-pointer border-b border-border"
+        className="hover:bg-muted cursor-pointer border-b border-border"
         onClick={onToggle}
       >
         <td className="py-3 pl-4 pr-2">
@@ -1218,7 +1218,7 @@ function HoldingRow({
               <Tooltip content="Record a sale or transfer">
                 <button
                   onClick={(e) => { e.stopPropagation(); onSell(); }}
-                  className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                  className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <Tag className="h-3.5 w-3.5" />
                 </button>
@@ -1235,7 +1235,7 @@ function HoldingRow({
             <Tooltip content="See lot details">
               <button
                 onClick={(e) => { e.stopPropagation(); onToggle(); }}
-                className="p-1.5 rounded text-muted-foreground hover:bg-accent transition-colors"
+                className="p-1.5 rounded text-muted-foreground hover:bg-muted transition-colors"
               >
                 {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               </button>
@@ -1248,7 +1248,7 @@ function HoldingRow({
         <>
           {holding.isManaged ? (
             /* Managed holding: show aggregate info + asset class editor instead of lots */
-            <tr className="border-b border-border bg-muted/10">
+            <tr className="border-b border-border bg-muted">
               <td colSpan={8} className="py-3 pl-4 pr-4">
                 <div className="flex flex-wrap items-start gap-6 text-sm">
                   <div>
@@ -1300,7 +1300,7 @@ function HoldingRow({
           ) : (
             <>
               {/* Lot sub-header: "Purchase Date" spans Symbol+Name so it never wraps */}
-              <tr className="bg-muted/20 text-11 text-muted-foreground uppercase tracking-[1px] font-mono">
+              <tr className="bg-muted text-11 text-muted-foreground uppercase tracking-[1px] font-mono">
                 <th colSpan={2} className="py-1.5 pl-4 pr-2 text-left font-medium whitespace-nowrap">
                   Purchase Date
                 </th>
@@ -1350,7 +1350,7 @@ function HoldingRow({
               )}
 
               {/* Group editor — always editable regardless of managed status */}
-              <tr className="border-b border-border bg-muted/5">
+              <tr className="border-b border-border bg-muted">
                 <td colSpan={8} className="py-2 pl-4 pr-4">
                   <div className="flex items-center gap-2 tp-caption">
                     <SectionLabel as="span">Group</SectionLabel>
@@ -1602,7 +1602,7 @@ function ImportInvestmentsModal({
           <p className="text-sm text-muted-foreground">
             Upload a CSV or TSV file with these columns in order:
           </p>
-          <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono">
+          <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs font-mono">
             Symbol, Purchase Date, Price, Quantity
           </div>
           <p className="tp-caption">
@@ -1735,7 +1735,7 @@ function ImportInvestmentsModal({
 
       {step === "result" && result && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-4">
+          <div className="flex items-center gap-3 rounded-md border border-border bg-muted p-4">
             <CheckCircle2 className="h-6 w-6 text-up shrink-0" />
             <div>
               <p className="text-sm font-medium">
@@ -1878,7 +1878,7 @@ function AddManualInvestmentModal({
         </div>
 
         {totalGain != null && (
-          <div className="rounded-md bg-muted/40 border border-border px-4 py-2.5 flex items-center justify-between text-sm">
+          <div className="rounded-md bg-muted border border-border px-4 py-2.5 flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Total Gain</span>
             <GainCell value={totalGain} />
           </div>
@@ -1927,7 +1927,7 @@ function ManualHoldingRow({
 
   return (
     <>
-      <tr className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+      <tr className="border-b border-border last:border-0 hover:bg-muted transition-colors">
         {/* Symbol — blank for manual entries */}
         <td className="py-3 pl-4 pr-2 text-13 text-muted-foreground">—</td>
         {/* Name */}
@@ -1953,7 +1953,7 @@ function ManualHoldingRow({
           <div className="flex items-center justify-end gap-1">
             <button
               onClick={onEdit}
-              className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+              className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
               title="Edit"
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -2079,7 +2079,7 @@ function StickyHoldingRow({
                 </colgroup>
                 <tbody>
                   <tr
-                    className="hover:bg-muted/30 cursor-pointer"
+                    className="hover:bg-muted cursor-pointer"
                     onClick={onToggle}
                   >
                     <td className="py-3 pl-4 pr-2">
@@ -2105,7 +2105,7 @@ function StickyHoldingRow({
                       <div className="flex items-center gap-1 justify-end">
                         <button
                           onClick={(e) => { e.stopPropagation(); onToggle(); }}
-                          className="p-1.5 rounded text-muted-foreground hover:bg-accent transition-colors"
+                          className="p-1.5 rounded text-muted-foreground hover:bg-muted transition-colors"
                           title={expanded ? "Collapse" : "Expand"}
                         >
                           {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
@@ -2345,14 +2345,14 @@ function SellModal({
             <button
               type="button"
               onClick={() => { setMode("sell"); setDestAccountId(""); setError(null); }}
-              className={`flex-1 py-2 transition-colors ${mode === "sell" ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-muted/60"}`}
+              className={`flex-1 py-2 transition-colors ${mode === "sell" ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-muted"}`}
             >
               Sell
             </button>
             <button
               type="button"
               onClick={() => { setMode("transfer"); setDestAccountId(""); setError(null); }}
-              className={`flex-1 py-2 transition-colors border-l border-border ${mode === "transfer" ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-muted/60"}`}
+              className={`flex-1 py-2 transition-colors border-l border-border ${mode === "transfer" ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-muted"}`}
             >
               Transfer to another account
             </button>
@@ -2367,14 +2367,14 @@ function SellModal({
             <button
               type="button"
               onClick={() => setSelectionMode("method")}
-              className={`flex-1 py-2 transition-colors ${selectionMode === "method" ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-muted/60"}`}
+              className={`flex-1 py-2 transition-colors ${selectionMode === "method" ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-muted"}`}
             >
               By cost basis method
             </button>
             <button
               type="button"
               onClick={() => setSelectionMode("lots")}
-              className={`flex-1 py-2 transition-colors border-l border-border ${selectionMode === "lots" ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-muted/60"}`}
+              className={`flex-1 py-2 transition-colors border-l border-border ${selectionMode === "lots" ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-muted"}`}
             >
               Specific lots
             </button>
@@ -2449,7 +2449,7 @@ function SellModal({
                       {sortedLots.map((lot) => {
                         const available = parseFloat(lot.quantity);
                         return (
-                          <tr key={lot.id} className="border-t border-border hover:bg-muted/20">
+                          <tr key={lot.id} className="border-t border-border hover:bg-muted">
                             <td className="py-2 px-3 tabular-nums font-mono">
                               {lot.acquiredDate ? formatDate(lot.acquiredDate) : "—"}
                             </td>
@@ -2581,7 +2581,7 @@ function SellModal({
           <div className="overflow-x-auto rounded border border-border">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-muted/40">
+                <tr className="bg-muted">
                   <th className="py-2 px-3 text-left tp-table-header">Lot Date</th>
                   <th className="py-2 px-3 text-right tp-table-header">Shares</th>
                   <th className="py-2 px-3 text-right tp-table-header">Cost/Share</th>
@@ -2620,7 +2620,7 @@ function SellModal({
           </div>
 
           {/* Sell — summary */}
-          <div className="rounded border border-border bg-muted/20 p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-13">
+          <div className="rounded border border-border bg-muted p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-13">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Gross Proceeds</span>
               <StatValue className="font-medium">{formatCurrency(preview!.grossProceeds)}</StatValue>
@@ -2671,7 +2671,7 @@ function SellModal({
       ) : (
         /* Transfer — confirm summary (no server round-trip needed, no taxable gain) */
         <div className="space-y-4">
-          <div className="rounded border border-border bg-muted/20 p-3 text-sm space-y-1">
+          <div className="rounded border border-border bg-muted p-3 text-sm space-y-1">
             <div className="flex justify-between">
               <span className="text-muted-foreground">From</span>
               <span className="font-medium">This account</span>
@@ -2700,7 +2700,7 @@ function SellModal({
             <div className="overflow-x-auto rounded border border-border">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-muted/40">
+                  <tr className="bg-muted">
                     <th className="py-2 px-3 text-left tp-table-header">Lot Date</th>
                     <th className="py-2 px-3 text-right tp-table-header">Shares</th>
                     <th className="py-2 px-3 text-right tp-table-header">Cost/Share</th>
@@ -2786,7 +2786,7 @@ function EditSaleActivityModal({
   return (
     <Modal open onClose={onClose} title="Edit Sale">
       {/* Explanation */}
-      <div className="flex gap-2.5 rounded-md bg-muted/60 border border-border p-3 mb-5">
+      <div className="flex gap-2.5 rounded-md bg-muted border border-border p-3 mb-5">
         <AlertCircle className="shrink-0 mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
         <p className="tp-caption leading-relaxed">
           Only <strong className="text-foreground">price per share</strong> and <strong className="text-foreground">fees</strong> can be corrected here.
@@ -2809,7 +2809,7 @@ function EditSaleActivityModal({
         ].map(({ label, value, mono }) => (
           <div key={label}>
             <label className="block text-xs font-medium mb-1">{label}</label>
-            <div className={`rounded border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground select-none ${mono ? "font-mono font-bold" : ""}`}>
+            <div className={`rounded border border-border bg-muted px-3 py-2 text-sm text-muted-foreground select-none ${mono ? "font-mono font-bold" : ""}`}>
               {value}
             </div>
           </div>
@@ -2844,7 +2844,7 @@ function EditSaleActivityModal({
 
       {/* Live recomputed preview */}
       {priceNum > 0 && (
-        <div className="rounded-md border border-border bg-muted/20 px-4 py-3 mb-4 grid grid-cols-3 gap-2 text-xs">
+        <div className="rounded-md border border-border bg-muted px-4 py-3 mb-4 grid grid-cols-3 gap-2 text-xs">
           <div>
             <p className="text-muted-foreground mb-0.5">Gross</p>
             <StatValue as="p" className="font-medium">{formatCurrency(grossProceeds)}</StatValue>
@@ -3071,7 +3071,7 @@ function ReviewDividendModal({
     <Modal open onClose={onClose} title="Review Pending Dividend">
       <div className="space-y-4">
         {/* Summary row — ticker left, ex-date right */}
-        <div className="flex items-center justify-between p-3 bg-muted/40 rounded-lg">
+        <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
           <p className="text-sm font-semibold">{dividend.ticker}</p>
           <p className="text-sm text-muted-foreground">Ex-date: {formatDate(dividend.exDate)}</p>
         </div>
@@ -3359,7 +3359,7 @@ function EditConfirmedDividendModal({
         </div>
       ) : dividendInfo ? (
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-3 bg-muted/40 rounded-lg">
+          <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
             <p className="text-sm font-semibold">{dividendInfo.ticker}</p>
             <p className="text-sm text-muted-foreground">Ex-date: {formatDate(dividendInfo.exDate)}</p>
           </div>
@@ -3494,7 +3494,7 @@ function PendingBuyModal({ pendingBuy, onClose, onSaved }: PendingBuyModalProps)
     <Modal open onClose={onClose} title={`Review Pending Buy — ${pendingBuy.ticker}`}>
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
         {/* Origin summary */}
-        <div className="rounded-md bg-muted/30 px-3 py-2 text-sm space-y-0.5">
+        <div className="rounded-md bg-muted px-3 py-2 text-sm space-y-0.5">
           <div className="flex items-center gap-3">
             <span className="font-medium text-foreground">{pos.ticker.symbol}</span>
             <span className="text-muted-foreground">${Number(pos.strikePrice).toFixed(2)} {pos.optionType} · {pos.contracts} contract{pos.contracts !== 1 ? "s" : ""}</span>
@@ -3731,7 +3731,7 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
       {step === "input" ? (
         <div className="space-y-4">
           {/* Origin summary */}
-          <div className="rounded-md bg-muted/30 px-3 py-2 text-sm space-y-0.5">
+          <div className="rounded-md bg-muted px-3 py-2 text-sm space-y-0.5">
             <div className="flex items-center gap-3">
               <span className="font-medium text-foreground">{pos.ticker.symbol}</span>
               <span className="text-muted-foreground">${Number(pos.strikePrice).toFixed(2)} Call · {pos.contracts} contract{pos.contracts !== 1 ? "s" : ""}</span>
@@ -3922,7 +3922,7 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
               <div className="overflow-x-auto rounded border border-border">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-muted/40">
+                    <tr className="bg-muted">
                       <th className="py-2 px-3 text-left tp-table-header">Lot Date</th>
                       <th className="py-2 px-3 text-right tp-table-header">Shares</th>
                       <th className="py-2 px-3 text-right tp-table-header">Cost/Share</th>
@@ -3959,7 +3959,7 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
               </div>
 
               {/* Summary */}
-              <div className="rounded border border-border bg-muted/20 p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-13">
+              <div className="rounded border border-border bg-muted p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-13">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Gross Proceeds</span>
                   <StatValue className="font-medium">{formatCurrency(preview!.grossProceeds)}</StatValue>
@@ -4106,7 +4106,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
         </div>
         <div className="p-4 space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-8 bg-muted/40 rounded animate-pulse" />
+            <div key={i} className="h-8 bg-muted rounded animate-pulse" />
           ))}
         </div>
       </Card>
@@ -4389,7 +4389,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
           <div className="overflow-x-auto">
             <table className="w-full text-13" style={{ tableLayout: "fixed", minWidth: "900px" }}>
               <thead>
-                <tr className="text-11 text-muted-foreground uppercase tracking-[1px] font-mono bg-muted/30 border-b border-border">
+                <tr className="text-11 text-muted-foreground uppercase tracking-[1px] font-mono bg-muted border-b border-border">
                   <th style={{ width: "110px" }} className="py-2 pl-4 pr-2 text-left font-medium">Date</th>
                   <th style={{ width: "90px" }} className="py-2 px-2 text-left font-medium">Type</th>
                   <th style={{ width: "80px" }} className="py-2 px-2 text-left font-medium">Symbol</th>
@@ -4429,7 +4429,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
                   const badgeLabel = isSale ? "Sale" : isPurchase ? "Purchase" : isTransfer ? "Transfer" : "Dividend";
 
                   return (
-                    <tr key={a.id} className="border-b border-border hover:bg-muted/20 group">
+                    <tr key={a.id} className="border-b border-border hover:bg-muted group">
                       <td className="py-3 pl-4 pr-2 tabular-nums font-mono">{formatDate(a.date)}</td>
                       <td className="py-3 px-2">
                         <span className={`inline-block rounded-full px-2 py-0.5 text-10 font-medium ${badgeClass}`}>
@@ -5079,7 +5079,7 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
 
       {parsed && (
         <div className="space-y-3">
-          <div className="rounded-md border border-border bg-muted/30 px-3 py-2.5 text-xs space-y-2">
+          <div className="rounded-md border border-border bg-muted px-3 py-2.5 text-xs space-y-2">
             <div className="flex flex-wrap gap-x-6 gap-y-1 text-muted-foreground">
               <span className="font-medium text-foreground">Ready to import</span>
               <span>{parsed.buyCount} buy{parsed.buyCount !== 1 ? "s" : ""}</span>
@@ -5385,7 +5385,7 @@ function GrowthChart({ accountId, isManaged, onImportClick, onDayGain }: { accou
             className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
               d === duration
                 ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
             }`}
           >
             {d}
@@ -5860,7 +5860,7 @@ export function InvestmentAccount() {
                         setCashInput(cashBalance != null ? String(cashBalance) : "");
                         setEditingCash(true);
                       }}
-                      className="rounded p-0.5 hover:bg-accent transition-colors"
+                      className="rounded p-0.5 hover:bg-muted transition-colors"
                       aria-label="Edit cash balance"
                     >
                       <Pencil className="h-3 w-3 text-muted-foreground" />
@@ -5884,7 +5884,7 @@ export function InvestmentAccount() {
                     <button
                       type="submit"
                       disabled={savingCash}
-                      className="rounded p-1.5 hover:bg-accent transition-colors"
+                      className="rounded p-1.5 hover:bg-muted transition-colors"
                       aria-label="Save"
                     >
                       <Check className="h-3.5 w-3.5 text-up" />
@@ -5892,7 +5892,7 @@ export function InvestmentAccount() {
                     <button
                       type="button"
                       onClick={() => setEditingCash(false)}
-                      className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+                      className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
                       aria-label="Cancel"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -6058,7 +6058,7 @@ export function InvestmentAccount() {
               <div className="overflow-x-auto">
                 <table className="w-full" style={{ tableLayout: "fixed", minWidth: "1080px" }}>
                   <thead>
-                    <tr className="text-11 text-muted-foreground uppercase tracking-[1px] font-mono bg-muted/30 border-b border-border">
+                    <tr className="text-11 text-muted-foreground uppercase tracking-[1px] font-mono bg-muted border-b border-border">
                       <th
                         style={{ width: "80px" }}
                         className="py-2 pl-4 pr-2 text-left font-medium"
@@ -6095,7 +6095,7 @@ export function InvestmentAccount() {
                             groupManuals.reduce((s, m) => s + (m.totalCost ?? 0), 0);
                           const groupGainPct = groupCost > 0 ? (groupGain / groupCost) * 100 : null;
                           return [
-                            <tr key={`group-${group}`} className="bg-muted/40 border-y border-border">
+                            <tr key={`group-${group}`} className="bg-muted border-y border-border">
                               <td colSpan={5} className="py-1.5 pl-4 pr-2">
                                 <SectionLabel as="span" className="text-foreground">
                                   {group || "Other"}
@@ -6199,7 +6199,7 @@ export function InvestmentAccount() {
                           className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
                             y === snapshotYear
                               ? "bg-primary text-primary-foreground"
-                              : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                              : "text-muted-foreground hover:text-foreground hover:bg-muted"
                           }`}
                         >
                           {y}

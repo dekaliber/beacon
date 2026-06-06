@@ -34,7 +34,7 @@ export function Modal({ open, onClose, title, children, className, contentClassN
       <div className={cn("flex w-full max-w-lg flex-col rounded-lg bg-background shadow-xl max-h-[90vh] overflow-hidden", className)}>
         <div className="flex items-center justify-between px-6 pt-6 pb-4">
           <h2 className="tp-card-title">{title}</h2>
-          <button onClick={onClose} className="rounded-md p-1 hover:bg-accent">
+          <button onClick={onClose} className="rounded-md p-1 hover:bg-muted">
             <X className="h-5 w-5" />
           </button>
         </div>

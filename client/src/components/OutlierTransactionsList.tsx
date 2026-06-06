@@ -49,7 +49,7 @@ export function OutlierTransactionsList({ categories }: OutlierTransactionsListP
                 {cat.transactions.map((t) => (
                   <div
                     key={t.id}
-                    className={`flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-muted/40 ${t.isPending ? "opacity-60" : ""}`}
+                    className={`flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-muted ${t.isPending ? "opacity-60" : ""}`}
                   >
                     <span
                       className="shrink-0 inline-flex h-4 w-4 items-center justify-center rounded text-[9px] font-bold leading-none text-white"

@@ -354,7 +354,7 @@ export function DatePicker({
             <button
               type="button"
               onClick={() => setMode("months")}
-              className="flex items-center gap-1 rounded px-1.5 py-1 text-15 font-semibold text-ink hover:bg-muted/50"
+              className="flex items-center gap-1 rounded px-1.5 py-1 text-15 font-semibold text-ink hover:bg-muted"
             >
               {format(viewDate, "MMMM yyyy")}
               <ChevronDown className="h-3.5 w-3.5 opacity-60" />
@@ -364,7 +364,7 @@ export function DatePicker({
                 type="button"
                 aria-label="Previous month"
                 onClick={() => setViewDate((d) => addMonths(d, -1))}
-                className="rounded p-1 text-ink-2 hover:bg-muted/50"
+                className="rounded p-1 text-ink-2 hover:bg-muted"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
@@ -372,7 +372,7 @@ export function DatePicker({
                 type="button"
                 aria-label="Next month"
                 onClick={() => setViewDate((d) => addMonths(d, 1))}
-                className="rounded p-1 text-ink-2 hover:bg-muted/50"
+                className="rounded p-1 text-ink-2 hover:bg-muted"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -407,8 +407,8 @@ export function DatePicker({
                       : dayDisabled
                         ? "cursor-not-allowed text-ink-4 opacity-40"
                         : inMonth
-                          ? "text-ink hover:bg-muted/50"
-                          : "text-ink-4 hover:bg-muted/50",
+                          ? "text-ink hover:bg-muted"
+                          : "text-ink-4 hover:bg-muted",
                     isToday && !isSelected && "ring-1 ring-inset ring-primary/40",
                   )}
                 >
@@ -456,7 +456,7 @@ export function DatePicker({
               type="button"
               aria-label="Previous year"
               onClick={() => setViewDate((d) => addMonths(d, -12))}
-              className="rounded p-1 text-ink-2 hover:bg-muted/50"
+              className="rounded p-1 text-ink-2 hover:bg-muted"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -467,7 +467,7 @@ export function DatePicker({
               type="button"
               aria-label="Next year"
               onClick={() => setViewDate((d) => addMonths(d, 12))}
-              className="rounded p-1 text-ink-2 hover:bg-muted/50"
+              className="rounded p-1 text-ink-2 hover:bg-muted"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -487,7 +487,7 @@ export function DatePicker({
                     "rounded-md py-2 text-13 transition-colors",
                     isCur
                       ? "bg-primary font-medium text-primary-foreground"
-                      : "text-ink hover:bg-muted/50",
+                      : "text-ink hover:bg-muted",
                   )}
                 >
                   {format(setMonth(viewDate, m), "MMM")}

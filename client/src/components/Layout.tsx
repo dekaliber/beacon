@@ -71,7 +71,7 @@ function KeyboardShortcutsButton() {
           "relative flex items-center justify-center rounded-md p-2 transition-colors",
           open
             ? "bg-primary text-primary-foreground"
-            : "text-muted-foreground hover:bg-accent hover:text-ink"
+            : "text-muted-foreground hover:bg-muted hover:text-ink"
         )}
         aria-label="Keyboard shortcuts"
       >
@@ -171,7 +171,7 @@ function NotificationBell() {
           "relative flex items-center justify-center rounded-md p-2 transition-colors",
           open
             ? "bg-primary text-primary-foreground"
-            : "text-muted-foreground hover:bg-accent hover:text-ink"
+            : "text-muted-foreground hover:bg-muted hover:text-ink"
         )}
         aria-label="Notifications"
       >
@@ -204,7 +204,7 @@ function NotificationBell() {
                   <button
                     key={a.accountId}
                     onClick={() => handleItemClick(a.accountId)}
-                    className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
+                    className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
                   >
                     <div>
                       <p className="font-medium">{a.accountName}</p>
@@ -271,7 +271,7 @@ export function UserMenu() {
                   "tp-nav-link w-full rounded-none",
                   isActive
                     ? "bg-primary text-primary-foreground"
-                    : "hover:bg-accent hover:text-ink"
+                    : "hover:bg-muted hover:text-ink"
                 )
               }
             >

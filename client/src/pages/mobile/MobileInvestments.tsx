@@ -150,7 +150,7 @@ function TaxSheet({
     <>
       <div
         className={cn(
-          "fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200",
+          "fixed inset-0 z-[55] bg-black/50 transition-opacity duration-200",
           open ? "opacity-100" : "pointer-events-none opacity-0",
         )}
         onClick={onClose}
@@ -167,7 +167,7 @@ function TaxSheet({
             <h2 className="tp-panel-title">Tax Buckets</h2>
             <p className="tp-caption">of invested value</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
+          <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-muted">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -233,7 +233,7 @@ function WithdrawalSheet({
     <>
       <div
         className={cn(
-          "fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200",
+          "fixed inset-0 z-[55] bg-black/50 transition-opacity duration-200",
           open ? "opacity-100" : "pointer-events-none opacity-0",
         )}
         onClick={onClose}
@@ -247,7 +247,7 @@ function WithdrawalSheet({
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
           <h2 className="tp-panel-title">Monthly Withdrawals</h2>
-          <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
+          <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-muted">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -295,7 +295,7 @@ function WithdrawalSheet({
 
           {/* Selected month detail */}
           {selectedData ? (
-            <div className="mt-4 rounded-lg bg-muted/50 px-4 py-3 space-y-1.5">
+            <div className="mt-4 rounded-lg bg-muted px-4 py-3 space-y-1.5">
               <p className="text-sm font-semibold">{selectedData.label} {currentYear}</p>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Withdrawn</span>
@@ -445,7 +445,7 @@ function RebalanceModal({
       {/* Header */}
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
         <h2 className="tp-panel-title">Rebalancing Simulator</h2>
-        <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
+        <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-muted">
           <X className="h-5 w-5" />
         </button>
       </div>
@@ -961,7 +961,7 @@ export function MobileInvestments() {
                   </div>
                   <button
                     onClick={() => setShowRebalance(true)}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-muted-foreground border border-border hover:bg-muted/60 transition-colors"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-muted-foreground border border-border hover:bg-muted transition-colors"
                   >
                     <Sliders className="h-3 w-3" />
                     Rebalance

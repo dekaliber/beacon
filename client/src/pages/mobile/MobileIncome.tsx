@@ -127,7 +127,7 @@ function CategoryPicker({ categories, initialId = "" }: { categories: Category[]
           <div className="max-h-52 overflow-y-auto">
             <button
               type="button"
-              className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-sm hover:bg-accent ${!selectedId ? "font-medium text-primary" : "text-muted-foreground"}`}
+              className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-sm hover:bg-muted ${!selectedId ? "font-medium text-primary" : "text-muted-foreground"}`}
               onClick={() => handleSelect("")}
             >
               No category
@@ -137,7 +137,7 @@ function CategoryPicker({ categories, initialId = "" }: { categories: Category[]
               <button
                 key={o.id}
                 type="button"
-                className={`flex w-full items-center justify-between px-3 py-2 text-left hover:bg-accent ${selectedId === o.id ? "bg-primary/5" : ""}`}
+                className={`flex w-full items-center justify-between px-3 py-2 text-left hover:bg-muted ${selectedId === o.id ? "bg-primary/5" : ""}`}
                 onClick={() => handleSelect(o.id)}
               >
                 <span className="flex flex-col">
@@ -251,7 +251,7 @@ function MobileIncomeModal({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-md p-2 text-muted-foreground hover:bg-accent"
+          className="rounded-md p-2 text-muted-foreground hover:bg-muted"
           aria-label="Close"
         >
           <X className="h-5 w-5" />
@@ -425,7 +425,7 @@ function MobileIncomeModal({
           <button
             type="button"
             onClick={() => { onClose(); setConfirmDelete(false); }}
-            className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
+            className="flex-1 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
           >
             Cancel
           </button>
@@ -460,7 +460,7 @@ function IncomeRow({
 
   return (
     <div
-      className={`py-3 px-4 ${upcoming ? "italic opacity-60" : notReceived ? "bg-muted/40" : ""} ${onTap ? "cursor-pointer active:opacity-60" : ""}`}
+      className={`py-3 px-4 ${upcoming ? "italic opacity-60" : notReceived ? "bg-muted" : ""} ${onTap ? "cursor-pointer active:opacity-60" : ""}`}
       onClick={onTap}
     >
       <div className="flex items-start justify-between gap-3">
@@ -631,7 +631,7 @@ function MobileIncomeFilterSheet({
       {/* Backdrop */}
       <div
         className={cn(
-          "fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200",
+          "fixed inset-0 z-[55] bg-black/50 transition-opacity duration-200",
           open ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={onClose}
@@ -653,7 +653,7 @@ function MobileIncomeFilterSheet({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-2 text-muted-foreground hover:bg-accent"
+            className="rounded-md p-2 text-muted-foreground hover:bg-muted"
             aria-label="Close filters"
           >
             <X className="h-5 w-5" />
@@ -784,7 +784,7 @@ function MobileIncomeFilterSheet({
                           key={o.id}
                           type="button"
                           onClick={() => toggleCategory(o.id)}
-                          className={`flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-accent ${sel ? "bg-primary/5" : ""}`}
+                          className={`flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-muted ${sel ? "bg-primary/5" : ""}`}
                         >
                           <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${sel ? "border-primary bg-primary" : "border-border"}`}>
                             {sel && <Check className="h-2.5 w-2.5 text-white" />}
@@ -869,7 +869,7 @@ function MobileIncomeFilterSheet({
             <button
               type="button"
               onClick={() => { onReset(); onClose(); }}
-              className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-13 font-medium text-muted-foreground transition-colors hover:bg-white/[.88]"
+              className="flex-1 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-13 font-medium text-muted-foreground transition-colors hover:bg-white/[.88]"
             >
               Reset to defaults
             </button>
@@ -1126,14 +1126,11 @@ export function MobileIncome() {
               Upcoming
             </SectionLabel>
             <div className="relative">
-              <div className="-mx-4 divide-y divide-border">
+              <div className={`-mx-4 divide-y divide-border ${!upcomingExpanded && hiddenUpcomingCount > 0 ? "fade-bottom-mask" : ""}`}>
                 {visibleUpcoming.map((income) => (
                   <IncomeRow key={income.id} income={income} upcoming />
                 ))}
               </div>
-              {!upcomingExpanded && hiddenUpcomingCount > 0 && (
-                <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-muted/30 to-transparent" />
-              )}
             </div>
             {hiddenUpcomingCount > 0 && (
               <button

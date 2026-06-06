@@ -90,7 +90,7 @@ export function MobileReimbursements() {
                   <button
                     type="button"
                     onClick={() => openResolve(expense.id)}
-                    className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent transition-colors"
+                    className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted transition-colors"
                   >
                     Resolve
                   </button>
@@ -104,7 +104,7 @@ export function MobileReimbursements() {
       {/* Backdrop */}
       <div
         className={cn(
-          "fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200",
+          "fixed inset-0 z-[55] bg-black/50 transition-opacity duration-200",
           confirming ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={closeSheet}
@@ -120,7 +120,7 @@ export function MobileReimbursements() {
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
           <h2 className="tp-panel-title">Mark as resolved?</h2>
-          <button type="button" onClick={closeSheet} className="rounded-md p-2 text-muted-foreground hover:bg-accent">
+          <button type="button" onClick={closeSheet} className="rounded-md p-2 text-muted-foreground hover:bg-muted">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -132,7 +132,7 @@ export function MobileReimbursements() {
             <button
               type="button"
               onClick={closeSheet}
-              className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-3 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
+              className="flex-1 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-3 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
             >
               Cancel
             </button>

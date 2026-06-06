@@ -185,7 +185,7 @@ export function MobileAssetClasses() {
                       <button
                         type="button"
                         onClick={() => { openAdd(topClass.id); setExpandedIds((p) => new Set([...p, topClass.id])); }}
-                        className="rounded p-1.5 hover:bg-accent"
+                        className="rounded p-1.5 hover:bg-muted"
                         aria-label="Add sub-class"
                       >
                         <Plus className="h-4 w-4 text-muted-foreground" />
@@ -193,7 +193,7 @@ export function MobileAssetClasses() {
                       <button
                         type="button"
                         onClick={() => openEdit(topClass)}
-                        className="rounded pl-1.5 py-1.5 hover:bg-accent"
+                        className="rounded pl-1.5 py-1.5 hover:bg-muted"
                         aria-label="Edit"
                       >
                         <Pencil className="h-4 w-4 text-muted-foreground/40" />
@@ -203,7 +203,7 @@ export function MobileAssetClasses() {
 
                   {/* Children — tap to edit */}
                   {expanded && hasChildren && (
-                    <div className="divide-y divide-border border-t border-border bg-muted/30">
+                    <div className="divide-y divide-border border-t border-border bg-muted">
                       {topClass.children!.map((child) => {
                         const childTarget = child.target ? parseFloat(child.target.targetPct) : null;
                         return (
@@ -211,7 +211,7 @@ export function MobileAssetClasses() {
                             key={child.id}
                             type="button"
                             onClick={() => openEdit(child)}
-                            className="flex w-full items-center gap-3 py-2.5 pl-12 pr-4 text-left hover:bg-muted/50"
+                            className="flex w-full items-center gap-3 py-2.5 pl-12 pr-4 text-left hover:bg-muted"
                           >
                             <span className="flex-1 text-sm truncate">{child.name}</span>
                             <span className={cn(
@@ -330,7 +330,7 @@ function MobileAssetClassModal({
             </span>
           )}
         </div>
-        <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
+        <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-muted" aria-label="Close">
           <X className="h-5 w-5" />
         </button>
       </div>
@@ -358,7 +358,7 @@ function MobileAssetClassModal({
           {showDerivedTarget && (
             <div>
               <label className="mb-1.5 block text-sm font-medium">Target Allocation</label>
-              <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2.5 text-sm text-muted-foreground">
                 <span>{derivedVal != null ? `${derivedVal.toFixed(1)}%` : "—"}</span>
                 <span className="opacity-60">∑ derived from sub-classes</span>
               </div>
@@ -437,7 +437,7 @@ function MobileAssetClassModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
+            className="flex-1 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
           >
             Cancel
           </button>

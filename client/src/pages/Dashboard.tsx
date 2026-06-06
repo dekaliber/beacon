@@ -279,7 +279,7 @@ export function Dashboard() {
                         <button
                           key={opt.month}
                           onClick={() => { setYear(yr); setMonth(opt.month); setPickerOpen(false); }}
-                          className={`w-full text-left px-4 py-1 text-sm transition-colors ${isSelected ? "bg-accent font-medium" : "hover:bg-accent/60"}`}
+                          className={`w-full text-left px-4 py-1 text-sm transition-colors ${isSelected ? "bg-accent font-medium" : "hover:bg-muted"}`}
                         >
                           {opt.label}
                         </button>

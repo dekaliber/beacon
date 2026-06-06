@@ -162,7 +162,7 @@ function EditBalanceSheet({
       {/* Backdrop */}
       <div
         className={cn(
-          "fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200",
+          "fixed inset-0 z-[55] bg-black/50 transition-opacity duration-200",
           account ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={onClose}
@@ -183,7 +183,7 @@ function EditBalanceSheet({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-2 text-muted-foreground hover:bg-accent"
+            className="rounded-md p-2 text-muted-foreground hover:bg-muted"
             aria-label="Close"
           >
             <X className="h-5 w-5" />
@@ -232,7 +232,7 @@ function EditBalanceSheet({
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[.88] disabled:opacity-50"
+              className="flex-1 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[.88] disabled:opacity-50"
             >
               Cancel
             </button>
@@ -317,7 +317,7 @@ function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved,
     <>
       <div
         className={cn(
-          "fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200",
+          "fixed inset-0 z-[55] bg-black/50 transition-opacity duration-200",
           isOpen ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={onClose}
@@ -332,7 +332,7 @@ function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved,
 
         <div className="flex items-center justify-between px-4 pb-3 shrink-0 border-b border-border">
           <h2 className="tp-panel-title">{isEditing ? "Edit Cash Injection" : "Add Cash Injection"}</h2>
-          <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
+          <button type="button" onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-muted" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -413,7 +413,7 @@ function AddCashInjectionSheet({ open, accountId, defaultDate, onClose, onSaved,
               type="button"
               onClick={() => { onClose(); setConfirmDelete(false); }}
               disabled={saving}
-              className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[.88] disabled:opacity-50"
+              className="flex-1 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[.88] disabled:opacity-50"
             >
               Cancel
             </button>
@@ -500,7 +500,7 @@ function CCPaymentSheet({
       {/* Backdrop */}
       <div
         className={cn(
-          "fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200",
+          "fixed inset-0 z-[55] bg-black/50 transition-opacity duration-200",
           event ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={onClose}
@@ -526,7 +526,7 @@ function CCPaymentSheet({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-2 text-muted-foreground hover:bg-accent"
+            className="rounded-md p-2 text-muted-foreground hover:bg-muted"
             aria-label="Close"
           >
             <X className="h-5 w-5" />
@@ -610,7 +610,7 @@ function CCPaymentSheet({
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[.88] disabled:opacity-50"
+              className="flex-1 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[.88] disabled:opacity-50"
             >
               Cancel
             </button>
@@ -660,7 +660,7 @@ function BankingTile({
         </div>
         <button
           onClick={onEdit}
-          className="rounded p-1 hover:bg-accent flex-shrink-0"
+          className="rounded p-1 hover:bg-muted flex-shrink-0"
         >
           <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
         </button>
@@ -725,7 +725,7 @@ function MobileEventsLedger({
                   type: "button" as const,
                   onClick: () => isCCPayment ? onCCPaymentTap?.(event) : onInjectionTap?.(event),
                   className: cn(
-                    "w-full text-left border-b border-border/50 px-4 py-2.5 active:bg-muted/40 transition-colors",
+                    "w-full text-left border-b border-border/50 px-4 py-2.5 active:bg-muted transition-colors",
                     isInjection && "bg-warn-soft/50 active:bg-warn-soft/60",
                   ),
                 }

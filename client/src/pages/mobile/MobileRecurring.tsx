@@ -414,7 +414,7 @@ function RuleDetailSheet({
     <>
       <div
         className={cn(
-          "fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200",
+          "fixed inset-0 z-[55] bg-black/50 transition-opacity duration-200",
           open ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={onClose}
@@ -440,7 +440,7 @@ function RuleDetailSheet({
                 <span className={`tp-stat ${parseFloat(rule.amount) < 0 ? "text-up" : ""}`}>
                   {displayAmount(rule.amount)}
                 </span>
-                <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-accent" aria-label="Close">
+                <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted" aria-label="Close">
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -468,7 +468,7 @@ function RuleDetailSheet({
               <div className="flex gap-3">
                 <button
                   onClick={() => { onClose(); setTimeout(() => onArchive(rule), 200); }}
-                  className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors"
                 >
                   <Archive className="h-4 w-4" />
                   Archive
@@ -573,7 +573,7 @@ function EditRuleModal({
       {/* Header */}
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
         <h2 className="tp-panel-title">Edit Recurring</h2>
-        <button onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
+        <button onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-muted" aria-label="Close">
           <X className="h-5 w-5" />
         </button>
       </div>
@@ -659,7 +659,7 @@ function EditRuleModal({
             Delete
           </button>
           <div className="flex gap-2">
-            <button type="button" onClick={onClose} disabled={saving} className="rounded-md border border-border px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent transition-colors disabled:opacity-50">
+            <button type="button" onClick={onClose} disabled={saving} className="rounded-md border border-border px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50">
               Cancel
             </button>
             <button type="button" onClick={handleSave} disabled={saving} className="rounded-md bg-gradient-to-b from-primary to-primary-deep px-4 py-2.5 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95 disabled:opacity-50">
@@ -700,7 +700,7 @@ function ConfirmSheet({
   useBodyScrollLock(open);
   return (
     <>
-      <div className={cn("fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200", open ? "opacity-100" : "pointer-events-none opacity-0")} onClick={onCancel} />
+      <div className={cn("fixed inset-0 z-[55] bg-black/50 transition-opacity duration-200", open ? "opacity-100" : "pointer-events-none opacity-0")} onClick={onCancel} />
       <div className={cn("fixed bottom-0 left-0 right-0 z-[60] flex flex-col bg-background rounded-t-2xl shadow-xl transition-transform duration-250 ease-out", open ? "translate-y-0" : "translate-y-full")}>
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="px-4 pt-2 pb-4 space-y-3">
@@ -708,7 +708,7 @@ function ConfirmSheet({
           <div className="text-sm text-muted-foreground">{description}</div>
           {extra}
           <div className="flex gap-3 pt-1">
-            <button onClick={onCancel} disabled={loading} className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors disabled:opacity-50">
+            <button onClick={onCancel} disabled={loading} className="flex-1 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors disabled:opacity-50">
               Cancel
             </button>
             <button
@@ -757,7 +757,7 @@ function DeleteRuleSheet({
 
   return (
     <>
-      <div className={cn("fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200", open ? "opacity-100" : "pointer-events-none opacity-0")} onClick={onCancel} />
+      <div className={cn("fixed inset-0 z-[55] bg-black/50 transition-opacity duration-200", open ? "opacity-100" : "pointer-events-none opacity-0")} onClick={onCancel} />
       <div className={cn("fixed bottom-0 left-0 right-0 z-[60] flex flex-col bg-background rounded-t-2xl shadow-xl transition-transform duration-250 ease-out max-h-[85vh] overflow-hidden", open ? "translate-y-0" : "translate-y-full")}>
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
 
@@ -773,7 +773,7 @@ function DeleteRuleSheet({
           {linkedExpenses === "loading" ? (
             <p className="tp-caption italic">Loading linked transactions…</p>
           ) : totalLinked === 0 ? (
-            <p className="rounded-md bg-muted/50 px-3 py-2 text-xs">
+            <p className="rounded-md bg-muted px-3 py-2 text-xs">
               No linked transactions — deleting will not affect any expenses.
             </p>
           ) : (
@@ -817,10 +817,10 @@ function DeleteRuleSheet({
 
           {/* Actions */}
           <div className="flex gap-2 pt-1">
-            <button onClick={onCancel} disabled={loading} className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors disabled:opacity-50">
+            <button onClick={onCancel} disabled={loading} className="flex-1 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors disabled:opacity-50">
               Cancel
             </button>
-            <button onClick={onArchive} disabled={loading} className="flex items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2.5 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50">
+            <button onClick={onArchive} disabled={loading} className="flex items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50">
               <Archive className="h-3.5 w-3.5" />
               Archive
             </button>
@@ -910,7 +910,7 @@ function TransferRuleModal({
     <div className="fixed inset-0 z-[60] flex flex-col bg-background">
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
         <h2 className="tp-panel-title">{rule ? "Edit Recurring Transfer" : "New Recurring Transfer"}</h2>
-        <button onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Close">
+        <button onClick={onClose} className="rounded-md p-2 text-muted-foreground hover:bg-muted" aria-label="Close">
           <X className="h-5 w-5" />
         </button>
       </div>
@@ -991,7 +991,7 @@ function TransferRuleModal({
 
       <div className="shrink-0 border-t border-border p-4">
         <div className="flex gap-3">
-          <button type="button" onClick={onClose} disabled={saving} className="flex-1 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors disabled:opacity-50">
+          <button type="button" onClick={onClose} disabled={saving} className="flex-1 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors disabled:opacity-50">
             Cancel
           </button>
           <button type="submit" form="transfer-rule-form" disabled={saving} className="flex-1 rounded-md bg-gradient-to-b from-primary to-primary-deep py-2.5 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95 disabled:opacity-50">
@@ -1021,7 +1021,7 @@ function TransferDetailSheet({
 
   return (
     <>
-      <div className={cn("fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200", open ? "opacity-100" : "pointer-events-none opacity-0")} onClick={onClose} />
+      <div className={cn("fixed inset-0 z-[55] bg-black/50 transition-opacity duration-200", open ? "opacity-100" : "pointer-events-none opacity-0")} onClick={onClose} />
       <div className={cn("fixed bottom-0 left-0 right-0 z-[60] flex flex-col bg-background rounded-t-2xl shadow-xl transition-transform duration-250 ease-out", open ? "translate-y-0" : "translate-y-full")}>
         <div className="mx-auto mt-3 mb-6 h-1 w-10 rounded-full bg-muted-foreground/30" />
         {rule && (
@@ -1033,7 +1033,7 @@ function TransferDetailSheet({
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <span className="tp-stat">{formatCurrency(parseFloat(rule.amount))}</span>
-                <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-accent" aria-label="Close">
+                <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted" aria-label="Close">
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -1062,7 +1062,7 @@ function TransferDetailSheet({
 
             <div className="shrink-0 border-t border-border p-4">
               <div className="flex gap-3">
-                <button onClick={() => { onClose(); setTimeout(() => onArchive(rule), 200); }} className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border bg-white/[.62] shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors">
+                <button onClick={() => { onClose(); setTimeout(() => onArchive(rule), 200); }} className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border bg-card shadow-soft backdrop-blur-sm backdrop-saturate-[130%] py-2.5 text-sm font-medium text-muted-foreground hover:bg-white/[.88] transition-colors">
                   <Archive className="h-4 w-4" />
                   Archive
                 </button>
@@ -1245,7 +1245,7 @@ export function MobileRecurring() {
                           ref={rule.id === highlightId ? highlightRef : undefined}
                           onClick={() => setDetailRule(rule)}
                           className={cn(
-                            "flex cursor-pointer items-center gap-3 px-4 py-3 active:bg-accent transition-colors",
+                            "flex cursor-pointer items-center gap-3 px-4 py-3 active:bg-muted transition-colors",
                             rule.id === highlightId && "bg-warn-soft"
                           )}
                         >
@@ -1335,7 +1335,7 @@ export function MobileRecurring() {
                   <div
                     key={rule.id}
                     onClick={() => setTransferDetailRule(rule)}
-                    className="flex cursor-pointer items-start gap-3 px-4 py-3 active:bg-accent transition-colors"
+                    className="flex cursor-pointer items-start gap-3 px-4 py-3 active:bg-muted transition-colors"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium text-sm">{rule.description}</p>

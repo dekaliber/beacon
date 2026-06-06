@@ -58,7 +58,7 @@ export function ReimbursementsPage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {expenses.map((expense) => (
-                    <tr key={expense.id} className="hover:bg-muted/50">
+                    <tr key={expense.id} className="hover:bg-muted">
                       <td className="py-3 pl-3">{formatDate(expense.date)}</td>
                       <td className="py-3">
                         <div className="flex items-center gap-2">
@@ -77,7 +77,7 @@ export function ReimbursementsPage() {
                       <td className="py-3 pr-3 text-right">
                         <button
                           onClick={() => handleResolve(expense.id)}
-                          className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent"
+                          className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
                         >
                           Resolve
                         </button>
@@ -108,7 +108,7 @@ export function ReimbursementsPage() {
                     <span className="font-semibold text-down">-{formatCurrency(expense.amount)}</span>
                     <button
                       onClick={() => handleResolve(expense.id)}
-                      className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent"
+                      className="rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"
                     >
                       Resolve
                     </button>
@@ -141,7 +141,7 @@ export function ReimbursementsPage() {
         <div className="mt-6 flex gap-3">
           <button
             onClick={() => setResolvingId(null)}
-            className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-accent"
+            className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
           >
             Cancel
           </button>

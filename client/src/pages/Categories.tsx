@@ -167,10 +167,10 @@ function CategoryList({ categories, expanded, icon: Icon, onToggleExpand, onAddC
 
         return (
           <div key={cat.id}>
-            <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50">
+            <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted">
               <button
                 onClick={() => hasChildren && onToggleExpand(cat.id)}
-                className={`rounded p-0.5 ${hasChildren ? "hover:bg-accent" : ""}`}
+                className={`rounded p-0.5 ${hasChildren ? "hover:bg-muted" : ""}`}
                 disabled={!hasChildren}
               >
                 {hasChildren ? (
@@ -198,14 +198,14 @@ function CategoryList({ categories, expanded, icon: Icon, onToggleExpand, onAddC
               <div className="flex gap-1">
                 <button
                   onClick={() => onAddChild(cat.id)}
-                  className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+                  className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
                   title="Add subcategory"
                 >
                   <Plus className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => onEdit(cat)}
-                  className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+                  className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
                 >
                   <Pencil className="h-4 w-4" />
                 </button>
@@ -213,15 +213,15 @@ function CategoryList({ categories, expanded, icon: Icon, onToggleExpand, onAddC
             </div>
 
             {isOpen && hasChildren && (
-              <div className="border-t border-border bg-muted/30">
+              <div className="border-t border-border bg-muted">
                 {cat.children!.map((child) => (
-                  <div key={child.id} className="flex items-center gap-3 py-2 pl-12 pr-4 hover:bg-muted/50">
+                  <div key={child.id} className="flex items-center gap-3 py-2 pl-12 pr-4 hover:bg-muted">
                     <span className="flex-1 text-sm">{child.name}</span>
                     {child.ignoreInBudget && <span title="Ignored in budget" className="inline-flex flex-shrink-0"><EyeOff className="h-3.5 w-3.5 text-ink-4" /></span>}
                     <div className="flex gap-1">
                       <button
                         onClick={() => onEdit(child)}
-                        className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+                        className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>

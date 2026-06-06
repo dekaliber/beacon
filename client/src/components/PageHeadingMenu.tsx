@@ -62,7 +62,7 @@ export function PageHeadingMenu({
               key={item.to}
               to={item.to}
               onClick={() => setOpen(false)}
-              className="flex items-center gap-2.5 px-4 py-3 text-sm text-foreground hover:bg-accent transition-colors"
+              className="flex items-center gap-2.5 px-4 py-3 text-sm text-foreground hover:bg-muted transition-colors"
             >
               {item.icon}
               {item.label}

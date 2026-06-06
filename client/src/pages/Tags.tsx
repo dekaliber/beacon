@@ -161,7 +161,7 @@ export function TagsPage() {
                               )}
                               <button
                                 onClick={() => handleToggleExpand(tag)}
-                                className="rounded p-1 hover:bg-accent"
+                                className="rounded p-1 hover:bg-muted"
                                 title={isExpanded ? "Hide expenses" : "Show expenses"}
                               >
                                 {isExpanded
@@ -171,7 +171,7 @@ export function TagsPage() {
                               </button>
                               <button
                                 onClick={() => { setEditing(tag); setModalOpen(true); }}
-                                className="rounded p-1 hover:bg-accent"
+                                className="rounded p-1 hover:bg-muted"
                               >
                                 <Pencil className="h-3.5 w-3.5" />
                               </button>

@@ -115,6 +115,7 @@
   --color-primary-foreground: #FFFFFF;
   --color-secondary: #F1F5F9;
   --color-muted: #F8FAFC;
+  --color-muted-hover: var(--color-secondary); /* #F1F5F9 — one rung darker; hover step for muted surfaces */
   --color-muted-foreground: var(--color-ink-3);
   --color-accent: #F1F5F9;
   --color-border: oklch(0.16 0.020 265 / 0.07);
@@ -596,4 +597,12 @@ svg.lucide {
 .tp-nav-link[aria-current="page"] {
   font-weight: 500;
   color: var(--color-ink);
+}
+
+/* Bottom scroll-fade — masks the element's OWN alpha (not a color overlay), so the
+   real gradient backdrop shows through instead of a solid band that won't match it.
+   Used on collapsed mobile lists that have hidden rows below the fold. */
+.fade-bottom-mask {
+  -webkit-mask-image: linear-gradient(to top, transparent 0, #000 4rem);
+          mask-image: linear-gradient(to top, transparent 0, #000 4rem);
 }

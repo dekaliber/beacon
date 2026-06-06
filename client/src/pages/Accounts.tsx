@@ -158,7 +158,7 @@ export function Accounts() {
                     <EyeOff className="h-3.5 w-3.5 text-ink-4" />
                   </span>
                 )}
-                <button onClick={() => openEdit(account)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors">
+                <button onClick={() => openEdit(account)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors">
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -202,7 +202,7 @@ export function Accounts() {
               "tp-nav-link",
               isDemoMode
                 ? "bg-warn-soft text-warn-deep hover:bg-warn-soft"
-                : "hover:bg-accent hover:text-ink"
+                : "hover:bg-muted hover:text-ink"
             )}
           >
             {isDemoMode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
