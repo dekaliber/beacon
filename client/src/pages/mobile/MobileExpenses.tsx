@@ -1516,7 +1516,7 @@ export function MobileExpenses() {
   );
   const { data: accounts } = useApi(() => getAccounts({ includeHidden: true }), [], "accounts");
   const { data: categories } = useApi(() => getFlatCategories("EXPENSE"), [], "categories-EXPENSE");
-  const { data: vendors } = useApi(() => getExpenseVendors(), [], "expense-vendors");
+  const { data: vendors, refetch: refetchVendors } = useApi(() => getExpenseVendors(), [], "expense-vendors");
   const { data: tags, refetch: refetchTags } = useApi(() => getTags(), [], "tags");
 
   const eligibleAccounts = useMemo(
@@ -1620,7 +1620,8 @@ export function MobileExpenses() {
     loadingMoreRef.current = false;
     setRefreshKey((k) => k + 1);
     refetchUpcoming();
-  }, [refetchUpcoming]);
+    refetchVendors();
+  }, [refetchUpcoming, refetchVendors]);
 
   if (loadingExpenses && allExpenses.length === 0) return <BeaconLoader />;
 
