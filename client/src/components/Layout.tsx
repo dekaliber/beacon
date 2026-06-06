@@ -297,9 +297,12 @@ export function UserMenu() {
 export function Layout() {
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen pt-4">
       {/* Floating glass topbar */}
-      <header className="sticky top-4 z-50 mx-auto mt-4 max-w-7xl px-2">
+      {/* Gap lives in the wrapper's pt-4 (not the header's margin): a child margin-top
+          here collapses up through the min-h-screen div and adds ~16px of phantom
+          scroll on top of 100vh. Padding stays inside the border-box height. */}
+      <header className="sticky top-4 z-50 mx-auto max-w-7xl px-2">
         {/* backdrop-blur kept here (unlike body Cards): the nav is a sticky layer with
             real content scrolling behind it, so the frost is load-bearing. See the
             no-backdrop-blur-on-cards note — if the modal compositing bar resurfaces on
