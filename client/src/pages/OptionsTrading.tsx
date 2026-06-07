@@ -2872,6 +2872,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
 
  // Summary stats for the footer modules
  let totalLivePnl: number | null = null;
+ let totalCurrentPremium: number | null = null;
  let cspITMCapital = 0;
  let ccITMCapital = 0;
  for (const p of positions) {
@@ -2879,6 +2880,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  if (curPrem != null) {
  const pnl = (p.premiumPerShare - curPrem) * 100 * p.contracts - (p.feesOpen ?? 0);
  totalLivePnl = (totalLivePnl ?? 0) + pnl;
+ totalCurrentPremium = (totalCurrentPremium ?? 0) + curPrem * 100 * p.contracts;
  }
  const stockNow = livePrices.get(p.ticker.symbol) ?? null;
  if (stockNow != null) {
@@ -3063,9 +3065,9 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  </tbody>
  </table>
  </div>
- <div className="grid grid-cols-2 divide-x divide-border/50">
+ <div className="grid grid-cols-3 gap-3 mt-4">
  {/* Capital at Risk of Assignment */}
- <div className="flex flex-col gap-0.5 px-4 pt-4">
+ <div className="flex flex-col gap-0.5 rounded-lg border border-border px-4 py-4">
  <span className="tp-eyebrow">Capital at Risk of Assignment</span>
  {hasCARData ? (
  cspITMCapital === 0 && ccITMCapital === 0 ? (
@@ -3090,8 +3092,17 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <span className="tp-numeric text-muted-foreground">—</span>
  )}
  </div>
+ {/* Total Current Premium */}
+ <div className="flex flex-col gap-0.5 rounded-lg border border-border px-4 py-4">
+ <span className="tp-eyebrow">Total Current Premium</span>
+ {totalCurrentPremium != null ? (
+ <span className="tp-numeric font-medium">${fmtUSD(totalCurrentPremium)}</span>
+ ) : (
+ <span className="tp-numeric text-muted-foreground">—</span>
+ )}
+ </div>
  {/* Total Live P&L */}
- <div className="flex flex-col gap-0.5 px-4 pt-4">
+ <div className="flex flex-col gap-0.5 rounded-lg border border-border px-4 py-4">
  <span className="tp-eyebrow">Total Live P&L</span>
  {totalLivePnl != null ? (
  <span className={cn("tp-numeric font-medium", totalLivePnl >= 0 ? "text-up" : "text-down")}>
