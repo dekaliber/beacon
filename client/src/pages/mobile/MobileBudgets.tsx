@@ -224,9 +224,9 @@ function PaceBar({ normalizedYTD, budget, pctElapsed }: { normalizedYTD: number;
 // ── Projection explanation modal ──────────────────────────────────────────────
 
 function ProjectionModal({ onClose }: { onClose: () => void }) {
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       <div
@@ -314,7 +314,8 @@ function ProjectionModal({ onClose }: { onClose: () => void }) {
           </section>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
