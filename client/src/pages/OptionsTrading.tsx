@@ -30,6 +30,7 @@ import {
  runOptionsScreener,
  getActiveAssignedHoldings,
  getRealizedDispositions,
+ getOptionsBenchmark,
  type OptionsPosition,
  type OptionsTicker,
  type OptionsPositionGroup,
@@ -2873,9 +2874,11 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  // Summary stats for the footer modules
  let totalLivePnl: number | null = null;
  let totalCurrentPremium: number | null = null;
+ let totalPremiumPendingClose = 0; // net premium collected on still-open positions
  let cspITMCapital = 0;
  let ccITMCapital = 0;
  for (const p of positions) {
+ totalPremiumPendingClose += calcPosition(p).totalPremiumNet;
  const curPrem = p.currentPremiumPerShare ?? null;
  if (curPrem != null) {
  const pnl = (p.premiumPerShare - curPrem) * 100 * p.contracts - (p.feesOpen ?? 0);
@@ -3065,7 +3068,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  </tbody>
  </table>
  </div>
- <div className="grid grid-cols-3 gap-3 mt-4">
+ <div className="grid grid-cols-4 gap-3 mt-4">
  {/* Capital at Risk of Assignment */}
  <div className="flex flex-col gap-0.5 rounded-lg border border-border px-4 py-4">
  <span className="tp-eyebrow">Capital at Risk of Assignment</span>
@@ -3092,11 +3095,18 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <span className="tp-numeric text-muted-foreground">—</span>
  )}
  </div>
- {/* Total Current Premium */}
+ {/* Premium Collected (Pending Close) — net credit on still-open positions */}
  <div className="flex flex-col gap-0.5 rounded-lg border border-border px-4 py-4">
- <span className="tp-eyebrow">Total Current Premium</span>
+ <span className="tp-eyebrow">Premium Collected (Pending Close)</span>
+ <span className={cn("tp-numeric font-medium", totalPremiumPendingClose >= 0 ? "text-up" : "text-down")}>
+ {totalPremiumPendingClose >= 0 ? "+" : "−"}${fmtUSD(Math.abs(totalPremiumPendingClose))}
+ </span>
+ </div>
+ {/* Cost to Close — current cost to buy-to-close all open positions (a debit) */}
+ <div className="flex flex-col gap-0.5 rounded-lg border border-border px-4 py-4">
+ <span className="tp-eyebrow">Cost to Close</span>
  {totalCurrentPremium != null ? (
- <span className="tp-numeric font-medium">${fmtUSD(totalCurrentPremium)}</span>
+ <span className="tp-numeric font-medium text-down">−${fmtUSD(totalCurrentPremium)}</span>
  ) : (
  <span className="tp-numeric text-muted-foreground">—</span>
  )}
@@ -4492,6 +4502,12 @@ function isNonTradingDay(utcMs: number): boolean {
 
 // ── Summary Cards ──────────────────────────────────────────────────────────────
 
+// Benchmark indices paginated (2 per page) inside the Benchmark Performance card.
+const BENCHMARK_LAYOUT: { symbol: string; label: string }[][] = [
+ [{ symbol:"^SP500TR", label:"S&P 500 TR" }, { symbol:"^IXIC", label:"Nasdaq Comp" }],
+ [{ symbol:"^PUT", label:"S&P 500 PutWrite" }, { symbol:"^BXM", label:"S&P 500 BuyWrite" }],
+];
+
 // Hover (?) tooltip for a summary-card heading; mirrors the NIIT tooltip on TaxEstimator.
 function CardInfoTooltip({ children }: { children: React.ReactNode }) {
  return (
@@ -4804,32 +4820,6 @@ function SummaryCards({
  return sum + (c.pnl ?? 0);
  }, 0);
 
- // Premium earned since last Monday
- const lastMonday = (() => {
- const d = new Date();
- d.setHours(0, 0, 0, 0);
- const day = d.getDay();
- d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
- return d;
- })();
-
- const premiumThisWeek = closedPositions
- .filter((p) => {
- const closeDate = p.closedAt ? new Date(p.closedAt) : new Date(p.expirationDate.split("T")[0]);
- return closeDate >= lastMonday;
- })
- .reduce((sum, p) => sum + (calcPosition(p).pnl ?? 0), 0);
-
- // Pending premium = max profit (totalPremiumNet) for open positions expiring this week
- const endOfWeek = new Date(lastMonday);
- endOfWeek.setDate(lastMonday.getDate() + 6);
- endOfWeek.setHours(23, 59, 59, 999);
- const pendingThisWeek = openPositions.reduce((sum, p) => {
- const expDate = new Date(p.expirationDate.split("T")[0] +"T20:00:00Z");
- if (expDate < lastMonday || expDate > endOfWeek) return sum;
- return sum + calcPosition(p).totalPremiumNet;
- }, 0);
-
  // Annualized rate: cumulative pnl / basis over time elapsed since the starting week.
  // When capital changes exist, the period is split at each change date and each sub-period
  // is weighted by its own basis so deposits/withdrawals don't distort past returns.
@@ -4840,6 +4830,26 @@ function SummaryCards({
  const allDates = closedPositions.map((p) => new Date(p.openedAt).getTime());
  return allDates.length > 0 ? Math.min(...allDates) : null;
  })();
+
+ // Benchmark total return (S&P 500 TR + Nasdaq Composite) over the same window as
+ // the account's marked return, for side-by-side comparison.
+ const benchmarkStartStr = annReturnFirstDate != null
+ ? new Date(annReturnFirstDate).toISOString().slice(0, 10)
+ : null;
+ const { data: benchmarkData } = useApi(
+ () => benchmarkStartStr ? getOptionsBenchmark(benchmarkStartStr) : Promise.resolve({ benchmarks: [] }),
+ [benchmarkStartStr]
+ );
+ // Benchmark card pagination: measure one page's height so the vertical-slide
+ // carousel can translate by exact pixels (all pages share the same structure).
+ const [benchPage, setBenchPage] = useState(0);
+ const benchTrackRef = useRef<HTMLDivElement>(null);
+ const [benchPageH, setBenchPageH] = useState(0);
+ useLayoutEffect(() => {
+ const first = benchTrackRef.current?.children[0] as HTMLElement | undefined;
+ if (first) setBenchPageH(first.offsetHeight);
+ }, [benchmarkData]);
+
  const annReturn = (() => {
  if (!settings?.startingBasis || cumulativePremium === 0 || annReturnFirstDate == null) return null;
  const totalElapsedDays = (Date.now() - annReturnFirstDate) / 86_400_000;
@@ -5073,28 +5083,8 @@ function SummaryCards({
  )}
  </div>
 
- {/* Row 2: weekly / cumulative / underlying / marked totals */}
+ {/* Row 2: cumulative / underlying / marked totals / benchmark */}
  <div className="grid grid-cols-4 gap-4">
- {/* Premium This Week — split realized / pending */}
- <Card className="p-6">
- <SectionLabel>Premium This Week</SectionLabel>
- <div className="flex items-end mt-1">
- <div className="flex-1 min-w-0">
- <p className={`tp-stat truncate ${premiumThisWeek >= 0 ?"text-up" :"text-down"}`}>
- {premiumThisWeek !== 0 ?`$${fmtUSD(premiumThisWeek)}` :"$0.00"}
- </p>
- <p className="tp-caption mt-0.5">realized</p>
- </div>
- <div className="w-px bg-border self-stretch shrink-0" />
- <div className="flex-1 min-w-0 pl-3">
- <p className="tp-stat truncate text-ink-3">
- {pendingThisWeek > 0 ?`$${fmtUSD(pendingThisWeek)}` :"$0"}
- </p>
- <p className="tp-caption mt-0.5">pending</p>
- </div>
- </div>
- </Card>
-
  {/* Cumulative Premium — split cumulative total / annualized ROR */}
  <Card className="p-6">
  <div className="flex items-center gap-1.5">
@@ -5151,10 +5141,10 @@ function SummaryCards({
  </div>
  </Card>
 
- {/* Total Marked P/L — total current return / time-weighted % on basis */}
+ {/* Total Marked P&L — total current return / time-weighted % on basis */}
  <Card className="p-6">
  <div className="flex items-center gap-1.5">
- <SectionLabel as="span">Total Marked P/L</SectionLabel>
+ <SectionLabel as="span">Total Marked P&L</SectionLabel>
  <CardInfoTooltip>
  Rollup of premium collected, current P&L of open positions, and total P&L of underlying shares — note that the % return is <span className="font-medium text-foreground">not</span> annualized
  </CardInfoTooltip>
@@ -5174,6 +5164,60 @@ function SummaryCards({
  <p className="tp-caption mt-0.5">Return on basis</p>
  </div>
  </div>
+ </Card>
+
+ {/* Benchmark Performance — paginated total return of 4 indices since start date */}
+ <Card className="p-6">
+ <div className="flex items-center gap-1.5">
+ <SectionLabel as="span">Benchmark Performance</SectionLabel>
+ <CardInfoTooltip>
+ Compare performance since your start date to the S&P 500 (<span className="font-medium text-foreground">^SP500TR</span>), Nasdaq Composite (<span className="font-medium text-foreground">^IXIC</span>), CBOE PutWrite (<span className="font-medium text-foreground">^PUT</span>), and BuyWrite (<span className="font-medium text-foreground">^BXM</span>) indices.
+ </CardInfoTooltip>
+ </div>
+ {(() => {
+ const pct = (symbol: string) => benchmarkData?.benchmarks.find((b) => b.symbol === symbol)?.pctChange ?? null;
+ const cls = (v: number | null) => v != null && v !== 0 ? (v >= 0 ?"text-up" :"text-down") :"";
+ const renderStat = (symbol: string, label: string, padLeft: boolean) => {
+ const v = pct(symbol);
+ return (
+ <div className={cn("flex-1 min-w-0", padLeft &&"pl-3")}>
+ <p className={`tp-stat truncate ${cls(v)}`}>{v != null ? fmtPct(v) :"—"}</p>
+ <p className="tp-caption mt-0.5 whitespace-nowrap">{label}</p>
+ </div>
+ );
+ };
+ return (
+ <>
+ {/* Even split like the other cards; the centered chevron floats over the gutter */}
+ <div className="overflow-hidden mt-1" style={{ height: benchPageH || undefined }}>
+ <div
+ ref={benchTrackRef}
+ className="transition-transform duration-300 ease-out"
+ style={{ transform:`translateY(-${benchPage * benchPageH}px)` }}
+ >
+ {BENCHMARK_LAYOUT.map((pair, i) => (
+ <div key={i} className="flex items-end">
+ {renderStat(pair[0].symbol, pair[0].label, false)}
+ <div className="w-px bg-border self-stretch shrink-0" />
+ {renderStat(pair[1].symbol, pair[1].label, true)}
+ </div>
+ ))}
+ </div>
+ </div>
+ {/* Single toggle chevron, vertically centered in the whole card */}
+ <button
+ type="button"
+ onClick={() => setBenchPage((p) => (p === 0 ? 1 : 0))}
+ className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-foreground transition-colors"
+ aria-label={benchPage === 0 ?"Show more benchmarks" :"Show previous benchmarks"}
+ >
+ {benchPage === 0
+ ? <ChevronDown className="h-3.5 w-3.5" />
+ : <ChevronUp className="h-3.5 w-3.5" />}
+ </button>
+ </>
+ );
+ })()}
  </Card>
  </div>
 

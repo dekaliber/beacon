@@ -254,6 +254,58 @@ function tradierHeaders(): Record<string, string> {
   return { Authorization: `Bearer ${token}`, Accept: "application/json" };
 }
 
+// ── Yahoo Finance helper (benchmark indices) ────────────────────────────────────
+// Tradier/Tiingo don't serve raw index symbols (^SP500TR, ^IXIC), but Yahoo does.
+// Returns the total-return % change of `symbol` from the first trading day on/after
+// `startDate` (YYYY-MM-DD) through the latest available daily close. Uses adjclose
+// so index total-return series (which already bake in dividends) are used as-is.
+async function fetchYahooReturnSince(
+  symbol: string,
+  startDate: string
+): Promise<{ startPrice: number; currentPrice: number; pctChange: number; asOf: string } | null> {
+  try {
+    // Start a week early so the first trading day on/after startDate is included
+    // even when startDate falls on a weekend or market holiday.
+    const period1 = Math.floor(new Date(startDate + "T00:00:00Z").getTime() / 1000) - 7 * 86400;
+    const period2 = Math.floor(Date.now() / 1000);
+    const url =
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}` +
+      `?interval=1d&period1=${period1}&period2=${period2}`;
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as any;
+    const result = data?.chart?.result?.[0];
+    if (!result) return null;
+
+    const timestamps: number[] = result.timestamp ?? [];
+    const adjClose: (number | null)[] = result.indicators?.adjclose?.[0]?.adjclose ?? [];
+    const close: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
+
+    const startMs = new Date(startDate + "T00:00:00Z").getTime();
+    const priceAt = (i: number): number | null => adjClose[i] ?? close[i] ?? null;
+
+    // First valid close on/after the start date
+    let startPrice: number | null = null;
+    for (let i = 0; i < timestamps.length; i++) {
+      if (timestamps[i] * 1000 < startMs) continue;
+      const p = priceAt(i);
+      if (p != null && p > 0) { startPrice = p; break; }
+    }
+    // Latest valid close
+    let currentPrice: number | null = null;
+    let asOf = new Date().toISOString();
+    for (let i = timestamps.length - 1; i >= 0; i--) {
+      const p = priceAt(i);
+      if (p != null && p > 0) { currentPrice = p; asOf = new Date(timestamps[i] * 1000).toISOString(); break; }
+    }
+    if (startPrice == null || currentPrice == null) return null;
+
+    return { startPrice, currentPrice, pctChange: (currentPrice / startPrice - 1) * 100, asOf };
+  } catch {
+    return null;
+  }
+}
+
 // ── Settings ───────────────────────────────────────────────────────────────────
 
 const settingsSchema = z.object({
@@ -937,6 +989,36 @@ optionsRoutes.get("/stock-quotes", async (req, res) => {
       }
     }
     res.json(result);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    res.status(500).json({ error: message });
+  }
+});
+
+// ── Benchmark Performance (Yahoo indices) ─────────────────────────────────────
+// GET /benchmark?start=YYYY-MM-DD  →  total-return % of S&P 500 TR and Nasdaq
+// Composite since the user's start date, for side-by-side comparison with the
+// account's marked return.
+const BENCHMARKS: { symbol: string; label: string }[] = [
+  { symbol: "^SP500TR", label: "S&P 500 TR" },
+  { symbol: "^IXIC", label: "Nasdaq Comp" },
+  { symbol: "^PUT", label: "S&P 500 PutWrite" },
+  { symbol: "^BXM", label: "S&P 500 BuyWrite" },
+];
+
+optionsRoutes.get("/benchmark", async (req, res) => {
+  const { start } = req.query;
+  if (!start || typeof start !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(start)) {
+    return res.status(400).json({ error: "Missing or invalid start (expected YYYY-MM-DD)" });
+  }
+  try {
+    const benchmarks = await Promise.all(
+      BENCHMARKS.map(async ({ symbol, label }) => {
+        const r = await fetchYahooReturnSince(symbol, start);
+        return { symbol, label, pctChange: r?.pctChange ?? null, asOf: r?.asOf ?? null };
+      })
+    );
+    res.json({ benchmarks });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
     res.status(500).json({ error: message });

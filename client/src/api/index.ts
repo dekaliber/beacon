@@ -935,6 +935,18 @@ export const getUnderlyingQuotes = (symbols: string[]) =>
     `/options/stock-quotes?symbols=${symbols.map(encodeURIComponent).join(",")}`
   );
 
+export interface OptionsBenchmark {
+  symbol: string;
+  label: string;
+  pctChange: number | null;
+  asOf: string | null;
+}
+
+export const getOptionsBenchmark = (start: string) =>
+  api.get<{ benchmarks: OptionsBenchmark[] }>(
+    `/options/benchmark?start=${encodeURIComponent(start)}`
+  );
+
 export const getStockPriceAtOpen = (symbol: string, openedAt: string) =>
   api.get<{ price: number; timeLabel: string }>(
     `/options/stock-price-at-open?symbol=${encodeURIComponent(symbol)}&openedAt=${encodeURIComponent(openedAt)}`
