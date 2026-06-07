@@ -2043,7 +2043,7 @@ export function Expenses() {
                       {visibleUpcoming.map((expense) => (
                         <div key={expense.id} className="flex items-center justify-between py-3 italic opacity-60">
                           <div className="min-w-0 flex-1">
-                            <p className="truncate font-medium">{expense.description}</p>
+                            <p className="truncate tp-row-label">{expense.description}</p>
                             <p className="text-sm text-muted-foreground">
                               {expense.vendor && <>{expense.vendor} &middot; </>}
                               {expense.category?.name ?? <span className="text-down">[Uncategorized]</span>} &middot; {formatDate(expense.date)}
@@ -2064,7 +2064,7 @@ export function Expenses() {
                 {hasMore && (
                   <button
                     onClick={() => setUpcomingExpanded((v) => !v)}
-                    className="mt-2 flex w-full items-center justify-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                    className="mt-2 flex w-full items-center justify-center gap-1 text-13 text-muted-foreground hover:text-foreground"
                   >
                     {upcomingExpanded ? (
                       <><ChevronDown className="h-4 w-4 rotate-180" /> Collapse</>
@@ -2146,7 +2146,7 @@ export function Expenses() {
                   <div className="min-w-0 flex-1 flex items-start gap-2">
                     {expense.isReimbursementExpected && <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-warn" />}
                     <div className="min-w-0">
-                      <p className="truncate font-medium">{expense.description}</p>
+                      <p className="truncate tp-row-label">{expense.description}</p>
                       <p className="text-sm text-muted-foreground">
                         {expense.vendor && <>{expense.vendor} &middot; </>}
                         {expense.category?.name ?? <span className="text-down">[Uncategorized]</span>} &middot; {formatDate(expense.date)}
@@ -2486,7 +2486,7 @@ function ExpenseRowWithOffsets({
           <EditableCell value={expense.date} type="date" onSave={(v) => onInlineUpdate(expense.id, "date", v)} />
         </td>
         <td className="py-2 pr-3">
-          <EditableCell value={expense.description} onSave={(v) => onInlineUpdate(expense.id, "description", v)} className={`font-medium${isFullyOffset ? " text-ink-4" : ""}`} />
+          <EditableCell value={expense.description} onSave={(v) => onInlineUpdate(expense.id, "description", v)} className={`tp-row-label${isFullyOffset ? " text-ink-4" : ""}`} />
           {expense.tags.length > 0 && (
             <div className="mt-0.5 flex flex-wrap gap-1">
               {expense.tags.map(({ tag }) => (
@@ -2776,7 +2776,7 @@ function ImportModal({
           <p className="text-sm text-muted-foreground">
             Upload a CSV or TSV file with these columns in order:
           </p>
-          <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs font-mono">
+          <div className="rounded-md border border-border bg-card px-3 py-2 text-xs font-mono">
             Date, Description, Vendor, Category, Account, Amount
           </div>
           <p className="tp-caption">
@@ -2830,9 +2830,9 @@ function ImportModal({
             )}
           </div>
 
-          <div className="max-h-[50vh] overflow-auto rounded-md border border-border">
+          <div className="max-h-[50vh] overflow-auto rounded-md border border-border bg-white">
             <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-background">
+              <thead className="sticky top-0 bg-muted">
                 <tr className="border-b border-border text-left text-muted-foreground">
                   <ColumnHeader className="px-2 py-1.5">#</ColumnHeader>
                   <ColumnHeader className="px-2 py-1.5">Date</ColumnHeader>
@@ -2850,7 +2850,7 @@ function ImportModal({
                   return (
                   <tr key={i} className={`border-b border-border ${row.errors.length > 0 ? "bg-down/5" : ""}`}>
                     <td className="px-2 py-1.5 text-muted-foreground">{i + 1}</td>
-                    <td className="px-2 py-1.5">{row.date}</td>
+                    <td className="px-2 py-1.5">{row.date ? new Date(row.date).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "numeric", day: "numeric", year: "2-digit" }) : "—"}</td>
                     <td className="px-2 py-1.5 max-w-[150px] truncate">{row.description}</td>
                     <td className="px-2 py-1.5 max-w-[120px] truncate">{row.vendor}</td>
                     <td className="px-2 py-1.5 max-w-[120px] truncate">{row.categoryName || "—"}</td>

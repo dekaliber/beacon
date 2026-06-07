@@ -634,7 +634,7 @@ function AddInvestmentModal({
       ) : (
         <form onSubmit={handleSave} noValidate className="space-y-5">
           {/* Ticker header card */}
-          <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted">
+          <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card">
             <button
               type="button"
               onClick={resetToSearch}
@@ -650,7 +650,7 @@ function AddInvestmentModal({
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-2 flex-wrap">
-                <span className="font-bold text-13">{selectedTicker?.ticker}</span>
+                <span className="font-bold font-mono text-13">{selectedTicker?.ticker}</span>
                 <span className="text-sm text-muted-foreground truncate">{selectedTicker?.name}</span>
               </div>
               {fetchingPrice ? (
@@ -1181,11 +1181,11 @@ function HoldingRow({
         onClick={onToggle}
       >
         <td className="py-3 pl-4 pr-2">
-          <span className="font-bold text-13">{holding.ticker}</span>
+          <span className="font-bold font-mono text-13">{holding.ticker}</span>
         </td>
         <td className="py-3 px-2 overflow-hidden">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-sm text-muted-foreground truncate">{holding.name}</span>
+            <span className="text-13 text-muted-foreground truncate">{holding.name}</span>
           </div>
         </td>
         <td className="py-3 px-2 tp-numeric">
@@ -1602,7 +1602,7 @@ function ImportInvestmentsModal({
           <p className="text-sm text-muted-foreground">
             Upload a CSV or TSV file with these columns in order:
           </p>
-          <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs font-mono">
+          <div className="rounded-md border border-border bg-card px-3 py-2 text-xs font-mono">
             Symbol, Purchase Date, Price, Quantity
           </div>
           <p className="tp-caption">
@@ -1656,9 +1656,9 @@ function ImportInvestmentsModal({
             )}
           </div>
 
-          <div className="max-h-[50vh] overflow-auto rounded-md border border-border">
+          <div className="max-h-[50vh] overflow-auto rounded-md border border-border bg-white">
             <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-background">
+              <thead className="sticky top-0 bg-muted">
                 <tr className="border-b border-border text-left text-muted-foreground">
                   <th className="px-2 py-1.5 font-medium">#</th>
                   <th className="px-2 py-1.5 font-medium">Symbol</th>
@@ -1678,7 +1678,7 @@ function ImportInvestmentsModal({
                     >
                       <td className="px-2 py-1.5 text-muted-foreground">{i + 1}</td>
                       <td className="px-2 py-1.5 font-semibold">{row.symbol || "—"}</td>
-                      <td className="px-2 py-1.5">{row.purchaseDate}</td>
+                      <td className="px-2 py-1.5">{row.purchaseDate ? new Date(row.purchaseDate).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "numeric", day: "numeric", year: "2-digit" }) : "—"}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums font-mono">
                         {row.price > 0 ? formatCurrency(row.price) : "—"}
                       </td>
@@ -2083,10 +2083,10 @@ function StickyHoldingRow({
                     onClick={onToggle}
                   >
                     <td className="py-3 pl-4 pr-2">
-                      <span className="font-bold text-13">{holding.ticker}</span>
+                      <span className="font-bold font-mono text-13">{holding.ticker}</span>
                     </td>
                     <td className="py-3 px-2 overflow-hidden">
-                      <span className="text-sm text-muted-foreground truncate block">{holding.name}</span>
+                      <span className="text-13 text-muted-foreground truncate block">{holding.name}</span>
                     </td>
                     <td className="py-3 px-2 tp-numeric">
                       {holding.currentPrice != null ? formatCurrency(holding.currentPrice) : <span className="text-muted-foreground">—</span>}
@@ -2578,7 +2578,7 @@ function SellModal({
       ) : mode === "sell" ? (
         <div className="space-y-4">
           {/* Sell — lot breakdown table */}
-          <div className="overflow-x-auto rounded border border-border">
+          <div className="overflow-x-auto rounded border border-border bg-card">
             <table className="w-full text-xs">
               <thead>
                 <tr>
@@ -2610,7 +2610,7 @@ function SellModal({
                     </td>
                     <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.proceeds)}</td>
                     <td className="py-2 px-3 text-right tabular-nums font-mono">{formatCurrency(lot.costBasis)}</td>
- <td className={`py-2 px-3 text-right tp-numeric ${gainColor(lot.gain)}`}>
+                    <td className={`py-2 px-3 text-right font-mono tabular-nums font-medium ${gainColor(lot.gain)}`}>
                       {lot.gain >= 0 ? "+" : ""}{formatCurrency(lot.gain)}
                     </td>
                   </tr>
@@ -2620,14 +2620,14 @@ function SellModal({
           </div>
 
           {/* Sell — summary */}
-          <div className="rounded border border-border bg-muted p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-13">
+          <div className="rounded border border-border bg-card p-4 grid grid-cols-2 gap-x-6 gap-y-2 text-13">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Gross Proceeds</span>
-              <StatValue className="font-medium">{formatCurrency(preview!.grossProceeds)}</StatValue>
+              <span className="tp-numeric">{formatCurrency(preview!.grossProceeds)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Fees</span>
-              <StatValue className="font-medium">{preview!.fees > 0 ? `(${formatCurrency(preview!.fees)})` : "—"}</StatValue>
+              <span className="tp-numeric">{preview!.fees > 0 ? `(${formatCurrency(preview!.fees)})` : "—"}</span>
             </div>
             <div className="flex justify-between border-t border-border pt-2 col-span-2">
               <span className="font-medium">Net Proceeds</span>
@@ -2671,7 +2671,7 @@ function SellModal({
       ) : (
         /* Transfer — confirm summary (no server round-trip needed, no taxable gain) */
         <div className="space-y-4">
-          <div className="rounded border border-border bg-muted p-3 text-sm space-y-1">
+          <div className="rounded border border-border bg-card p-3 text-13 space-y-1">
             <div className="flex justify-between">
               <span className="text-muted-foreground">From</span>
               <span className="font-medium">This account</span>
@@ -2682,22 +2682,22 @@ function SellModal({
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Ticker</span>
-              <StatValue className="font-medium">{holding.ticker}</StatValue>
+              <StatValue className="font-bold font-mono">{holding.ticker}</StatValue>
             </div>
             <div className="flex justify-between border-t border-border pt-2 mt-1">
               <span className="text-muted-foreground">Total Shares</span>
-              <StatValue className="font-medium">
+              <span className="tp-numeric">
                 {(selectionMode === "method" ? parseFloat(shares) : lotTotalShares).toLocaleString(undefined, { maximumFractionDigits: 8 })}
-              </StatValue>
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Total Cost Basis</span>
-              <StatValue className="font-medium">{formatCurrency(transferTotalCostBasis)}</StatValue>
+              <span className="tp-numeric">{formatCurrency(transferTotalCostBasis)}</span>
             </div>
           </div>
 
           {transferLotBreakdown.length > 0 && (
-            <div className="overflow-x-auto rounded border border-border">
+            <div className="overflow-x-auto rounded border border-border bg-card">
               <table className="w-full text-xs">
                 <thead>
                   <tr>
@@ -3072,7 +3072,7 @@ function ReviewDividendModal({
       <div className="space-y-4">
         {/* Summary row — ticker left, ex-date right */}
         <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-          <p className="text-sm font-semibold">{dividend.ticker}</p>
+          <p className="font-mono font-bold">{dividend.ticker}</p>
           <p className="text-sm text-muted-foreground">Ex-date: {formatDate(dividend.exDate)}</p>
         </div>
 
@@ -3360,7 +3360,7 @@ function EditConfirmedDividendModal({
       ) : dividendInfo ? (
         <div className="space-y-4">
           <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-            <p className="text-sm font-semibold">{dividendInfo.ticker}</p>
+            <p className="font-mono font-bold">{dividendInfo.ticker}</p>
             <p className="text-sm text-muted-foreground">Ex-date: {formatDate(dividendInfo.exDate)}</p>
           </div>
 
@@ -4430,13 +4430,13 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
 
                   return (
                     <tr key={a.id} className="border-b border-border hover:bg-muted group">
-                      <td className="py-3 pl-4 pr-2 tabular-nums font-mono">{formatDate(a.date)}</td>
+                      <td className="py-3 pl-4 pr-2">{formatDate(a.date)}</td>
                       <td className="py-3 px-2">
                         <span className={`inline-block rounded-full px-2 py-0.5 text-10 font-medium ${badgeClass}`}>
                           {badgeLabel}
                         </span>
                       </td>
-                      <td className="py-3 px-2 font-mono font-bold text-xs">{a.ticker}</td>
+                      <td className="py-3 px-2 font-mono font-bold">{a.ticker}</td>
                       <td className="py-3 px-2 text-right tabular-nums font-mono">
                         {a.shares != null
                           ? a.shares.toLocaleString(undefined, { maximumFractionDigits: 8 })

@@ -141,14 +141,14 @@ export function SecuritiesPage() {
         {/* Symbol + linked equivalents */}
         <td className="py-2 pl-4 pr-2 align-middle">
           {!instrument.isManual && (
-            <span className="font-semibold text-sm">{instrument.primaryTicker}</span>
+            <span className="font-bold font-mono text-13">{instrument.primaryTicker}</span>
           )}
           {!instrument.isManual && instrument.tickers.length > 0 && (
             <div className="mt-0.5 space-y-0.5">
               {instrument.tickers.map((t) => (
                 <div key={t.id} className="flex items-center gap-1">
                   <Link2 className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  <span className="font-semibold text-sm">{t.ticker}</span>
+                  <span className="font-bold font-mono text-13">{t.ticker}</span>
                 </div>
               ))}
             </div>
@@ -157,7 +157,7 @@ export function SecuritiesPage() {
 
         {/* Name */}
         <td className="py-2 px-2 align-middle overflow-hidden">
-          <span className="text-sm text-muted-foreground truncate block">
+          <span className="text-13 text-muted-foreground truncate block">
             {instrument.name ?? <span className="italic opacity-50">—</span>}
           </span>
         </td>

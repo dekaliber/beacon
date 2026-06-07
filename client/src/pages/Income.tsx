@@ -1779,7 +1779,7 @@ function ImportModal({
           <p className="text-sm text-muted-foreground">
             Upload a CSV or TSV file with these columns in order:
           </p>
-          <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs font-mono">
+          <div className="rounded-md border border-border bg-card px-3 py-2 text-xs font-mono">
             Date, Source, Category, Account, Amount
           </div>
           <p className="tp-caption">
@@ -1827,9 +1827,9 @@ function ImportModal({
             )}
           </div>
 
-          <div className="max-h-[50vh] overflow-auto rounded-md border border-border">
+          <div className="max-h-[50vh] overflow-auto rounded-md border border-border bg-white">
             <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-background">
+              <thead className="sticky top-0 bg-muted">
                 <tr className="border-b border-border text-left text-muted-foreground">
                   <ColumnHeader className="px-2 py-1.5">#</ColumnHeader>
                   <ColumnHeader className="px-2 py-1.5">Date</ColumnHeader>
@@ -1844,7 +1844,7 @@ function ImportModal({
                 {rows.map((row, i) => (
                   <tr key={i} className={`border-b border-border ${row.errors.length > 0 ? "bg-down/5" : ""}`}>
                     <td className="px-2 py-1.5 text-muted-foreground">{i + 1}</td>
-                    <td className="px-2 py-1.5">{row.date}</td>
+                    <td className="px-2 py-1.5">{row.date ? new Date(row.date).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "numeric", day: "numeric", year: "2-digit" }) : "—"}</td>
                     <td className="px-2 py-1.5 max-w-[120px] truncate">{row.source || "—"}</td>
                     <td className="px-2 py-1.5">{row.categoryId ? (categories.find((c) => c.id === row.categoryId)?.name ?? row.categoryName) : row.categoryName}</td>
                     <td className="px-2 py-1.5 max-w-[100px] truncate">{row.accountName}</td>

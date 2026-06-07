@@ -224,7 +224,7 @@ export function AssignedSharesCard({ externalQuotes }: { externalQuotes?: Record
                   const coveredShares = g.openCallContracts * 100;
                   return (
                     <tr key={g.key} className="border-b border-border/50 hover:bg-muted">
-                      <td className={cn(tdClass, "tp-row-label")}>{g.ticker}</td>
+                      <td className={cn(tdClass, "font-bold font-mono")}>{g.ticker}</td>
                       <td className={tdBody}>
                         <AccountChip name={g.accountName} color={g.accountColor} />
                       </td>
@@ -284,7 +284,7 @@ export function AssignedSharesCard({ externalQuotes }: { externalQuotes?: Record
                 const pct = costBasis > 0 ? (g.realizedPnl / costBasis) * 100 : 0;
                 return (
                   <tr key={g.key} className="border-b border-border/50 hover:bg-muted">
-                    <td className={cn(tdClass, "tp-row-label")}>{g.ticker}</td>
+                    <td className={cn(tdClass, "font-bold font-mono")}>{g.ticker}</td>
                     <td className={tdBody}>{fmtMDY(g.assignmentExpiration)}</td>
                     <td className={cn(tdClass, "text-right")}>${fmtUSD(g.assignmentStrike)}</td>
                     <td className={cn(tdClass, "text-right")}>{fmtShares(g.shares)}</td>

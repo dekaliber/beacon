@@ -2565,7 +2565,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
         {/* ── Group 1: Position (always visible, frozen) ── */}
         <td style={{ left: 0 }}   className={stickyTd(0, isGrouped ? "pl-8 pr-2" : "pl-4 pr-2", true)}>
           <div className="flex items-center gap-1.5">
-            <span className="font-medium">{p.ticker.symbol}</span>
+            <span className="font-bold font-mono">{p.ticker.symbol}</span>
             {p.group && <Link className="h-3 w-3 text-muted-foreground shrink-0" />}
           </div>
         </td>
@@ -3444,7 +3444,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
                 {/* Position + Contracts — frozen */}
                 <td style={{ left: 0 }}   className={cn(tdText, "sticky z-[2] bg-[#FBFCFE] group-hover:bg-muted pl-4 pr-2")}>
                   <div className="flex items-center gap-1.5">
-                    <span className="font-medium">{p.ticker.symbol}</span>
+                    <span className="font-bold font-mono">{p.ticker.symbol}</span>
                     {p.groupId && <Link className="h-3 w-3 text-muted-foreground shrink-0" />}
                   </div>
                 </td>
@@ -4193,7 +4193,7 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
             </tr>
             {expanded && byTicker.map(({ symbol, metrics }) => (
               <tr key={symbol} className="border-b border-border last:border-0 hover:bg-muted transition-colors">
-                <td className="px-4 py-2 font-medium">{symbol}</td>
+                <td className="px-4 py-2 font-bold font-mono">{symbol}</td>
                 <MetricCells m={metrics} />
               </tr>
             ))}
@@ -5372,7 +5372,7 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
                             isHighlighted ? "bg-primary/10 hover:bg-primary/15" : "hover:bg-muted"
                           )}
                         >
-                          <td className="pl-4 pr-2 py-2 font-medium">{r.ticker}</td>
+                          <td className="pl-4 pr-2 py-2 font-bold font-mono">{r.ticker}</td>
                           <td className="px-2 py-2">
                             <span className={cn(
                               "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
@@ -5999,7 +5999,7 @@ function ImportOptionsModal({ open, onClose, onComplete }: {
           <p className="text-sm text-muted-foreground">
             Upload a CSV or TSV file with these columns in order:
           </p>
-          <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs font-mono leading-relaxed">
+          <div className="rounded-md border border-border bg-card px-3 py-2 text-xs font-mono leading-relaxed">
             Ticker, Type, Strike Price, Expiration, Date Opened, Premium, Contracts,
             Cost Basis, Stock Price, Fees, Notes
           </div>
@@ -6054,9 +6054,9 @@ function ImportOptionsModal({ open, onClose, onComplete }: {
             )}
           </div>
 
-          <div className="max-h-[50vh] overflow-auto rounded-md border border-border">
+          <div className="max-h-[50vh] overflow-auto rounded-md border border-border bg-white">
             <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-background">
+              <thead className="sticky top-0 bg-muted">
                 <tr className="border-b border-border text-left text-muted-foreground">
                   <ColumnHeader className="px-2 py-1.5">#</ColumnHeader>
                   <ColumnHeader className="px-2 py-1.5">Ticker</ColumnHeader>
@@ -6066,8 +6066,8 @@ function ImportOptionsModal({ open, onClose, onComplete }: {
                   <ColumnHeader className="px-2 py-1.5">Opened</ColumnHeader>
                   <ColumnHeader className="px-2 py-1.5 text-right">Premium</ColumnHeader>
                   <ColumnHeader className="px-2 py-1.5 text-right">Qty</ColumnHeader>
-                  <ColumnHeader className="px-2 py-1.5 text-right">Cost Basis</ColumnHeader>
-                  <ColumnHeader className="px-2 py-1.5 text-right">Stock Price</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5 text-right whitespace-nowrap">Cost Basis</ColumnHeader>
+                  <ColumnHeader className="px-2 py-1.5 text-right whitespace-nowrap">Stock Price</ColumnHeader>
                   <ColumnHeader className="px-2 py-1.5 text-right">Fees</ColumnHeader>
                   <ColumnHeader className="px-2 py-1.5">Notes</ColumnHeader>
                   <ColumnHeader className="px-2 py-1.5">Status</ColumnHeader>
@@ -6077,14 +6077,14 @@ function ImportOptionsModal({ open, onClose, onComplete }: {
                 {visibleRows.map((row) => {
                   const i = rows.indexOf(row);
                   return (
-                    <tr key={i} className={`border-b border-border ${row.errors.length > 0 ? "bg-down/5" : ""}`}>
+                    <tr key={i} className={`border-b border-border last:border-b-0 ${row.errors.length > 0 ? "bg-down/5" : ""}`}>
                       <td className="px-2 py-1.5 text-muted-foreground">{i + 1}</td>
-                      <td className="px-2 py-1.5 font-medium">{row.ticker || "—"}</td>
+                      <td className="px-2 py-1.5 font-bold font-mono">{row.ticker || "—"}</td>
                       <td className="px-2 py-1.5">{row.optionType}</td>
                       <td className="px-2 py-1.5 text-right">{row.strikePrice > 0 ? `$${row.strikePrice.toFixed(2)}` : "—"}</td>
-                      <td className="px-2 py-1.5">{row.expirationDate || "—"}</td>
+                      <td className="px-2 py-1.5">{row.expirationDate ? new Date(row.expirationDate).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "numeric", day: "numeric", year: "2-digit" }) : "—"}</td>
                       <td className="px-2 py-1.5">{row.openedAt ? new Date(row.openedAt).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "numeric", day: "numeric", year: "2-digit" }) : "—"}</td>
-                      <td className="px-2 py-1.5 text-right">{row.premiumPerShare > 0 ? `$${row.premiumPerShare.toFixed(4)}` : "—"}</td>
+                      <td className="px-2 py-1.5 text-right">{row.premiumPerShare > 0 ? `$${row.premiumPerShare.toFixed(2)}` : "—"}</td>
                       <td className="px-2 py-1.5 text-right">{row.contracts > 0 ? row.contracts : "—"}</td>
                       <td className="px-2 py-1.5 text-right">{row.shareCostBasis != null ? `$${row.shareCostBasis.toFixed(2)}` : "—"}</td>
                       <td className="px-2 py-1.5 text-right">{row.stockPriceAtOpen != null ? `$${row.stockPriceAtOpen.toFixed(2)}` : "—"}</td>
