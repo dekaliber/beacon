@@ -781,7 +781,7 @@ function EditableCategoryCell({
  };
 
  return (
- <div ref={ref}>
+ <div ref={ref} className="text-13">
  {editing ? (
  <input
  ref={inputRef}
@@ -804,7 +804,7 @@ function EditableCategoryCell({
  <div
  ref={dropdownRef}
  style={{ position:"fixed", top: dropdownPos.top, bottom: dropdownPos.bottom, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 220), zIndex: 9999 }}
- className="rounded-md border border-border bg-background shadow-lg"
+ className="rounded-md border border-border bg-background shadow-lg text-13"
  >
  <div className="max-h-48 overflow-auto">
  {filtered.length === 0 ? (
