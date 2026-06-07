@@ -260,7 +260,7 @@ function MobileGrowthChart({ accountId }: { accountId: string }) {
                 return (
                   <div className="rounded-lg border border-border bg-background px-2.5 py-1.5 shadow-md text-xs">
                     <p className="text-muted-foreground mb-0.5">{formatDate(pt.date)}</p>
-                    <StatValue as="p" className="font-semibold">{formatCurrency(pt.marketValue)}</StatValue>
+                    <p className="font-semibold">{formatCurrency(pt.marketValue)}</p>
                   </div>
                 );
               }}

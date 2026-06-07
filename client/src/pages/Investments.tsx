@@ -68,7 +68,7 @@ function StackedBar({ segments }: { segments: BarSegment[] }) {
  <div className="space-y-1">
  <div className="flex justify-between gap-4">
  <span className="text-muted-foreground">Target</span>
- <span className="tp-numeric">
+ <span>
  {tooltip.segment.targetPct != null
  ?`${tooltip.segment.targetPct.toFixed(1)}%`
  :"—"}
@@ -81,7 +81,7 @@ function StackedBar({ segments }: { segments: BarSegment[] }) {
  </div>
  <div className="flex justify-between gap-4">
  <span className="text-muted-foreground">Actual</span>
- <span className="tp-numeric">
+ <span>
  {tooltip.segment.actualPct.toFixed(1)}%
  <span className="text-muted-foreground ml-1.5">
  {formatCurrency(tooltip.segment.actualValue)}
@@ -142,7 +142,7 @@ function DeviationBar({ actualPct, targetPct, scale, color, name, targetValue, a
  <div className="space-y-1">
  <div className="flex justify-between gap-4">
  <span className="text-muted-foreground">Target</span>
- <span className="tp-numeric">
+ <span>
  {targetPct != null ?`${targetPct.toFixed(1)}%` :"—"}
  {targetValue != null && (
  <span className="text-muted-foreground ml-1.5">{formatCurrency(targetValue)}</span>
@@ -151,7 +151,7 @@ function DeviationBar({ actualPct, targetPct, scale, color, name, targetValue, a
  </div>
  <div className="flex justify-between gap-4">
  <span className="text-muted-foreground">Actual</span>
- <span className="tp-numeric">
+ <span>
  {actualPct.toFixed(1)}%
  <span className="text-muted-foreground ml-1.5">{formatCurrency(actualValue)}</span>
  </span>
@@ -357,13 +357,13 @@ function RebalanceModal({
  });
 
  // Column templates — identical between header row and data rows so alignment is guaranteed
- // dot | name | bar | adjustment | current% | after% | vs.target
- const MANUAL_COLS ="10px 160px 1fr 76px 48px 48px 60px";
- // dot | name | bar | trade | current% | after% | vs.target
- const AUTO_COLS ="10px 160px 1fr 88px 48px 48px 60px";
+ // dot | name | bar | adjustment | current% | after% | vs target
+ const MANUAL_COLS ="10px 155px 1fr 76px 48px 48px 65px";
+ // dot | name | bar | trade | current% | after% | vs target
+ const AUTO_COLS ="10px 155px 1fr 88px 48px 48px 65px";
 
  const rowCls ="grid items-center gap-x-3";
- const hdrCls ="text-xs font-medium text-muted-foreground";
+ const hdrCls ="tp-table-header";
 
  return (
  <Modal open={isOpen} onClose={onClose} title="Rebalancing Simulator" className="max-w-2xl">
@@ -410,7 +410,7 @@ function RebalanceModal({
  <span className={`${hdrCls} text-right`}>Adjustment</span>
  <span className={`${hdrCls} text-right`}>Current</span>
  <span className={`${hdrCls} text-right`}>After</span>
- <span className={`${hdrCls} text-right`}>vs. Target</span>
+ <span className={`${hdrCls} text-right`}>vs Target</span>
  </div>
 
  <div className="border-t border-border" />
@@ -470,7 +470,7 @@ function RebalanceModal({
 
  {/* Footer */}
  <div className="flex items-center justify-between border-t border-border pt-3">
- <span className="text-muted-foreground">Net cash deployed</span>
+ <span className="text-13 text-muted-foreground">Net cash deployed</span>
  <span className={`tp-numeric font-semibold ${
  manualDelta > 0 ?"text-up" : manualDelta < 0 ?"text-down" :"text-ink-3"
  }`}>
@@ -558,7 +558,7 @@ function RebalanceModal({
  <span className={`${hdrCls} text-right`}>{rebalanceMode ==="buy-only" ?"Buy" :"Trade"}</span>
  <span className={`${hdrCls} text-right`}>Current</span>
  <span className={`${hdrCls} text-right`}>After</span>
- <span className={`${hdrCls} text-right`}>vs. Target</span>
+ <span className={`${hdrCls} text-right`}>vs Target</span>
  </div>
 
  <div className="border-t border-border" />
@@ -613,21 +613,21 @@ function RebalanceModal({
  <div className="flex items-center justify-between border-t border-border pt-3">
  {rebalanceMode ==="buy-only" ? (
  <>
- <span className="text-muted-foreground">Total cash to deploy</span>
+ <span className="text-13 text-muted-foreground">Total cash to deploy</span>
  <StatValue className="text-13 font-semibold text-blue">
  {autoNetCash > 1 ?`+${formatCurrency(autoNetCash)}` : formatCurrency(0)}
  </StatValue>
  </>
  ) : autoNetCash > 1 ? (
  <>
- <span className="text-muted-foreground">Net cash to deploy</span>
+ <span className="text-13 text-muted-foreground">Net cash to deploy</span>
  <StatValue className="text-13 font-semibold text-blue">
  +{formatCurrency(autoNetCash)}
  </StatValue>
  </>
  ) : autoNetCash < -1 ? (
  <>
- <span className="text-muted-foreground">Net cash proceeds</span>
+ <span className="text-13 text-muted-foreground">Net cash proceeds</span>
  <StatValue className="text-13 font-semibold text-warn">
  −{formatCurrency(Math.abs(autoNetCash))}
  </StatValue>
@@ -862,7 +862,7 @@ function SummaryRow({
  <div className={`flex items-center justify-between gap-3 ${muted ?"text-muted-foreground" :""}`}>
  <span className="text-13">{label}</span>
  <div className="flex items-center gap-2 tabular-nums font-mono">
- <span className="text-13 font-medium">{formatCurrency(value)}</span>
+ <span className="tp-numeric">{formatCurrency(value)}</span>
  <span className="tp-caption w-8 text-right">{pct.toFixed(0)}%</span>
  </div>
  </div>
@@ -876,7 +876,7 @@ function GainBadge({ value, pct, label, className ="" }: { value: number; pct?: 
  const Icon = positive ? TrendingUp : TrendingDown;
  return (
  <span
- className={`inline-flex items-center gap-1 text-13 font-medium ${
+ className={`inline-flex items-center gap-1 tp-numeric ${
  positive ?"text-up" :"text-down"
  } ${className}`}
  >
@@ -1086,14 +1086,14 @@ function WithdrawalRateCard({
  <div className="space-y-1">
  <div className="flex justify-between gap-4">
  <span className="text-muted-foreground">Withdrawn</span>
- <StatValue className="font-medium">{formatCurrency(barTooltip.total)}</StatValue>
+ <span className="font-medium">{formatCurrency(barTooltip.total)}</span>
  </div>
  {barTooltip.rate !== null && (
  <div className="flex justify-between gap-4">
  <span className="text-muted-foreground">Ann. rate</span>
- <StatValue className="font-medium">
+ <span className="font-medium">
  {`${(barTooltip.rate * 100).toFixed(2)}%`}
- </StatValue>
+ </span>
  </div>
  )}
  </div>

@@ -5282,17 +5282,17 @@ function GrowthChartTooltip({ active, payload, label }: any) {
  <p className="font-semibold text-foreground mb-1">{formatAxisDate(label)}</p>
  <div className="flex justify-between gap-4">
  <span className="text-muted-foreground">Market value</span>
- <StatValue className="font-medium">{formatCurrency(d.marketValue)}</StatValue>
+ <span className="font-medium">{formatCurrency(d.marketValue)}</span>
  </div>
  {hasCostBasis && (
  <>
  <div className="flex justify-between gap-4">
  <span className="text-muted-foreground">Cost basis</span>
- <StatValue className="font-medium">{formatCurrency(d.costBasis!)}</StatValue>
+ <span className="font-medium">{formatCurrency(d.costBasis!)}</span>
  </div>
  <div className="flex justify-between gap-4 pt-1 border-t border-border">
  <span className="text-muted-foreground">Unrealized gain</span>
- <span className={`tp-numeric ${pos ?"text-up" :"text-down"}`}>
+ <span className={`${pos ?"text-up" :"text-down"}`}>
  {pos ?"+" :""}{formatCurrency(d.unrealizedGain!)} ({pos ?"+" :""}{d.unrealizedGainPct!.toFixed(2)}%)
  </span>
  </div>
@@ -5321,7 +5321,7 @@ function GrowthChartTooltip({ active, payload, label }: any) {
  <span className="text-muted-foreground">
  {isSell ?"Sold" :"Bought"} {sharesStr} {ev.ticker}
  </span>
- <span className={`tp-numeric ${isSell ?"text-warn" :"text-up"}`}>
+ <span className={`${isSell ?"text-warn" :"text-up"}`}>
  {isSell ?"-" :"+"}{formatCurrency(ev.netAmount)}
  </span>
  </div>

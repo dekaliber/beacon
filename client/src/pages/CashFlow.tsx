@@ -92,7 +92,7 @@ function BalanceTooltip({ active, payload, label }: any) {
  return (
  <div className="rounded-lg border border-border bg-background shadow-md px-3 py-2 text-xs space-y-0.5">
  <p className="font-semibold text-foreground">{fmtDate(label as string)}</p>
- <p className="text-muted-foreground">Balance: <StatValue className="text-foreground font-medium">{formatCurrency(payload[0].value ?? 0)}</StatValue></p>
+ <p className="text-muted-foreground">Balance: <span className="text-foreground font-medium">{formatCurrency(payload[0].value ?? 0)}</span></p>
  </div>
  );
 }

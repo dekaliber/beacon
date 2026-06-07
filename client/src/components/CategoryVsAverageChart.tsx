@@ -208,16 +208,16 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
           const left = Math.max(0, Math.min(mousePos.x - TOOLTIP_MIN_W / 2, width - TOOLTIP_MIN_W));
           return (
             <div
-              className="pointer-events-none absolute z-10 rounded-md border border-border bg-card px-3 py-2 shadow-md"
+              className="pointer-events-none absolute z-10 rounded border border-border bg-background px-3 py-2 text-xs shadow-md"
               style={{ left, top: mousePos.y - 8, minWidth: TOOLTIP_MIN_W, transform: "translateY(-100%)" }}
             >
-              <p className="mb-1.5 tp-row-label font-semibold">{c.categoryName}</p>
-              <div className="grid gap-x-3 gap-y-1 text-13" style={{ gridTemplateColumns: "max-content 1fr" }}>
-                <span className="text-ink-3">Category Avg</span>
-                <span className="tp-numeric font-medium text-ink">{fmtAmt(c.avgAmount)}</span>
-                <span className="text-ink-3">Current Month</span>
+              <p className="mb-1.5 font-medium">{c.categoryName}</p>
+              <div className="grid gap-x-3 gap-y-1" style={{ gridTemplateColumns: "max-content 1fr" }}>
+                <span className="text-muted-foreground">Category Avg</span>
+                <span className="font-medium">{fmtAmt(c.avgAmount)}</span>
+                <span className="text-muted-foreground">Current Month</span>
                 <span className="font-semibold" style={{ color: barColor }}>
-                  <span className="tp-numeric">{fmtAmt(c.currentAmount)}{pctStr}</span>
+                  <span>{fmtAmt(c.currentAmount)}{pctStr}</span>
                   {pendingAmtTip > 0 && (
                     <span className="block tp-fineprint italic">({fmtAmt(pendingAmtTip)} pending)</span>
                   )}
