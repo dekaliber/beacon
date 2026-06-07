@@ -992,7 +992,7 @@ function CategoryPacingTable({ outliers, year }: { outliers: CategoryOutliersDat
   return (
     <Card>
       <div className="mb-3">
-        <p className="tp-panel-title">Category Pacing</p>
+        <p className="tp-card-title">Category Pacing</p>
         <p className="tp-caption">YTD spend vs same period {year - 1}</p>
       </div>
       <table className="w-full text-xs">
@@ -1067,7 +1067,7 @@ function YoYBadge({ avgByYear, years, year }: { avgByYear: number[]; years: numb
     }`}>
       <div className="flex items-center gap-1">
         <Icon className="h-3.5 w-3.5 shrink-0" />
-        <span className="tp-panel-title leading-none">{abs}%</span>
+        <span className="font-bold leading-none">{abs}%</span>
       </div>
       <p className="mt-1 text-xs opacity-75">vs {year - 1}</p>
     </div>
@@ -1098,7 +1098,7 @@ function CategoryAvgMonthlyGrid({ year, completedMonths }: { year: number; compl
       </CardHeader>
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
         {items.map((item: { categoryId: string; name: string; color: string; avgMonthly: number; trend: { avgByYear: number[] } | undefined }) => (
-          <div key={item.categoryId} className="bg-muted px-3 py-2.5 border-t border-border">
+          <div key={item.categoryId} className="py-2.5 border-t border-border">
             <div className="flex items-center gap-1.5 mb-1">
               <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
               <p className="truncate tp-caption">{item.name}</p>
