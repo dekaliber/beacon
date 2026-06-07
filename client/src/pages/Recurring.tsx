@@ -1138,7 +1138,7 @@ export function Recurring() {
               {ruleGroups.map(([groupName, groupRules]) => (
                 <div key={groupName ?? "__ungrouped__"}>
                   {groupName && (
-                    <p className="mb-2 tp-panel-title">{groupName}</p>
+                    <p className="mb-2 tp-card-title">{groupName}</p>
                   )}
                   <Card>
                     <RuleTable

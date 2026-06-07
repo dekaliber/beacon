@@ -510,7 +510,7 @@ function LotEditScreen({
         </div>
 
         {gains && gains.totalCost > 0 && (
-          <div className="rounded-md bg-muted px-4 py-3 space-y-1.5 text-sm">
+          <div className="rounded-md border border-border bg-card px-4 py-3 space-y-1.5 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Total Cost</span>
               <StatValue className="font-medium">{formatCurrency(gains.totalCost)}</StatValue>
@@ -706,7 +706,7 @@ function HoldingDetailSheet({
 
               {/* ST / LT gain breakdown */}
               {(holding.shortTermGain !== 0 || holding.longTermGain !== 0) && (
-                <div className="rounded-md bg-muted px-4 py-3 flex gap-6 text-sm">
+                <div className="rounded-md border border-border bg-card px-4 py-3 flex gap-6 text-sm">
                   <div>
                     <p className="tp-caption mb-0.5">Short-Term</p>
                     <GainText value={holding.shortTermGain} />
@@ -980,7 +980,7 @@ function ActivityDetailSheet({
               </div>
             )}
             {isSale && a.shortTermGain != null && a.longTermGain != null && (
-              <div className="rounded-md bg-muted px-3 py-2.5 flex gap-6 text-sm">
+              <div className="rounded-md border border-border bg-card px-3 py-2.5 flex gap-6 text-sm">
                 <div>
                   <p className="tp-caption mb-0.5">Short-Term</p>
                   <GainText value={a.shortTermGain} />
@@ -1225,7 +1225,7 @@ function AddInvestmentFullscreen({
         {step === "lots" && selected && (
           <>
             {/* Ticker header */}
-            <div className="flex items-center gap-3 rounded-md bg-muted px-3 py-2.5">
+            <div className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2.5">
               <button type="button" onClick={() => setStep("search")} className="text-muted-foreground hover:text-foreground">
                 <ArrowLeft className="h-4 w-4" />
               </button>
@@ -1461,7 +1461,7 @@ function AddManualFullscreen({
         </div>
 
         {totalGain != null && (
-          <div className="rounded-md bg-muted px-4 py-2.5 flex items-center justify-between text-sm">
+          <div className="rounded-md border border-border bg-card px-4 py-2.5 flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Total Gain</span>
             <GainText value={totalGain} />
           </div>
@@ -1829,7 +1829,7 @@ export function MobileInvestmentAccount() {
           <div className="space-y-4">
             {/* Pending dividends */}
             {pendingDividends && pendingDividends.length > 0 && (
-              <div className="rounded-xl border border-border overflow-hidden">
+              <div className="rounded-xl border border-border bg-card overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted">
                   <Clock className="h-4 w-4 text-violet-deep" />
                   <span className="text-sm font-semibold">Pending Dividends</span>
@@ -1931,7 +1931,7 @@ export function MobileInvestmentAccount() {
             {filteredActivities.length === 0 && (
               <p className="py-8 text-center text-sm text-muted-foreground">No activity yet.</p>
             )}
-            <div className="divide-y divide-border rounded-xl border border-border overflow-hidden">
+            <div className="divide-y divide-border rounded-xl border border-border bg-card overflow-hidden">
               {filteredActivities.map((a) => {
                 const isPurchase = a.type === "PURCHASE";
                 const isSale = a.type === "SALE";

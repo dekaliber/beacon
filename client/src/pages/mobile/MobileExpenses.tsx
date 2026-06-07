@@ -165,7 +165,7 @@ function CategoryPicker({ categories, initialId = "", externalId }: { categories
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search categories…"
-              className="w-full rounded-md bg-muted px-3 py-1.5 text-sm focus:outline-none"
+              className="w-full rounded-md px-3 py-1.5 text-sm focus:outline-none"
             />
           </div>
           <div className="max-h-52 overflow-y-auto">
@@ -305,7 +305,7 @@ function TagPicker({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search or create tag…"
-              className="w-full rounded-md bg-muted px-3 py-1.5 text-sm focus:outline-none"
+              className="w-full rounded-md px-3 py-1.5 text-sm focus:outline-none"
             />
           </div>
           <div className="max-h-52 overflow-y-auto">
@@ -1233,7 +1233,7 @@ function MobileFilterSheet({
                   value={catSearch}
                   onChange={(e) => setCatSearch(e.target.value)}
                   placeholder="Search categories…"
-                  className="w-full rounded-md bg-muted px-3 py-2 text-sm focus:outline-none"
+                  className="w-full rounded-md px-3 py-2 text-sm focus:outline-none"
                 />
                 <div className="max-h-44 overflow-y-auto rounded-md border border-border">
                   {filteredCats.length === 0 ? (

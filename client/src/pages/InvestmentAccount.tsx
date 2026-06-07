@@ -1300,7 +1300,7 @@ function HoldingRow({
           ) : (
             <>
               {/* Lot sub-header: "Purchase Date" spans Symbol+Name so it never wraps */}
-              <tr className="bg-muted text-11 text-muted-foreground uppercase tracking-[1px] font-mono">
+              <tr className="text-11 text-muted-foreground uppercase tracking-[1px] font-mono">
                 <th colSpan={2} className="py-1.5 pl-4 pr-2 text-left font-medium whitespace-nowrap">
                   Purchase Date
                 </th>
@@ -2581,7 +2581,7 @@ function SellModal({
           <div className="overflow-x-auto rounded border border-border">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-muted">
+                <tr>
                   <th className="py-2 px-3 text-left tp-table-header">Lot Date</th>
                   <th className="py-2 px-3 text-right tp-table-header">Shares</th>
                   <th className="py-2 px-3 text-right tp-table-header">Cost/Share</th>
@@ -2700,7 +2700,7 @@ function SellModal({
             <div className="overflow-x-auto rounded border border-border">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-muted">
+                  <tr>
                     <th className="py-2 px-3 text-left tp-table-header">Lot Date</th>
                     <th className="py-2 px-3 text-right tp-table-header">Shares</th>
                     <th className="py-2 px-3 text-right tp-table-header">Cost/Share</th>
@@ -3922,7 +3922,7 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
               <div className="overflow-x-auto rounded border border-border">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="bg-muted">
+                    <tr>
                       <th className="py-2 px-3 text-left tp-table-header">Lot Date</th>
                       <th className="py-2 px-3 text-right tp-table-header">Shares</th>
                       <th className="py-2 px-3 text-right tp-table-header">Cost/Share</th>
@@ -4102,7 +4102,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
     return (
       <Card className="overflow-hidden">
         <div className="px-4 py-3 border-b border-border">
-          <h3 className="font-semibold text-sm">Activity</h3>
+          <h3 className="tp-card-title">Activity</h3>
         </div>
         <div className="p-4 space-y-3">
           {[1, 2, 3].map((i) => (
@@ -4323,7 +4323,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
           {/* Header + filters */}
           <div className="px-4 pt-3 pb-3 border-b border-border space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-sm">Activity</h3>
+              <h3 className="tp-card-title">Activity</h3>
               {hasActiveFilters && (
                 <button
                   onClick={clearFilters}
@@ -4389,7 +4389,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
           <div className="overflow-x-auto">
             <table className="w-full text-13" style={{ tableLayout: "fixed", minWidth: "900px" }}>
               <thead>
-                <tr className="text-11 text-muted-foreground uppercase tracking-[1px] font-mono bg-muted border-b border-border">
+                <tr className="text-11 text-muted-foreground uppercase tracking-[1px] font-mono border-b border-border">
                   <th style={{ width: "110px" }} className="py-2 pl-4 pr-2 text-left font-medium">Date</th>
                   <th style={{ width: "90px" }} className="py-2 px-2 text-left font-medium">Type</th>
                   <th style={{ width: "80px" }} className="py-2 px-2 text-left font-medium">Symbol</th>
@@ -6031,7 +6031,7 @@ export function InvestmentAccount() {
           ) : (holdings.length > 0 || manuals.length > 0) ? (
             <Card className="overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                <h3 className="font-semibold text-sm">Holdings</h3>
+                <h3 className="tp-card-title">Holdings</h3>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="secondary"
@@ -6058,7 +6058,7 @@ export function InvestmentAccount() {
               <div className="overflow-x-auto">
                 <table className="w-full" style={{ tableLayout: "fixed", minWidth: "1080px" }}>
                   <thead>
-                    <tr className="text-11 text-muted-foreground uppercase tracking-[1px] font-mono bg-muted border-b border-border">
+                    <tr className="text-11 text-muted-foreground uppercase tracking-[1px] font-mono border-b border-border">
                       <th
                         style={{ width: "80px" }}
                         className="py-2 pl-4 pr-2 text-left font-medium"

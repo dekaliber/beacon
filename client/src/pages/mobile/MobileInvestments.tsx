@@ -295,7 +295,7 @@ function WithdrawalSheet({
 
           {/* Selected month detail */}
           {selectedData ? (
-            <div className="mt-4 rounded-lg bg-muted px-4 py-3 space-y-1.5">
+            <div className="mt-4 rounded-lg border border-border bg-card px-4 py-3 space-y-1.5">
               <p className="text-sm font-semibold">{selectedData.label} {currentYear}</p>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Withdrawn</span>

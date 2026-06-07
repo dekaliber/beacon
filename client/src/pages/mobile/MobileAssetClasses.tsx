@@ -358,7 +358,7 @@ function MobileAssetClassModal({
           {showDerivedTarget && (
             <div>
               <label className="mb-1.5 block text-sm font-medium">Target Allocation</label>
-              <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2.5 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2.5 text-sm text-muted-foreground">
                 <span>{derivedVal != null ? `${derivedVal.toFixed(1)}%` : "—"}</span>
                 <span className="opacity-60">∑ derived from sub-classes</span>
               </div>

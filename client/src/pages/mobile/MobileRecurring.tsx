@@ -773,7 +773,7 @@ function DeleteRuleSheet({
           {linkedExpenses === "loading" ? (
             <p className="tp-caption italic">Loading linked transactions…</p>
           ) : totalLinked === 0 ? (
-            <p className="rounded-md bg-muted px-3 py-2 text-xs">
+            <p className="rounded-md border border-border bg-card px-3 py-2 text-xs">
               No linked transactions — deleting will not affect any expenses.
             </p>
           ) : (

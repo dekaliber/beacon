@@ -580,7 +580,7 @@ function CCPaymentSheet({
             ) : expenses.length === 0 ? (
               <p className="py-4 text-center tp-caption">No transactions found</p>
             ) : (
-              <div className="rounded-md border border-border overflow-hidden">
+              <div className="rounded-md border border-border bg-card overflow-hidden">
                 {expenses.map((exp, i) => (
                   <div
                     key={exp.id}

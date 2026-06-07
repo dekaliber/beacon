@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   BarChart,
   Bar,
@@ -320,7 +321,7 @@ function ProjectionModal({ onClose }: { onClose: () => void }) {
 // ── Forecast range explanation modal ─────────────────────────────────────
 
 function ForecastRangeModal({ onClose }: { onClose: () => void }) {
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
       onClick={onClose}
@@ -362,7 +363,8 @@ function ForecastRangeModal({ onClose }: { onClose: () => void }) {
           </section>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -382,7 +384,7 @@ function Metric({
   plain?: boolean;
 }) {
   return (
-    <div className={plain ? "py-2.5" : "rounded-lg bg-muted px-3 py-2.5"}>
+    <div className={plain ? "py-2.5" : "rounded-lg border border-border bg-card px-3 py-2.5"}>
       <p className="tp-caption">{label}</p>
       <p className={`mt-0.5 tp-stat leading-tight whitespace-nowrap ${valueClass ?? ""}`}>{value}</p>
       {sub && <p className="mt-0.5 tp-caption">{sub}</p>}
