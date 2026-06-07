@@ -2271,6 +2271,7 @@ interface OpenPositionsTableProps {
  onPositionUpdated: () => void;
  extraTickers?: string[];
  onPricesUpdated?: (prices: Map<string, number>) => void;
+ tabBarRef?: React.RefObject<HTMLDivElement>;
 }
 
 const COL_GROUPS = [
@@ -2281,7 +2282,7 @@ const COL_GROUPS = [
 ] as const;
 type ColGroupKey = (typeof COL_GROUPS)[number]["key"];
 
-function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, chainMaxCapitalAtRiskMap, onEdit, onClose, onConfirm, onPositionUpdated, extraTickers, onPricesUpdated }: OpenPositionsTableProps) {
+function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, chainMaxCapitalAtRiskMap, onEdit, onClose, onConfirm, onPositionUpdated, extraTickers, onPricesUpdated, tabBarRef }: OpenPositionsTableProps) {
  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
  const [openColGroups, setOpenColGroups] = useState<Set<ColGroupKey>>(new Set(["live"]));
  const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -2869,8 +2870,56 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  return <React.Fragment key={p.id}>{primaryRow}{chainRow}</React.Fragment>;
  };
 
+ // Summary stats for the footer modules
+ let totalLivePnl: number | null = null;
+ let cspITMCapital = 0;
+ let ccITMCapital = 0;
+ for (const p of positions) {
+ const curPrem = p.currentPremiumPerShare ?? null;
+ if (curPrem != null) {
+ const pnl = (p.premiumPerShare - curPrem) * 100 * p.contracts - (p.feesOpen ?? 0);
+ totalLivePnl = (totalLivePnl ?? 0) + pnl;
+ }
+ const stockNow = livePrices.get(p.ticker.symbol) ?? null;
+ if (stockNow != null) {
+ const isItm = p.optionType === "PUT" ? stockNow < p.strikePrice : stockNow > p.strikePrice;
+ if (isItm) {
+ const car = calcPosition(p).capitalAtRisk;
+ if (p.optionType === "PUT") cspITMCapital += car;
+ else ccITMCapital += car;
+ }
+ }
+ }
+ const hasCARData = positions.some((p) => livePrices.has(p.ticker.symbol));
+
  return (
  <>
+ {tabBarRef?.current && createPortal(
+ <div className="ml-auto flex items-center gap-2 py-1.5">
+ <span className="tp-caption">
+ {lastFetchedAt != null ? (
+ <>
+ {"Prices as of "}
+ {lastFetchedAt.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit", timeZone: "America/New_York" })}
+ {" "}
+ {lastFetchedAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })}
+ {" ET via Tradier"}
+ </>
+ ) : (
+ "Prices via Tradier"
+ )}
+ </span>
+ <button
+ onClick={fetchAllQuotes}
+ disabled={refreshingAll}
+ className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 disabled:opacity-50 transition-colors"
+ >
+ <RefreshCw className={cn("h-3 w-3", refreshingAll && "animate-spin")} />
+ Refresh all premiums
+ </button>
+ </div>,
+ tabBarRef.current
+ )}
  <div ref={tableContainerRef} className="overflow-x-auto" onScroll={(e) => { if (portalScrollRef.current) portalScrollRef.current.scrollLeft = e.currentTarget.scrollLeft; }}>
  <table className="w-full text-left border-collapse min-w-[700px]">
  <colgroup>
@@ -3014,28 +3063,44 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  </tbody>
  </table>
  </div>
- <div className="flex items-center justify-end gap-2 px-4 py-2 border-t border-border/50">
- <span className="tp-caption">
- {lastFetchedAt != null ? (
- <>
- Prices as of{""}
- {lastFetchedAt.toLocaleDateString("en-US", { month:"numeric", day:"numeric", year:"2-digit", timeZone:"America/New_York" })}
- {""}
- {lastFetchedAt.toLocaleTimeString("en-US", { hour:"numeric", minute:"2-digit", timeZone:"America/New_York" })}
- {" ET via Tradier"}
- </>
+ <div className="grid grid-cols-2 divide-x divide-border/50">
+ {/* Capital at Risk of Assignment */}
+ <div className="flex flex-col gap-0.5 px-4 pt-4">
+ <span className="tp-eyebrow">Capital at Risk of Assignment</span>
+ {hasCARData ? (
+ cspITMCapital === 0 && ccITMCapital === 0 ? (
+ <span className="tp-numeric font-medium text-up">$0.00</span>
  ) : (
-"Prices via Tradier"
- )}
+ <div className="flex items-center gap-3">
+ {cspITMCapital > 0 && (
+ <span className="tp-numeric">
+ <span className="tp-caption mr-1">CSP</span>
+ <span className="font-medium text-down">−${fmtUSD(cspITMCapital)}</span>
  </span>
- <button
- onClick={fetchAllQuotes}
- disabled={refreshingAll}
- className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 disabled:opacity-50 transition-colors"
- >
- <RefreshCw className={cn("h-3 w-3", refreshingAll &&"animate-spin")} />
- Refresh all premiums
- </button>
+ )}
+ {ccITMCapital > 0 && (
+ <span className="tp-numeric">
+ <span className="tp-caption mr-1">CC</span>
+ <span className="font-medium text-up">+${fmtUSD(ccITMCapital)}</span>
+ </span>
+ )}
+ </div>
+ )
+ ) : (
+ <span className="tp-numeric text-muted-foreground">—</span>
+ )}
+ </div>
+ {/* Total Live P&L */}
+ <div className="flex flex-col gap-0.5 px-4 pt-4">
+ <span className="tp-eyebrow">Total Live P&L</span>
+ {totalLivePnl != null ? (
+ <span className={cn("tp-numeric font-medium", totalLivePnl >= 0 ? "text-up" : "text-down")}>
+ {totalLivePnl >= 0 ? "+" : "−"}${fmtUSD(Math.abs(totalLivePnl))}
+ </span>
+ ) : (
+ <span className="tp-numeric text-muted-foreground">—</span>
+ )}
+ </div>
  </div>
 
  {/* Sticky column-header portal — shown when the thead has scrolled above the nav */}
@@ -5461,6 +5526,7 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
 
 export function OptionsTrading() {
  const [tab, setTab] = useState<"open" |"closed">("open");
+ const tabBarRef = useRef<HTMLDivElement>(null);
  const [positionModal, setPositionModal] = useState<"new" | OptionsPosition | null>(null);
  const [closeModal, setCloseModal] = useState<OptionsPosition | null>(null);
  const [editCloseModal, setEditCloseModal] = useState<OptionsPosition | null>(null);
@@ -5636,7 +5702,7 @@ export function OptionsTrading() {
 
  {/* Tabs */}
  <Card>
- <div className="flex border-b border-border px-4">
+ <div ref={tabBarRef} className="flex border-b border-border px-4">
  <button className={tabClass(tab ==="open")} onClick={() => setTab("open")}>
  Open Positions
  {openPositions.length > 0 && (
@@ -5668,6 +5734,7 @@ export function OptionsTrading() {
  onPositionUpdated={refetchPositions}
  extraTickers={activeLotTickers}
  onPricesUpdated={handlePricesUpdated}
+ tabBarRef={tabBarRef}
  />
  ) : (
  <ClosedPositionsTable
