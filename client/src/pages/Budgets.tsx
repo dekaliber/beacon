@@ -439,8 +439,8 @@ function BudgetPanelCard({
  const displayPctAboveBelow = isCompletedYear ? actualPctAboveBelow : panel.percentAboveBelow;
  const isOverPace = displayPctAboveBelow > 0;
  const isNoBudget = panel.effectiveAnnualBudget === 0;
- const isCurrentYear = today.getFullYear() === parseInt(currentMonthName.split("")[1]);
- const mtdMonthLabel = currentMonthName.split("")[0];
+ const isCurrentYear = today.getFullYear() === parseInt(currentMonthName.split(" ")[1]);
+ const mtdMonthLabel = currentMonthName.split(" ")[0];
  const daysLeft = isCurrentYear
  ? new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() - today.getDate()
  : 0;
