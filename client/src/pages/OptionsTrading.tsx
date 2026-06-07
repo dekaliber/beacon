@@ -48,7 +48,7 @@ import { AssignedSharesCard } from"@/components/AssignedSharesCard";
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { DatePicker } from"@/components/DatePicker";
-import { Plus, ChevronDown, ChevronUp, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info } from"lucide-react";
+import { Plus, ChevronDown, ChevronUp, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, CircleQuestionMark } from"lucide-react";
 import { createPortal } from"react-dom";
 import { cn, parseAmount } from"@/lib/utils";
 import { SectionLabel, ColumnHeader, StatValue } from"@/components/Typography";
@@ -2271,7 +2271,7 @@ interface OpenPositionsTableProps {
  onPositionUpdated: () => void;
  extraTickers?: string[];
  onPricesUpdated?: (prices: Map<string, number>) => void;
- tabBarRef?: React.RefObject<HTMLDivElement>;
+ tabBarRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 const COL_GROUPS = [
@@ -4492,6 +4492,18 @@ function isNonTradingDay(utcMs: number): boolean {
 
 // ── Summary Cards ──────────────────────────────────────────────────────────────
 
+// Hover (?) tooltip for a summary-card heading; mirrors the NIIT tooltip on TaxEstimator.
+function CardInfoTooltip({ children }: { children: React.ReactNode }) {
+ return (
+ <span className="group relative inline-flex">
+ <CircleQuestionMark className="h-3.5 w-3.5 cursor-default text-muted-foreground/60" />
+ <span className="pointer-events-none invisible absolute bottom-full left-1/2 z-[60] mb-2 w-64 -translate-x-1/2 rounded-md border border-border bg-background px-3 py-2 tp-caption opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100">
+ {children}
+ </span>
+ </span>
+ );
+}
+
 function SummaryCards({
  openPositions,
  closedPositions,
@@ -4875,6 +4887,74 @@ function SummaryCards({
  return totalWeightedReturn * (365 / totalElapsedDays) * 100;
  })();
 
+ // Live P&L of open positions (mark-to-market against current premium).
+ // Matches the per-row livePnl used in OpenPositionsTable's footer.
+ const totalLivePnl = openPositions.reduce<number | null>((acc, p) => {
+ const curPrem = p.currentPremiumPerShare ?? null;
+ if (curPrem == null) return acc;
+ const pnl = (p.premiumPerShare - curPrem) * 100 * p.contracts - (p.feesOpen ?? 0);
+ return (acc ?? 0) + pnl;
+ }, null);
+
+ // Total current return: realized premium + live P&L of open positions +
+ // underlying P&L (realized + unrealized from assigned lots).
+ const totalMarkedPnl =
+ cumulativePremium + (totalLivePnl ?? 0) + (totalUnrealizedPnl ?? 0) + (totalRealizedPnl ?? 0);
+
+ // % return on the capital base, as a true time-weighted return.
+ // Split the timeline at each basis adjustment; chain per-period returns
+ // geometrically where each period's NAV start = (basis in effect) +
+ // (gains accumulated before that period). Realized premium is attributed by
+ // close date; the current snapshot P/L (live + underlying) lands in the final
+ // period. With no basis adjustments this collapses to markedPnl / startingBasis.
+ const markedReturnPct = (() => {
+ if (!settings?.startingBasis || annReturnFirstDate == null) return null;
+ const snapshotPnl = (totalLivePnl ?? 0) + (totalUnrealizedPnl ?? 0) + (totalRealizedPnl ?? 0);
+
+ const changesAfterStart = capitalChanges.filter(
+ (c) => new Date(c.effectiveDate +"T12:00:00").getTime() > annReturnFirstDate
+ );
+
+ // No basis adjustments — simple return on the starting basis
+ if (changesAfterStart.length === 0) {
+ return settings.startingBasis > 0 ? (totalMarkedPnl / settings.startingBasis) * 100 : null;
+ }
+
+ // Build sub-period boundaries (same construction as the annualized return)
+ const sorted = [...changesAfterStart].sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
+ const periods: { startMs: number; basis: number }[] = [
+ { startMs: annReturnFirstDate, basis: settings.startingBasis },
+ ];
+ for (const c of sorted) {
+ const changeMs = new Date(c.effectiveDate +"T12:00:00").getTime();
+ const prevBasis = periods[periods.length - 1].basis;
+ periods.push({ startMs: changeMs, basis: prevBasis + Number(c.delta) });
+ }
+
+ // Geometric chaining of per-period returns
+ let chained = 1;
+ let accumulatedGains = 0;
+ for (let i = 0; i < periods.length; i++) {
+ const periodStart = periods[i].startMs;
+ const periodEnd = i + 1 < periods.length ? periods[i + 1].startMs : Date.now();
+ const periodBasis = periods[i].basis;
+
+ let gain = closedPositions.reduce((sum, p) => {
+ const closeMs = p.closedAt
+ ? new Date(p.closedAt).getTime()
+ : new Date(p.expirationDate).getTime();
+ return closeMs >= periodStart && closeMs < periodEnd ? sum + (calcPosition(p).pnl ?? 0) : sum;
+ }, 0);
+ if (i === periods.length - 1) gain += snapshotPnl;
+
+ const navStart = periodBasis + accumulatedGains;
+ if (navStart > 0) chained *= 1 + gain / navStart;
+ accumulatedGains += gain;
+ }
+
+ return (chained - 1) * 100;
+ })();
+
  return (
  <>
  <div className="grid grid-cols-4 gap-4">
@@ -4904,79 +4984,10 @@ function SummaryCards({
  </div>
  </Card>
 
- {/* Premium This Week — split realized / pending */}
- <Card className="p-6">
- <SectionLabel>Premium This Week</SectionLabel>
- <div className="flex items-end mt-1">
- <div className="flex-1 min-w-0">
- <p className={`tp-stat truncate ${premiumThisWeek >= 0 ?"text-up" :"text-down"}`}>
- {premiumThisWeek !== 0 ?`$${fmtUSD(premiumThisWeek)}` :"$0.00"}
- </p>
- <p className="tp-caption mt-0.5">realized</p>
- </div>
- <div className="w-px bg-border self-stretch shrink-0" />
- <div className="flex-1 min-w-0 pl-3">
- <p className="tp-stat truncate text-ink-3">
- {pendingThisWeek > 0 ?`$${fmtUSD(pendingThisWeek)}` :"$0"}
- </p>
- <p className="tp-caption mt-0.5">pending</p>
- </div>
- </div>
- </Card>
-
- {/* Cumulative Premium — split cumulative total / annualized ROR */}
- <Card className="p-6">
- <SectionLabel>Cumulative Premium</SectionLabel>
- <div className="flex items-end mt-1">
- <div className="flex-1 min-w-0">
- <p className={`tp-stat truncate ${cumulativePremium >= 0 ?"text-up" :"text-down"}`}>
- {`$${fmtUSD(cumulativePremium)}`}
- </p>
- <p className="tp-caption mt-0.5 truncate">
- {annReturnFirstDate != null ?`since ${fmtDateTimeShort(new Date(annReturnFirstDate).toISOString())}` :"—"}
- </p>
- </div>
- <div className="w-px bg-border self-stretch shrink-0" />
- <div className="flex-1 min-w-0 pl-3">
- <p className={`tp-stat truncate ${annReturn != null ? (annReturn >= (settings?.targetReturn ?? 0) * 100 ?"text-up" :"text-warn") :""}`}>
- {annReturn != null ? fmtPct(annReturn) :"—"}
- </p>
- <p className="tp-caption mt-0.5">Annualized ROR</p>
- </div>
- </div>
- </Card>
-
- {/* Underlying P&L — unrealized and realized from assigned lots */}
- <Card className="p-6">
- <SectionLabel>Underlying P&L</SectionLabel>
- <div className="flex items-end mt-1">
- <div className="flex-1 min-w-0">
- <p className={`tp-stat truncate ${totalUnrealizedPnl != null && totalUnrealizedPnl !== 0 ? (totalUnrealizedPnl >= 0 ?"text-up" :"text-down") :""}`}>
- {totalUnrealizedPnl != null
- ?`${totalUnrealizedPnl >= 0 ?"+" :"−"}$${fmtUSD(Math.abs(totalUnrealizedPnl))}`
- :"—"}
- </p>
- <p className="tp-caption mt-0.5">Unrealized</p>
- </div>
- <div className="w-px bg-border self-stretch shrink-0" />
- <div className="flex-1 min-w-0 pl-3">
- <p className={`tp-stat truncate ${totalRealizedPnl != null && totalRealizedPnl !== 0 ? (totalRealizedPnl >= 0 ?"text-up" :"text-down") :""}`}>
- {totalRealizedPnl != null
- ?`${totalRealizedPnl >= 0 ?"+" :"−"}$${fmtUSD(Math.abs(totalRealizedPnl))}`
- :"—"}
- </p>
- <p className="tp-caption mt-0.5">Realized</p>
- </div>
- </div>
- </Card>
- </div>
-
- {/* Capital Utilization Panel (24hr) — render removed; utilizationData useMemo + hover state kept above */}
-
- {/* Capital Utilization Panel (market hours) */}
+ {/* Capital Utilization Rate — 3-card-wide module beside Capital at Risk */}
  {utilizationDataTrading && utilizationDataTrading.series.length > 0 && (
- <Card className="p-6 flex items-start">
- <div className="shrink-0 w-1/4">
+ <Card className="p-6 col-span-3 flex items-start">
+ <div className="shrink-0 w-1/3">
  <span className="flex items-center gap-1">
  <SectionLabel as="span">Capital Utilization Rate</SectionLabel>
  <button
@@ -5060,6 +5071,111 @@ function SummaryCards({
  </div>
  </Card>
  )}
+ </div>
+
+ {/* Row 2: weekly / cumulative / underlying / marked totals */}
+ <div className="grid grid-cols-4 gap-4">
+ {/* Premium This Week — split realized / pending */}
+ <Card className="p-6">
+ <SectionLabel>Premium This Week</SectionLabel>
+ <div className="flex items-end mt-1">
+ <div className="flex-1 min-w-0">
+ <p className={`tp-stat truncate ${premiumThisWeek >= 0 ?"text-up" :"text-down"}`}>
+ {premiumThisWeek !== 0 ?`$${fmtUSD(premiumThisWeek)}` :"$0.00"}
+ </p>
+ <p className="tp-caption mt-0.5">realized</p>
+ </div>
+ <div className="w-px bg-border self-stretch shrink-0" />
+ <div className="flex-1 min-w-0 pl-3">
+ <p className="tp-stat truncate text-ink-3">
+ {pendingThisWeek > 0 ?`$${fmtUSD(pendingThisWeek)}` :"$0"}
+ </p>
+ <p className="tp-caption mt-0.5">pending</p>
+ </div>
+ </div>
+ </Card>
+
+ {/* Cumulative Premium — split cumulative total / annualized ROR */}
+ <Card className="p-6">
+ <div className="flex items-center gap-1.5">
+ <SectionLabel as="span">Cumulative Premium</SectionLabel>
+ <CardInfoTooltip>
+ Premium collected on positions that have been <span className="font-medium text-foreground">closed</span>
+ </CardInfoTooltip>
+ </div>
+ <div className="flex items-end mt-1">
+ <div className="flex-1 min-w-0">
+ <p className={`tp-stat truncate ${cumulativePremium >= 0 ?"text-up" :"text-down"}`}>
+ {`$${fmtUSD(cumulativePremium)}`}
+ </p>
+ <p className="tp-caption mt-0.5 truncate">
+ {annReturnFirstDate != null ?`since ${fmtDateTimeShort(new Date(annReturnFirstDate).toISOString())}` :"—"}
+ </p>
+ </div>
+ <div className="w-px bg-border self-stretch shrink-0" />
+ <div className="flex-1 min-w-0 pl-3">
+ <p className={`tp-stat truncate ${annReturn != null ? (annReturn >= (settings?.targetReturn ?? 0) * 100 ?"text-up" :"text-warn") :""}`}>
+ {annReturn != null ? fmtPct(annReturn) :"—"}
+ </p>
+ <p className="tp-caption mt-0.5">Annualized ROR</p>
+ </div>
+ </div>
+ </Card>
+
+ {/* Underlying P&L — unrealized and realized from assigned lots */}
+ <Card className="p-6">
+ <div className="flex items-center gap-1.5">
+ <SectionLabel as="span">Underlying P&L</SectionLabel>
+ <CardInfoTooltip>
+ Current gain or loss of shares that have been assigned from a put
+ </CardInfoTooltip>
+ </div>
+ <div className="flex items-end mt-1">
+ <div className="flex-1 min-w-0">
+ <p className={`tp-stat truncate ${totalUnrealizedPnl != null && totalUnrealizedPnl !== 0 ? (totalUnrealizedPnl >= 0 ?"text-up" :"text-down") :""}`}>
+ {totalUnrealizedPnl != null
+ ?`${totalUnrealizedPnl >= 0 ?"+" :"−"}$${fmtUSD(Math.abs(totalUnrealizedPnl))}`
+ :"—"}
+ </p>
+ <p className="tp-caption mt-0.5">Unrealized</p>
+ </div>
+ <div className="w-px bg-border self-stretch shrink-0" />
+ <div className="flex-1 min-w-0 pl-3">
+ <p className={`tp-stat truncate ${totalRealizedPnl != null && totalRealizedPnl !== 0 ? (totalRealizedPnl >= 0 ?"text-up" :"text-down") :""}`}>
+ {totalRealizedPnl != null
+ ?`${totalRealizedPnl >= 0 ?"+" :"−"}$${fmtUSD(Math.abs(totalRealizedPnl))}`
+ :"—"}
+ </p>
+ <p className="tp-caption mt-0.5">Realized</p>
+ </div>
+ </div>
+ </Card>
+
+ {/* Total Marked P/L — total current return / time-weighted % on basis */}
+ <Card className="p-6">
+ <div className="flex items-center gap-1.5">
+ <SectionLabel as="span">Total Marked P/L</SectionLabel>
+ <CardInfoTooltip>
+ Rollup of premium collected, current P&L of open positions, and total P&L of underlying shares — note that the % return is <span className="font-medium text-foreground">not</span> annualized
+ </CardInfoTooltip>
+ </div>
+ <div className="flex items-end mt-1">
+ <div className="flex-1 min-w-0">
+ <p className={`tp-stat truncate ${totalMarkedPnl !== 0 ? (totalMarkedPnl >= 0 ?"text-up" :"text-down") :""}`}>
+ {`${totalMarkedPnl >= 0 ?"+" :"−"}$${fmtUSD(Math.abs(totalMarkedPnl))}`}
+ </p>
+ <p className="tp-caption mt-0.5">Total current return</p>
+ </div>
+ <div className="w-px bg-border self-stretch shrink-0" />
+ <div className="flex-1 min-w-0 pl-3">
+ <p className={`tp-stat truncate ${markedReturnPct != null && markedReturnPct !== 0 ? (markedReturnPct >= 0 ?"text-up" :"text-down") :""}`}>
+ {markedReturnPct != null ? fmtPct(markedReturnPct) :"—"}
+ </p>
+ <p className="tp-caption mt-0.5">Return on basis</p>
+ </div>
+ </div>
+ </Card>
+ </div>
 
  {showUtilModal && (
  <div
