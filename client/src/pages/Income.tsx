@@ -158,6 +158,7 @@ function EditableTypeaheadCell({
  const [focusIdx, setFocusIdx] = useState(0);
  const [dropdownPos, setDropdownPos] = useState<{ top?: number; bottom?: number; left: number; minWidth: number }>({ left: 0, minWidth: 0 });
  const ref = useRef<HTMLDivElement>(null);
+ const dropdownRef = useRef<HTMLDivElement>(null);
  const inputRef = useRef<HTMLInputElement>(null);
 
  const sorted = useMemo(() =>
@@ -180,7 +181,11 @@ function EditableTypeaheadCell({
  if (editing) {
  inputRef.current?.focus();
  const handler = (e: MouseEvent) => {
- if (ref.current && !ref.current.contains(e.target as Node)) {
+ const target = e.target as Node;
+ if (
+ ref.current && !ref.current.contains(target) &&
+ dropdownRef.current && !dropdownRef.current.contains(target)
+ ) {
  setEditing(false);
  setSearch("");
  }
@@ -229,7 +234,9 @@ function EditableTypeaheadCell({
  placeholder="Type to filter..."
  className="w-full rounded border border-primary px-1 py-0.5 focus:outline-none"
  />
+ {createPortal(
  <div
+ ref={dropdownRef}
  style={{ position:"fixed", top: dropdownPos.top, bottom: dropdownPos.bottom, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 180), zIndex: 9999 }}
  className="rounded-md border border-border bg-background shadow-lg"
  >
@@ -249,7 +256,9 @@ function EditableTypeaheadCell({
  ))
  )}
  </div>
- </div>
+ </div>,
+ document.body
+ )}
  </>
  ) : color != null ? (
  <span
