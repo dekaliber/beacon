@@ -3504,8 +3504,8 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  const isCollapsed = collapsedWeeks.has(monday);
  const weekPnl = positions.reduce((sum, p) => sum + (calcPosition(p).pnl ?? 0), 0);
  return [
- <tr key={`week-${label}`} className="bg-muted border-y border-border cursor-pointer hover:bg-muted-hover select-none" onClick={() => toggleWeek(monday)}>
- <td colSpan={5} className="py-1.5 pl-4 sticky left-0 z-[2] bg-[#FBFCFE]">
+ <tr key={`week-${label}`} className="group border-y border-border cursor-pointer hover:bg-muted select-none" onClick={() => toggleWeek(monday)}>
+ <td colSpan={5} className="py-1.5 pl-4 sticky left-0 z-[2] group-hover:bg-muted">
  <div className="flex items-center gap-1.5">
  <SectionLabel as="span" className="text-foreground">{label}</SectionLabel>
  {isCollapsed ? <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" /> : <ChevronUp className="h-3 w-3 text-muted-foreground shrink-0" />}
