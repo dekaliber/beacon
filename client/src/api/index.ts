@@ -1058,6 +1058,7 @@ export interface ActiveAssignedHolding {
   assignmentExpiration: string; // YYYY-MM-DD
   acquiredDate: string | null;
   openCallContracts: number; // outstanding CC contracts against this batch
+  openCallAvgStrike: number | null; // contracts-weighted avg strike of those CCs
   fromOptionsPositionId: string | null;
 }
 

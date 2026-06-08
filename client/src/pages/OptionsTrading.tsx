@@ -45,7 +45,7 @@ import {
 import type { TickerSearchResult } from"@/types";
 import { useNotifications } from"@/context/NotificationContext";
 import { Card } from"@/components/Card";
-import { AssignedSharesCard } from"@/components/AssignedSharesCard";
+import { AssignedSharesCard, type SellCoveredCallSeed } from"@/components/AssignedSharesCard";
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { DatePicker } from"@/components/DatePicker";
@@ -428,10 +428,23 @@ function computePerformanceMetrics(positions: OptionsPosition[]): PerformanceMet
 
 // ── Open Position Modal ────────────────────────────────────────────────────────
 
+// Seed values for opening the modal in create mode pre-filled — e.g. the
+// "Sell covered call" shortcut on an assigned lot. Contracts and cost basis are
+// not seeded here; once the batch loads they're applied from its authoritative
+// contractsRemaining / weightedCostPerShare (same as picking the lot manually).
+export interface PositionPrefill {
+ kind: "prefill";
+ tickerId: string | null;
+ tickerSymbol: string;
+ investmentAccountId: string;
+ assignedBatchKey: string; // `${strike}|${expiry(YYYY-MM-DD)}`
+}
+
 interface PositionModalProps {
  tickers: OptionsTicker[];
  groups: OptionsPositionGroup[];
  editing: OptionsPosition | null;
+ prefill?: PositionPrefill;
  onClose: () => void;
  onSaved: () => void;
  onDelete: () => Promise<void>;
@@ -461,9 +474,9 @@ type TickerDropdownItem =
  | { kind:"existing"; id: string; symbol: string }
  | { kind:"new"; result: TickerSearchResult };
 
-function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerCreated }: PositionModalProps) {
- const [tickerQuery, setTickerQuery] = useState(editing?.ticker?.symbol ??"");
- const [selectedExistingId, setSelectedExistingId] = useState<string | null>(editing?.tickerId ?? null);
+function PositionModal({ tickers, editing, prefill, onClose, onSaved, onDelete, onTickerCreated }: PositionModalProps) {
+ const [tickerQuery, setTickerQuery] = useState(editing?.ticker?.symbol ?? prefill?.tickerSymbol ??"");
+ const [selectedExistingId, setSelectedExistingId] = useState<string | null>(editing?.tickerId ?? prefill?.tickerId ?? null);
  const [dropdownItems, setDropdownItems] = useState<TickerDropdownItem[]>([]);
  const [searchLoading, setSearchLoading] = useState(false);
  const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -496,7 +509,7 @@ function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerC
  const [deltaAtOpenStatus, setDeltaAtOpenStatus] = useState<"idle" |"fetching" |"success" |"error">("idle");
  const [notes, setNotes] = useState(editing?.notes ??"");
  const [groupId] = useState(editing?.groupId ??"");
- const [investmentAccountId, setInvestmentAccountId] = useState(editing?.investmentAccountId ??"");
+ const [investmentAccountId, setInvestmentAccountId] = useState(editing?.investmentAccountId ?? prefill?.investmentAccountId ??"");
  const [selectedBatchKey, setSelectedBatchKey] = useState<string>(() => {
  if (editing?.assignedFromStrikePrice != null && editing?.assignedFromExpirationDate) {
  const expDate = editing.assignedFromExpirationDate.split("T")[0];
@@ -528,6 +541,24 @@ function PositionModal({ tickers, editing, onClose, onSaved, onDelete, onTickerC
  [isCoveredCall, selectedTicker, investmentAccountId]
  );
  const hasAssignedBatches = assignedBatches && assignedBatches.length > 0;
+
+ // Prefill path ("Sell covered call" shortcut): once the assigned batches load,
+ // select the originating lot and pull its contractsRemaining / cost basis —
+ // mirroring what choosing the lot from the picker would set. Runs once.
+ const prefillApplied = useRef(false);
+ useEffect(() => {
+ if (!prefill || prefillApplied.current || !assignedBatches || assignedBatches.length === 0) return;
+ const [strike, expiry] = prefill.assignedBatchKey.split("|");
+ const batch = assignedBatches.find(
+ (b) =>`${parseFloat(b.strikePrice)}|${b.expirationDate}` ===`${parseFloat(strike)}|${expiry}`
+ );
+ if (!batch) return;
+ setSelectedBatchKey(`${batch.strikePrice}|${batch.expirationDate}`);
+ setContracts(batch.contractsRemaining.toString());
+ if (batch.weightedCostPerShare != null)
+ setShareCostBasis(batch.weightedCostPerShare.toFixed(6).replace(/\.?0+$/,""));
+ prefillApplied.current = true;
+ }, [prefill, assignedBatches]);
 
  const fetchPrice = useCallback(async (symbol: string) => {
  try {
@@ -5698,7 +5729,7 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
 export function OptionsTrading() {
  const [tab, setTab] = useState<"open" |"closed">("open");
  const tabBarRef = useRef<HTMLDivElement>(null);
- const [positionModal, setPositionModal] = useState<"new" | OptionsPosition | null>(null);
+ const [positionModal, setPositionModal] = useState<"new" | OptionsPosition | PositionPrefill | null>(null);
  const [closeModal, setCloseModal] = useState<OptionsPosition | null>(null);
  const [editCloseModal, setEditCloseModal] = useState<OptionsPosition | null>(null);
  const [confirmDraftModal, setConfirmDraftModal] = useState<OptionsPosition | null>(null);
@@ -5753,8 +5784,8 @@ export function OptionsTrading() {
  const tickerEntries = Array.from(openTickerMap.entries());
 
  // ── Assigned lot prices (shared across SummaryCards, OpenPositionsTable, AssignedSharesCard) ──
- const { data: activeHoldings } = useApi(getActiveAssignedHoldings, []);
- const { data: realizedAssignedData } = useApi(getRealizedDispositions, []);
+ const { data: activeHoldings, refetch: refetchActiveHoldings } = useApi(getActiveAssignedHoldings, []);
+ const { data: realizedAssignedData, refetch: refetchRealizedAssigned } = useApi(getRealizedDispositions, []);
  const activeLotTickers = useMemo(
  () => [...new Set((activeHoldings ?? []).map((r) => r.ticker))],
  [activeHoldings]
@@ -5794,7 +5825,24 @@ export function OptionsTrading() {
  const refetchAll = useCallback(() => {
  refetchPositions();
  refetchTickers();
- }, [refetchPositions, refetchTickers]);
+ // Opening/editing a covered call changes lot coverage, so keep the
+ // Assigned Lots table in sync without a manual page refresh.
+ refetchActiveHoldings();
+ refetchRealizedAssigned();
+ }, [refetchPositions, refetchTickers, refetchActiveHoldings, refetchRealizedAssigned]);
+
+ // "Sell covered call" shortcut from an assigned lot: open the position modal
+ // in create mode pre-filled to write a CC against that lot.
+ const handleSellCoveredCall = useCallback((seed: SellCoveredCallSeed) => {
+ const tickerId = (tickers ?? []).find((t) => t.symbol === seed.ticker)?.id ?? null;
+ setPositionModal({
+ kind:"prefill",
+ tickerId,
+ tickerSymbol: seed.ticker,
+ investmentAccountId: seed.accountId,
+ assignedBatchKey:`${seed.assignmentStrike}|${seed.assignmentExpiration}`,
+ });
+ }, [tickers]);
 
  const handleDelete = async (p: OptionsPosition) => {
  await deleteOptionsPosition(p.id);
@@ -5802,6 +5850,8 @@ export function OptionsTrading() {
  // income/pending records, so refresh notifications alongside positions.
  refetchPositions();
  refetchNotifications();
+ refetchActiveHoldings();
+ refetchRealizedAssigned();
  };
 
  const tabClass = (active: boolean) =>
@@ -5920,7 +5970,7 @@ export function OptionsTrading() {
  </Card>
 
  {/* Assigned stock (acquired via assigned CSPs) */}
- <AssignedSharesCard externalQuotes={assignedQuotes} />
+ <AssignedSharesCard externalQuotes={assignedQuotes} active={activeHoldings} realized={realizedAssignedData} onSellCoveredCall={handleSellCoveredCall} />
 
  {/* Performance Charts */}
  <PerformanceCharts
@@ -5940,10 +5990,11 @@ export function OptionsTrading() {
  <PositionModal
  tickers={tickers ?? []}
  groups={groups ?? []}
- editing={positionModal ==="new" ? null : positionModal}
+ editing={positionModal ==="new" || (typeof positionModal ==="object" &&"kind" in positionModal) ? null : positionModal}
+ prefill={typeof positionModal ==="object" && positionModal !== null &&"kind" in positionModal ? positionModal : undefined}
  onClose={() => setPositionModal(null)}
  onSaved={() => { setPositionModal(null); refetchAll(); }}
- onDelete={async () => { if (positionModal !=="new" && positionModal) { await handleDelete(positionModal); setPositionModal(null); } }}
+ onDelete={async () => { if (typeof positionModal ==="object" && positionModal !== null && !("kind" in positionModal)) { await handleDelete(positionModal); setPositionModal(null); } }}
  onTickerCreated={refetchTickers}
  />
  )}
@@ -5952,7 +6003,7 @@ export function OptionsTrading() {
  <ClosePositionModal
  position={closeModal}
  onClose={() => setCloseModal(null)}
- onSaved={() => { setCloseModal(null); refetchPositions(); refetchGroups(); refetchNotifications(); }}
+ onSaved={() => { setCloseModal(null); refetchPositions(); refetchGroups(); refetchNotifications(); refetchActiveHoldings(); refetchRealizedAssigned(); }}
  defaultBankingAccountId={settings?.defaultCashAccountId ?? null}
  />
  )}
@@ -5961,7 +6012,7 @@ export function OptionsTrading() {
  <EditCloseModal
  position={editCloseModal}
  onClose={() => setEditCloseModal(null)}
- onSaved={() => { setEditCloseModal(null); refetchPositions(); refetchNotifications(); }}
+ onSaved={() => { setEditCloseModal(null); refetchPositions(); refetchNotifications(); refetchActiveHoldings(); refetchRealizedAssigned(); }}
  onEditPositionDetails={() => { setPositionModal(editCloseModal); setEditCloseModal(null); }}
  />
  )}

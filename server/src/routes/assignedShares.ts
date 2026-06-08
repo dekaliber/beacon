@@ -50,6 +50,7 @@ assignedSharesRoutes.get("/active", async (req, res) => {
       },
       select: {
         contracts: true,
+        strikePrice: true,
         investmentAccountId: true,
         assignedFromStrikePrice: true,
         assignedFromExpirationDate: true,
@@ -63,6 +64,9 @@ assignedSharesRoutes.get("/active", async (req, res) => {
     `${ticker}|${strike}|${expiry}|${accountId}`;
 
   const openCallContractsByBatch = new Map<string, number>();
+  // Σ(callStrike × contracts) per batch; divided by contracts below to get the
+  // contracts-weighted average strike of the open covered calls on that lot.
+  const openCallStrikeWeightedByBatch = new Map<string, number>();
   for (const cc of openCalls) {
     if (cc.assignedFromStrikePrice == null || cc.assignedFromExpirationDate == null) continue;
     if (cc.investmentAccountId == null) continue;
@@ -73,6 +77,10 @@ assignedSharesRoutes.get("/active", async (req, res) => {
       cc.investmentAccountId
     );
     openCallContractsByBatch.set(key, (openCallContractsByBatch.get(key) ?? 0) + cc.contracts);
+    openCallStrikeWeightedByBatch.set(
+      key,
+      (openCallStrikeWeightedByBatch.get(key) ?? 0) + Number(cc.strikePrice) * cc.contracts
+    );
   }
 
   const rows = lots
@@ -81,6 +89,11 @@ assignedSharesRoutes.get("/active", async (req, res) => {
       const assignmentStrike = Number(l.fromOptionsPosition!.strikePrice);
       const assignmentExpiration = l.fromOptionsPosition!.expirationDate.toISOString().slice(0, 10);
       const key = batchKey(l.holding.ticker, assignmentStrike, assignmentExpiration, l.holding.accountId);
+      const openCallContracts = openCallContractsByBatch.get(key) ?? 0;
+      const openCallAvgStrike =
+        openCallContracts > 0
+          ? (openCallStrikeWeightedByBatch.get(key) ?? 0) / openCallContracts
+          : null;
       return {
         lotId: l.id,
         ticker: l.holding.ticker,
@@ -91,7 +104,8 @@ assignedSharesRoutes.get("/active", async (req, res) => {
         assignmentStrike,
         assignmentExpiration,
         acquiredDate: l.acquiredDate ? l.acquiredDate.toISOString().slice(0, 10) : null,
-        openCallContracts: openCallContractsByBatch.get(key) ?? 0,
+        openCallContracts,
+        openCallAvgStrike,
         fromOptionsPositionId: l.fromOptionsPositionId,
       };
     });

@@ -1,10 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
+import { BanknoteArrowUp } from "lucide-react";
 import { Card } from "@/components/Card";
 import { cn } from "@/lib/utils";
-import { useApi } from "@/hooks/useApi";
 import {
-  getActiveAssignedHoldings,
-  getRealizedDispositions,
   getUnderlyingQuotes,
   type ActiveAssignedHolding,
   type RealizedDisposition,
@@ -35,12 +33,14 @@ const tdBody = "px-3 py-2 text-13 whitespace-nowrap";
 interface ActiveGroup {
   key: string;
   ticker: string;
+  accountId: string;
   accountName: string | null;
   accountColor: string | null;
   assignmentStrike: number;
   assignmentExpiration: string;
   acquiredDate: string | null;
   openCallContracts: number;
+  openCallAvgStrike: number | null;
   shares: number;
 }
 
@@ -71,6 +71,7 @@ function groupActive(rows: ActiveAssignedHolding[]): ActiveGroup[] {
       map.set(key, {
         key,
         ticker: r.ticker,
+        accountId: r.accountId,
         accountName: r.accountName,
         accountColor: r.accountColor,
         assignmentStrike: r.assignmentStrike,
@@ -78,6 +79,7 @@ function groupActive(rows: ActiveAssignedHolding[]): ActiveGroup[] {
         acquiredDate: r.acquiredDate,
         // Same across the batch (matched by ticker|strike|expiry|account).
         openCallContracts: r.openCallContracts,
+        openCallAvgStrike: r.openCallAvgStrike,
         shares: r.shares,
       });
     }
@@ -134,10 +136,29 @@ function AccountChip({ name, color }: { name: string | null; color: string | nul
   );
 }
 
-export function AssignedSharesCard({ externalQuotes }: { externalQuotes?: Record<string, { price: number }> }) {
+export interface SellCoveredCallSeed {
+  ticker: string;
+  accountId: string;
+  assignmentStrike: number;
+  assignmentExpiration: string; // YYYY-MM-DD
+}
+
+export function AssignedSharesCard({
+  externalQuotes,
+  active,
+  realized,
+  onSellCoveredCall,
+}: {
+  externalQuotes?: Record<string, { price: number }>;
+  // The parent owns this data (and its refresh), so the card stays in sync when
+  // a covered call is opened/closed without an independent refetch.
+  active: ActiveAssignedHolding[] | null;
+  realized: { rows: RealizedDisposition[] } | null;
+  // Opens the position modal pre-filled to write a CC against this lot. Shown
+  // per row only when the lot has uncovered shares.
+  onSellCoveredCall?: (seed: SellCoveredCallSeed) => void;
+}) {
   const [tab, setTab] = useState<"active" | "realized">("active");
-  const { data: active } = useApi(getActiveAssignedHoldings, []);
-  const { data: realized } = useApi(getRealizedDispositions, []);
 
   const [ownQuotes, setOwnQuotes] = useState<Record<string, { price: number }>>({});
   const activeTickers = useMemo(
@@ -205,10 +226,12 @@ export function AssignedSharesCard({ externalQuotes }: { externalQuotes?: Record
                   <th className={cn(thClass, "text-right")}>Assign Strike</th>
                   <th className={cn(thClass, "text-right")}>Shares</th>
                   <th className={thClass}>Open CC</th>
+                  <th className={cn(thClass, "text-right")}>Avg CC Strike</th>
                   <th className={cn(thClass, "text-right")}>Current</th>
                   <th className={cn(thClass, "text-right")}>Mkt Value</th>
                   <th className={cn(thClass, "text-right")}>Unrealized P&amp;L</th>
                   <th className={cn(thClass, "text-right")}>% Gain</th>
+                  <th className={cn(thClass, "text-right")}><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -222,6 +245,8 @@ export function AssignedSharesCard({ externalQuotes }: { externalQuotes?: Record
                       ? ((price - g.assignmentStrike) / g.assignmentStrike) * 100
                       : null;
                   const coveredShares = g.openCallContracts * 100;
+                  const uncoveredShares = g.shares - coveredShares;
+                  const canSellCC = onSellCoveredCall != null && uncoveredShares >= 100;
                   return (
                     <tr key={g.key} className="border-b border-border/50 hover:bg-muted">
                       <td className={cn(tdClass, "font-bold font-mono")}>{g.ticker}</td>
@@ -235,9 +260,14 @@ export function AssignedSharesCard({ externalQuotes }: { externalQuotes?: Record
                       <td className={cn(tdClass, "text-right")}>{fmtShares(g.shares)}</td>
                       <td className={tdClass}>
                         {coveredShares > 0 ? (
-                          <span>
-                            {fmtShares(Math.min(coveredShares, g.shares))} / {fmtShares(g.shares)} sh
-                          </span>
+                          <span>{fmtShares(Math.min(coveredShares, g.shares))} sh</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className={cn(tdClass, "text-right")}>
+                        {g.openCallAvgStrike != null ? (
+                          `$${fmtUSD(g.openCallAvgStrike)}`
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
@@ -253,6 +283,24 @@ export function AssignedSharesCard({ externalQuotes }: { externalQuotes?: Record
                       </td>
                       <td className={cn(tdClass, "text-right", pct != null && pnlColor(pct))}>
                         {pct != null ? fmtPct(pct) : "—"}
+                      </td>
+                      <td className={cn(tdClass, "text-right")}>
+                        {canSellCC && (
+                          <button
+                            onClick={() =>
+                              onSellCoveredCall!({
+                                ticker: g.ticker,
+                                accountId: g.accountId,
+                                assignmentStrike: g.assignmentStrike,
+                                assignmentExpiration: g.assignmentExpiration,
+                              })
+                            }
+                            className="p-1.5 rounded text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
+                            title="Sell covered call"
+                          >
+                            <BanknoteArrowUp className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
