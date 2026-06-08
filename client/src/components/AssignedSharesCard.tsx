@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { BanknoteArrowUp } from "lucide-react";
+import { BanknoteArrowUp, BanknoteX } from "lucide-react";
 import { Card } from "@/components/Card";
 import { cn } from "@/lib/utils";
 import {
@@ -246,7 +246,7 @@ export function AssignedSharesCard({
                       : null;
                   const coveredShares = g.openCallContracts * 100;
                   const uncoveredShares = g.shares - coveredShares;
-                  const canSellCC = onSellCoveredCall != null && uncoveredShares >= 100;
+                  const canSellCC = uncoveredShares >= 100;
                   return (
                     <tr key={g.key} className="border-b border-border/50 hover:bg-muted">
                       <td className={cn(tdClass, "font-bold font-mono")}>{g.ticker}</td>
@@ -285,21 +285,27 @@ export function AssignedSharesCard({
                         {pct != null ? fmtPct(pct) : "—"}
                       </td>
                       <td className={cn(tdClass, "text-right")}>
-                        {canSellCC && (
-                          <button
-                            onClick={() =>
-                              onSellCoveredCall!({
-                                ticker: g.ticker,
-                                accountId: g.accountId,
-                                assignmentStrike: g.assignmentStrike,
-                                assignmentExpiration: g.assignmentExpiration,
-                              })
-                            }
-                            className="p-1.5 rounded text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
-                            title="Sell covered call"
-                          >
-                            <BanknoteArrowUp className="h-3.5 w-3.5" />
-                          </button>
+                        {onSellCoveredCall != null && (
+                          canSellCC ? (
+                            <button
+                              onClick={() =>
+                                onSellCoveredCall({
+                                  ticker: g.ticker,
+                                  accountId: g.accountId,
+                                  assignmentStrike: g.assignmentStrike,
+                                  assignmentExpiration: g.assignmentExpiration,
+                                })
+                              }
+                              className="p-1.5 rounded text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
+                              title="Sell covered call"
+                            >
+                              <BanknoteArrowUp className="h-3.5 w-3.5" />
+                            </button>
+                          ) : (
+                            <span className="p-1.5 inline-flex opacity-50" title="All shares used as collateral">
+                              <BanknoteX className="h-3.5 w-3.5 text-muted-foreground" />
+                            </span>
+                          )
                         )}
                       </td>
                     </tr>
