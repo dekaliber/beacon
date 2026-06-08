@@ -2768,7 +2768,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <td className={tdClass}>
  <div className="flex items-center gap-0.5">
  {isDraftRow ? (
- <button onClick={() => onConfirm(p)} className="p-1.5 rounded text-primary/50 hover:text-primary hover:bg-primary/10 transition-colors" title="Confirm & open position">
+ <button onClick={() => onConfirm(p)} className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors" title="Confirm & open position">
  <PlayCircle className="h-3.5 w-3.5" />
  </button>
  ) : (
