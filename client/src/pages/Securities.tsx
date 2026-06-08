@@ -4,6 +4,7 @@ import { createPortal } from"react-dom";
 import { AlertTriangle, ArrowLeft, Link2, Pencil, Layers, X, Plus, CircleQuestionMark } from"lucide-react";
 import { Card } from"@/components/Card";
 import { Button } from"@/components/Button";
+import { Tooltip } from"@/components/Tooltip";
 import { Modal } from"@/components/Modal";
 import { EmptyState } from"@/components/EmptyState";
 import { useApi } from"@/hooks/useApi";
@@ -217,13 +218,14 @@ export function SecuritiesPage() {
  {/* Actions */}
  <td className="py-2 pr-3 align-middle">
  <div className="flex items-center justify-end">
+ <Tooltip content="Edit security">
  <button
  onClick={() => setEditModal({ open: true, instrument })}
- className="rounded p-1 hover:bg-muted"
- title="Edit"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
- <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+ <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  </div>
  </td>
 

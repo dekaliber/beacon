@@ -29,6 +29,7 @@ import {
  Info,
 } from"lucide-react";
 import { Card } from"@/components/Card";
+import { Tooltip } from"@/components/Tooltip";
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { DatePicker } from"@/components/DatePicker";
@@ -224,27 +225,29 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
  {/* Edit cell */}
  <td className="py-2 pr-4 w-14">
  <div className="flex items-center gap-1">
+ <Tooltip content="Override statement amount">
  <button
  onClick={() => { setValue(Math.abs(event.amount).toFixed(2)); setOpen(true); }}
- className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
- title="Override statement amount"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
  <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  {onDetailClick && (
+ <Tooltip content="View statement transactions">
  <button
  onClick={(e) => {
  const rect = (e.currentTarget.closest("tr") as HTMLElement).getBoundingClientRect();
  onDetailClick(rect.top + rect.height / 2);
  }}
  className={cn(
-"rounded p-1.5 hover:bg-muted transition-colors",
+"rounded p-1.5 hover:bg-muted-hover transition-colors",
  isDetailOpen ?"text-primary" :"text-muted-foreground/40 hover:text-muted-foreground",
  )}
- title="View statement transactions"
  >
  <List className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  )}
  </div>
  </td>
@@ -457,21 +460,23 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
  </td>
  <td className="py-2 pr-4">
  <div className="flex items-center gap-1 h-[26px]">
+ <Tooltip content="Edit">
  <button
  onClick={() => setEditing(true)}
- className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
- title="Edit"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
  <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
+ <Tooltip content="Delete">
  <button
  onClick={handleDelete}
  disabled={saving}
- className="rounded p-1.5 text-muted-foreground/40 hover:text-down hover:bg-down/10 transition-colors disabled:opacity-40"
- title="Delete"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-down hover:bg-down-soft transition-colors disabled:opacity-40"
  >
  <Trash2 className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  </div>
  </td>
  <td className={cn(
@@ -732,7 +737,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
  <span className="font-medium">{event.description}</span>
  {event.relatedAccountName && event.type !=="CC_CHARGE" && (
  <span className="tp-caption">
- {event.type ==="TRANSFER_IN" ?"from" : event.type ==="TRANSFER_OUT" ?"to" :"·"}{""}
+ {event.type ==="TRANSFER_IN" ?"from" : event.type ==="TRANSFER_OUT" ?"to" :"·"}{" "}
  {event.relatedAccountName}
  </span>
  )}
@@ -776,21 +781,23 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
  {(event.type ==="TRANSFER_IN" || event.type ==="TRANSFER_OUT") &&
  event.transferId && (
  <>
+ <Tooltip content="Edit transfer">
  <button
  onClick={() => onEditTransfer?.(event)}
- className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
- title="Edit transfer"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
  <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  {event.confidence ==="PROJECTED" && (
+ <Tooltip content="Confirm transfer">
  <button
  onClick={async () => { await confirmTransfer(event.transferId!); onRefetch(); }}
- className="rounded p-1.5 text-muted-foreground/40 hover:text-up hover:bg-muted transition-colors"
- title="Confirm transfer"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-up hover:bg-up-soft transition-colors"
  >
  <SquareCheckBig className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  )}
  </>
  )}
@@ -1145,12 +1152,14 @@ export function CashFlow() {
  {formatCurrency(account.totalMarketValue)}
  </StatValue>
  </div>
+ <Tooltip content="Edit balance">
  <button
  onClick={() => setEditingBalance(account)}
- className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors flex-shrink-0"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors flex-shrink-0"
  >
  <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  </div>
  </Card>
  </div>

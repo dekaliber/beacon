@@ -45,6 +45,7 @@ import {
 import type { TickerSearchResult } from"@/types";
 import { useNotifications } from"@/context/NotificationContext";
 import { Card } from"@/components/Card";
+import { Tooltip } from"@/components/Tooltip";
 import { AssignedSharesCard, type SellCoveredCallSeed } from"@/components/AssignedSharesCard";
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
@@ -992,7 +993,7 @@ function PositionModal({ tickers, editing, prefill, onClose, onSaved, onDelete, 
  </div>
  <div>
  <label className="block text-xs font-medium mb-1">
- Premium / Share{""}
+ Premium / Share{" "}
  <span className="text-muted-foreground font-normal">
  {quoteFetching ?"(fetching…)" :""}
  </span>
@@ -1343,7 +1344,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  return (
  <div>
  <label className="block text-xs font-medium mb-1">
- {label}{""}
+ {label}{" "}
  <span className="text-muted-foreground font-normal">of {position.contracts}</span>
  </label>
  <input
@@ -1364,7 +1365,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  {!isExpired && (
  <div>
  <label className="block text-xs font-medium mb-1">
- {isRolled ?"Date / Time Rolled" :"Date Closed"}{""}
+ {isRolled ?"Date / Time Rolled" :"Date Closed"}{" "}
  <span className="text-muted-foreground font-normal">(ET)</span>
  </label>
  <input
@@ -1407,7 +1408,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  )}
  <div>
  <label className="block text-xs font-medium mb-1">
- Stock Price at Assignment{""}
+ Stock Price at Assignment{" "}
  <span className="text-muted-foreground font-normal">
  {assignedPriceFetching ?"(fetching…)" :"(from Tradier)"}
  </span>
@@ -1481,7 +1482,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
 
  <div>
  <label className="block text-xs font-medium mb-1">
- {isRolled ?"Fees at Close (buy-back)" :"Fees at Close"}{""}
+ {isRolled ?"Fees at Close (buy-back)" :"Fees at Close"}{" "}
  <span className="text-muted-foreground font-normal">(optional)</span>
  </label>
  <div className="relative">
@@ -1548,7 +1549,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  {/* Stock price (auto-fetched, editable) */}
  <div>
  <label className="block text-xs font-medium mb-1">
- Stock Price at Open{""}
+ Stock Price at Open{" "}
  <span className="text-muted-foreground font-normal">
  {priceFetching ?"(fetching…)" :"(from Tradier)"}
  </span>
@@ -1771,7 +1772,7 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
  </div>
  <div>
  <label className="block text-xs font-medium mb-1">
- Stock Price at Assignment{""}
+ Stock Price at Assignment{" "}
  <span className="text-muted-foreground font-normal">
  {assignedPriceFetching ?"(fetching…)" :"(from Tradier)"}
  </span>
@@ -2247,7 +2248,7 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
 
  <div>
  <label className="block text-xs font-medium mb-1">
- Stock Price at Open{""}
+ Stock Price at Open{" "}
  <span className="text-muted-foreground font-normal">
  {priceFetching ?"(fetching…)" :"(from Tradier)"}
  </span>
@@ -2766,19 +2767,25 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
 
  {/* ── Actions ── */}
  <td className={tdClass}>
- <div className="flex items-center gap-0.5">
+ <div className="flex items-center gap-1">
  {isDraftRow ? (
- <button onClick={() => onConfirm(p)} className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors" title="Confirm & open position">
+ <Tooltip content="Confirm & open position">
+ <button onClick={() => onConfirm(p)} className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors">
  <PlayCircle className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  ) : (
- <button onClick={() => onClose(p)} className={cn("p-1.5 rounded transition-colors", isExpired ?"text-warn hover:text-warn hover:bg-warn-soft/60" :"text-muted-foreground/40 hover:text-primary hover:bg-primary/10")} title="Close position">
+ <Tooltip content="Close position">
+ <button onClick={() => onClose(p)} className={cn("p-1.5 rounded transition-colors", isExpired ?"text-warn hover:text-warn hover:bg-warn-soft/60" :"text-muted-foreground/40 hover:text-primary hover:bg-primary/10")}>
  <CircleCheck className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  )}
- <button onClick={() => onEdit(p)} className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors" title="Edit">
+ <Tooltip content="Edit">
+ <button onClick={() => onEdit(p)} className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors">
  <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  </div>
  </td>
  </tr>
@@ -3637,21 +3644,23 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  </span>
  </td>
  <td className={td}>
- <div className="flex items-center gap-0.5">
+ <div className="flex items-center gap-1">
+ <Tooltip content="Edit close details">
  <button
  onClick={() => onEdit(p)}
- className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
- title="Edit close details"
+ className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
  <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
+ <Tooltip content="Delete">
  <button
  onClick={() => setConfirmDelete(p)}
- className="p-1.5 rounded text-muted-foreground/40 hover:text-down hover:bg-down/10 transition-colors"
- title="Delete"
+ className="p-1.5 rounded text-muted-foreground/40 hover:text-down hover:bg-down-soft transition-colors"
  >
  <Trash2 className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  </div>
  </td>
  </tr>

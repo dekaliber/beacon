@@ -20,6 +20,7 @@ import { ToastContainer, useToast } from"@/components/Toast";
 import { MultiSelectDropdown } from"@/components/MultiSelectDropdown";
 import type { MultiSelectOption, MultiSelectGroup } from"@/components/MultiSelectDropdown";
 import { BulkEditBar } from"@/components/BulkEditBar";
+import { Tooltip } from"@/components/Tooltip";
 import type { GroupAction } from"@/components/BulkEditBar";
 import { useApi, getApiCache } from"@/hooks/useApi";
 import {
@@ -2009,7 +2010,7 @@ export function Expenses() {
  <ColumnHeader className="w-[155px] pb-3 pr-3">Account</ColumnHeader>
  <th className="w-[30px] pb-3"></th>
  <ColumnHeader className="w-[90px] pb-3 text-right">Amount</ColumnHeader>
- <th className="w-[60px] pb-3"></th>
+ <th className="w-[72px] pb-3"></th>
  </tr>
  </thead>
  <tbody className="divide-y divide-border">
@@ -2081,7 +2082,7 @@ export function Expenses() {
  <ColumnHeader className="w-[155px] cursor-pointer select-none pb-3 pr-3" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></ColumnHeader>
  <th className="w-[30px] pb-3"></th>
  <ColumnHeader className="w-[90px] cursor-pointer select-none pb-3 text-right" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></ColumnHeader>
- <th className="w-[60px] pb-3"></th>
+ <th className="w-[72px] pb-3"></th>
  </tr>
  </thead>
  <tbody className="divide-y divide-border">
@@ -2330,10 +2331,14 @@ function OffsetRow({
  <td className="w-[90px] py-2 text-right tp-numeric text-up">
  <EditableAmountCell value={offset.amount} onSave={(v) => onInlineUpdate(offset.id,"amount", v)} isOffset />
  </td>
- <td className="w-[60px] py-2 text-right">
- <button onClick={() => onEdit(offset)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors">
+ <td className="w-[72px] py-2">
+ <div className="flex items-center justify-center px-2">
+ <Tooltip content="Edit reimbursement">
+ <button onClick={() => onEdit(offset)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors">
  <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
+ </div>
  </td>
  </tr>
  );
@@ -2469,16 +2474,20 @@ function ExpenseRowWithOffsets({
  <td className={`w-[90px] py-2 text-right tp-numeric ${parseFloat(expense.amount) < 0 ?"text-up" :""}`}>
  <EditableAmountCell value={expense.amount} onSave={(v) => onInlineUpdate(expense.id,"amount", v)} />
  </td>
- <td className="w-[60px] py-2 text-right">
- <div className="flex items-center justify-end gap-0.5">
+ <td className="w-[72px] py-2">
+ <div className="flex items-center justify-center gap-1 px-2">
  {parseFloat(expense.amount) >= 0 && (
- <button onClick={() => onCreateOffset(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors" title="Add offset / reimbursement">
+ <Tooltip content="Add offset / reimbursement">
+ <button onClick={() => onCreateOffset(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors">
  <Undo2 className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  )}
- <button onClick={() => onEdit(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors">
- <Pencil className="h-4 w-4" />
+ <Tooltip content="Edit expense">
+ <button onClick={() => onEdit(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors">
+ <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  </div>
  </td>
  </tr>

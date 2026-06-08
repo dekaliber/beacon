@@ -2,6 +2,7 @@ import { useState, useEffect } from"react";
 import { Plus, Trash2, Pencil, Tags, TrendingUp, ChevronDown, ChevronRight, EyeOff } from"lucide-react";
 import type { LucideIcon } from"lucide-react";
 import { Card } from"@/components/Card";
+import { Tooltip } from"@/components/Tooltip";
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { EmptyState } from"@/components/EmptyState";
@@ -196,19 +197,22 @@ function CategoryList({ categories, expanded, icon: Icon, onToggleExpand, onAddC
  )}
 
  <div className="flex gap-1">
+ <Tooltip content="Add subcategory">
  <button
  onClick={() => onAddChild(cat.id)}
- className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
- title="Add subcategory"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
- <Plus className="h-4 w-4" />
+ <Plus className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
+ <Tooltip content="Edit category">
  <button
  onClick={() => onEdit(cat)}
- className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
- <Pencil className="h-4 w-4" />
+ <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  </div>
  </div>
 
@@ -219,12 +223,14 @@ function CategoryList({ categories, expanded, icon: Icon, onToggleExpand, onAddC
  <span className="flex-1">{child.name}</span>
  {child.ignoreInBudget && <span title="Ignored in budget" className="inline-flex flex-shrink-0"><EyeOff className="h-3.5 w-3.5 text-ink-4" /></span>}
  <div className="flex gap-1">
+ <Tooltip content="Edit subcategory">
  <button
  onClick={() => onEdit(child)}
- className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
  <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  </div>
  </div>
  ))}

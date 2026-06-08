@@ -7,7 +7,7 @@ import {
  Bar,
  XAxis,
  YAxis,
- Tooltip,
+ Tooltip as RechartsTooltip,
  ResponsiveContainer,
  LabelList,
  Cell,
@@ -15,6 +15,7 @@ import {
 } from"recharts";
 import { Card } from"@/components/Card";
 import { EmptyState } from"@/components/EmptyState";
+import { Tooltip } from"@/components/Tooltip";
 import { Modal } from"@/components/Modal";
 import { Button } from"@/components/Button";
 import { DatePicker } from"@/components/DatePicker";
@@ -452,7 +453,7 @@ const AnnualCostPanel = memo(function AnnualCostPanel({
  tickLine={false}
  axisLine={false}
  />
- <Tooltip content={<AnnualCostTooltip />} cursor={{ fill:"transparent" }} />
+ <RechartsTooltip content={<AnnualCostTooltip />} cursor={{ fill:"transparent" }} />
  <Bar dataKey="value" radius={3} maxBarSize={18}>
  {data.map((entry, i) => (
  <Cell key={i} fill={entry.isCredit ? CHART_CREDIT_COLOR : CHART_EXPENSE_COLOR} />
@@ -491,7 +492,7 @@ function YoYPanel({ history }: { history: RecurringHistoryMonth[] }) {
  axisLine={false}
  tickFormatter={(v: number) =>`$${v >= 1000 ?`${(v / 1000).toFixed(1)}k` : v}`}
  />
- <Tooltip
+ <RechartsTooltip
  content={({ active, payload, label }) => {
  if (!active || !payload?.length) return null;
  return (
@@ -617,31 +618,34 @@ function RuleTable({
  {hasActions && (
  <div className="flex items-center justify-end gap-1">
  {onEdit && (
+ <Tooltip content="Edit recurring transaction">
  <button
  onClick={() => onEdit(rule)}
- className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
- title="Edit recurring transaction"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
- <Pencil className="h-4 w-4" />
+ <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  )}
  {onArchive && (
+ <Tooltip content="Archive recurring transaction">
  <button
  onClick={() => onArchive(rule)}
- className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
- title="Archive recurring transaction"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
- <Archive className="h-4 w-4" />
+ <Archive className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  )}
  {onDelete && (
+ <Tooltip content="Permanently delete recurring transaction">
  <button
  onClick={() => onDelete(rule)}
- className="rounded p-1.5 text-muted-foreground/40 hover:text-down hover:bg-down/10 transition-colors"
- title="Permanently delete recurring transaction"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-down hover:bg-down-soft transition-colors"
  >
- <Trash2 className="h-4 w-4" />
+ <Trash2 className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  )}
  </div>
  )}
@@ -1276,20 +1280,22 @@ export function Recurring() {
  </td>
  <td className="py-3">
  <div className="flex items-center justify-end gap-1">
+ <Tooltip content="Edit">
  <button
  onClick={() => { setEditingTransferRule(rule); setTransferModalOpen(true); }}
- className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
- title="Edit"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
  <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
+ <Tooltip content="Archive">
  <button
  onClick={() => setArchiveTransferTarget(rule)}
- className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
- title="Archive"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
  <Archive className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  </div>
  </td>
  </tr>

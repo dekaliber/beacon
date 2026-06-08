@@ -38,6 +38,7 @@ import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { DatePicker } from"@/components/DatePicker";
 import { EmptyState } from"@/components/EmptyState";
+import { Tooltip } from"@/components/Tooltip";
 import { useApi, invalidateApiCache } from"@/hooks/useApi";
 import {
  getInvestmentHoldings,
@@ -97,36 +98,6 @@ import { BeaconLoader } from"@/components/BeaconLoader";
 import { SectionLabel, StatValue, DisplayStat } from"@/components/Typography";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function Tooltip({ content, children }: { content: React.ReactNode; children: React.ReactNode }) {
- const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
- const triggerRef = useRef<HTMLSpanElement>(null);
-
- const handleMouseEnter = () => {
- if (triggerRef.current) {
- const r = triggerRef.current.getBoundingClientRect();
- setPos({ x: r.left + r.width / 2, y: r.top });
- }
- };
-
- return (
- <span ref={triggerRef} className="inline-flex" onMouseEnter={handleMouseEnter} onMouseLeave={() => setPos(null)}>
- {children}
- {pos && createPortal(
- <div
- className="pointer-events-none fixed z-[9999]"
- style={{ left: pos.x, top: pos.y, transform:"translate(-50%, calc(-100% - 8px))" }}
- >
- <div className="rounded bg-card border border-border text-foreground text-xs shadow-lg px-2.5 py-1.5 whitespace-nowrap">
- {content}
- </div>
- <div className="w-2 h-2 bg-card border-b border-r border-border rotate-45 mx-auto -mt-[5px]" />
- </div>,
- document.body
- )}
- </span>
- );
-}
 
 function GainCell({
  value,
@@ -893,12 +864,16 @@ function LotRow({
  </td>
  <td className="py-2 pr-3">
  <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
- <button onClick={() => setEditing(true)} className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors">
+ <Tooltip content="Edit lot">
+ <button onClick={() => setEditing(true)} className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors">
  <Pencil className="h-3.5 w-3.5" />
  </button>
- <button onClick={handleDeleteRequest} className="p-1.5 rounded text-muted-foreground/40 hover:text-down hover:bg-down/10 transition-colors">
+ </Tooltip>
+ <Tooltip content="Delete lot">
+ <button onClick={handleDeleteRequest} className="p-1.5 rounded text-muted-foreground/40 hover:text-down hover:bg-down-soft transition-colors">
  <Trash2 className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  </div>
  </td>
  </tr>
@@ -1218,7 +1193,7 @@ function HoldingRow({
  <Tooltip content="Record a sale or transfer">
  <button
  onClick={(e) => { e.stopPropagation(); onSell(); }}
- className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+ className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
  <Tag className="h-3.5 w-3.5" />
  </button>
@@ -1227,7 +1202,7 @@ function HoldingRow({
  <Tooltip content="Delete this investment">
  <button
  onClick={(e) => { e.stopPropagation(); handleDeleteRequest(); }}
- className="p-1.5 rounded hover:bg-down/10 text-muted-foreground hover:text-down transition-colors"
+ className="p-1.5 rounded text-muted-foreground/40 hover:text-down hover:bg-down-soft transition-colors"
  >
  <Trash2 className="h-3.5 w-3.5" />
  </button>
@@ -1235,7 +1210,7 @@ function HoldingRow({
  <Tooltip content="See lot details">
  <button
  onClick={(e) => { e.stopPropagation(); onToggle(); }}
- className="p-1.5 rounded text-muted-foreground hover:bg-muted transition-colors"
+ className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
  {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
  </button>
@@ -1273,7 +1248,6 @@ function HoldingRow({
  <button
  onClick={(e) => { e.stopPropagation(); setAddingLot(true); }}
  className="flex items-center gap-1 tp-caption hover:text-foreground transition-colors"
- title="Update aggregate position"
  >
  <Pencil className="h-3 w-3" />
  Update position
@@ -1951,20 +1925,22 @@ function ManualHoldingRow({
  {/* Actions: edit + delete (replaces the expand chevron used by regular rows) */}
  <td className="py-3 pr-3">
  <div className="flex items-center justify-end gap-1">
+ <Tooltip content="Edit investment">
  <button
  onClick={onEdit}
- className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
- title="Edit"
+ className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
  <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
+ <Tooltip content="Delete investment">
  <button
  onClick={() => setShowDeleteModal(true)}
- className="p-1.5 rounded text-muted-foreground/40 hover:text-down hover:bg-down/10 transition-colors"
- title="Delete manual investment"
+ className="p-1.5 rounded text-muted-foreground/40 hover:text-down hover:bg-down-soft transition-colors"
  >
  <Trash2 className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  </div>
  </td>
  </tr>
@@ -2103,13 +2079,14 @@ function StickyHoldingRow({
  </td>
  <td className="py-3 pr-3" onClick={(e) => e.stopPropagation()}>
  <div className="flex items-center gap-1 justify-end">
+ <Tooltip content={expanded ?"Collapse" :"Expand"}>
  <button
  onClick={(e) => { e.stopPropagation(); onToggle(); }}
- className="p-1.5 rounded text-muted-foreground hover:bg-muted transition-colors"
- title={expanded ?"Collapse" :"Expand"}
+ className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
  {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
  </button>
+ </Tooltip>
  </div>
  </td>
  </tr>
@@ -4472,16 +4449,17 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
  </td>
  <td className="py-3 pl-2 pr-4 text-right">
  {(isSale || (!isSale && !isPurchase && !isTransfer)) && (
+ <Tooltip content={isSale ?"Edit sale" :"Edit dividend"}>
  <button
  onClick={() => isSale
  ? setEditingActivity(a)
  : setEditingDividendActivityId(a.id)
  }
- className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
- title={isSale ?"Edit sale" :"Edit dividend"}
+ className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover"
  >
  <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  )}
  </td>
  </tr>
@@ -5482,7 +5460,9 @@ function GrowthChart({ accountId, isManaged, onImportClick, onDayGain }: { accou
  </span>
  {hasCostBasis && (
  <span className="flex items-center gap-1.5">
- <span className="inline-block w-6 border-t border-dashed border-slate-soft" />
+ <svg width="24" height="2" className="inline-block" aria-hidden="true">
+ <line x1="0" y1="1" x2="24" y2="1" stroke="var(--color-chart-axis)" strokeWidth="1.5" strokeDasharray="5 4" />
+ </svg>
  Cost basis
  </span>
  )}
@@ -5854,18 +5834,6 @@ export function InvestmentAccount() {
  Settlement Cash
  </SectionLabel>
  </div>
- {!editingCash && (
- <button
- onClick={() => {
- setCashInput(cashBalance != null ? String(cashBalance) :"");
- setEditingCash(true);
- }}
- className="rounded p-0.5 hover:bg-muted transition-colors"
- aria-label="Edit cash balance"
- >
- <Pencil className="h-3 w-3 text-muted-foreground" />
- </button>
- )}
  </div>
  {editingCash ? (
  <form onSubmit={handleSaveCash} noValidate className="flex items-center gap-1.5 mt-1.5">
@@ -5892,7 +5860,7 @@ export function InvestmentAccount() {
  <button
  type="button"
  onClick={() => setEditingCash(false)}
- className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  aria-label="Cancel"
  >
  <X className="h-3.5 w-3.5" />
@@ -5900,7 +5868,19 @@ export function InvestmentAccount() {
  </form>
  ) : cashBalance != null ? (
  <div>
+ <div className="flex items-center justify-between">
  <DisplayStat as="p" className="tp-stat">{formatCurrency(cashBalance)}</DisplayStat>
+ <button
+ onClick={() => {
+ setCashInput(cashBalance != null ? String(cashBalance) :"");
+ setEditingCash(true);
+ }}
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
+ aria-label="Edit cash balance"
+ >
+ <Pencil className="h-3.5 w-3.5" />
+ </button>
+ </div>
  {account.cashBalanceUpdatedAt && (
  <p className="text-11 text-muted-foreground mt-0.5">
  Updated {new Date(account.cashBalanceUpdatedAt).toLocaleDateString("en-US", {

@@ -2,6 +2,7 @@ import { useState, useEffect } from"react";
 import { PERSONAL_COLOR, JOINT_COLOR } from"@/lib/accountColors";
 import { Plus, Pencil, Trash2, Landmark, CreditCard, TrendingUp, EyeOff, ArrowRight, ChevronDown, Eye } from"lucide-react";
 import { Card } from"@/components/Card";
+import { Tooltip } from"@/components/Tooltip";
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { EmptyState } from"@/components/EmptyState";
@@ -158,9 +159,11 @@ export function Accounts() {
  <EyeOff className="h-3.5 w-3.5 text-ink-4" />
  </span>
  )}
- <button onClick={() => openEdit(account)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors">
+ <Tooltip content="Edit account">
+ <button onClick={() => openEdit(account)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors">
  <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  </div>
  </Card>
  ))}

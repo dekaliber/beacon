@@ -5,6 +5,7 @@ import { Card } from"@/components/Card";
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { EmptyState } from"@/components/EmptyState";
+import { Tooltip } from"@/components/Tooltip";
 import { useApi } from"@/hooks/useApi";
 import { getTags, createTag, updateTag, deleteTag, getExpenses, getTagOrphanedOffsets } from"@/api";
 import { formatCurrency, formatDate } from"@/lib/utils";
@@ -159,22 +160,27 @@ export function TagsPage() {
  )}
  </>
  )}
+ <div className="flex items-center gap-1">
+ <Tooltip content={isExpanded ?"Hide expenses" :"Show expenses"}>
  <button
  onClick={() => handleToggleExpand(tag)}
- className="rounded p-1 hover:bg-muted"
- title={isExpanded ?"Hide expenses" :"Show expenses"}
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
  {isExpanded
  ? <ChevronUp className="h-3.5 w-3.5" />
  : <ChevronDown className="h-3.5 w-3.5" />
  }
  </button>
+ </Tooltip>
+ <Tooltip content="Edit tag">
  <button
  onClick={() => { setEditing(tag); setModalOpen(true); }}
- className="rounded p-1 hover:bg-muted"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
  <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
+ </div>
  </div>
  </div>
 

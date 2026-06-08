@@ -393,6 +393,15 @@ svg.lucide {
   100% { left:  0px; top: 30px; }
 }
 
+/* Tooltip enter — subtle fade + tiny rise. Paired with a show-delay in JS. */
+@keyframes tooltip-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-tooltip-in {
+  animation: tooltip-in 120ms ease-out;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    Typography Recipes — 12 named patterns from the design system.
    Use these classes directly or as the base for Typography.tsx components.

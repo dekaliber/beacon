@@ -8,6 +8,7 @@ import {
  Upload, FileText, Check, CheckCircle2, AlertCircle,
 } from"lucide-react";
 import { BulkEditBar } from"@/components/BulkEditBar";
+import { Tooltip } from"@/components/Tooltip";
 import { Card } from"@/components/Card";
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
@@ -1134,7 +1135,7 @@ export function IncomePage() {
  <ColumnHeader className="w-[185px] pb-3 pr-3">Account</ColumnHeader>
  <th className="w-[30px] pb-3"></th>
  <ColumnHeader className="w-[90px] pb-3 text-right">Amount</ColumnHeader>
- <th className="w-[40px] pb-3"></th>
+ <th className="w-[42px] pb-3"></th>
  </tr>
  </thead>
  <tbody className="divide-y divide-border">
@@ -1185,10 +1186,14 @@ export function IncomePage() {
  onSave={(v) => handleInlineUpdate(income.id,"amount", v)}
  />
  </td>
- <td className="w-[40px] py-2 text-right">
- <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors">
- <Pencil className="h-4 w-4" />
+ <td className="w-[42px] py-2">
+ <div className="flex items-center justify-center px-2">
+ <Tooltip content="Edit income">
+ <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors">
+ <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
+ </div>
  </td>
  </tr>
  ))}
@@ -1225,7 +1230,7 @@ export function IncomePage() {
  <ColumnHeader className="w-[185px] cursor-pointer select-none pb-3 pr-3" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></ColumnHeader>
  <th className="w-[30px] pb-3"></th>
  <ColumnHeader className="w-[90px] cursor-pointer select-none pb-3 text-right" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></ColumnHeader>
- <th className="w-[40px] pb-3"></th>
+ <th className="w-[42px] pb-3"></th>
  </tr>
  </thead>
  <tbody className="divide-y divide-border">
@@ -1285,10 +1290,14 @@ export function IncomePage() {
  onSave={(v) => handleInlineUpdate(income.id,"amount", v)}
  />
  </td>
- <td className="w-[40px] py-2 text-right">
- <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors">
- <Pencil className="h-4 w-4" />
+ <td className="w-[42px] py-2">
+ <div className="flex items-center justify-center px-2">
+ <Tooltip content="Edit income">
+ <button onClick={() => { setEditing(income); setModalOpen(true); }} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors">
+ <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
+ </div>
  </td>
  </tr>
  ))}

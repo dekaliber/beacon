@@ -1989,7 +1989,7 @@ export function TaxEstimatorPage() {
  <span className="w-[220px] shrink-0 text-right text-muted-foreground tp-numeric">
  {snapshotNetST !== 0 && (
  <span className={snapshotNetST < 0 ?"text-down" :""}>
- {snapshotNetST < 0 ?"-" :""}{formatCurrency(Math.abs(snapshotNetST))}{""}
+ {snapshotNetST < 0 ?"-" :""}{formatCurrency(Math.abs(snapshotNetST))}{" "}
  <span className="text-xs">@ {fmtPct(calc.marginalOrdRate)} ordinary</span>
  </span>
  )}
@@ -2002,7 +2002,7 @@ export function TaxEstimatorPage() {
  <span className="w-[280px] shrink-0 text-right text-muted-foreground tp-numeric">
  {snapshotNetLT !== 0 && (
  <span className={snapshotNetLT < 0 ?"text-down" :""}>
- {snapshotNetLT < 0 ?"-" :""}{formatCurrency(Math.abs(snapshotNetLT))}{""}
+ {snapshotNetLT < 0 ?"-" :""}{formatCurrency(Math.abs(snapshotNetLT))}{" "}
  <span className="text-xs">@ {fmtPct(calc.marginalPrefRate)} LT capital gains</span>
  </span>
  )}

@@ -4,6 +4,7 @@ import { Card } from"@/components/Card";
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { EmptyState } from"@/components/EmptyState";
+import { Tooltip } from"@/components/Tooltip";
 import { useApi } from"@/hooks/useApi";
 import {
  getAssetClasses,
@@ -313,19 +314,22 @@ function AssetClassRow({
  )}
 
  {/* Action buttons */}
- <div className="flex shrink-0 gap-0.5">
+ <div className="flex shrink-0 gap-1">
  {!isChild && (
+ <Tooltip content="Add sub-class">
  <button
  onClick={onAddChild}
- className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
- title="Add sub-class"
+ className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
  <Plus className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  )}
- <button onClick={onEdit} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors" title="Edit">
+ <Tooltip content="Edit">
+ <button onClick={onEdit} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors">
  <Pencil className="h-3.5 w-3.5" />
  </button>
+ </Tooltip>
  </div>
  </div>
  );
