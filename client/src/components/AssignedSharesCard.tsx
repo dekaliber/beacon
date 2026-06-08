@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { BanknoteArrowUp, BanknoteX } from "lucide-react";
+import { BanknoteArrowUp, BanknoteX, CircleAlert } from "lucide-react";
 import { Card } from "@/components/Card";
 import { cn } from "@/lib/utils";
 import {
@@ -244,9 +244,30 @@ export function AssignedSharesCard({
                     price != null
                       ? ((price - g.assignmentStrike) / g.assignmentStrike) * 100
                       : null;
-                  const coveredShares = g.openCallContracts * 100;
+                  const coveredShares = Math.min(g.openCallContracts * 100, g.shares);
                   const uncoveredShares = g.shares - coveredShares;
                   const canSellCC = uncoveredShares >= 100;
+
+                  // CC cap: when the covered call is ITM (price > CC strike), the
+                  // covered shares will be called away at the strike — cap their upside.
+                  const ccStrike = g.openCallAvgStrike;
+                  const ccIsItm = price != null && ccStrike != null && price > ccStrike && coveredShares > 0;
+                  const cappedUnreal = ccIsItm && price != null && ccStrike != null
+                    ? (ccStrike - g.assignmentStrike) * coveredShares
+                      + (price - g.assignmentStrike) * uncoveredShares
+                    : null;
+                  const cappedPct = ccIsItm && cappedUnreal != null
+                    ? (cappedUnreal / (g.assignmentStrike * g.shares)) * 100
+                    : null;
+                  const missedUpside = ccIsItm && unreal != null && cappedUnreal != null
+                    ? unreal - cappedUnreal
+                    : null;
+                  const ccCapTooltip = ccIsItm && ccStrike != null && cappedUnreal != null && missedUpside != null
+                    ? `Upside capped by covered call at $${fmtUSD(ccStrike)}. `
+                      + `Max gain on covered shares: ${fmtSigned(cappedUnreal)}. `
+                      + `Uncapped value at current price: ${fmtSigned(unreal!)}. `
+                      + `Foregone upside: $${fmtUSD(missedUpside)}.`
+                    : null;
                   return (
                     <tr key={g.key} className="border-b border-border/50 hover:bg-muted">
                       <td className={cn(tdClass, "font-bold font-mono")}>{g.ticker}</td>
@@ -278,11 +299,29 @@ export function AssignedSharesCard({
                       <td className={cn(tdClass, "text-right")}>
                         {mktValue != null ? `$${fmtUSD(mktValue)}` : "—"}
                       </td>
-                      <td className={cn(tdClass, "text-right", unreal != null && pnlColor(unreal))}>
-                        {unreal != null ? fmtSigned(unreal) : "—"}
+                      <td className={cn(tdClass, "text-right", (cappedUnreal ?? unreal) != null && pnlColor(cappedUnreal ?? unreal!))}>
+                        {unreal != null ? (
+                          <span className="inline-flex items-center justify-end gap-1">
+                            {fmtSigned(cappedUnreal ?? unreal)}
+                            {ccCapTooltip && (
+                              <span title={ccCapTooltip} className="cursor-default">
+                                <CircleAlert className="h-3.5 w-3.5 text-warn shrink-0" />
+                              </span>
+                            )}
+                          </span>
+                        ) : "—"}
                       </td>
-                      <td className={cn(tdClass, "text-right", pct != null && pnlColor(pct))}>
-                        {pct != null ? fmtPct(pct) : "—"}
+                      <td className={cn(tdClass, "text-right", (cappedPct ?? pct) != null && pnlColor(cappedPct ?? pct!))}>
+                        {pct != null ? (
+                          <span className="inline-flex items-center justify-end gap-1">
+                            {fmtPct(cappedPct ?? pct)}
+                            {ccCapTooltip && (
+                              <span title={ccCapTooltip} className="cursor-default">
+                                <CircleAlert className="h-3.5 w-3.5 text-warn shrink-0" />
+                              </span>
+                            )}
+                          </span>
+                        ) : "—"}
                       </td>
                       <td className={cn(tdClass, "text-right")}>
                         {onSellCoveredCall != null && (
