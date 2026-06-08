@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { BanknoteArrowUp, BanknoteX, CircleAlert } from "lucide-react";
 import { Card } from "@/components/Card";
 import { cn } from "@/lib/utils";
@@ -10,40 +11,6 @@ import {
 
 const fmtUSD = (n: number) =>
   n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-// ── ITM CC cap tooltip ─────────────────────────────────────────────────────────
-interface CcCapTooltipProps {
-  ccStrike: number;
-  cappedUnreal: number;
-  uncappedUnreal: number;
-  missedUpside: number;
-}
-function CcCapTooltip({ ccStrike, cappedUnreal, uncappedUnreal, missedUpside }: CcCapTooltipProps) {
-  return (
-    <span className="group relative inline-flex items-center">
-      <CircleAlert className="h-3.5 w-3.5 text-warn shrink-0 cursor-default" />
-      <span className="pointer-events-none invisible absolute bottom-full right-0 z-[60] mb-2 w-64 -translate-y-0 rounded-md border border-border bg-background px-3 py-2.5 text-xs shadow-md transition-opacity opacity-0 group-hover:visible group-hover:opacity-100">
-        <span className="block font-medium text-foreground mb-2">
-          Upside capped by covered call at ${fmtUSD(ccStrike)}
-        </span>
-        <span className="flex flex-col gap-1 font-mono tabular-nums">
-          <span className="flex justify-between gap-4">
-            <span className="text-muted-foreground font-sans">Max gain at strike</span>
-            <span className={cappedUnreal >= 0 ? "text-up" : "text-down"}>{fmtSigned(cappedUnreal)}</span>
-          </span>
-          <span className="flex justify-between gap-4">
-            <span className="text-muted-foreground font-sans">Value at current price</span>
-            <span className={uncappedUnreal >= 0 ? "text-up" : "text-down"}>{fmtSigned(uncappedUnreal)}</span>
-          </span>
-          <span className="flex justify-between gap-4 border-t border-border pt-1 mt-0.5">
-            <span className="text-muted-foreground font-sans">Foregone upside</span>
-            <span className="text-warn">${fmtUSD(missedUpside)}</span>
-          </span>
-        </span>
-      </span>
-    </span>
-  );
-}
 const fmtShares = (n: number) =>
   n.toLocaleString("en-US", { maximumFractionDigits: 4 });
 const fmtSigned = (n: number) => `${n < 0 ? "−" : ""}$${fmtUSD(Math.abs(n))}`;
@@ -63,6 +30,43 @@ const thClass =
 const tdClass = "px-3 py-2 text-13 font-mono tabular-nums whitespace-nowrap";
 // Body-text cell (non-mono) for account, dates, and the Via badge.
 const tdBody = "px-3 py-2 text-13 whitespace-nowrap";
+
+// ── ITM CC cap tooltip (portal-based to escape overflow-x-auto clipping) ──────
+interface CcCapTipData {
+  x: number;
+  y: number;
+  ccStrike: number;
+  cappedUnreal: number;
+  uncappedUnreal: number;
+  missedUpside: number;
+}
+function CcCapTooltipPortal({ x, y, ccStrike, cappedUnreal, uncappedUnreal, missedUpside }: CcCapTipData) {
+  return createPortal(
+    <div
+      className="fixed z-[70] pointer-events-none w-64 rounded-md border border-border bg-background px-3 py-2.5 text-xs shadow-md"
+      style={{ left: x + 14, top: y, transform: "translateY(-100%)" }}
+    >
+      <p className="font-medium text-foreground mb-2">
+        Upside capped by covered call at ${fmtUSD(ccStrike)}
+      </p>
+      <span className="flex flex-col gap-1 font-mono tabular-nums">
+        <span className="flex justify-between gap-4">
+          <span className="text-muted-foreground font-sans">Max gain at strike</span>
+          <span className={cappedUnreal >= 0 ? "text-up" : "text-down"}>{fmtSigned(cappedUnreal)}</span>
+        </span>
+        <span className="flex justify-between gap-4">
+          <span className="text-muted-foreground font-sans">Value at current price</span>
+          <span className={uncappedUnreal >= 0 ? "text-up" : "text-down"}>{fmtSigned(uncappedUnreal)}</span>
+        </span>
+        <span className="flex justify-between gap-4 border-t border-border pt-1 mt-0.5">
+          <span className="text-muted-foreground font-sans">Foregone upside</span>
+          <span className="text-warn">${fmtUSD(missedUpside)}</span>
+        </span>
+      </span>
+    </div>,
+    document.body,
+  );
+}
 
 interface ActiveGroup {
   key: string;
@@ -170,6 +174,46 @@ function AccountChip({ name, color }: { name: string | null; color: string | nul
   );
 }
 
+// Renders a right-aligned P&L value with a fixed-width icon slot to its right.
+// The slot is always present (empty spacer when no icon) so numbers stay
+// column-aligned across rows regardless of whether the icon is showing.
+function PnlCell({
+  value,
+  colorClass,
+  iconTipData,
+  onTipEnter,
+  onTipMove,
+  onTipLeave,
+}: {
+  value: string;
+  colorClass: string;
+  iconTipData: Omit<CcCapTipData, "x" | "y"> | null;
+  onTipEnter: (e: React.MouseEvent, data: Omit<CcCapTipData, "x" | "y">) => void;
+  onTipMove: (e: React.MouseEvent) => void;
+  onTipLeave: () => void;
+}) {
+  return (
+    <td className={cn(tdClass, "text-right", colorClass)}>
+      <span className="inline-flex items-center justify-end">
+        {value}
+        {/* Fixed-width slot: always rendered so the number edge never shifts */}
+        <span className="ml-1 w-3.5 shrink-0 inline-flex items-center justify-center">
+          {iconTipData && (
+            <span
+              className="cursor-default inline-flex"
+              onMouseEnter={(e) => onTipEnter(e, iconTipData)}
+              onMouseMove={onTipMove}
+              onMouseLeave={onTipLeave}
+            >
+              <CircleAlert className="h-3.5 w-3.5 text-warn" />
+            </span>
+          )}
+        </span>
+      </span>
+    </td>
+  );
+}
+
 export interface SellCoveredCallSeed {
   ticker: string;
   accountId: string;
@@ -193,6 +237,9 @@ export function AssignedSharesCard({
   onSellCoveredCall?: (seed: SellCoveredCallSeed) => void;
 }) {
   const [tab, setTab] = useState<"active" | "realized">("active");
+
+  // Portal-based tooltip state — avoids overflow-x-auto clipping.
+  const [ccTip, setCcTip] = useState<CcCapTipData | null>(null);
 
   const [ownQuotes, setOwnQuotes] = useState<Record<string, { price: number }>>({});
   const activeTickers = useMemo(
@@ -224,6 +271,12 @@ export function AssignedSharesCard({
 
   const activeCount = activeGroups.length;
   const realizedCount = realizedGroups.length;
+
+  const handleTipEnter = (e: React.MouseEvent, data: Omit<CcCapTipData, "x" | "y">) =>
+    setCcTip({ x: e.clientX, y: e.clientY, ...data });
+  const handleTipMove = (e: React.MouseEvent) =>
+    setCcTip((t) => (t ? { ...t, x: e.clientX, y: e.clientY } : null));
+  const handleTipLeave = () => setCcTip(null);
 
   return (
     <Card>
@@ -296,6 +349,12 @@ export function AssignedSharesCard({
                   const missedUpside = ccIsItm && unreal != null && cappedUnreal != null
                     ? unreal - cappedUnreal
                     : null;
+
+                  const iconTipData =
+                    ccIsItm && ccStrike != null && cappedUnreal != null && missedUpside != null
+                      ? { ccStrike, cappedUnreal, uncappedUnreal: unreal!, missedUpside }
+                      : null;
+
                   return (
                     <tr key={g.key} className="border-b border-border/50 hover:bg-muted">
                       <td className={cn(tdClass, "font-bold font-mono")}>{g.ticker}</td>
@@ -327,36 +386,22 @@ export function AssignedSharesCard({
                       <td className={cn(tdClass, "text-right")}>
                         {mktValue != null ? `$${fmtUSD(mktValue)}` : "—"}
                       </td>
-                      <td className={cn(tdClass, "text-right", (cappedUnreal ?? unreal) != null && pnlColor(cappedUnreal ?? unreal!))}>
-                        {unreal != null ? (
-                          <span className="inline-flex items-center justify-end gap-1">
-                            {fmtSigned(cappedUnreal ?? unreal)}
-                            {ccIsItm && ccStrike != null && cappedUnreal != null && missedUpside != null && (
-                              <CcCapTooltip
-                                ccStrike={ccStrike}
-                                cappedUnreal={cappedUnreal}
-                                uncappedUnreal={unreal}
-                                missedUpside={missedUpside}
-                              />
-                            )}
-                          </span>
-                        ) : "—"}
-                      </td>
-                      <td className={cn(tdClass, "text-right", (cappedPct ?? pct) != null && pnlColor(cappedPct ?? pct!))}>
-                        {pct != null ? (
-                          <span className="inline-flex items-center justify-end gap-1">
-                            {fmtPct(cappedPct ?? pct)}
-                            {ccIsItm && ccStrike != null && cappedUnreal != null && missedUpside != null && (
-                              <CcCapTooltip
-                                ccStrike={ccStrike}
-                                cappedUnreal={cappedUnreal}
-                                uncappedUnreal={unreal!}
-                                missedUpside={missedUpside}
-                              />
-                            )}
-                          </span>
-                        ) : "—"}
-                      </td>
+                      <PnlCell
+                        value={unreal != null ? fmtSigned(cappedUnreal ?? unreal) : "—"}
+                        colorClass={(cappedUnreal ?? unreal) != null ? pnlColor(cappedUnreal ?? unreal!) : ""}
+                        iconTipData={unreal != null ? iconTipData : null}
+                        onTipEnter={handleTipEnter}
+                        onTipMove={handleTipMove}
+                        onTipLeave={handleTipLeave}
+                      />
+                      <PnlCell
+                        value={pct != null ? fmtPct(cappedPct ?? pct) : "—"}
+                        colorClass={(cappedPct ?? pct) != null ? pnlColor(cappedPct ?? pct!) : ""}
+                        iconTipData={pct != null ? iconTipData : null}
+                        onTipEnter={handleTipEnter}
+                        onTipMove={handleTipMove}
+                        onTipLeave={handleTipLeave}
+                      />
                       <td className={cn(tdClass, "text-right")}>
                         {onSellCoveredCall != null && (
                           canSellCC ? (
@@ -442,6 +487,9 @@ export function AssignedSharesCard({
           </table>
         )}
       </div>
+
+      {/* Portal tooltip — rendered into document.body to escape overflow clipping */}
+      {ccTip !== null && <CcCapTooltipPortal {...ccTip} />}
     </Card>
   );
 }
