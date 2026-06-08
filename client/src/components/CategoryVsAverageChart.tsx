@@ -219,7 +219,7 @@ export function CategoryVsAverageChart({ categories, yearLabel, compact = false 
                 <span className="font-semibold" style={{ color: barColor }}>
                   <span>{fmtAmt(c.currentAmount)}{pctStr}</span>
                   {pendingAmtTip > 0 && (
-                    <span className="block tp-fineprint italic">({fmtAmt(pendingAmtTip)} pending)</span>
+                    <span className="block font-normal text-muted-foreground">({fmtAmt(pendingAmtTip)} pending)</span>
                   )}
                 </span>
               </div>
