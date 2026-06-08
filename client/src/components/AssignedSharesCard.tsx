@@ -316,8 +316,18 @@ export function AssignedSharesCard({
                   <th className={cn(thClass, "text-right")}>Avg CC Strike</th>
                   <th className={cn(thClass, "text-right")}>Current</th>
                   <th className={cn(thClass, "text-right")}>Mkt Value</th>
-                  <th className={cn(thClass, "text-right")}>Unrealized P&amp;L</th>
-                  <th className={cn(thClass, "text-right")}>% Gain</th>
+                  <th className={cn(thClass, "text-right")}>
+                    <span className="inline-flex items-center justify-end">
+                      Unrealized P&amp;L
+                      <span className="ml-1 w-3.5 shrink-0" />
+                    </span>
+                  </th>
+                  <th className={cn(thClass, "text-right")}>
+                    <span className="inline-flex items-center justify-end">
+                      % Gain
+                      <span className="ml-1 w-3.5 shrink-0" />
+                    </span>
+                  </th>
                   <th className={cn(thClass, "text-right")}><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
