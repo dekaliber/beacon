@@ -5816,7 +5816,17 @@ export function OptionsTrading() {
  let total = 0;
  for (const h of activeHoldings) {
  const price = assignedQuotes[h.ticker]?.price;
- if (price != null) total += (price - h.assignmentStrike) * h.shares;
+ if (price == null) continue;
+ const coveredShares = Math.min(h.openCallContracts * 100, h.shares);
+ const uncoveredShares = h.shares - coveredShares;
+ const ccIsItm = h.openCallAvgStrike != null && price > h.openCallAvgStrike && coveredShares > 0;
+ if (ccIsItm && h.openCallAvgStrike != null) {
+ // Cap the covered-share gain at the CC strike; uncovered shares use live price.
+ total += (h.openCallAvgStrike - h.assignmentStrike) * coveredShares
+ + (price - h.assignmentStrike) * uncoveredShares;
+ } else {
+ total += (price - h.assignmentStrike) * h.shares;
+ }
  }
  return total;
  }, [activeHoldings, assignedQuotes]);

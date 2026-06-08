@@ -10,6 +10,40 @@ import {
 
 const fmtUSD = (n: number) =>
   n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// ── ITM CC cap tooltip ─────────────────────────────────────────────────────────
+interface CcCapTooltipProps {
+  ccStrike: number;
+  cappedUnreal: number;
+  uncappedUnreal: number;
+  missedUpside: number;
+}
+function CcCapTooltip({ ccStrike, cappedUnreal, uncappedUnreal, missedUpside }: CcCapTooltipProps) {
+  return (
+    <span className="group relative inline-flex items-center">
+      <CircleAlert className="h-3.5 w-3.5 text-warn shrink-0 cursor-default" />
+      <span className="pointer-events-none invisible absolute bottom-full right-0 z-[60] mb-2 w-64 -translate-y-0 rounded-md border border-border bg-background px-3 py-2.5 text-xs shadow-md transition-opacity opacity-0 group-hover:visible group-hover:opacity-100">
+        <span className="block font-medium text-foreground mb-2">
+          Upside capped by covered call at ${fmtUSD(ccStrike)}
+        </span>
+        <span className="flex flex-col gap-1 font-mono tabular-nums">
+          <span className="flex justify-between gap-4">
+            <span className="text-muted-foreground font-sans">Max gain at strike</span>
+            <span className={cappedUnreal >= 0 ? "text-up" : "text-down"}>{fmtSigned(cappedUnreal)}</span>
+          </span>
+          <span className="flex justify-between gap-4">
+            <span className="text-muted-foreground font-sans">Value at current price</span>
+            <span className={uncappedUnreal >= 0 ? "text-up" : "text-down"}>{fmtSigned(uncappedUnreal)}</span>
+          </span>
+          <span className="flex justify-between gap-4 border-t border-border pt-1 mt-0.5">
+            <span className="text-muted-foreground font-sans">Foregone upside</span>
+            <span className="text-warn">${fmtUSD(missedUpside)}</span>
+          </span>
+        </span>
+      </span>
+    </span>
+  );
+}
 const fmtShares = (n: number) =>
   n.toLocaleString("en-US", { maximumFractionDigits: 4 });
 const fmtSigned = (n: number) => `${n < 0 ? "−" : ""}$${fmtUSD(Math.abs(n))}`;
@@ -262,12 +296,6 @@ export function AssignedSharesCard({
                   const missedUpside = ccIsItm && unreal != null && cappedUnreal != null
                     ? unreal - cappedUnreal
                     : null;
-                  const ccCapTooltip = ccIsItm && ccStrike != null && cappedUnreal != null && missedUpside != null
-                    ? `Upside capped by covered call at $${fmtUSD(ccStrike)}. `
-                      + `Max gain on covered shares: ${fmtSigned(cappedUnreal)}. `
-                      + `Uncapped value at current price: ${fmtSigned(unreal!)}. `
-                      + `Foregone upside: $${fmtUSD(missedUpside)}.`
-                    : null;
                   return (
                     <tr key={g.key} className="border-b border-border/50 hover:bg-muted">
                       <td className={cn(tdClass, "font-bold font-mono")}>{g.ticker}</td>
@@ -303,10 +331,13 @@ export function AssignedSharesCard({
                         {unreal != null ? (
                           <span className="inline-flex items-center justify-end gap-1">
                             {fmtSigned(cappedUnreal ?? unreal)}
-                            {ccCapTooltip && (
-                              <span title={ccCapTooltip} className="cursor-default">
-                                <CircleAlert className="h-3.5 w-3.5 text-warn shrink-0" />
-                              </span>
+                            {ccIsItm && ccStrike != null && cappedUnreal != null && missedUpside != null && (
+                              <CcCapTooltip
+                                ccStrike={ccStrike}
+                                cappedUnreal={cappedUnreal}
+                                uncappedUnreal={unreal}
+                                missedUpside={missedUpside}
+                              />
                             )}
                           </span>
                         ) : "—"}
@@ -315,10 +346,13 @@ export function AssignedSharesCard({
                         {pct != null ? (
                           <span className="inline-flex items-center justify-end gap-1">
                             {fmtPct(cappedPct ?? pct)}
-                            {ccCapTooltip && (
-                              <span title={ccCapTooltip} className="cursor-default">
-                                <CircleAlert className="h-3.5 w-3.5 text-warn shrink-0" />
-                              </span>
+                            {ccIsItm && ccStrike != null && cappedUnreal != null && missedUpside != null && (
+                              <CcCapTooltip
+                                ccStrike={ccStrike}
+                                cappedUnreal={cappedUnreal}
+                                uncappedUnreal={unreal!}
+                                missedUpside={missedUpside}
+                              />
                             )}
                           </span>
                         ) : "—"}
