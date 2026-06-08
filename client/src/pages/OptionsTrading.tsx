@@ -3008,7 +3008,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <th className={thClass}>Delta @ Open</th>
  </>
  ) : (
- <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40 italic")}>Contracts</th>
+ <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40")}>Contracts</th>
  )}
  {isColOpen("return") ? (
  <>
@@ -3017,7 +3017,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <th className={thClass}>Ann. Return</th>
  </>
  ) : (
- <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40 italic")}>Total Prem</th>
+ <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40")}>Total Prem</th>
  )}
  {isColOpen("risk") ? (
  <>
@@ -3027,7 +3027,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <th className={thClass}>% to Strike</th>
  </>
  ) : (
- <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40 italic")}>% to Strike</th>
+ <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40")}>% to Strike</th>
  )}
  {isColOpen("live") ? (
  <>
@@ -3039,7 +3039,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <th className={thClass}>% Gain</th>
  </>
  ) : (
- <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40 italic")}>Live P&L</th>
+ <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40")}>Live P&L</th>
  )}
  <th className={thClass} />
  </tr>
@@ -3203,7 +3203,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <th className={thClass}>Delta @ Open</th>
  </>
  ) : (
- <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40 italic")}>Contracts</th>
+ <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40")}>Contracts</th>
  )}
  {isColOpen("return") ? (
  <>
@@ -3212,7 +3212,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <th className={thClass}>Ann. Return</th>
  </>
  ) : (
- <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40 italic")}>Total Prem</th>
+ <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40")}>Total Prem</th>
  )}
  {isColOpen("risk") ? (
  <>
@@ -3222,7 +3222,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <th className={thClass}>% to Strike</th>
  </>
  ) : (
- <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40 italic")}>% to Strike</th>
+ <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40")}>% to Strike</th>
  )}
  {isColOpen("live") ? (
  <>
@@ -3234,7 +3234,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <th className={thClass}>% Gain</th>
  </>
  ) : (
- <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40 italic")}>Live P&L</th>
+ <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40")}>Live P&L</th>
  )}
  <th className={thClass} />
  </tr>
@@ -3490,7 +3490,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  <th className={thClass}>Days in Trade</th>
  </>
  ) : (
- <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40 italic")}>Days in Trade</th>
+ <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40")}>Days in Trade</th>
  )}
  {/* P&L group */}
  {isColOpen("pnl") ? (
@@ -3501,7 +3501,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  <th className={thClass}>P/L</th>
  </>
  ) : (
- <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40 italic")}>P/L</th>
+ <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40")}>P/L</th>
  )}
  <th className={thClass}>Ann. Return</th>
  <th className={thClass}>Outcome</th>
@@ -3766,7 +3766,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  <th className={thClass}>Days in Trade</th>
  </>
  ) : (
- <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40 italic")}>Days in Trade</th>
+ <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40")}>Days in Trade</th>
  )}
  {isColOpen("pnl") ? (
  <>
@@ -3776,7 +3776,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  <th className={thClass}>P/L</th>
  </>
  ) : (
- <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40 italic")}>P/L</th>
+ <th className={cn(thClass,"border-l border-border/50 text-muted-foreground/40")}>P/L</th>
  )}
  <th className={thClass}>Ann. Return</th>
  <th className={thClass}>Outcome</th>
