@@ -3988,23 +3988,37 @@ function PerformanceCharts({
  const realized = csp + cc;
  const pending = pendingCSP + pendingCC;
  return (
- <div className="rounded border border-border bg-background p-2 text-xs shadow-md">
- <p className="mb-1 font-medium">{label}</p>
- {realized !== 0 && (
+ <div className="rounded-lg border border-border bg-background shadow-md px-3 py-2 text-xs min-w-[230px]">
+ <p className="font-semibold text-foreground">{label}</p>
+ {realized === 0 && pending === 0 ? (
+ <p className="mt-1 text-muted-foreground">$0.00</p>
+ ) : (
  <>
- <p className="font-medium" style={{ color:"var(--color-blue)" }}>CC: ${fmtUSD(cc)}</p>
- <p className="font-medium" style={{ color:"var(--color-violet)" }}>CSP: ${fmtUSD(csp)}</p>
+ {realized !== 0 && (
+ <div className="mt-1.5">
+ <div className="flex justify-between gap-4">
+ <span className="text-muted-foreground">Closed Total</span>
+ <span className="font-medium text-foreground">${fmtUSD(realized)}</span>
+ </div>
+ <div className="mt-0.5 flex justify-between gap-4 text-muted-foreground">
+ <span><span style={{ color:"var(--color-blue)" }}>CC</span>: ${fmtUSD(cc)}</span>
+ <span><span style={{ color:"var(--color-violet)" }}>CSP</span>: ${fmtUSD(csp)}</span>
+ </div>
+ </div>
+ )}
+ {pending !== 0 && (
+ <div className={realized !== 0 ?"mt-1.5 pt-1.5 border-t border-border" :"mt-1.5"}>
+ <div className="flex justify-between gap-4">
+ <span className="text-muted-foreground">Pending Total</span>
+ <span className="font-medium text-foreground">${fmtUSD(pending)}</span>
+ </div>
+ <div className="mt-0.5 flex justify-between gap-4 text-muted-foreground">
+ <span><span style={{ color:"var(--color-blue)" }}>CC</span>: ${fmtUSD(pendingCC)}</span>
+ <span><span style={{ color:"var(--color-violet)" }}>CSP</span>: ${fmtUSD(pendingCSP)}</span>
+ </div>
+ </div>
+ )}
  </>
- )}
- {pending > 0 && (
- <p className="text-muted-foreground mt-0.5">
- Pending: ${fmtUSD(pending)}
- {pendingCC > 0 && pendingCSP > 0 &&` (CC $${fmtUSD(pendingCC)} / CSP $${fmtUSD(pendingCSP)})`}
- </p>
- )}
- {realized === 0 && pending === 0 && <p className="text-primary">$0.00</p>}
- {targetWeekly != null && (
- <p className="mt-0.5 text-muted-foreground">Target: ${fmtUSD(targetWeekly)}</p>
  )}
  </div>
  );

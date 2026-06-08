@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { BanknoteArrowUp, BanknoteX, CircleAlert } from "lucide-react";
 import { Card } from "@/components/Card";
+import { Tooltip } from "@/components/Tooltip";
 import { cn } from "@/lib/utils";
 import {
   getUnderlyingQuotes,
@@ -415,24 +416,27 @@ export function AssignedSharesCard({
                       <td className={cn(tdClass, "text-right")}>
                         {onSellCoveredCall != null && (
                           canSellCC ? (
-                            <button
-                              onClick={() =>
-                                onSellCoveredCall({
-                                  ticker: g.ticker,
-                                  accountId: g.accountId,
-                                  assignmentStrike: g.assignmentStrike,
-                                  assignmentExpiration: g.assignmentExpiration,
-                                })
-                              }
-                              className="p-1.5 rounded text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
-                              title="Sell covered call"
-                            >
-                              <BanknoteArrowUp className="h-3.5 w-3.5" />
-                            </button>
+                            <Tooltip content="Sell covered call">
+                              <button
+                                onClick={() =>
+                                  onSellCoveredCall({
+                                    ticker: g.ticker,
+                                    accountId: g.accountId,
+                                    assignmentStrike: g.assignmentStrike,
+                                    assignmentExpiration: g.assignmentExpiration,
+                                  })
+                                }
+                                className="p-1.5 rounded text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
+                              >
+                                <BanknoteArrowUp className="h-3.5 w-3.5" />
+                              </button>
+                            </Tooltip>
                           ) : (
-                            <span className="p-1.5 inline-flex opacity-50" title="All shares used as collateral">
-                              <BanknoteX className="h-3.5 w-3.5 text-muted-foreground" />
-                            </span>
+                            <Tooltip content="All shares used as collateral">
+                              <span className="p-1.5 inline-flex">
+                                <BanknoteX className="h-3.5 w-3.5 text-muted-foreground/20" />
+                              </span>
+                            </Tooltip>
                           )
                         )}
                       </td>
