@@ -925,11 +925,11 @@ export function MobileInvestments() {
               </div>
 
               {targetRate !== null && ytdRate !== null && effectiveDenominator > 0 && (
-                <p className={`text-xs font-medium tabular-nums font-mono mb-1.5 ${ytdRate <= targetRate ? "text-up" : "text-down"}`}>
+                <span className={`tp-delta-pill self-start mb-1.5 ${ytdRate <= targetRate ? "up" : "down"}`}>
                   {ytdRate <= targetRate
                     ? `▼ ${((targetRate - ytdRate) * 100).toFixed(2)}% under target`
                     : `▲ ${((ytdRate - targetRate) * 100).toFixed(2)}% over target`}
-                </p>
+                </span>
               )}
 
               <p className="tp-caption mb-3">
