@@ -2588,13 +2588,19 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const ctd ="px-2 pb-2 text-xs font-mono tabular-nums whitespace-nowrap text-muted-foreground";
 
  // Frozen columns need an opaque fill so scrolling cells don't bleed through.
- // Resting paints the page base (#FBFCFE). Hover mirrors the row: bg-muted for
+ // Resting paints the page base (#fbfcfd). Hover mirrors the row: bg-muted for
  // plain rows, bg-muted-hover for grouped rows (which rest on bg-muted).
- // reimbursement rows: bg-row-reimbursement → #F7F3EE; hover → #F4EEE4
- const stickyBg = isExpired ?"bg-[#F7F3EE]" : isItm ?"bg-row-uncategorized-solid" :"bg-[#FBFCFE]";
- const stickyHover = isExpired ?"group-hover:bg-[#F4EEE4]" : isItm ?"group-hover:bg-row-uncategorized-solid-hover" : isGrouped ?"group-hover:bg-muted-hover" :"group-hover:bg-muted";
+ // reimbursement rows: bg-row-reimbursement → #f9f4ee; hover → #f6efe5
+ const stickyBg = isExpired ?"bg-[#f9f4ee]" : isItm ?"bg-row-uncategorized-solid" :"bg-[#fbfcfd]";
+ const stickyHover = isExpired ?"group-hover:bg-[#f6efe5]" : isItm ?"group-hover:bg-row-uncategorized-solid-hover" : isGrouped ?"group-hover:bg-muted-hover" :"group-hover:bg-muted";
+ // Frozen cells are z-raised + opaque, so the row's collapsed bottom border
+ // gets painted over. Re-draw it on the cell itself (matches the tr's
+ // border-b condition: omitted when a roll sub-row follows). Tinted rows use
+ // an opaque edge so it can't compound the translucent tint like the
+ // scrolling side's collapsed border does — see --color-row-uncategorized-edge.
+ const bEdge = isItm ?"border-b border-b-row-uncategorized-edge" :"border-b border-b-border";
  const stickyTd = (_leftPx: number, extra?: string, textOnly = false) =>
- cn(textOnly ? tdTextClass : tdClass,"sticky z-[2]", stickyHover, stickyBg, extra);
+ cn(textOnly ? tdTextClass : tdClass,"sticky z-[2]", !hasChain && bEdge, stickyHover, stickyBg, extra);
 
  const primaryRow = (
  <tr key={p.id} className={cn("group", hasChain ?"" :"border-b border-border", isExpired ?"hover:bg-row-reimbursement-hover" : isItm ?"hover:bg-row-uncategorized-hover" : isGrouped ?"hover:bg-muted-hover" :"hover:bg-muted", isGrouped &&"bg-muted", isExpired ?"bg-row-reimbursement" : isItm ?"bg-row-uncategorized" :"", isDraftRow &&"italic opacity-60")}>
@@ -2614,7 +2620,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  </span>
  </td>
  <td style={{ left: 152 }} className={stickyTd(152)}>${fmtUSD(p.strikePrice)}</td>
- <td style={{ left: 232 }} className={stickyTd(232,"border-r border-border/40", true)}>{fmtDate(p.expirationDate)}</td>
+ <td style={{ left: 232 }} className={stickyTd(232,"border-r border-r-border/40", true)}>{fmtDate(p.expirationDate)}</td>
 
  {/* ── Group 2: Trade Details ── */}
  {isColOpen("details") ? (
@@ -2796,10 +2802,10 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const chainRow = hasChain ? (
  <tr key={`${p.id}-chain`} className={cn("group","border-b border-border", isExpired ?"hover:bg-row-reimbursement-hover" : isItm ?"hover:bg-row-uncategorized-hover" : isGrouped ?"hover:bg-muted-hover" :"hover:bg-muted", isGrouped &&"bg-muted", isExpired ?"bg-warn-soft/50" : isItm ?"bg-row-uncategorized" :"")}>
  {/* Label — frozen */}
- <td style={{ left: 0 }} className={cn(ctd,"sticky z-[2]", stickyHover, stickyBg, isGrouped ?"pl-8 pr-2" :"pl-4 pr-2","font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-10")}>roll</td>
- <td style={{ left: 80 }} className={cn(ctd,"sticky z-[2]", stickyHover, stickyBg)} />
- <td style={{ left: 152 }} className={cn(ctd,"sticky z-[2]", stickyHover, stickyBg)} />
- <td style={{ left: 232 }} className={cn(ctd,"sticky z-[2] border-r border-border/40", stickyHover, stickyBg)} />
+ <td style={{ left: 0 }} className={cn(ctd,"sticky z-[2]", bEdge, stickyHover, stickyBg, isGrouped ?"pl-8 pr-2" :"pl-4 pr-2","font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-10")}>roll</td>
+ <td style={{ left: 80 }} className={cn(ctd,"sticky z-[2]", bEdge, stickyHover, stickyBg)} />
+ <td style={{ left: 152 }} className={cn(ctd,"sticky z-[2]", bEdge, stickyHover, stickyBg)} />
+ <td style={{ left: 232 }} className={cn(ctd,"sticky z-[2]", bEdge,"border-r border-r-border/40", stickyHover, stickyBg)} />
 
  {/* Details group — chain net per-share in Premium column */}
  {isColOpen("details") ? (
@@ -2977,7 +2983,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  {/* ── Row 1: group headers ── */}
  <tr>
  {/* Position — always visible, no toggle */}
- <th colSpan={4} style={{ left: 0 }} className="sticky z-[3] bg-[#FBFCFE] px-3 pt-2 pb-1" />
+ <th colSpan={4} style={{ left: 0 }} className="sticky z-[3] bg-[#fbfcfd] px-3 pt-2 pb-1" />
  {/* Collapsible groups */}
  {COL_GROUPS.map(({ key, label, count }) => (
  <th
@@ -3004,10 +3010,10 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  </tr>
  {/* ── Row 2: column headers ── */}
  <tr className="border-b border-border">
- <th style={{ left: 0 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE] pl-4 pr-2")}>Ticker</th>
- <th style={{ left: 80 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE]")}>Type</th>
- <th style={{ left: 152 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE]")}>Strike</th>
- <th style={{ left: 232 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE] border-r border-border/40")}>Exp</th>
+ <th style={{ left: 0 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] pl-4 pr-2")}>Ticker</th>
+ <th style={{ left: 80 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Type</th>
+ <th style={{ left: 152 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Strike</th>
+ <th style={{ left: 232 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] border-r border-border/40")}>Exp</th>
  {isColOpen("details") ? (
  <>
  <th className={cn(thClass,"border-l border-border/50")}>Contracts</th>
@@ -3057,7 +3063,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  {/* ── Draft section ── */}
  {sortedDrafts.length > 0 && (
  <tr className="bg-muted border-y border-border">
- <td colSpan={4} className="py-1.5 pl-4 sticky left-0 z-[2] bg-[#FBFCFE]">
+ <td colSpan={4} className="py-1.5 pl-4 sticky left-0 z-[2] bg-[#fbfcfd]">
  <SectionLabel as="span" className="text-foreground">Draft Positions</SectionLabel>
  </td>
  <td colSpan={totalCols - 4} className="py-1.5 pr-4 text-right">
@@ -3070,7 +3076,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  {/* ── Open section header (only when both sections are non-empty) ── */}
  {sortedDrafts.length > 0 && sorted.length > 0 && (
  <tr className="bg-muted border-y border-border">
- <td colSpan={4} className="py-1.5 pl-4 sticky left-0 z-[2] bg-[#FBFCFE]">
+ <td colSpan={4} className="py-1.5 pl-4 sticky left-0 z-[2] bg-[#fbfcfd]">
  <SectionLabel as="span" className="text-foreground">Open Positions</SectionLabel>
  </td>
  <td colSpan={totalCols - 4} />
@@ -3174,7 +3180,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  </colgroup>
  <thead>
  <tr>
- <th colSpan={4} style={{ left: 0 }} className="sticky z-[3] bg-[#FBFCFE] px-3 pt-2 pb-1" />
+ <th colSpan={4} style={{ left: 0 }} className="sticky z-[3] bg-[#fbfcfd] px-3 pt-2 pb-1" />
  {COL_GROUPS.map(({ key, label, count }) => (
  <th
  key={key}
@@ -3199,10 +3205,10 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <th className="pt-2 pb-1" />
  </tr>
  <tr className="border-b border-border">
- <th style={{ left: 0 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE] pl-4 pr-2")}>Ticker</th>
- <th style={{ left: 80 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE]")}>Type</th>
- <th style={{ left: 152 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE]")}>Strike</th>
- <th style={{ left: 232 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE] border-r border-border/40")}>Exp</th>
+ <th style={{ left: 0 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] pl-4 pr-2")}>Ticker</th>
+ <th style={{ left: 80 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Type</th>
+ <th style={{ left: 152 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Strike</th>
+ <th style={{ left: 232 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] border-r border-border/40")}>Exp</th>
  {isColOpen("details") ? (
  <>
  <th className={cn(thClass,"border-l border-border/50")}>Contracts</th>
@@ -3460,7 +3466,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  {/* ── Row 1: group headers ── */}
  <tr>
  {/* Position + Contracts — always, no toggle */}
- <th colSpan={5} style={{ left: 0 }} className="sticky z-[3] bg-[#FBFCFE] px-3 pt-2 pb-1" />
+ <th colSpan={5} style={{ left: 0 }} className="sticky z-[3] bg-[#fbfcfd] px-3 pt-2 pb-1" />
  {/* Collapsible groups */}
  {CLOSED_COL_GROUPS.map(({ key, label, count }) => (
  <th
@@ -3486,11 +3492,11 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  </tr>
  {/* ── Row 2: column headers ── */}
  <tr className="border-b border-border">
- <th style={{ left: 0 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE] pl-4 pr-2")}>Ticker</th>
- <th style={{ left: 80 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE]")}>Type</th>
- <th style={{ left: 152 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE]")}>Strike</th>
- <th style={{ left: 232 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE]")}>Exp</th>
- <th style={{ left: 312 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE] border-r border-border/40")}>Contracts</th>
+ <th style={{ left: 0 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] pl-4 pr-2")}>Ticker</th>
+ <th style={{ left: 80 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Type</th>
+ <th style={{ left: 152 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Strike</th>
+ <th style={{ left: 232 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Exp</th>
+ <th style={{ left: 312 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] border-r border-border/40")}>Contracts</th>
  {/* Dates group */}
  {isColOpen("dates") ? (
  <>
@@ -3568,13 +3574,13 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  const positionRow = (
  <tr key={p.id} className={cn("group hover:bg-muted", cs ?"" :"border-b border-border")}>
  {/* Position + Contracts — frozen */}
- <td style={{ left: 0 }} className={cn(tdText,"sticky z-[2] bg-[#FBFCFE] group-hover:bg-muted pl-4 pr-2")}>
+ <td style={{ left: 0 }} className={cn(tdText,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted pl-4 pr-2")}>
  <div className="flex items-center gap-1.5">
  <span className="font-bold font-mono">{p.ticker.symbol}</span>
  {p.groupId && <Link className="h-3 w-3 text-muted-foreground shrink-0" />}
  </div>
  </td>
- <td style={{ left: 80 }} className={cn(tdText,"sticky z-[2] bg-[#FBFCFE] group-hover:bg-muted")}>
+ <td style={{ left: 80 }} className={cn(tdText,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted")}>
  <span className={cn(
 "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
  p.optionType ==="CALL" ?"bg-blue-soft text-blue-deep" :"bg-violet-soft text-violet-deep"
@@ -3582,9 +3588,9 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  {p.optionType ==="CALL" ?"CC" :"CSP"}
  </span>
  </td>
- <td style={{ left: 152 }} className={cn(td,"sticky z-[2] bg-[#FBFCFE] group-hover:bg-muted")}>${fmtUSD(p.strikePrice)}</td>
- <td style={{ left: 232 }} className={cn(tdText,"sticky z-[2] bg-[#FBFCFE] group-hover:bg-muted")}>{fmtDate(p.expirationDate)}</td>
- <td style={{ left: 312 }} className={cn(td,"sticky z-[2] bg-[#FBFCFE] group-hover:bg-muted border-r border-border/40")}>{p.contracts}</td>
+ <td style={{ left: 152 }} className={cn(td,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted")}>${fmtUSD(p.strikePrice)}</td>
+ <td style={{ left: 232 }} className={cn(tdText,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted")}>{fmtDate(p.expirationDate)}</td>
+ <td style={{ left: 312 }} className={cn(td,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted border-r border-border/40")}>{p.contracts}</td>
  {/* Dates group */}
  {isColOpen("dates") ? (
  <>
@@ -3671,11 +3677,11 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  const chainRow = cs ? (
  <tr key={`${p.id}-chain`} className="group border-b border-border hover:bg-muted">
  {/* Label — frozen */}
- <td style={{ left: 0 }} className={cn(ctd,"sticky z-[2] bg-[#FBFCFE] group-hover:bg-muted pl-4 pr-2 font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-10")}>roll</td>
- <td style={{ left: 80 }} className={cn(ctd,"sticky z-[2] bg-[#FBFCFE] group-hover:bg-muted")} />
- <td style={{ left: 152 }} className={cn(ctd,"sticky z-[2] bg-[#FBFCFE] group-hover:bg-muted")} />
- <td style={{ left: 232 }} className={cn(ctd,"sticky z-[2] bg-[#FBFCFE] group-hover:bg-muted")} />
- <td style={{ left: 312 }} className={cn(ctd,"sticky z-[2] bg-[#FBFCFE] group-hover:bg-muted border-r border-border/40")} />
+ <td style={{ left: 0 }} className={cn(ctd,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted pl-4 pr-2 font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-10")}>roll</td>
+ <td style={{ left: 80 }} className={cn(ctd,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted")} />
+ <td style={{ left: 152 }} className={cn(ctd,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted")} />
+ <td style={{ left: 232 }} className={cn(ctd,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted")} />
+ <td style={{ left: 312 }} className={cn(ctd,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted border-r border-border/40")} />
  {/* Dates group */}
  {isColOpen("dates") ? (
  <>
@@ -3742,7 +3748,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  </colgroup>
  <thead>
  <tr>
- <th colSpan={5} style={{ left: 0 }} className="sticky z-[3] bg-[#FBFCFE] px-3 pt-2 pb-1" />
+ <th colSpan={5} style={{ left: 0 }} className="sticky z-[3] bg-[#fbfcfd] px-3 pt-2 pb-1" />
  {CLOSED_COL_GROUPS.map(({ key, label, count }) => (
  <th
  key={key}
@@ -3765,11 +3771,11 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  <th colSpan={3} className="pt-2 pb-1" />
  </tr>
  <tr className="border-b border-border">
- <th style={{ left: 0 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE] pl-4 pr-2")}>Ticker</th>
- <th style={{ left: 80 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE]")}>Type</th>
- <th style={{ left: 152 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE]")}>Strike</th>
- <th style={{ left: 232 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE]")}>Exp</th>
- <th style={{ left: 312 }} className={cn(thClass,"sticky z-[3] bg-[#FBFCFE] border-r border-border/40")}>Contracts</th>
+ <th style={{ left: 0 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] pl-4 pr-2")}>Ticker</th>
+ <th style={{ left: 80 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Type</th>
+ <th style={{ left: 152 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Strike</th>
+ <th style={{ left: 232 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Exp</th>
+ <th style={{ left: 312 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] border-r border-border/40")}>Contracts</th>
  {isColOpen("dates") ? (
  <>
  <th className={cn(thClass,"border-l border-border/50")}>Opened</th>
