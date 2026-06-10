@@ -2,7 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { getDividendScanResult, type DividendEvent } from "../services/tiingo.js";
-import { backfillUnlinkedHoldings } from "./instruments.js";
+import { backfillUnlinkedHoldings, reactivateMislinkedInstruments } from "./instruments.js";
 import { getUserId } from "../middleware/auth.js";
 
 export const pendingDividendRoutes = Router();
@@ -141,6 +141,12 @@ async function runScan(): Promise<void> {
   // Holdings created via the lot import flow before today's fix may have
   // instrumentId = null and would otherwise be invisible to this scan.
   await backfillUnlinkedHoldings();
+
+  // Self-heal any instrument left marked inactive while it is still held — a
+  // state the old transfer bug could produce. Without this, such a ticker stays
+  // invisible to the scan (which filters isActive) until someone happens to load
+  // the Securities page. Running it here makes the scan self-sufficient.
+  await reactivateMislinkedInstruments();
 
   // Fetch all active, non-manual instruments. For each we will scan its
   // primary ticker AND every alias ticker registered in InstrumentTicker.

@@ -135,7 +135,7 @@ async function backfillUnlinkedManualInvestments() {
 // orphan check ran before the destination holding was created). Safe to call
 // repeatedly; only touches instruments that are genuinely mislinked.
 
-async function reactivateMislinkedInstruments() {
+export async function reactivateMislinkedInstruments() {
   const mislinked = await prisma.instrument.findMany({
     where: {
       isActive: false,

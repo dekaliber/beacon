@@ -2332,7 +2332,7 @@ function OffsetRow({
  <EditableAmountCell value={offset.amount} onSave={(v) => onInlineUpdate(offset.id,"amount", v)} isOffset />
  </td>
  <td className="w-[72px] py-2">
- <div className="flex items-center justify-center px-2">
+ <div className="flex items-center justify-end px-2">
  <Tooltip content="Edit reimbursement">
  <button onClick={() => onEdit(offset)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors">
  <Pencil className="h-3.5 w-3.5" />
@@ -2475,7 +2475,7 @@ function ExpenseRowWithOffsets({
  <EditableAmountCell value={expense.amount} onSave={(v) => onInlineUpdate(expense.id,"amount", v)} />
  </td>
  <td className="w-[72px] py-2">
- <div className="flex items-center justify-center gap-1 px-2">
+ <div className="flex items-center justify-end gap-1 px-2">
  {parseFloat(expense.amount) >= 0 && (
  <Tooltip content="Add offset / reimbursement">
  <button onClick={() => onCreateOffset(expense)} className="rounded p-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors">
