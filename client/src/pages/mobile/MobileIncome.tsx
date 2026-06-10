@@ -1128,7 +1128,7 @@ export function MobileIncome() {
             <div className="relative">
               <div className={`-mx-4 divide-y divide-border ${!upcomingExpanded && hiddenUpcomingCount > 0 ? "fade-bottom-mask" : ""}`}>
                 {visibleUpcoming.map((income) => (
-                  <IncomeRow key={income.id} income={income} upcoming />
+                  <IncomeRow key={income.id} income={income} upcoming onTap={() => setEditingIncome(income)} />
                 ))}
               </div>
             </div>
