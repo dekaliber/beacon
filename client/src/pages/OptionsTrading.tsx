@@ -2555,6 +2555,8 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const pctOtmNow = stockNow != null
  ? (p.strikePrice - stockNow) / stockNow * 100
  : null;
+ // In-the-money: %OTM > 0 for CSPs (PUT), < 0 for CCs (CALL).
+ const isItm = !isExpired && pctOtmNow != null && (p.optionType ==="PUT" ? pctOtmNow > 0 : pctOtmNow < 0);
  const daysInTrade = (Date.now() - new Date(p.openedAt).getTime()) / 86_400_000;
  const curAnnRet = livePnl != null && c.capitalAtRisk > 0 && daysInTrade > 0
  ? (livePnl / c.capitalAtRisk) * (365 / daysInTrade) * 100
@@ -2589,13 +2591,13 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  // Resting paints the page base (#FBFCFE). Hover mirrors the row: bg-muted for
  // plain rows, bg-muted-hover for grouped rows (which rest on bg-muted).
  // reimbursement rows: bg-row-reimbursement → #F7F3EE; hover → #F4EEE4
- const stickyBg = isExpired ?"bg-[#F7F3EE]" :"bg-[#FBFCFE]";
- const stickyHover = isExpired ?"group-hover:bg-[#F4EEE4]" : isGrouped ?"group-hover:bg-muted-hover" :"group-hover:bg-muted";
+ const stickyBg = isExpired ?"bg-[#F7F3EE]" : isItm ?"bg-row-uncategorized-solid" :"bg-[#FBFCFE]";
+ const stickyHover = isExpired ?"group-hover:bg-[#F4EEE4]" : isItm ?"group-hover:bg-row-uncategorized-solid-hover" : isGrouped ?"group-hover:bg-muted-hover" :"group-hover:bg-muted";
  const stickyTd = (_leftPx: number, extra?: string, textOnly = false) =>
  cn(textOnly ? tdTextClass : tdClass,"sticky z-[2]", stickyHover, stickyBg, extra);
 
  const primaryRow = (
- <tr key={p.id} className={cn("group", hasChain ?"" :"border-b border-border", isExpired ?"hover:bg-row-reimbursement-hover" : isGrouped ?"hover:bg-muted-hover" :"hover:bg-muted", isGrouped &&"bg-muted", isExpired ?"bg-row-reimbursement" :"", isDraftRow &&"italic opacity-60")}>
+ <tr key={p.id} className={cn("group", hasChain ?"" :"border-b border-border", isExpired ?"hover:bg-row-reimbursement-hover" : isItm ?"hover:bg-row-uncategorized-hover" : isGrouped ?"hover:bg-muted-hover" :"hover:bg-muted", isGrouped &&"bg-muted", isExpired ?"bg-row-reimbursement" : isItm ?"bg-row-uncategorized" :"", isDraftRow &&"italic opacity-60")}>
  {/* ── Group 1: Position (always visible, frozen) ── */}
  <td style={{ left: 0 }} className={stickyTd(0, isGrouped ?"pl-8 pr-2" :"pl-4 pr-2", true)}>
  <div className="flex items-center gap-1.5">
@@ -2792,7 +2794,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  );
 
  const chainRow = hasChain ? (
- <tr key={`${p.id}-chain`} className={cn("group","border-b border-border", isExpired ?"hover:bg-row-reimbursement-hover" : isGrouped ?"hover:bg-muted-hover" :"hover:bg-muted", isGrouped &&"bg-muted", isExpired &&"bg-warn-soft/50")}>
+ <tr key={`${p.id}-chain`} className={cn("group","border-b border-border", isExpired ?"hover:bg-row-reimbursement-hover" : isItm ?"hover:bg-row-uncategorized-hover" : isGrouped ?"hover:bg-muted-hover" :"hover:bg-muted", isGrouped &&"bg-muted", isExpired ?"bg-warn-soft/50" : isItm ?"bg-row-uncategorized" :"")}>
  {/* Label — frozen */}
  <td style={{ left: 0 }} className={cn(ctd,"sticky z-[2]", stickyHover, stickyBg, isGrouped ?"pl-8 pr-2" :"pl-4 pr-2","font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-10")}>roll</td>
  <td style={{ left: 80 }} className={cn(ctd,"sticky z-[2]", stickyHover, stickyBg)} />

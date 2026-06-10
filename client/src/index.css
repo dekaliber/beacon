@@ -77,6 +77,9 @@
   --color-row-reimbursement-hover: color-mix(in oklab, var(--color-warn) 14%, transparent);
   --color-row-uncategorized:       color-mix(in oklab, var(--color-down) 7%, transparent);
   --color-row-uncategorized-hover: color-mix(in oklab, var(--color-down) 11%, transparent);
+  /* Opaque equivalents for frozen/sticky cells (no bleed-through) */
+  --color-row-uncategorized-solid:       color-mix(in oklab, var(--color-down) 7%, var(--color-background));
+  --color-row-uncategorized-solid-hover: color-mix(in oklab, var(--color-down) 11%, var(--color-background));
 
   /* ── Chart series — §05; ordered data-viz palette ────────────────────── */
   --color-chart-1:  oklch(0.56 0.15 268);
