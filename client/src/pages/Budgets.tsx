@@ -544,15 +544,13 @@ function BudgetPanelCard({
  <div className="grid grid-cols-3 gap-3">
  <Metric
  label={`${mtdMonthLabel} so far`}
- value={completedMonthCount > 0 || isCurrentYear ? fmt(panel.mtdTotal) :"—"}
- valueClass={
- panel.effectiveAnnualBudget > 0 && (completedMonthCount > 0 || isCurrentYear)
- ? panel.mtdTotal > panel.effectiveAnnualBudget / 12
- ?"text-down"
- :"text-up"
- : undefined
- }
+ value={completedMonthCount > 0 || isCurrentYear ? fmt(panel.mtdActual) :"—"}
  sub={isCurrentYear && daysLeft > 0 ?`${daysLeft} days remaining` :"month complete"}
+ />
+ <Metric
+ label={`${mtdMonthLabel} expected`}
+ value={completedMonthCount > 0 || isCurrentYear ? fmt(panel.mtdFuture) :"—"}
+ sub="not yet posted"
  />
  <Metric
  label="Remaining spend target"

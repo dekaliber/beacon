@@ -121,13 +121,15 @@ async function computeMetrics(
 ): Promise<{
   ytdCompletedMonths: number;   // actual spend in months prior to current month (display only)
   mtdTotal: number;             // actual spend in current month incl. pending (display only)
+  mtdActual: number;            // already-occurred MTD spend (date ≤ today) (display only)
+  mtdFuture: number;            // known future MTD spend (date > today, within month) (display only)
   normalizedYTD: number;        // timing-adjusted figure for the run-rate ratio
   projectedAnnual: number;      // expected full-year spend at current trajectory
   recurringExpectedAnnual: number; // total known recurring costs for the full year
   actualDiscretionaryYTD: number;  // discretionary (non-recurring) spend so far
 }> {
   if (accountIds.length === 0) {
-    return { ytdCompletedMonths: 0, mtdTotal: 0, normalizedYTD: 0, projectedAnnual: 0, recurringExpectedAnnual: 0, actualDiscretionaryYTD: 0 };
+    return { ytdCompletedMonths: 0, mtdTotal: 0, mtdActual: 0, mtdFuture: 0, normalizedYTD: 0, projectedAnnual: 0, recurringExpectedAnnual: 0, actualDiscretionaryYTD: 0 };
   }
 
   const startOfYear  = new Date(Date.UTC(year, 0, 1));
@@ -157,9 +159,12 @@ async function computeMetrics(
       date: { gte: startOfMonth, lte: endOfMonth },
       ...ignoredExpenseFilter(ignoredCategoryIds),
     },
-    select: { amount: true },
+    select: { amount: true, date: true },
   });
-  const mtdTotal = mtdRows.reduce((s, e) => s + Number(e.amount), 0);
+  // Split into already-occurred (≤ today) vs known-future (> today) for display.
+  const mtdActual = mtdRows.filter(e => e.date <= today).reduce((s, e) => s + Number(e.amount), 0);
+  const mtdFuture = mtdRows.filter(e => e.date > today).reduce((s, e) => s + Number(e.amount), 0);
+  const mtdTotal  = mtdActual + mtdFuture;
 
   // ── 3. Normalization ───────────────────────────────────────────────────────
   const rules = await prisma.recurrenceRule.findMany({
@@ -313,7 +318,7 @@ async function computeMetrics(
     elapsed > 0 ? (actualDiscretionaryYTD / elapsed) * totalDays : 0;
   const projectedAnnual = recurringExpectedAnnual + projectedDiscretionary;
 
-  return { ytdCompletedMonths, mtdTotal, normalizedYTD, projectedAnnual, recurringExpectedAnnual, actualDiscretionaryYTD };
+  return { ytdCompletedMonths, mtdTotal, mtdActual, mtdFuture, normalizedYTD, projectedAnnual, recurringExpectedAnnual, actualDiscretionaryYTD };
 }
 
 /**
@@ -473,6 +478,8 @@ budgetRoutes.get("/:year", async (req, res) => {
   const scaledJoint = {
     ytdCompletedMonths:      jointMetrics.ytdCompletedMonths      * splitRatio,
     mtdTotal:                jointMetrics.mtdTotal                * splitRatio,
+    mtdActual:               jointMetrics.mtdActual               * splitRatio,
+    mtdFuture:               jointMetrics.mtdFuture               * splitRatio,
     normalizedYTD:           jointMetrics.normalizedYTD           * splitRatio,
     projectedAnnual:         jointMetrics.projectedAnnual         * splitRatio,
     recurringExpectedAnnual: jointMetrics.recurringExpectedAnnual * splitRatio,
@@ -483,6 +490,8 @@ budgetRoutes.get("/:year", async (req, res) => {
   const totalMetrics = {
     ytdCompletedMonths:      personalMetrics.ytdCompletedMonths      + scaledJoint.ytdCompletedMonths,
     mtdTotal:                personalMetrics.mtdTotal                + scaledJoint.mtdTotal,
+    mtdActual:               personalMetrics.mtdActual               + scaledJoint.mtdActual,
+    mtdFuture:               personalMetrics.mtdFuture               + scaledJoint.mtdFuture,
     normalizedYTD:           personalMetrics.normalizedYTD           + scaledJoint.normalizedYTD,
     projectedAnnual:         personalMetrics.projectedAnnual         + scaledJoint.projectedAnnual,
     recurringExpectedAnnual: personalMetrics.recurringExpectedAnnual + scaledJoint.recurringExpectedAnnual,
@@ -513,6 +522,8 @@ budgetRoutes.get("/:year", async (req, res) => {
     return {
       ytdCompletedMonths: Math.round(metrics.ytdCompletedMonths * 100) / 100,
       mtdTotal:           Math.round(metrics.mtdTotal           * 100) / 100,
+      mtdActual:          Math.round(metrics.mtdActual          * 100) / 100,
+      mtdFuture:          Math.round(metrics.mtdFuture          * 100) / 100,
       normalizedYTD:      Math.round(metrics.normalizedYTD      * 100) / 100,
       projectedAnnual:    Math.round(metrics.projectedAnnual    * 100) / 100,
       remaining:          Math.round(remaining                  * 100) / 100,

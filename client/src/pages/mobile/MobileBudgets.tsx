@@ -566,15 +566,16 @@ function BudgetPanelSection({
             <Metric
               plain
               label={`${mtdMonthLabel} so far`}
-              value={completedMonthCount > 0 || isCurrentYear ? fmt(panel.mtdTotal) : "—"}
-              valueClass={
-                panel.effectiveAnnualBudget > 0 && (completedMonthCount > 0 || isCurrentYear)
-                  ? panel.mtdTotal > panel.effectiveAnnualBudget / 12
-                    ? "text-down"
-                    : "text-up"
-                  : undefined
-              }
+              value={completedMonthCount > 0 || isCurrentYear ? fmt(panel.mtdActual) : "—"}
               sub={isCurrentYear && daysLeft > 0 ? `${daysLeft} days remaining` : "month complete"}
+            />
+          </div>
+          <div className="min-w-[125px]">
+            <Metric
+              plain
+              label={`${mtdMonthLabel} expected`}
+              value={completedMonthCount > 0 || isCurrentYear ? fmt(panel.mtdFuture) : "—"}
+              sub="not yet posted"
             />
           </div>
           <div className="min-w-[125px]">

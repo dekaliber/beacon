@@ -221,6 +221,8 @@ export interface BudgetPanel {
   monthlyBudgets?: MonthlyBudgetEntry[]; // resolved monthly amounts (not on Total)
   ytdCompletedMonths: number;        // actual spend in months before current
   mtdTotal: number;                  // actual spend in current month incl. pending
+  mtdActual: number;                 // already-occurred MTD spend (date ≤ today)
+  mtdFuture: number;                 // known future MTD spend (date > today, within month)
   normalizedYTD: number;             // timing-adjusted figure for run-rate
   projectedAnnual: number;           // expected full-year spend
   remaining: number;                 // budget - recurring annual costs - discretionary spent (can be negative)
