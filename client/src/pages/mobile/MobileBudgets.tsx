@@ -557,6 +557,11 @@ function BudgetPanelSection({
     </div>
   );
 
+  const mtdColorClass =
+    thisMonthBudget !== null && (completedMonthCount > 0 || isCurrentYear)
+      ? panel.mtdTotal > thisMonthBudget ? "text-down" : "text-up"
+      : undefined;
+
   const thisMonthBand = (
     <div className="space-y-2">
       <BandLabel>This month</BandLabel>
@@ -567,6 +572,7 @@ function BudgetPanelSection({
               plain
               label={`${mtdMonthLabel} so far`}
               value={completedMonthCount > 0 || isCurrentYear ? fmt(panel.mtdActual) : "—"}
+              valueClass={mtdColorClass}
               sub={isCurrentYear && daysLeft > 0 ? `${daysLeft} days remaining` : "month complete"}
             />
           </div>
@@ -575,6 +581,7 @@ function BudgetPanelSection({
               plain
               label={`${mtdMonthLabel} expected`}
               value={completedMonthCount > 0 || isCurrentYear ? fmt(panel.mtdFuture) : "—"}
+              valueClass={mtdColorClass}
               sub="not yet posted"
             />
           </div>
