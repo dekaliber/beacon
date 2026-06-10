@@ -447,7 +447,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
 
  if (!editing) {
  return (
- <tr className="group border-b border-border/50 bg-warn-soft/50 hover:bg-warn-soft transition-colors last:border-b-0">
+ <tr className="group border-b border-border bg-warn-soft/50 hover:bg-warn-soft transition-colors last:border-b-0">
  <td className="py-2 pl-4 pr-4 tp-fineprint whitespace-nowrap">{fmtDate(event.date)}</td>
  <td className="py-2 pr-4">
  <div className="flex items-center gap-2">
@@ -490,7 +490,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
  }
 
  return (
- <tr className="border-b border-border/50 bg-warn-soft last:border-b-0">
+ <tr className="border-b border-border bg-warn-soft last:border-b-0">
  <td className="py-2 pl-4 pr-4">
  <DatePicker
  compact
@@ -657,7 +657,7 @@ function StatementDetailPanel({ event, rowMidY, onClose }: StatementDetailPanelP
  </thead>
  <tbody>
  {expenses.map((exp) => (
- <tr key={exp.id} className="border-b border-border/40">
+ <tr key={exp.id} className="border-b border-border/50">
  <td className="py-1.5 pr-3 text-muted-foreground whitespace-nowrap">
  {fmtShort(exp.date.slice(0, 10))}
  </td>
@@ -727,7 +727,7 @@ function EventsLedger({ events: rawEvents, accountId, onRefetch, selectedCCPayme
  {event.type ==="BALANCE_ADJUSTMENT" ? (
  <AdjustmentEventRow event={event} onSaved={onRefetch} />
  ) : (
- <tr className="group border-b border-border/50 hover:bg-muted transition-colors last:border-b-0">
+ <tr className="group border-b border-border hover:bg-muted transition-colors last:border-b-0">
  <td className="py-2 pl-4 pr-4 tp-fineprint whitespace-nowrap">{fmtDate(event.date)}</td>
  <td className="py-2 pr-4">
  <div className="flex items-center gap-2">

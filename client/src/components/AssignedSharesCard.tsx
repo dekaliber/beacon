@@ -367,7 +367,7 @@ export function AssignedSharesCard({
                       : null;
 
                   return (
-                    <tr key={g.key} className="border-b border-border/50 hover:bg-muted">
+                    <tr key={g.key} className="border-b border-border hover:bg-muted">
                       <td className={cn(tdClass, "font-bold font-mono")}>{g.ticker}</td>
                       <td className={tdBody}>
                         <AccountChip name={g.accountName} color={g.accountColor} />
@@ -469,7 +469,7 @@ export function AssignedSharesCard({
                 const costBasis = g.assignmentStrike * g.shares;
                 const pct = costBasis > 0 ? (g.realizedPnl / costBasis) * 100 : 0;
                 return (
-                  <tr key={g.key} className="border-b border-border/50 hover:bg-muted">
+                  <tr key={g.key} className="border-b border-border hover:bg-muted">
                     <td className={cn(tdClass, "font-bold font-mono")}>{g.ticker}</td>
                     <td className={tdBody}>{fmtMDY(g.assignmentExpiration)}</td>
                     <td className={cn(tdClass, "text-right")}>${fmtUSD(g.assignmentStrike)}</td>

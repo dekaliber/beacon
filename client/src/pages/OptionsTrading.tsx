@@ -3018,7 +3018,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <th style={{ left: 0 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] pl-4 pr-2")}>Ticker</th>
  <th style={{ left: 80 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Type</th>
  <th style={{ left: 152 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Strike</th>
- <th style={{ left: 232 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] border-r border-border/40")}>Exp</th>
+ <th style={{ left: 232 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] border-r border-border/50")}>Exp</th>
  {isColOpen("details") ? (
  <>
  <th className={cn(thClass,"border-l border-border/50")}>Contracts</th>
@@ -3213,7 +3213,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <th style={{ left: 0 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] pl-4 pr-2")}>Ticker</th>
  <th style={{ left: 80 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Type</th>
  <th style={{ left: 152 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Strike</th>
- <th style={{ left: 232 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] border-r border-border/40")}>Exp</th>
+ <th style={{ left: 232 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] border-r border-border/50")}>Exp</th>
  {isColOpen("details") ? (
  <>
  <th className={cn(thClass,"border-l border-border/50")}>Contracts</th>
@@ -3501,7 +3501,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  <th style={{ left: 80 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Type</th>
  <th style={{ left: 152 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Strike</th>
  <th style={{ left: 232 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Exp</th>
- <th style={{ left: 312 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] border-r border-border/40")}>Contracts</th>
+ <th style={{ left: 312 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] border-r border-border/50")}>Contracts</th>
  {/* Dates group */}
  {isColOpen("dates") ? (
  <>
@@ -3595,7 +3595,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  </td>
  <td style={{ left: 152 }} className={cn(td,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted")}>${fmtUSD(p.strikePrice)}</td>
  <td style={{ left: 232 }} className={cn(tdText,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted")}>{fmtDate(p.expirationDate)}</td>
- <td style={{ left: 312 }} className={cn(td,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted border-r border-border/40")}>{p.contracts}</td>
+ <td style={{ left: 312 }} className={cn(td,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted border-r border-border/50")}>{p.contracts}</td>
  {/* Dates group */}
  {isColOpen("dates") ? (
  <>
@@ -3686,7 +3686,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  <td style={{ left: 80 }} className={cn(ctd,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted")} />
  <td style={{ left: 152 }} className={cn(ctd,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted")} />
  <td style={{ left: 232 }} className={cn(ctd,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted")} />
- <td style={{ left: 312 }} className={cn(ctd,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted border-r border-border/40")} />
+ <td style={{ left: 312 }} className={cn(ctd,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted border-r border-border/50")} />
  {/* Dates group */}
  {isColOpen("dates") ? (
  <>
@@ -3780,7 +3780,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  <th style={{ left: 80 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Type</th>
  <th style={{ left: 152 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Strike</th>
  <th style={{ left: 232 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Exp</th>
- <th style={{ left: 312 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] border-r border-border/40")}>Contracts</th>
+ <th style={{ left: 312 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] border-r border-border/50")}>Contracts</th>
  {isColOpen("dates") ? (
  <>
  <th className={cn(thClass,"border-l border-border/50")}>Opened</th>
@@ -4373,13 +4373,31 @@ const TICKER_COLORS = [
 "var(--color-chart-5)", // 245° blue-purple
 ];
 
+// Trading basis in effect today = starting basis plus every capital adjustment
+// whose effective date has already arrived. Shared by the Capital at Risk panel
+// and the distribution bar so both reflect deposits/withdrawals.
+function computeCurrentBasis(
+ settings: OptionsSettings | null,
+ capitalChanges: OptionsCapitalChange[],
+): number | null {
+ if (settings?.startingBasis == null) return null;
+ const nowMs = Date.now();
+ return capitalChanges.reduce(
+ (basis, c) =>
+ basis + (new Date(c.effectiveDate +"T12:00:00").getTime() <= nowMs ? Number(c.delta) : 0),
+ Number(settings.startingBasis),
+ );
+}
+
 function CapitalDistributionBar({
  openPositions,
  settings,
+ capitalChanges,
  tickerColorMap,
 }: {
  openPositions: OptionsPosition[];
  settings: OptionsSettings | null;
+ capitalChanges: OptionsCapitalChange[];
  tickerColorMap: Map<string, string>;
 }) {
  const [tooltip, setTooltip] = useState<{ x: number; y: number; ticker: string; capital: number; pct: number } | null>(null);
@@ -4391,7 +4409,7 @@ function CapitalDistributionBar({
  }
 
  const totalDeployed = Array.from(tickerCapital.values()).reduce((s, v) => s + v, 0);
- const basis = settings?.startingBasis ?? 0;
+ const basis = computeCurrentBasis(settings, capitalChanges) ?? 0;
  const total = Math.max(basis, totalDeployed);
 
  if (total === 0) return null;
@@ -4814,9 +4832,14 @@ function SummaryCards({
  }
 
  const overallRate = totalBasisMinutes > 0 ? (totalCapitalMinutes / totalBasisMinutes) * 100 : null;
- const yMax = Math.max(1.0, ...series.map((d) => d.utilization));
+ // Absolute-dollar scale: the tallest of (basis, deployed) across all days sets the
+ // track height, so each bar's gray background encodes the basis in effect that day
+ // (it steps at capital adjustments) while over-deployed days still overflow their gray.
+ const absMax = Math.max(1, ...series.map((d) => Math.max(d.basis, d.capitalDeployed)));
+ // Basis on the most recent trading day — used for the faded future bars.
+ const currentBasis = series.length > 0 ? series[series.length - 1].basis : 0;
 
- return { series, overallRate, yMax };
+ return { series, overallRate, absMax, currentBasis };
  }, [openPositions, closedPositions, settings, capitalChanges]);
 
  const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -4835,7 +4858,7 @@ function SummaryCards({
  if (!utilizationDataTrading || chartWidth === 0) return null;
  const td = utilizationDataTrading;
  const BAR_W = 5, GAP = 2, DAY_MS = 86_400_000;
- type Bar = { dayMs: number; seriesIdx: number | null; utilization: number; isFuture: boolean; x: number };
+ type Bar = { dayMs: number; seriesIdx: number | null; utilization: number; basis: number; isFuture: boolean; x: number };
  const bars: Bar[] = [];
  let x = 0;
 
@@ -4844,7 +4867,7 @@ function SummaryCards({
  // Gap before any bar that is ≥3 calendar days after the previous bar — this
  // correctly marks week boundaries even when Monday is a market holiday.
  if (i > 0 && s.dayMs - td.series[i - 1].dayMs >= 3 * DAY_MS) x += GAP;
- bars.push({ dayMs: s.dayMs, seriesIdx: i, utilization: s.utilization, isFuture: false, x });
+ bars.push({ dayMs: s.dayMs, seriesIdx: i, utilization: s.utilization, basis: s.basis, isFuture: false, x });
  x += BAR_W;
  }
 
@@ -4855,7 +4878,7 @@ function SummaryCards({
  const gap = prevDayMs !== null && dayMs - prevDayMs >= 3 * DAY_MS ? GAP : 0;
  if (x + gap + BAR_W > chartWidth) break;
  x += gap;
- bars.push({ dayMs, seriesIdx: null, utilization: 0, isFuture: true, x });
+ bars.push({ dayMs, seriesIdx: null, utilization: 0, basis: td.currentBasis, isFuture: true, x });
  prevDayMs = dayMs;
  x += BAR_W;
  }
@@ -4881,6 +4904,9 @@ function SummaryCards({
  const totalCapitalAtRisk = openPositions.reduce((sum, p) => {
  return sum + calcPosition(p).capitalAtRisk;
  }, 0);
+
+ // Basis in effect today (starting basis + applied adjustments) drives capital available.
+ const currentBasis = computeCurrentBasis(settings, capitalChanges);
 
  const cumulativePremium = closedPositions.reduce((sum, p) => {
  const c = calcPosition(p);
@@ -5047,12 +5073,12 @@ function SummaryCards({
  {openPositions.length > 0 ?`${openPositions.length} open position${openPositions.length !== 1 ?"s" :""}` :"No open positions"}
  </p>
  </div>
- {settings?.startingBasis != null && (
+ {currentBasis != null && (
  <>
  <div className="w-px bg-border self-stretch shrink-0" />
  <div className="flex-1 min-w-0 pl-3">
  <p className="tp-stat truncate text-ink-3">
- {`$${(settings.startingBasis - totalCapitalAtRisk).toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
+ {`$${(currentBasis - totalCapitalAtRisk).toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
  </p>
  <p className="tp-caption mt-0.5">capital available</p>
  </div>
@@ -5095,13 +5121,15 @@ function SummaryCards({
  onMouseLeave={() => setHoveredBarIdxTrading(null)}
  >
  {displayBars.bars.map((bar, i) => {
- const bgH = (1 / utilizationDataTrading.yMax) * 66;
- const fillH = bar.isFuture ? 0 : Math.min((bar.utilization / utilizationDataTrading.yMax) * 66, 66);
+ const absMax = utilizationDataTrading.absMax;
+ // Gray track height encodes the basis in effect that day; fills are deployed dollars.
+ const bgH = (bar.basis / absMax) * 66;
+ const fillH = bar.isFuture ? 0 : Math.min((bar.utilization * bar.basis / absMax) * 66, 66);
  const isHovered = bar.seriesIdx !== null && hoveredBarIdxTrading === bar.seriesIdx;
  const isOver = bar.utilization > 1;
  const dimmed = hoveredBarIdxTrading !== null && !isHovered;
  const s = bar.seriesIdx !== null ? utilizationDataTrading.series[bar.seriesIdx] : null;
- const cspH = s && !isOver ? Math.min((s.cspDeployed / s.basis) / utilizationDataTrading.yMax * 66, fillH) : 0;
+ const cspH = s && !isOver ? Math.min((s.cspDeployed / absMax) * 66, fillH) : 0;
  const ccH = fillH - cspH;
  return (
  <g key={i}>
@@ -5320,14 +5348,14 @@ function SummaryCards({
  <section>
  <h4 className="mb-1.5 font-semibold text-foreground">Available basis</h4>
  <p className="text-muted-foreground leading-relaxed">
- Uses your Starting Basis from Settings, adjusted over time by any dated Basis Adjustments you've recorded.
+ Uses your Starting Basis from Settings, adjusted over time by any dated Basis Adjustments you've recorded. Each bar's gray background is scaled to the basis in effect that day, so the track steps up or down when you record an adjustment.
  </p>
  </section>
 
  <section>
  <h4 className="mb-1.5 font-semibold text-foreground">Above 100%</h4>
  <p className="text-muted-foreground leading-relaxed">
- A day exceeds 100% when capital deployed exceeds your available basis — for example, when using margin. Those bars appear in amber.
+ A day exceeds 100% when capital deployed exceeds your available basis — for example, when using margin. The colored fill rises above its gray track and the bar appears in amber.
  </p>
  </section>
  </div>
@@ -5671,7 +5699,7 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
  key={i}
  onClick={toggleHighlight}
  className={cn(
-"border-b border-border/50 transition-colors whitespace-nowrap cursor-pointer",
+"border-b border-border transition-colors whitespace-nowrap cursor-pointer",
  isHighlighted ?"bg-primary/10 hover:bg-primary/15" :"hover:bg-muted"
  )}
  >
@@ -5953,6 +5981,7 @@ export function OptionsTrading() {
  <CapitalDistributionBar
  openPositions={openPositions}
  settings={settings ?? null}
+ capitalChanges={capitalChanges ?? []}
  tickerColorMap={tickerColorMap}
  />
  </div>

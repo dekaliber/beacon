@@ -216,7 +216,7 @@ export function TagsPage() {
  const exp = item.data;
  return (
  <>
- <tr key={exp.id} className="border-b border-border/30">
+ <tr key={exp.id} className="border-b border-border/50">
  <td className="py-1.5 pr-3 tabular-nums font-mono text-muted-foreground">
  {formatDate(exp.date.slice(0, 10))}
  </td>
@@ -236,7 +236,7 @@ export function TagsPage() {
  </td>
  </tr>
  {(exp.offsets ?? []).map((offset) => (
- <tr key={offset.id} className="border-b border-border/30 last:border-0 text-muted-foreground">
+ <tr key={offset.id} className="border-b border-border/50 last:border-0 text-muted-foreground">
  <td className="py-1 pr-3" />
  <td className="py-1 pr-2">
  <span className="flex items-center gap-1 truncate">
@@ -262,7 +262,7 @@ export function TagsPage() {
  } else {
  const offset = item.data;
  return (
- <tr key={offset.id} className="border-b border-border/30 last:border-0">
+ <tr key={offset.id} className="border-b border-border/50 last:border-0">
  <td className="py-1 pr-3 tabular-nums font-mono text-muted-foreground">
  {formatDate(offset.date.slice(0, 10))}
  </td>
