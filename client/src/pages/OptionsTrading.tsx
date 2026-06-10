@@ -2588,11 +2588,16 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const ctd ="px-2 pb-2 text-xs font-mono tabular-nums whitespace-nowrap text-muted-foreground";
 
  // Frozen columns need an opaque fill so scrolling cells don't bleed through.
- // Resting paints the page base (#fbfcfd). Hover mirrors the row: bg-muted for
- // plain rows, bg-muted-hover for grouped rows (which rest on bg-muted).
- // reimbursement rows: bg-row-reimbursement → #f9f4ee; hover → #f6efe5
- const stickyBg = isExpired ?"bg-[#f9f4ee]" : isItm ?"bg-row-uncategorized-solid" :"bg-[#fbfcfd]";
- const stickyHover = isExpired ?"group-hover:bg-[#f6efe5]" : isItm ?"group-hover:bg-row-uncategorized-solid-hover" : isGrouped ?"group-hover:bg-muted-hover" :"group-hover:bg-muted";
+ // Hover mirrors the row: bg-muted for plain rows, bg-muted-hover for grouped
+ // rows (which rest on bg-muted). Tinted rows use the *-solid tokens — opaque
+ // composites of the translucent tints over the page base (see index.css),
+ // token-derived so they're display-independent.
+ // Plain rows are the exception: the resting page surface is gradient-lightened
+ // above --color-background (which ≈ --color-muted), so a token fill would erase
+ // the hover step. #fbfcfd matches the lightened surface and stays lighter than
+ // the bg-muted hover. Near-white, so cross-monitor drift is negligible.
+ const stickyBg = isExpired ?"bg-row-reimbursement-solid" : isItm ?"bg-row-uncategorized-solid" :"bg-[#fbfcfd]";
+ const stickyHover = isExpired ?"group-hover:bg-row-reimbursement-solid-hover" : isItm ?"group-hover:bg-row-uncategorized-solid-hover" : isGrouped ?"group-hover:bg-muted-hover" :"group-hover:bg-muted";
  // Frozen cells are z-raised + opaque, so the row's collapsed bottom border
  // gets painted over. Re-draw it on the cell itself (matches the tr's
  // border-b condition: omitted when a roll sub-row follows). Tinted rows use
