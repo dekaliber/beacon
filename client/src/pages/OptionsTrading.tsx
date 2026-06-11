@@ -3370,10 +3370,15 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  );
  }
 
+ // Effective close timestamp: real closedAt, else expiration at 20:00 UTC (market close).
+ const getCloseMs = (p: OptionsPosition): number => {
+ if (p.closedAt) return new Date(p.closedAt).getTime();
+ const [ey, em, ed] = p.expirationDate.split("T")[0].split("-").map(Number);
+ return Date.UTC(ey, em - 1, ed, 20, 0, 0);
+ };
+
  const sorted = [...positions].sort((a, b) => {
- const aClose = a.closedAt ? a.closedAt.split("T")[0] : a.expirationDate.split("T")[0];
- const bClose = b.closedAt ? b.closedAt.split("T")[0] : b.expirationDate.split("T")[0];
- const closeDiff = aClose.localeCompare(bClose);
+ const closeDiff = getCloseMs(a) - getCloseMs(b);
  if (closeDiff !== 0) return closeDiff;
  const tickerDiff = a.ticker.symbol.localeCompare(b.ticker.symbol);
  if (tickerDiff !== 0) return tickerDiff;
@@ -3394,12 +3399,6 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  // ── Pre-compute fully-closed chain summaries ─────────────────────────────────
  // Each groupId whose every leg is closed becomes one summary row, rendered at
  // the bottom of the week in which the final leg closed.
- const getCloseMs = (p: OptionsPosition): number => {
- if (p.closedAt) return new Date(p.closedAt).getTime();
- const [ey, em, ed] = p.expirationDate.split("T")[0].split("-").map(Number);
- return Date.UTC(ey, em - 1, ed, 20, 0, 0);
- };
-
  // Build chain summaries for fully-closed chains only (all legs closed).
  // Keyed by the ID of the final leg so we know where to render the row inline.
  interface ChainSummary {

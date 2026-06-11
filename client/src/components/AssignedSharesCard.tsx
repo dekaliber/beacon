@@ -426,7 +426,7 @@ export function AssignedSharesCard({
                                     assignmentExpiration: g.assignmentExpiration,
                                   })
                                 }
-                                className="p-1.5 rounded text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
+                                className="p-1.5 inline-flex rounded text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
                               >
                                 <BanknoteArrowUp className="h-3.5 w-3.5" />
                               </button>
