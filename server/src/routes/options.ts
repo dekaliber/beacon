@@ -4,6 +4,7 @@ import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { getUserId } from "../middleware/auth.js";
 import { nextBusinessDay } from "../lib/businessDays.js";
+import { fetchYahooClosingPrice } from "../services/yahoo.js";
 
 export const optionsRoutes = Router();
 
@@ -340,7 +341,233 @@ const capitalChangeSchema = z.object({
   effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   delta: z.coerce.number().refine((v) => v !== 0, { message: "Delta cannot be zero" }),
   note: z.string().nullable().optional(),
+  // Client local date, used to decide whether the boundary is "live" (include the
+  // open-option mark) or back-dated (assigned-share marks only).
+  today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// Batched live stock quotes from Tradier → { SYMBOL: last (or close) }.
+async function fetchTradierStockQuotes(symbols: string[]): Promise<Map<string, number | null>> {
+  const out = new Map<string, number | null>();
+  if (symbols.length === 0) return out;
+  const url = `${TRADIER_BASE}/markets/quotes?symbols=${symbols.map(encodeURIComponent).join(",")}`;
+  const r = await fetch(url, { headers: tradierHeaders() });
+  if (!r.ok) return out;
+  const data = (await r.json()) as any;
+  const raw = data?.quotes?.quote;
+  if (!raw) return out;
+  for (const q of Array.isArray(raw) ? raw : [raw]) {
+    if (q?.symbol) out.set(String(q.symbol).toUpperCase(), q.last ?? q.close ?? null);
+  }
+  return out;
+}
+
+// Live option chain for one (symbol, expiration) from Tradier.
+async function fetchTradierChain(symbol: string, expiration: string): Promise<any[]> {
+  const url = `${TRADIER_BASE}/markets/options/chains?symbol=${encodeURIComponent(symbol)}&expiration=${encodeURIComponent(expiration)}&greeks=false`;
+  const r = await fetch(url, { headers: tradierHeaders() });
+  if (!r.ok) return [];
+  const data = (await r.json()) as any;
+  const chain = data?.options?.option;
+  return Array.isArray(chain) ? chain : chain ? [chain] : [];
+}
+
+type SnapshotDetail = {
+  capturedVia: "tradier-live" | "yahoo-historical";
+  effectiveDate: string;
+  isLive: boolean;
+  assignedLots: { ticker: string; shares: number; costBasis: number; price: number; source: string; unrealized: number; ccStrike: number | null; coveredShares: number }[];
+  openOptions: {
+    positionId: string; symbol: string; optionType: string; strike: number; expiration: string;
+    contracts: number; premiumReceived: number; currentMark: number; source: string; mark: number;
+  }[];
+  totals: { assignedUnrealized: number; openOptionMark: number; unrealizedSnapshot: number };
+};
+
+// Mark-to-market of all holdings as of `effectiveDate`, used to pin NAV at a
+// basis-change boundary so "Return on basis" can be chained as a true
+// time-weighted return.
+//
+// Live boundaries (effectiveDate >= clientToday) fire a FRESH Tradier refresh:
+// assigned shares are valued at the live underlying quote and each open option
+// is re-marked from the Tradier chain (and its current price persisted), so the
+// snapshot matches what the page shows. Back-dated boundaries fall back to the
+// Tiingo historical close for assigned shares and exclude open options.
+async function captureBasisSnapshot(
+  userId: string,
+  effectiveDate: string,
+  clientToday: string,
+): Promise<{ unrealizedSnapshot: number; excludesOptions: boolean; detail: SnapshotDetail }> {
+  const isLive = effectiveDate >= clientToday;
+
+  const lots = await prisma.investmentLot.findMany({
+    where: { fromOptionsPositionId: { not: null }, holding: { account: { userId } } },
+    select: {
+      quantity: true,
+      holding: { select: { ticker: true, accountId: true } },
+      fromOptionsPosition: { select: { strikePrice: true, expirationDate: true } },
+    },
+  });
+
+  // Open covered calls written against assigned batches, keyed by the original
+  // CSP strike/expiry they recover — mirrors GET /assigned-shares/active so the
+  // snapshot caps covered-share gains at the CC strike exactly like the page.
+  const openCalls = await prisma.optionsPosition.findMany({
+    where: {
+      userId, optionType: "CALL", status: "OPEN", isActive: true,
+      assignedFromStrikePrice: { not: null }, assignedFromExpirationDate: { not: null },
+    },
+    select: {
+      contracts: true, strikePrice: true, investmentAccountId: true,
+      assignedFromStrikePrice: true, assignedFromExpirationDate: true,
+      ticker: { select: { symbol: true } },
+    },
+  });
+  const batchKey = (ticker: string, strike: number, expiry: string, accountId: string) =>
+    `${ticker}|${strike}|${expiry}|${accountId}`;
+  const ccContractsByBatch = new Map<string, number>();
+  const ccStrikeWeightedByBatch = new Map<string, number>();
+  for (const cc of openCalls) {
+    if (cc.assignedFromStrikePrice == null || cc.assignedFromExpirationDate == null || cc.investmentAccountId == null) continue;
+    const key = batchKey(
+      cc.ticker.symbol, Number(cc.assignedFromStrikePrice),
+      cc.assignedFromExpirationDate.toISOString().slice(0, 10), cc.investmentAccountId,
+    );
+    ccContractsByBatch.set(key, (ccContractsByBatch.get(key) ?? 0) + cc.contracts);
+    ccStrikeWeightedByBatch.set(key, (ccStrikeWeightedByBatch.get(key) ?? 0) + Number(cc.strikePrice) * cc.contracts);
+  }
+
+  const assignedLots: SnapshotDetail["assignedLots"] = [];
+  const openOptions: SnapshotDetail["openOptions"] = [];
+  let assignedUnrealized = 0;
+  let openOptionMark = 0;
+
+  // ── Assigned-share unrealized ───────────────────────────────────────────────
+  // Resolve each ticker's price with a layered fallback (source recorded in the
+  // detail). Live: fresh Tradier → last stored TickerPrice → Yahoo EOD close.
+  // Back-dated: stored daily close (TickerPriceHistory) → Yahoo EOD close.
+  const tickers = [...new Set(lots.map((l) => l.holding.ticker))];
+  const priceForTicker = new Map<string, { price: number; source: string } | null>();
+
+  if (isLive) {
+    const live = await fetchTradierStockQuotes(tickers);
+    const cachedRows = await prisma.tickerPrice.findMany({
+      where: { ticker: { in: tickers } },
+      select: { ticker: true, price: true },
+    });
+    const cache = new Map(cachedRows.map((c) => [c.ticker, Number(c.price)]));
+    for (const t of tickers) {
+      const tradier = live.get(t.toUpperCase());
+      if (tradier != null) { priceForTicker.set(t, { price: tradier, source: "tradier-live" }); continue; }
+      const stored = cache.get(t);
+      if (stored != null) { priceForTicker.set(t, { price: stored, source: "ticker-price-cache" }); continue; }
+      const eod = await fetchYahooClosingPrice(t, effectiveDate);
+      priceForTicker.set(t, eod != null ? { price: eod, source: "yahoo-eod" } : null);
+    }
+  } else {
+    const effDate = new Date(effectiveDate + "T00:00:00.000Z");
+    for (const t of tickers) {
+      const hist = await prisma.tickerPriceHistory.findFirst({
+        where: { ticker: t, date: { lte: effDate } },
+        orderBy: { date: "desc" },
+        select: { closePrice: true },
+      });
+      if (hist != null) { priceForTicker.set(t, { price: Number(hist.closePrice), source: "ticker-price-history" }); continue; }
+      const eod = await fetchYahooClosingPrice(t, effectiveDate);
+      priceForTicker.set(t, eod != null ? { price: eod, source: "yahoo-eod" } : null);
+    }
+  }
+
+  for (const l of lots) {
+    if (l.fromOptionsPosition == null) continue;
+    const ticker = l.holding.ticker;
+    const resolved = priceForTicker.get(ticker);
+    if (resolved == null) continue;
+    const price = resolved.price;
+    const shares = Number(l.quantity);
+    const costBasis = Number(l.fromOptionsPosition.strikePrice);
+
+    // Cap covered shares at the open covered-call strike when the CC is ITM —
+    // those shares are effectively called away at the CC strike. Mirrors the
+    // client's totalUnrealizedPnl so U(boundary) and U(now) use one methodology.
+    const key = batchKey(ticker, costBasis, l.fromOptionsPosition.expirationDate.toISOString().slice(0, 10), l.holding.accountId);
+    const ccContracts = ccContractsByBatch.get(key) ?? 0;
+    const ccStrike = ccContracts > 0 ? (ccStrikeWeightedByBatch.get(key) ?? 0) / ccContracts : null;
+    const coveredShares = Math.min(ccContracts * 100, shares);
+    const uncoveredShares = shares - coveredShares;
+    const ccIsItm = ccStrike != null && price > ccStrike && coveredShares > 0;
+
+    const unrealized = round2(
+      ccIsItm && ccStrike != null
+        ? (ccStrike - costBasis) * coveredShares + (price - costBasis) * uncoveredShares
+        : (price - costBasis) * shares,
+    );
+    assignedUnrealized += unrealized;
+    assignedLots.push({
+      ticker, shares, costBasis, price, source: resolved.source, unrealized,
+      ccStrike: ccIsItm ? ccStrike : null, coveredShares: ccIsItm ? coveredShares : 0,
+    });
+  }
+
+  // ── Open-option mark (live boundaries only) ────────────────────────────────
+  if (isLive) {
+    const openPositions = await prisma.optionsPosition.findMany({
+      where: { userId, status: "OPEN", isActive: true, isDraft: false },
+      select: {
+        id: true, optionType: true, strikePrice: true, expirationDate: true, contracts: true,
+        premiumPerShare: true, feesOpen: true, currentPremiumPerShare: true,
+        ticker: { select: { symbol: true } },
+      },
+    });
+
+    // Fetch each (symbol, expiration) chain once.
+    const chainCache = new Map<string, any[]>();
+    for (const p of openPositions) {
+      const symbol = p.ticker.symbol;
+      const expiration = p.expirationDate.toISOString().slice(0, 10);
+      const key = `${symbol}|${expiration}`;
+      if (!chainCache.has(key)) chainCache.set(key, await fetchTradierChain(symbol, expiration));
+
+      const wantType = p.optionType === "CALL" ? "call" : "put";
+      const strike = Number(p.strikePrice);
+      const match = chainCache.get(key)!.find(
+        (o: any) => (o.option_type ?? "").toLowerCase() === wantType && Math.abs(Number(o.strike) - strike) < 0.001,
+      );
+      const freshLast: number | null = match?.last ?? null;
+
+      // Persist the fresh price so the page's live P&L stays in sync with the snapshot.
+      if (freshLast != null) {
+        await prisma.optionsPosition.update({ where: { id: p.id }, data: { currentPremiumPerShare: freshLast } });
+      }
+      const currentMark = freshLast ?? (p.currentPremiumPerShare != null ? Number(p.currentPremiumPerShare) : null);
+      if (currentMark == null) continue; // no price anywhere → skip this leg
+
+      const premiumReceived = Number(p.premiumPerShare);
+      const mark = round2((premiumReceived - currentMark) * 100 * p.contracts - Number(p.feesOpen ?? 0));
+      openOptionMark += mark;
+      openOptions.push({
+        positionId: p.id, symbol, optionType: p.optionType, strike, expiration, contracts: p.contracts,
+        premiumReceived, currentMark, source: freshLast != null ? "tradier-live" : "stored", mark,
+      });
+    }
+  }
+
+  assignedUnrealized = round2(assignedUnrealized);
+  openOptionMark = round2(openOptionMark);
+  const unrealizedSnapshot = round2(assignedUnrealized + openOptionMark);
+
+  const detail: SnapshotDetail = {
+    capturedVia: isLive ? "tradier-live" : "yahoo-historical",
+    effectiveDate,
+    isLive,
+    assignedLots,
+    openOptions,
+    totals: { assignedUnrealized, openOptionMark, unrealizedSnapshot },
+  };
+  return { unrealizedSnapshot, excludesOptions: !isLive, detail };
+}
 
 optionsRoutes.get("/capital-changes", async (req, res) => {
   const userId = getUserId(req);
@@ -356,10 +583,34 @@ optionsRoutes.post("/capital-changes", async (req, res) => {
   const parsed = capitalChangeSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
+  const { today, ...changeData } = parsed.data;
   const change = await prisma.optionsCapitalChange.create({
-    data: { userId, ...parsed.data },
+    data: { userId, ...changeData },
   });
-  res.status(201).json(change);
+
+  // Capture the boundary NAV snapshot so "Return on basis" can chain a true
+  // time-weighted return. Best-effort: a market-data failure must not block the
+  // adjustment — the snapshot stays null and the metric falls back to a ratio.
+  try {
+    const { unrealizedSnapshot, excludesOptions, detail } = await captureBasisSnapshot(
+      userId,
+      change.effectiveDate,
+      today ?? change.effectiveDate,
+    );
+    const updated = await prisma.optionsCapitalChange.update({
+      where: { id: change.id },
+      data: {
+        unrealizedSnapshot,
+        snapshotCapturedAt: new Date(),
+        snapshotExcludesOptions: excludesOptions,
+        snapshotDetail: detail,
+      },
+    });
+    return res.status(201).json(updated);
+  } catch (err) {
+    console.error("Failed to capture basis snapshot:", err);
+    return res.status(201).json(change);
+  }
 });
 
 optionsRoutes.delete("/capital-changes/:id", async (req, res) => {

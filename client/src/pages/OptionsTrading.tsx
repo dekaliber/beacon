@@ -36,6 +36,7 @@ import {
  type OptionsPositionGroup,
  type OptionsSettings,
  type OptionsCapitalChange,
+ type RealizedDisposition,
  type OptionsPositionInput,
  type OptionsCloseInput,
  type OptionOutcome,
@@ -1928,7 +1929,9 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
  const { data: allAccounts } = useApi(() => getAccounts(), []);
  const bankingAccounts = (allAccounts ?? []).filter((a) => a.type ==="CHECKING" || a.type ==="SAVINGS");
 
- const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+ // Client LOCAL date (en-CA → YYYY-MM-DD), not UTC — so the live-vs-back-dated
+ // snapshot decision doesn't shift a day near midnight ET. See [[feedback_local_date_utc]].
+ const todayStr = useMemo(() => new Date().toLocaleDateString("en-CA"), []);
  const [showAdjustForm, setShowAdjustForm] = useState(false);
  const [adjustDate, setAdjustDate] = useState(todayStr);
  const [adjustDelta, setAdjustDelta] = useState("");
@@ -1942,7 +1945,7 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
  setAdjustSaving(true);
  setAdjustError("");
  try {
- await createOptionsCapitalChange({ effectiveDate: adjustDate, delta, note: adjustNote || null });
+ await createOptionsCapitalChange({ effectiveDate: adjustDate, delta, note: adjustNote || null, today: todayStr });
  onCapitalChangeMutated();
  setAdjustDelta("");
  setAdjustNote("");
@@ -2061,6 +2064,7 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
  <label className="block tp-caption mb-1">Date</label>
  <DatePicker
  value={adjustDate} onChange={setAdjustDate}
+ max={todayStr}
  className="w-full"
  />
  </div>
@@ -3068,7 +3072,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  {/* ── Draft section ── */}
  {sortedDrafts.length > 0 && (
  <tr className="bg-muted border-y border-border">
- <td colSpan={4} className="py-1.5 pl-4 sticky left-0 z-[2] bg-[#fbfcfd]">
+ <td colSpan={4} className="py-1.5 pl-4 sticky left-0 z-[2] bg-muted">
  <SectionLabel as="span" className="text-foreground">Draft Positions</SectionLabel>
  </td>
  <td colSpan={totalCols - 4} className="py-1.5 pr-4 text-right">
@@ -3081,7 +3085,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  {/* ── Open section header (only when both sections are non-empty) ── */}
  {sortedDrafts.length > 0 && sorted.length > 0 && (
  <tr className="bg-muted border-y border-border">
- <td colSpan={4} className="py-1.5 pl-4 sticky left-0 z-[2] bg-[#fbfcfd]">
+ <td colSpan={4} className="py-1.5 pl-4 sticky left-0 z-[2] bg-muted">
  <SectionLabel as="span" className="text-foreground">Open Positions</SectionLabel>
  </td>
  <td colSpan={totalCols - 4} />
@@ -4612,6 +4616,7 @@ function SummaryCards({
  capitalChanges,
  totalUnrealizedPnl,
  totalRealizedPnl,
+ realizedRows,
 }: {
  openPositions: OptionsPosition[];
  closedPositions: OptionsPosition[];
@@ -4619,6 +4624,7 @@ function SummaryCards({
  capitalChanges: OptionsCapitalChange[];
  totalUnrealizedPnl: number | null;
  totalRealizedPnl: number | null;
+ realizedRows: RealizedDisposition[];
 }) {
  // ── Capital utilization series ────────────────────────────────────────────
  const utilizationData = useMemo(() => {
@@ -5005,54 +5011,72 @@ function SummaryCards({
  cumulativePremium + (totalLivePnl ?? 0) + (totalUnrealizedPnl ?? 0) + (totalRealizedPnl ?? 0);
 
  // % return on the capital base, as a true time-weighted return.
- // Split the timeline at each basis adjustment; chain per-period returns
- // geometrically where each period's NAV start = (basis in effect) +
- // (gains accumulated before that period). Realized premium is attributed by
- // close date; the current snapshot P/L (live + underlying) lands in the final
- // period. With no basis adjustments this collapses to markedPnl / startingBasis.
+ // We chain per-period returns split at each basis adjustment. Each period's NAV
+ // is pinned at its boundaries using the stored mark-to-market snapshot, so a
+ // deposit is treated as a flow (never a gain) and the % always shares the sign
+ // of the dollar figure. Requires every boundary to carry a snapshot; otherwise
+ // (older rows / market data unavailable) we fall back to a plain ratio.
  const markedReturnPct = (() => {
  if (!settings?.startingBasis || annReturnFirstDate == null) return null;
- const snapshotPnl = (totalLivePnl ?? 0) + (totalUnrealizedPnl ?? 0) + (totalRealizedPnl ?? 0);
 
- const changesAfterStart = capitalChanges.filter(
- (c) => new Date(c.effectiveDate +"T12:00:00").getTime() > annReturnFirstDate
- );
+ const currentBasis = computeCurrentBasis(settings, capitalChanges);
+ const fallback = () =>
+ currentBasis != null && currentBasis > 0 ? (totalMarkedPnl / currentBasis) * 100 : null;
 
- // No basis adjustments — simple return on the starting basis
- if (changesAfterStart.length === 0) {
+ const boundaries = capitalChanges
+ .filter((c) => new Date(c.effectiveDate +"T12:00:00").getTime() > annReturnFirstDate)
+ .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
+
+ // No adjustments → plain markedPnl / startingBasis (== fallback on starting basis).
+ if (boundaries.length === 0) {
  return settings.startingBasis > 0 ? (totalMarkedPnl / settings.startingBasis) * 100 : null;
  }
+ // Any boundary missing its NAV snapshot → can't chain accurately; fall back.
+ if (boundaries.some((c) => c.unrealizedSnapshot == null)) return fallback();
 
- // Build sub-period boundaries (same construction as the annualized return)
- const sorted = [...changesAfterStart].sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
- const periods: { startMs: number; basis: number }[] = [
- { startMs: annReturnFirstDate, basis: settings.startingBasis },
+ // Current unrealized mark (open-option live P&L + assigned-share unrealized).
+ // Realized dispositions are attributed by sale date below, not counted here.
+ const uNow = (totalLivePnl ?? 0) + (totalUnrealizedPnl ?? 0);
+
+ // Periods: each starts at a boundary (or the window start) and carries the
+ // basis in effect and the unrealized mark at its start (0 before any holdings).
+ const periods: { startMs: number; basis: number; uStart: number }[] = [
+ { startMs: annReturnFirstDate, basis: settings.startingBasis, uStart: 0 },
  ];
- for (const c of sorted) {
+ for (const c of boundaries) {
  const changeMs = new Date(c.effectiveDate +"T12:00:00").getTime();
- const prevBasis = periods[periods.length - 1].basis;
- periods.push({ startMs: changeMs, basis: prevBasis + Number(c.delta) });
+ const prev = periods[periods.length - 1];
+ periods.push({ startMs: changeMs, basis: prev.basis + Number(c.delta), uStart: Number(c.unrealizedSnapshot) });
  }
 
- // Geometric chaining of per-period returns
- let chained = 1;
- let accumulatedGains = 0;
- for (let i = 0; i < periods.length; i++) {
- const periodStart = periods[i].startMs;
- const periodEnd = i + 1 < periods.length ? periods[i + 1].startMs : Date.now();
- const periodBasis = periods[i].basis;
-
- let gain = closedPositions.reduce((sum, p) => {
+ const realizedInRange = (startMs: number, endMs: number) => {
+ const premium = closedPositions.reduce((sum, p) => {
  const closeMs = p.closedAt
  ? new Date(p.closedAt).getTime()
  : new Date(p.expirationDate).getTime();
- return closeMs >= periodStart && closeMs < periodEnd ? sum + (calcPosition(p).pnl ?? 0) : sum;
+ return closeMs >= startMs && closeMs < endMs ? sum + (calcPosition(p).pnl ?? 0) : sum;
  }, 0);
- if (i === periods.length - 1) gain += snapshotPnl;
+ const disp = realizedRows.reduce((sum, r) => {
+ const saleMs = new Date(r.saleDate +"T12:00:00").getTime();
+ return saleMs >= startMs && saleMs < endMs ? sum + r.realizedPnl : sum;
+ }, 0);
+ return premium + disp;
+ };
 
- const navStart = periodBasis + accumulatedGains;
- if (navStart > 0) chained *= 1 + gain / navStart;
- accumulatedGains += gain;
+ // We assume premium and capital gains are withdrawn rather than left to
+ // compound, so each period's return is measured against the contributed basis
+ // in effect — prior gains never inflate a later period's denominator.
+ let chained = 1;
+ for (let i = 0; i < periods.length; i++) {
+ const periodStart = periods[i].startMs;
+ const periodEnd = i + 1 < periods.length ? periods[i + 1].startMs : Date.now();
+ const uStart = periods[i].uStart;
+ const uEnd = i + 1 < periods.length ? periods[i + 1].uStart : uNow;
+
+ // Period gain = realized cash in the window + change in unrealized mark.
+ const gain = realizedInRange(periodStart, periodEnd) + (uEnd - uStart);
+ const basis = periods[i].basis;
+ if (basis > 0) chained *= 1 + gain / basis;
  }
 
  return (chained - 1) * 100;
@@ -5241,7 +5265,10 @@ function SummaryCards({
  <div className="flex items-center gap-1.5">
  <SectionLabel as="span">Total Marked P&L</SectionLabel>
  <CardInfoTooltip>
- Rollup of premium collected, current P&L of open positions, and total P&L of underlying shares — note that the % return is <span className="font-medium text-foreground">not</span> annualized
+ Rollup of premium collected, current P&L of open positions, and total P&L of underlying shares. The % is a <span className="font-medium text-foreground">time-weighted return on basis</span> (chained across any basis adjustments so deposits aren't counted as gains) and is <span className="font-medium text-foreground">not</span> annualized.
+ {capitalChanges.some((c) => c.snapshotExcludesOptions) && (
+ <span className="block mt-1">Note: a back-dated basis adjustment valued only assigned shares at that date, excluding open-option P&L.</span>
+ )}
  </CardInfoTooltip>
  </div>
  <div className="flex items-end mt-1">
@@ -5994,6 +6021,7 @@ export function OptionsTrading() {
  capitalChanges={capitalChanges ?? []}
  totalUnrealizedPnl={totalUnrealizedPnl}
  totalRealizedPnl={totalRealizedPnl}
+ realizedRows={realizedAssignedData?.rows ?? []}
  />
 
  {/* Tabs */}

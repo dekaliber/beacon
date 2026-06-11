@@ -916,6 +916,17 @@ model OptionsCapitalChange {
   effectiveDate String   // YYYY-MM-DD (client local date)
   delta         Decimal  @db.Decimal(12, 2) // positive = deposit, negative = withdrawal
   note          String?
+
+  // NAV snapshot captured when the change is recorded, used to chain a true
+  // time-weighted "Return on basis" across this boundary. Mark-to-market of all
+  // holdings (open-option live mark + assigned-share unrealized) valued as of
+  // effectiveDate. Null = not captured (older rows / market data unavailable) =>
+  // the metric falls back to a simple ratio.
+  unrealizedSnapshot      Decimal?  @db.Decimal(14, 2)
+  snapshotCapturedAt      DateTime?
+  snapshotExcludesOptions Boolean   @default(false) // true when a back-dated capture omitted the open-option mark
+  snapshotDetail          Json?     // per-ticker / per-position breakdown behind unrealizedSnapshot, for auditing
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

@@ -824,14 +824,50 @@ export interface OptionsCapitalChange {
   effectiveDate: string; // YYYY-MM-DD
   delta: number; // positive = deposit, negative = withdrawal
   note: string | null;
+  // NAV mark-to-market captured at this boundary; null when not captured (older
+  // rows / market data unavailable), in which case Return on basis falls back.
+  unrealizedSnapshot: number | null;
+  snapshotCapturedAt: string | null;
+  snapshotExcludesOptions: boolean;
+  snapshotDetail: OptionsBasisSnapshotDetail | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// Audit breakdown behind unrealizedSnapshot (per-ticker / per-position marks).
+export interface OptionsBasisSnapshotDetail {
+  capturedVia: "tradier-live" | "yahoo-historical";
+  effectiveDate: string;
+  isLive: boolean;
+  assignedLots: {
+    ticker: string;
+    shares: number;
+    costBasis: number;
+    price: number;
+    source: string;
+    unrealized: number;
+    ccStrike: number | null; // covered-call strike the gain was capped at (ITM), else null
+    coveredShares: number; // shares capped at the CC strike, else 0
+  }[];
+  openOptions: {
+    positionId: string;
+    symbol: string;
+    optionType: string;
+    strike: number;
+    expiration: string;
+    contracts: number;
+    premiumReceived: number;
+    currentMark: number;
+    source: string;
+    mark: number;
+  }[];
+  totals: { assignedUnrealized: number; openOptionMark: number; unrealizedSnapshot: number };
 }
 
 export const getOptionsCapitalChanges = () =>
   api.get<OptionsCapitalChange[]>("/options/capital-changes");
 
-export const createOptionsCapitalChange = (data: { effectiveDate: string; delta: number; note?: string | null }) =>
+export const createOptionsCapitalChange = (data: { effectiveDate: string; delta: number; note?: string | null; today?: string }) =>
   api.post<OptionsCapitalChange>("/options/capital-changes", data);
 
 export const deleteOptionsCapitalChange = (id: string) =>

@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { getMetadata as getTiingoMeta, getDividendScanResult } from "../services/tiingo.js";
 import { searchCoins, getPrices, getPrice as getCoinGeckoPrice, getMarketChart } from "../services/coingecko.js";
+import { fetchYahooPrice, fetchYahooHistory, fetchYahooClosingPrice } from "../services/yahoo.js";
 import { deactivateIfOrphaned } from "./instruments.js";
 import { getUserId } from "../middleware/auth.js";
 
@@ -45,118 +46,8 @@ async function fetchYahooMeta(ticker: string): Promise<{ name: string; type: str
   }
 }
 
-// ── Helper: fetch price from Yahoo Finance ──────────────────────────────────
-
-async function fetchYahooPrice(ticker: string): Promise<{ price: number; priceDate: Date } | null> {
-  try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=2d`;
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0",
-        Accept: "application/json",
-      },
-    });
-    if (!res.ok) return null;
-    const data = await res.json() as any;
-    const result = data?.chart?.result?.[0];
-    if (!result) return null;
-    const meta = result?.meta;
-    const price: number | null = meta?.regularMarketPrice ?? null;
-    const priceTs: number | null = meta?.regularMarketTime ?? null;
-    if (price == null || priceTs == null) return null;
-    const priceDate = new Date(priceTs * 1000);
-    return { price, priceDate };
-  } catch {
-    return null;
-  }
-}
-
-// ── Helper: fetch adjusted-close price history from Yahoo Finance ───────────
-// Returns daily (date, closePrice) pairs for the given ticker and date range.
-// Uses adjclose so that stock splits and dividends don't create artificial jumps.
-
-async function fetchYahooHistory(
-  ticker: string,
-  fromDate: Date,
-  toDate: Date = new Date()
-): Promise<Array<{ date: Date; closePrice: number }>> {
-  try {
-    const period1 = Math.floor(fromDate.getTime() / 1000);
-    const period2 = Math.floor(toDate.getTime() / 1000);
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&period1=${period1}&period2=${period2}`;
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
-    });
-    if (!res.ok) {
-      console.warn(`[fetchYahooHistory] ${ticker}: HTTP ${res.status}`);
-      return [];
-    }
-    const data = await res.json() as any;
-    const result = data?.chart?.result?.[0];
-    if (!result) return [];
-
-    const timestamps: number[] = result.timestamp ?? [];
-    const adjCloses: (number | null)[] = result.indicators?.adjclose?.[0]?.adjclose ?? [];
-
-    const points: Array<{ date: Date; closePrice: number }> = [];
-    for (let i = 0; i < timestamps.length; i++) {
-      const price = adjCloses[i];
-      if (price == null || price <= 0) continue;
-      // Normalize to UTC midnight for consistent DATE storage
-      const raw = new Date(timestamps[i] * 1000);
-      const date = new Date(Date.UTC(raw.getUTCFullYear(), raw.getUTCMonth(), raw.getUTCDate()));
-      points.push({ date, closePrice: price });
-    }
-    return points;
-  } catch (err) {
-    console.warn(`[fetchYahooHistory] ${ticker}: exception`, err);
-    return [];
-  }
-}
-
-// ── Helper: fetch closing price for a specific date from Yahoo Finance ───────
-// Looks back up to 7 calendar days to handle weekends and market holidays.
-// Prefers adjClose (split/dividend-adjusted); falls back to unadjusted close.
-
-async function fetchYahooClosingPrice(ticker: string, date: string): Promise<number | null> {
-  try {
-    // Use end-of-day UTC on the target date so the trading session is fully included,
-    // and look back 7 days to handle weekends / holiday closures.
-    const targetEnd = new Date(date + "T23:59:59Z");
-    const rangeStart = new Date(targetEnd.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-    const period1 = Math.floor(rangeStart.getTime() / 1000);
-    const period2 = Math.floor(targetEnd.getTime() / 1000);
-
-    const url =
-      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}` +
-      `?interval=1d&period1=${period1}&period2=${period2}`;
-
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
-    });
-    if (!res.ok) return null;
-
-    const data = await res.json() as any;
-    const result = data?.chart?.result?.[0];
-    if (!result) return null;
-
-    // Prefer adjclose (accounts for splits); fall back to regular close
-    const adjCloses: (number | null)[] = result?.indicators?.adjclose?.[0]?.adjclose ?? [];
-    const closes: (number | null)[] = result?.indicators?.quote?.[0]?.close ?? [];
-
-    for (let i = adjCloses.length - 1; i >= 0; i--) {
-      if (adjCloses[i] != null) return adjCloses[i]!;
-    }
-    for (let i = closes.length - 1; i >= 0; i--) {
-      if (closes[i] != null) return closes[i]!;
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
-}
+// Yahoo price helpers (fetchYahooPrice / fetchYahooHistory / fetchYahooClosingPrice)
+// live in ../services/yahoo.js and are imported above.
 
 // ── Helpers: trading-day calculations (Eastern time) ────────────────────────
 
