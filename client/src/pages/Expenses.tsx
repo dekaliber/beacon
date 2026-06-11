@@ -2431,7 +2431,7 @@ function ExpenseRowWithOffsets({
  <EditableCell value={expense.date} type="date" onSave={(v) => onInlineUpdate(expense.id,"date", v)} />
  </td>
  <td className="py-2 pr-3">
- <EditableCell value={expense.description} onSave={(v) => onInlineUpdate(expense.id,"description", v)} className={`tp-row-label${isFullyOffset ?" text-ink-4" :""}`} />
+ <EditableCell value={expense.description} onSave={(v) => onInlineUpdate(expense.id,"description", v)} className={isFullyOffset ?"font-medium text-ink-4" :"tp-row-label"} />
  {expense.tags.length > 0 && (
  <div className="mt-0.5 flex flex-wrap gap-1">
  {expense.tags.map(({ tag }) => (
