@@ -4855,7 +4855,8 @@ function SummaryCards({
  const ro = new ResizeObserver(entries => setChartWidth(Math.floor(entries[0].contentRect.width)));
  ro.observe(el);
  return () => ro.disconnect();
- }, []);
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [utilizationDataTrading != null]);
 
  // Pre-compute display bars (past trading days + future bars to fill available width)
  // with x positions that include a 2px gap at each week boundary.
