@@ -170,7 +170,7 @@ function calcPosition(p: OptionsPosition) {
 
  const capitalAtRisk =
  p.optionType ==="CALL"
- ? (p.shareCostBasis ?? 0) * 100 * p.contracts
+ ? (p.shareCostBasis ?? p.stockPriceAtOpen ?? p.strikePrice) * 100 * p.contracts
  : p.strikePrice * 100 * p.contracts;
 
  const breakeven =

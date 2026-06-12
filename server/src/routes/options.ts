@@ -1069,6 +1069,7 @@ optionsRoutes.post("/positions/:id/roll", async (req, res) => {
           premiumPerShare: newPremiumPerShare,
           feesOpen: newFeesOpen ?? null,
           stockPriceAtOpen: newStockPriceAtOpen ?? null,
+          shareCostBasis: existing.shareCostBasis,
         },
         include: { ticker: true, group: true },
       });
@@ -1127,6 +1128,7 @@ optionsRoutes.post("/positions/:id/roll", async (req, res) => {
         premiumPerShare: newPremiumPerShare,
         feesOpen: newFeesOpen ?? null,
         stockPriceAtOpen: newStockPriceAtOpen ?? null,
+        shareCostBasis: existing.shareCostBasis,
       },
       include: { ticker: true, group: true },
     });
