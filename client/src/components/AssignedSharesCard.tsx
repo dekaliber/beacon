@@ -49,7 +49,7 @@ function CcCapTooltipPortal({ x, y, mode, ccStrike, cappedUnreal, uncappedUnreal
   return createPortal(
     <div
       className="fixed z-[70] pointer-events-none w-64 rounded-md border border-border bg-background px-3 py-2.5 text-xs shadow-md"
-      style={{ left: x + 14, top: y, transform: "translateY(-100%)" }}
+      style={{ left: x, top: y - 6, transform: "translateX(-50%) translateY(-100%)" }}
     >
       <p className="font-medium text-foreground mb-2">
         Upside capped by covered call at ${fmtUSD(ccStrike)}
@@ -204,14 +204,12 @@ function PnlCell({
   colorClass,
   iconTipData,
   onTipEnter,
-  onTipMove,
   onTipLeave,
 }: {
   value: string;
   colorClass: string;
   iconTipData: Omit<CcCapTipData, "x" | "y"> | null;
   onTipEnter: (e: React.MouseEvent, data: Omit<CcCapTipData, "x" | "y">) => void;
-  onTipMove: (e: React.MouseEvent) => void;
   onTipLeave: () => void;
 }) {
   return (
@@ -224,7 +222,6 @@ function PnlCell({
             <span
               className="cursor-default inline-flex"
               onMouseEnter={(e) => onTipEnter(e, iconTipData)}
-              onMouseMove={onTipMove}
               onMouseLeave={onTipLeave}
             >
               <CircleAlert className="h-3.5 w-3.5 text-warn" />
@@ -294,10 +291,10 @@ export function AssignedSharesCard({
   const activeCount = activeGroups.length;
   const realizedCount = realizedGroups.length;
 
-  const handleTipEnter = (e: React.MouseEvent, data: Omit<CcCapTipData, "x" | "y">) =>
-    setCcTip({ x: e.clientX, y: e.clientY, ...data });
-  const handleTipMove = (e: React.MouseEvent) =>
-    setCcTip((t) => (t ? { ...t, x: e.clientX, y: e.clientY } : null));
+  const handleTipEnter = (e: React.MouseEvent, data: Omit<CcCapTipData, "x" | "y">) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setCcTip({ x: rect.left + rect.width / 2, y: rect.top, ...data });
+  };
   const handleTipLeave = () => setCcTip(null);
 
   return (
@@ -430,7 +427,6 @@ export function AssignedSharesCard({
                         colorClass={(cappedUnreal ?? unreal) != null ? pnlColor(cappedUnreal ?? unreal!) : ""}
                         iconTipData={unreal != null ? amountTipData : null}
                         onTipEnter={handleTipEnter}
-                        onTipMove={handleTipMove}
                         onTipLeave={handleTipLeave}
                       />
                       <PnlCell
@@ -438,7 +434,6 @@ export function AssignedSharesCard({
                         colorClass={(cappedPct ?? pct) != null ? pnlColor(cappedPct ?? pct!) : ""}
                         iconTipData={pct != null ? pctTipData : null}
                         onTipEnter={handleTipEnter}
-                        onTipMove={handleTipMove}
                         onTipLeave={handleTipLeave}
                       />
                       <td className={cn(tdClass, "text-right")}>
