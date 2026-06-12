@@ -36,12 +36,16 @@ const tdBody = "px-3 py-2 text-13 whitespace-nowrap";
 interface CcCapTipData {
   x: number;
   y: number;
+  mode: "amount" | "pct";
   ccStrike: number;
+  cappedUnreal: number;
+  uncappedUnreal: number;
+  missedUpside: number;
   cappedPct: number;
   uncappedPct: number;
   missedPct: number;
 }
-function CcCapTooltipPortal({ x, y, ccStrike, cappedPct, uncappedPct, missedPct }: CcCapTipData) {
+function CcCapTooltipPortal({ x, y, mode, ccStrike, cappedUnreal, uncappedUnreal, missedUpside, cappedPct, uncappedPct, missedPct }: CcCapTipData) {
   return createPortal(
     <div
       className="fixed z-[70] pointer-events-none w-64 rounded-md border border-border bg-background px-3 py-2.5 text-xs shadow-md"
@@ -50,20 +54,37 @@ function CcCapTooltipPortal({ x, y, ccStrike, cappedPct, uncappedPct, missedPct 
       <p className="font-medium text-foreground mb-2">
         Upside capped by covered call at ${fmtUSD(ccStrike)}
       </p>
-      <span className="flex flex-col gap-1 font-mono tabular-nums">
-        <span className="flex justify-between gap-4">
-          <span className="text-muted-foreground font-sans">Max gain at strike</span>
-          <span className={cappedPct >= 0 ? "text-up" : "text-down"}>{fmtPct(cappedPct)}</span>
+      {mode === "amount" ? (
+        <span className="flex flex-col gap-1 font-mono tabular-nums">
+          <span className="flex justify-between gap-4">
+            <span className="text-muted-foreground font-sans">Max gain at strike</span>
+            <span className={cappedUnreal >= 0 ? "text-up" : "text-down"}>{fmtSigned(cappedUnreal)}</span>
+          </span>
+          <span className="flex justify-between gap-4">
+            <span className="text-muted-foreground font-sans">Value at current price</span>
+            <span className={uncappedUnreal >= 0 ? "text-up" : "text-down"}>{fmtSigned(uncappedUnreal)}</span>
+          </span>
+          <span className="flex justify-between gap-4 border-t border-border pt-1 mt-0.5">
+            <span className="text-muted-foreground font-sans">Foregone upside</span>
+            <span className="text-warn">${fmtUSD(missedUpside)}</span>
+          </span>
         </span>
-        <span className="flex justify-between gap-4">
-          <span className="text-muted-foreground font-sans">Gain at current price</span>
-          <span className={uncappedPct >= 0 ? "text-up" : "text-down"}>{fmtPct(uncappedPct)}</span>
+      ) : (
+        <span className="flex flex-col gap-1 font-mono tabular-nums">
+          <span className="flex justify-between gap-4">
+            <span className="text-muted-foreground font-sans">Max gain at strike</span>
+            <span className={cappedPct >= 0 ? "text-up" : "text-down"}>{fmtPct(cappedPct)}</span>
+          </span>
+          <span className="flex justify-between gap-4">
+            <span className="text-muted-foreground font-sans">Gain at current price</span>
+            <span className={uncappedPct >= 0 ? "text-up" : "text-down"}>{fmtPct(uncappedPct)}</span>
+          </span>
+          <span className="flex justify-between gap-4 border-t border-border pt-1 mt-0.5">
+            <span className="text-muted-foreground font-sans">Foregone upside</span>
+            <span className="text-warn">{fmtPct(missedPct)}</span>
+          </span>
         </span>
-        <span className="flex justify-between gap-4 border-t border-border pt-1 mt-0.5">
-          <span className="text-muted-foreground font-sans">Foregone upside</span>
-          <span className="text-warn">{fmtPct(missedPct)}</span>
-        </span>
-      </span>
+      )}
     </div>,
     document.body,
   );
@@ -366,10 +387,12 @@ export function AssignedSharesCard({
                   const missedPct = missedUpside != null && costBasis > 0
                     ? (missedUpside / costBasis) * 100
                     : 0;
-                  const iconTipData =
-                    ccIsItm && ccStrike != null && cappedPct != null && missedUpside != null
-                      ? { ccStrike, cappedPct, uncappedPct, missedPct }
+                  const baseTipData =
+                    ccIsItm && ccStrike != null && cappedUnreal != null && cappedPct != null && missedUpside != null
+                      ? { ccStrike, cappedUnreal, uncappedUnreal: unreal!, missedUpside, cappedPct, uncappedPct, missedPct }
                       : null;
+                  const amountTipData = baseTipData ? { ...baseTipData, mode: "amount" as const } : null;
+                  const pctTipData = baseTipData ? { ...baseTipData, mode: "pct" as const } : null;
 
                   return (
                     <tr key={g.key} className="border-b border-border hover:bg-muted">
@@ -405,7 +428,7 @@ export function AssignedSharesCard({
                       <PnlCell
                         value={unreal != null ? fmtSigned(cappedUnreal ?? unreal) : "—"}
                         colorClass={(cappedUnreal ?? unreal) != null ? pnlColor(cappedUnreal ?? unreal!) : ""}
-                        iconTipData={unreal != null ? iconTipData : null}
+                        iconTipData={unreal != null ? amountTipData : null}
                         onTipEnter={handleTipEnter}
                         onTipMove={handleTipMove}
                         onTipLeave={handleTipLeave}
@@ -413,7 +436,7 @@ export function AssignedSharesCard({
                       <PnlCell
                         value={pct != null ? fmtPct(cappedPct ?? pct) : "—"}
                         colorClass={(cappedPct ?? pct) != null ? pnlColor(cappedPct ?? pct!) : ""}
-                        iconTipData={pct != null ? iconTipData : null}
+                        iconTipData={pct != null ? pctTipData : null}
                         onTipEnter={handleTipEnter}
                         onTipMove={handleTipMove}
                         onTipLeave={handleTipLeave}
