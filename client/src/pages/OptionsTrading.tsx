@@ -2324,6 +2324,7 @@ type ColGroupKey = (typeof COL_GROUPS)[number]["key"];
 function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, chainMaxCapitalAtRiskMap, onEdit, onClose, onConfirm, onPositionUpdated, extraTickers, onPricesUpdated, seedLivePrices, tabBarRef }: OpenPositionsTableProps) {
  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
  const [openColGroups, setOpenColGroups] = useState<Set<ColGroupKey>>(new Set(["live"]));
+ const [draftsOpen, setDraftsOpen] = useState(true);
  const tableContainerRef = useRef<HTMLDivElement>(null);
  const theadRef = useRef<HTMLTableSectionElement>(null);
  const portalScrollRef = useRef<HTMLDivElement>(null);
@@ -3079,16 +3080,19 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <tbody>
  {/* ── Draft section ── */}
  {sortedDrafts.length > 0 && (
- <tr className="bg-muted border-y border-border">
- <td colSpan={4} className="py-1.5 pl-4 sticky left-0 z-[2] bg-muted">
+ <tr className="group bg-muted border-y border-border cursor-pointer hover:bg-muted select-none" onClick={() => setDraftsOpen((v) => !v)}>
+ <td colSpan={4} className="py-1.5 pl-4 sticky left-0 z-[2] bg-muted group-hover:bg-muted">
+ <div className="flex items-center gap-1.5">
  <SectionLabel as="span" className="text-foreground">Draft Positions</SectionLabel>
+ {draftsOpen ? <ChevronUp className="h-3 w-3 text-muted-foreground shrink-0" /> : <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />}
+ </div>
  </td>
  <td colSpan={totalCols - 4} className="py-1.5 pr-4 text-right">
  <span className="tp-caption font-normal">Not included in totals · click <PlayCircle className="inline h-3 w-3 mb-0.5" /> to confirm &amp; open</span>
  </td>
  </tr>
  )}
- {sortedDrafts.map((p) => renderRow(p, false, true))}
+ {draftsOpen && sortedDrafts.map((p) => renderRow(p, false, true))}
 
  {/* ── Open section header (only when both sections are non-empty) ── */}
  {sortedDrafts.length > 0 && sorted.length > 0 && (
