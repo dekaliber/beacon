@@ -1059,24 +1059,28 @@ export interface ScreenerResult {
 export interface ScreenerParams {
   tickers: string[];
   optionType: "CALL" | "PUT" | "BOTH";
-  minDTE: number;
-  maxDTE: number;
-  minDelta: number;
-  maxDelta: number;
-  minOI: number;
-  minMark: number;
+  minDTE?: number;
+  maxDTE?: number;
+  minDelta?: number;
+  maxDelta?: number;
+  minOI?: number;
+  minVolume?: number;
+  strikeMin?: number;
+  strikeMax?: number;
 }
 
 export const runOptionsScreener = (params: ScreenerParams) => {
   const qs = new URLSearchParams({
     tickers: params.tickers.join(","),
     optionType: params.optionType,
-    minDTE: String(params.minDTE),
-    maxDTE: String(params.maxDTE),
-    minDelta: String(params.minDelta),
-    maxDelta: String(params.maxDelta),
-    minOI: String(params.minOI),
-    minMark: String(params.minMark),
+    ...(params.minDTE != null && { minDTE: String(params.minDTE) }),
+    ...(params.maxDTE != null && { maxDTE: String(params.maxDTE) }),
+    ...(params.minDelta != null && { minDelta: String(params.minDelta) }),
+    ...(params.maxDelta != null && { maxDelta: String(params.maxDelta) }),
+    ...(params.minOI != null && { minOI: String(params.minOI) }),
+    ...(params.minVolume != null && { minVolume: String(params.minVolume) }),
+    ...(params.strikeMin != null && { strikeMin: String(params.strikeMin) }),
+    ...(params.strikeMax != null && { strikeMax: String(params.strikeMax) }),
   });
   return api.get<ScreenerResult[]>(`/options/screener?${qs}`);
 };

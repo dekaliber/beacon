@@ -1411,13 +1411,15 @@ optionsRoutes.get("/screener", async (req, res) => {
   const {
     tickers: tickersParam,
     optionType = "BOTH",
-    minDTE = "0",
-    maxDTE = "60",
-    minDelta = "0",
-    maxDelta = "1",
-    minOI = "0",
-    minMark = "0",
-  } = req.query as Record<string, string>;
+    minDTE,
+    maxDTE,
+    minDelta,
+    maxDelta,
+    minOI,
+    minVolume,
+    strikeMin,
+    strikeMax,
+  } = req.query as Record<string, string | undefined>;
 
   if (!tickersParam) {
     return res.status(400).json({ error: "Missing required param: tickers" });
@@ -1426,12 +1428,14 @@ optionsRoutes.get("/screener", async (req, res) => {
   const symbols = tickersParam.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
   if (symbols.length === 0) return res.status(400).json({ error: "No tickers provided" });
 
-  const minDTEn = parseInt(minDTE, 10);
-  const maxDTEn = parseInt(maxDTE, 10);
-  const minDeltaN = parseFloat(minDelta);
-  const maxDeltaN = parseFloat(maxDelta);
-  const minOIn = parseInt(minOI, 10);
-  const minMarkN = parseFloat(minMark);
+  const minDTEn = minDTE != null ? parseInt(minDTE, 10) : null;
+  const maxDTEn = maxDTE != null ? parseInt(maxDTE, 10) : null;
+  const minDeltaN = minDelta != null ? parseFloat(minDelta) : null;
+  const maxDeltaN = maxDelta != null ? parseFloat(maxDelta) : null;
+  const minOIn = minOI != null ? parseInt(minOI, 10) : null;
+  const minVolumeN = minVolume != null ? parseInt(minVolume, 10) : null;
+  const strikeMinN = strikeMin != null ? parseFloat(strikeMin) : null;
+  const strikeMaxN = strikeMax != null ? parseFloat(strikeMax) : null;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -1481,7 +1485,9 @@ optionsRoutes.get("/screener", async (req, res) => {
       const eligibleDates = dates.filter((d) => {
         const exp = new Date(d + "T00:00:00");
         const dte = Math.round((exp.getTime() - today.getTime()) / 86400000);
-        return dte >= minDTEn && dte <= maxDTEn;
+        if (minDTEn != null && dte < minDTEn) return false;
+        if (maxDTEn != null && dte > maxDTEn) return false;
+        return true;
       });
 
       // 3. For each eligible expiration, fetch chains and filter
@@ -1499,23 +1505,30 @@ optionsRoutes.get("/screener", async (req, res) => {
           const side: "CALL" | "PUT" = (opt.option_type ?? "").toLowerCase() === "call" ? "CALL" : "PUT";
           if (optionType !== "BOTH" && side !== optionType) continue;
 
+          const strike: number = opt.strike;
+          if (strikeMinN != null && strike < strikeMinN) continue;
+          if (strikeMaxN != null && strike > strikeMaxN) continue;
+
           const delta: number | null = opt.greeks?.delta ?? null;
           const absDelta = delta != null ? Math.abs(delta) : null;
-          if (absDelta != null && (absDelta < minDeltaN || absDelta > maxDeltaN)) continue;
+          if (minDeltaN != null && absDelta != null && absDelta < minDeltaN) continue;
+          if (maxDeltaN != null && absDelta != null && absDelta > maxDeltaN) continue;
 
           const oi: number | null = opt.open_interest ?? null;
-          if (oi != null && oi < minOIn) continue;
+          if (minOIn != null && oi != null && oi < minOIn) continue;
+
+          const volume: number | null = opt.volume ?? null;
+          if (minVolumeN != null && volume != null && volume < minVolumeN) continue;
 
           const bid: number | null = opt.bid ?? null;
           const ask: number | null = opt.ask ?? null;
           const last: number | null = opt.last ?? null;
-          if (last != null && last < minMarkN) continue;
 
           results.push({
             ticker: symbol,
             expiration: expDate,
             dte,
-            strike: opt.strike,
+            strike,
             optionType: side,
             underlyingPrice: underlyingPriceMap.get(symbol) ?? null,
             delta,

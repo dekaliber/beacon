@@ -5414,8 +5414,8 @@ const DEFAULT_PARAMS: ScreenerParams = {
  maxDTE: 7,
  minDelta: 0.10,
  maxDelta: 0.30,
- minOI: 0,
- minMark: 0,
+ minOI: undefined,
+ minVolume: undefined,
 };
 
 function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: OptionsTicker[]; onDraftCreated: (ticker: string, underlyingPrice: number | null) => void }) {
@@ -5571,7 +5571,7 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
  )}
  </div>
 
- {/* Row: option type + DTE + delta + OI + min mark */}
+ {/* Row: option type + DTE + delta + OI + volume + strike (single ticker) */}
  <div className="flex flex-wrap items-end gap-6">
  {/* Option Type */}
  <div>
@@ -5601,17 +5601,19 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
  <div className="flex items-center gap-1.5">
  <input
  type="number"
- value={params.minDTE}
+ value={params.minDTE ?? ""}
  min={0}
- onChange={(e) => setParam("minDTE", Math.max(0, parseInt(e.target.value) || 0))}
+ onFocus={(e) => e.target.select()}
+ onChange={(e) => { const v = e.target.value; setParam("minDTE", v === "" ? undefined : Math.max(0, parseInt(v) || 0)); }}
  className="w-16 rounded-md border border-border bg-background px-3 py-2 text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
  />
  <span className="text-muted-foreground text-xs shrink-0">–</span>
  <input
  type="number"
- value={params.maxDTE}
+ value={params.maxDTE ?? ""}
  min={0}
- onChange={(e) => setParam("maxDTE", Math.max(0, parseInt(e.target.value) || 0))}
+ onFocus={(e) => e.target.select()}
+ onChange={(e) => { const v = e.target.value; setParam("maxDTE", v === "" ? undefined : Math.max(0, parseInt(v) || 0)); }}
  className="w-16 rounded-md border border-border bg-background px-3 py-2 text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
  />
  </div>
@@ -5623,21 +5625,23 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
  <div className="flex items-center gap-1.5">
  <input
  type="number"
- value={params.minDelta}
+ value={params.minDelta ?? ""}
  min={0}
  max={1}
  step={0.01}
- onChange={(e) => setParam("minDelta", Math.min(1, Math.max(0, parseFloat(e.target.value) || 0)))}
+ onFocus={(e) => e.target.select()}
+ onChange={(e) => { const v = e.target.value; setParam("minDelta", v === "" ? undefined : Math.min(1, Math.max(0, parseFloat(v) || 0))); }}
  className="w-16 rounded-md border border-border bg-background px-3 py-2 text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
  />
  <span className="text-muted-foreground text-xs shrink-0">–</span>
  <input
  type="number"
- value={params.maxDelta}
+ value={params.maxDelta ?? ""}
  min={0}
  max={1}
  step={0.01}
- onChange={(e) => setParam("maxDelta", Math.min(1, Math.max(0, parseFloat(e.target.value) || 0)))}
+ onFocus={(e) => e.target.select()}
+ onChange={(e) => { const v = e.target.value; setParam("maxDelta", v === "" ? undefined : Math.min(1, Math.max(0, parseFloat(v) || 0))); }}
  className="w-16 rounded-md border border-border bg-background px-3 py-2 text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
  />
  </div>
@@ -5648,25 +5652,56 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
  <label className="block text-xs font-medium mb-1">Min OI</label>
  <input
  type="number"
- value={params.minOI}
+ value={params.minOI ?? ""}
  min={0}
- onChange={(e) => setParam("minOI", Math.max(0, parseInt(e.target.value) || 0))}
- className="w-24 rounded-md border border-border bg-background px-3 py-2 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+ onFocus={(e) => e.target.select()}
+ onChange={(e) => { const v = e.target.value; setParam("minOI", v === "" ? undefined : Math.max(0, parseInt(v) || 0)); }}
+ className="w-16 rounded-md border border-border bg-background px-3 py-2 text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
  />
  </div>
 
- {/* Min Last */}
+ {/* Min Volume */}
  <div>
- <label className="block text-xs font-medium mb-1">Min Last ($)</label>
+ <label className="block text-xs font-medium mb-1">Min Volume</label>
  <input
  type="number"
- value={params.minMark}
+ value={params.minVolume ?? ""}
  min={0}
- step={0.01}
- onChange={(e) => setParam("minMark", Math.max(0, parseFloat(e.target.value) || 0))}
- className="w-24 rounded-md border border-border bg-background px-3 py-2 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+ onFocus={(e) => e.target.select()}
+ onChange={(e) => { const v = e.target.value; setParam("minVolume", v === "" ? undefined : Math.max(0, parseInt(v) || 0)); }}
+ className="w-16 rounded-md border border-border bg-background px-3 py-2 text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
  />
  </div>
+
+ {/* Strike Price — only when exactly 1 ticker */}
+ {params.tickers.length === 1 && (
+ <div>
+ <label className="block text-xs font-medium mb-1">Strike Price</label>
+ <div className="flex items-center gap-1.5">
+ <input
+ type="number"
+ value={params.strikeMin ?? ""}
+ min={0}
+ step={0.5}
+ placeholder="min"
+ onFocus={(e) => e.target.select()}
+ onChange={(e) => { const v = e.target.value; setParam("strikeMin", v === "" ? undefined : Math.max(0, parseFloat(v) || 0)); }}
+ className="w-16 rounded-md border border-border bg-background px-3 py-2 text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+ />
+ <span className="text-muted-foreground text-xs shrink-0">–</span>
+ <input
+ type="number"
+ value={params.strikeMax ?? ""}
+ min={0}
+ step={0.5}
+ placeholder="max"
+ onFocus={(e) => e.target.select()}
+ onChange={(e) => { const v = e.target.value; setParam("strikeMax", v === "" ? undefined : Math.max(0, parseFloat(v) || 0)); }}
+ className="w-16 rounded-md border border-border bg-background px-3 py-2 text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+ />
+ </div>
+ </div>
+ )}
 
  {/* Run button — pushed to the right end of the filter row */}
  <div className="flex items-end ml-auto">
