@@ -52,7 +52,7 @@ function CcCapTooltipPortal({ x, y, mode, ccStrike, cappedUnreal, uncappedUnreal
       style={{ left: x, top: y - 6, transform: "translateX(-50%) translateY(-100%)" }}
     >
       <p className="font-medium text-foreground mb-2">
-        Upside capped by covered call at ${fmtUSD(ccStrike)}
+        Upside capped by CC at ${fmtUSD(ccStrike)}
       </p>
       {mode === "amount" ? (
         <span className="flex flex-col gap-1 font-mono tabular-nums">
