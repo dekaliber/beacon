@@ -76,7 +76,7 @@ async function applyCloseSideEffects(
         ticker: updated.ticker.symbol,
         quantity: shares,
         costPerShare: Math.max(0, costPerShare),
-        acquiredDate: updated.expirationDate,
+        acquiredDate: updated.closedAt ?? updated.expirationDate,
       },
       update: {},
     });
