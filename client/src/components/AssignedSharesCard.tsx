@@ -37,11 +37,11 @@ interface CcCapTipData {
   x: number;
   y: number;
   ccStrike: number;
-  cappedUnreal: number;
-  uncappedUnreal: number;
-  missedUpside: number;
+  cappedPct: number;
+  uncappedPct: number;
+  missedPct: number;
 }
-function CcCapTooltipPortal({ x, y, ccStrike, cappedUnreal, uncappedUnreal, missedUpside }: CcCapTipData) {
+function CcCapTooltipPortal({ x, y, ccStrike, cappedPct, uncappedPct, missedPct }: CcCapTipData) {
   return createPortal(
     <div
       className="fixed z-[70] pointer-events-none w-64 rounded-md border border-border bg-background px-3 py-2.5 text-xs shadow-md"
@@ -53,15 +53,15 @@ function CcCapTooltipPortal({ x, y, ccStrike, cappedUnreal, uncappedUnreal, miss
       <span className="flex flex-col gap-1 font-mono tabular-nums">
         <span className="flex justify-between gap-4">
           <span className="text-muted-foreground font-sans">Max gain at strike</span>
-          <span className={cappedUnreal >= 0 ? "text-up" : "text-down"}>{fmtSigned(cappedUnreal)}</span>
+          <span className={cappedPct >= 0 ? "text-up" : "text-down"}>{fmtPct(cappedPct)}</span>
         </span>
         <span className="flex justify-between gap-4">
-          <span className="text-muted-foreground font-sans">Value at current price</span>
-          <span className={uncappedUnreal >= 0 ? "text-up" : "text-down"}>{fmtSigned(uncappedUnreal)}</span>
+          <span className="text-muted-foreground font-sans">Gain at current price</span>
+          <span className={uncappedPct >= 0 ? "text-up" : "text-down"}>{fmtPct(uncappedPct)}</span>
         </span>
         <span className="flex justify-between gap-4 border-t border-border pt-1 mt-0.5">
           <span className="text-muted-foreground font-sans">Foregone upside</span>
-          <span className="text-warn">${fmtUSD(missedUpside)}</span>
+          <span className="text-warn">{fmtPct(missedPct)}</span>
         </span>
       </span>
     </div>,
@@ -361,9 +361,14 @@ export function AssignedSharesCard({
                     ? unreal - cappedUnreal
                     : null;
 
+                  const costBasis = g.assignmentStrike * g.shares;
+                  const uncappedPct = pct ?? 0;
+                  const missedPct = missedUpside != null && costBasis > 0
+                    ? (missedUpside / costBasis) * 100
+                    : 0;
                   const iconTipData =
-                    ccIsItm && ccStrike != null && cappedUnreal != null && missedUpside != null
-                      ? { ccStrike, cappedUnreal, uncappedUnreal: unreal!, missedUpside }
+                    ccIsItm && ccStrike != null && cappedPct != null && missedUpside != null
+                      ? { ccStrike, cappedPct, uncappedPct, missedPct }
                       : null;
 
                   return (
