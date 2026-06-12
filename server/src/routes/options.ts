@@ -1070,6 +1070,8 @@ optionsRoutes.post("/positions/:id/roll", async (req, res) => {
           feesOpen: newFeesOpen ?? null,
           stockPriceAtOpen: newStockPriceAtOpen ?? null,
           shareCostBasis: existing.shareCostBasis,
+          assignedFromStrikePrice: existing.assignedFromStrikePrice,
+          assignedFromExpirationDate: existing.assignedFromExpirationDate,
         },
         include: { ticker: true, group: true },
       });
@@ -1129,6 +1131,8 @@ optionsRoutes.post("/positions/:id/roll", async (req, res) => {
         feesOpen: newFeesOpen ?? null,
         stockPriceAtOpen: newStockPriceAtOpen ?? null,
         shareCostBasis: existing.shareCostBasis,
+        assignedFromStrikePrice: existing.assignedFromStrikePrice,
+        assignedFromExpirationDate: existing.assignedFromExpirationDate,
       },
       include: { ticker: true, group: true },
     });
