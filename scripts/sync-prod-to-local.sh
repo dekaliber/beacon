@@ -44,8 +44,8 @@ if [[ -n "${LOCAL_CLERK_USER_ID:-}" ]]; then
     USERID_TABLES="$(psql "$LOCAL_DATABASE_URL" -At -c \
       "SELECT table_name FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'userId' ORDER BY table_name;")"
     for tbl in $USERID_TABLES; do
-      psql "$LOCAL_DATABASE_URL" -v prod="$PROD_USER_ID" -v local="$LOCAL_CLERK_USER_ID" \
-        -c "UPDATE \"$tbl\" SET \"userId\" = :'local' WHERE \"userId\" = :'prod';"
+      psql "$LOCAL_DATABASE_URL" \
+        -c "UPDATE \"$tbl\" SET \"userId\" = '$LOCAL_CLERK_USER_ID' WHERE \"userId\" = '$PROD_USER_ID';"
     done
     echo "userId replacement complete."
   fi

@@ -2181,6 +2181,7 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
  const [error, setError] = useState("");
 
  useEffect(() => {
+ if (position.stockPriceAtOpen != null) return;
  let cancelled = false;
  setPriceFetching(true);
  getUnderlyingQuote(position.ticker.symbol)
@@ -2188,7 +2189,7 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
  .catch(() => {})
  .finally(() => { if (!cancelled) setPriceFetching(false); });
  return () => { cancelled = true; };
- }, [position.ticker.symbol]);
+ }, [position.ticker.symbol, position.stockPriceAtOpen]);
 
  const handleSubmit = async (e: React.FormEvent) => {
  e.preventDefault();
@@ -2308,6 +2309,7 @@ interface OpenPositionsTableProps {
  onPositionUpdated: () => void;
  extraTickers?: string[];
  onPricesUpdated?: (prices: Map<string, number>) => void;
+ seedLivePrices?: Map<string, number>;
  tabBarRef?: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -2319,7 +2321,7 @@ const COL_GROUPS = [
 ] as const;
 type ColGroupKey = (typeof COL_GROUPS)[number]["key"];
 
-function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, chainMaxCapitalAtRiskMap, onEdit, onClose, onConfirm, onPositionUpdated, extraTickers, onPricesUpdated, tabBarRef }: OpenPositionsTableProps) {
+function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, chainMaxCapitalAtRiskMap, onEdit, onClose, onConfirm, onPositionUpdated, extraTickers, onPricesUpdated, seedLivePrices, tabBarRef }: OpenPositionsTableProps) {
  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
  const [openColGroups, setOpenColGroups] = useState<Set<ColGroupKey>>(new Set(["live"]));
  const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -2346,6 +2348,12 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  return next;
  });
  };
+
+ useEffect(() => {
+ if (!seedLivePrices?.size) return;
+ for (const [ticker, price] of seedLivePrices) updateLivePrice(ticker, price);
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [seedLivePrices]);
 
  const fetchAllStockPrices = () => {
  const uniqueTickers = [...new Set([
@@ -5406,7 +5414,7 @@ const DEFAULT_PARAMS: ScreenerParams = {
  minMark: 0,
 };
 
-function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: OptionsTicker[]; onDraftCreated: () => void }) {
+function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: OptionsTicker[]; onDraftCreated: (ticker: string, underlyingPrice: number | null) => void }) {
  const [isOpen, setIsOpen] = useState(false);
  const [params, setParams] = useState<ScreenerParams>(DEFAULT_PARAMS);
  const [tickerInput, setTickerInput] = useState("");
@@ -5472,13 +5480,14 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
  openedAt: new Date().toISOString(),
  contracts,
  premiumPerShare: r.last ?? 0,
+ currentPremiumPerShare: r.last ?? undefined,
  stockPriceAtOpen: r.underlyingPrice ?? undefined,
  deltaAtOpen: r.delta ?? undefined,
  deltaAtOpenCapturedAt: new Date().toISOString(),
  isDraft: true,
  });
  setAddedRows((prev) => new Set(prev).add(rowIdx));
- onDraftCreated();
+ onDraftCreated(r.ticker, r.underlyingPrice);
  } catch {
  // leave button in normal state; user can retry
  } finally {
@@ -5782,11 +5791,11 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
  />
  </td>
  <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+ <Tooltip content={addedRows.has(i) ? "Added to drafts" : "Add to drafts"}>
  <button
  type="button"
  disabled={addingRow === i || addedRows.has(i)}
  onClick={() => handleAddDraft(r, i)}
- title={addedRows.has(i) ?"Added to drafts" :"Add to drafts"}
  className={cn(
 "p-1.5 rounded transition-colors disabled:cursor-not-allowed",
  addedRows.has(i)
@@ -5797,9 +5806,10 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
  )}
  >
  {addedRows.has(i)
- ? <BookmarkCheck className="h-4 w-4" />
- : <BookmarkPlus className="h-4 w-4" />}
+ ? <BookmarkCheck className="h-3.5 w-3.5" />
+ : <BookmarkPlus className="h-3.5 w-3.5" />}
  </button>
+ </Tooltip>
  </td>
  </tr>
  );
@@ -5923,6 +5933,8 @@ export function OptionsTrading() {
  }, [activeHoldings, assignedQuotes]);
  const totalRealizedPnl = realizedAssignedData != null ? (realizedAssignedData.netRealizedPnl ?? 0) : null;
 
+ const [seededLivePrices, setSeededLivePrices] = useState<Map<string, number>>(new Map());
+
  const refetchAll = useCallback(() => {
  refetchPositions();
  refetchTickers();
@@ -5931,6 +5943,13 @@ export function OptionsTrading() {
  refetchActiveHoldings();
  refetchRealizedAssigned();
  }, [refetchPositions, refetchTickers, refetchActiveHoldings, refetchRealizedAssigned]);
+
+ const handleDraftCreated = useCallback((ticker: string, underlyingPrice: number | null) => {
+ if (underlyingPrice != null) {
+ setSeededLivePrices((prev) => new Map(prev).set(ticker, underlyingPrice));
+ }
+ refetchAll();
+ }, [refetchAll]);
 
  // "Sell covered call" shortcut from an assigned lot: open the position modal
  // in create mode pre-filled to write a CC against that lot.
@@ -6058,6 +6077,7 @@ export function OptionsTrading() {
  onPositionUpdated={refetchPositions}
  extraTickers={activeLotTickers}
  onPricesUpdated={handlePricesUpdated}
+ seedLivePrices={seededLivePrices}
  tabBarRef={tabBarRef}
  />
  ) : (
@@ -6086,7 +6106,7 @@ export function OptionsTrading() {
  <PerformanceTable positions={normalizedPositions.filter((p) => !p.isDraft)} />
 
  {/* Option Screener */}
- <OptionScreener trackedTickers={tickers ?? []} onDraftCreated={refetchAll} />
+ <OptionScreener trackedTickers={tickers ?? []} onDraftCreated={handleDraftCreated} />
 
  {/* Modals */}
  {(positionModal !== null) && (
