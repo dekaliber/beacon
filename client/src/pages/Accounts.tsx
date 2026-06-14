@@ -418,7 +418,7 @@ function AccountModal({ open, onClose, onSave, onDelete, account, allAccounts }:
  <Modal open={open} onClose={() => setHideWarning(null)} title="Hide Account">
  <div className="space-y-4">
  <p>
- This account has {messages.join(" and")}. Are you sure you want to hide it?
+ This account has {messages.join(" and ")}. Are you sure you want to hide it?
  </p>
  <p className="text-muted-foreground">
  The account will be hidden from dropdowns and the Investments page, but all existing data will be preserved.

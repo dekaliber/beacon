@@ -317,7 +317,7 @@ function EditableCategoryCell({
  if (!search.trim()) return flatOptions;
  const terms = search.toLowerCase().split(/\s+/);
  return flatOptions.filter((o) => {
- const text = (o.parentLabel ? o.parentLabel +"" :"") + o.label;
+ const text = (o.parentLabel ? o.parentLabel +" " :"") + o.label;
  const words = text.toLowerCase().split(/\s+/);
  return terms.every((t) => words.some((w) => w.startsWith(t)));
  });

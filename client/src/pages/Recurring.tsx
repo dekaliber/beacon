@@ -86,7 +86,7 @@ function vendorColor(vendor: string): string {
 // Convert a stored UTC date string to a local YYYY-MM-DD key, matching
 // the same timezone shift that formatDate() applies for display.
 function toLocalDateKey(dateStr: string): string {
- const s = dateStr.replace(/-/g,"/").replace("T","").split(".")[0];
+ const s = dateStr.replace(/-/g,"/").replace("T"," ").split(".")[0];
  const d = new Date(s);
  const y = d.getFullYear();
  const m = String(d.getMonth() + 1).padStart(2,"0");
