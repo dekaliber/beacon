@@ -1072,6 +1072,7 @@ optionsRoutes.post("/positions/:id/roll", async (req, res) => {
           shareCostBasis: existing.shareCostBasis,
           assignedFromStrikePrice: existing.assignedFromStrikePrice,
           assignedFromExpirationDate: existing.assignedFromExpirationDate,
+          investmentAccountId: existing.investmentAccountId,
         },
         include: { ticker: true, group: true },
       });
@@ -1133,6 +1134,7 @@ optionsRoutes.post("/positions/:id/roll", async (req, res) => {
         shareCostBasis: existing.shareCostBasis,
         assignedFromStrikePrice: existing.assignedFromStrikePrice,
         assignedFromExpirationDate: existing.assignedFromExpirationDate,
+        investmentAccountId: existing.investmentAccountId,
       },
       include: { ticker: true, group: true },
     });
