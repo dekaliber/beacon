@@ -133,7 +133,7 @@ export function MultiSelectDropdown({
         transform: flipUp ? "translateY(-100%)" : undefined,
         zIndex: 9999,
       }}
-      className="min-w-[200px] rounded-md border border-border bg-background shadow-lg"
+      className="min-w-[200px] rounded-md border border-border bg-white shadow-lg"
     >
       <div className="flex gap-3 border-b border-border px-3 py-1.5">
         <button

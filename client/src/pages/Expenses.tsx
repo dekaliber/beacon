@@ -263,7 +263,7 @@ function VendorAutocomplete({
  autoComplete="off"
  />
  {open && filtered.length > 0 && (
- <div className={`absolute left-0 right-0 z-50 max-h-48 overflow-auto rounded-md border border-border bg-background shadow-lg ${flipUp ?"bottom-full mb-1" :"top-full mt-1"}`}>
+ <div className={`absolute left-0 right-0 z-50 max-h-48 overflow-auto rounded-md border border-border bg-white shadow-lg ${flipUp ?"bottom-full mb-1" :"top-full mt-1"}`}>
  {filtered.map((v, i) => (
  <button
  key={v}
@@ -456,7 +456,7 @@ function TagTypeahead({
  ? { bottom: window.innerHeight - anchorRect.top + 4 }
  : { top: anchorRect.bottom + 4 }),
  }}
- className="rounded-md border border-border bg-background shadow-lg"
+ className="rounded-md border border-border bg-white shadow-lg"
  >
  <div className="border-b border-border p-2">
  <input
@@ -613,7 +613,7 @@ function EditableVendorCell({
  const target = e.target as Node;
  if (
  ref.current && !ref.current.contains(target) &&
- dropdownRef.current && !dropdownRef.current.contains(target)
+ (!dropdownRef.current || !dropdownRef.current.contains(target))
  ) {
  if (editValue !== value) onSave(editValue);
  setEditing(false);
@@ -670,13 +670,13 @@ function EditableVendorCell({
  <div
  ref={dropdownRef}
  style={{ position:"fixed", top: dropdownPos.top, bottom: dropdownPos.bottom, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 150), zIndex: 9999 }}
- className="max-h-36 overflow-auto rounded-md border border-border bg-background shadow-lg"
+ className="max-h-48 overflow-auto rounded-md border border-border bg-white shadow-lg"
  >
  {filtered.map((v, i) => (
  <button
  key={v}
  type="button"
- className={`block w-full px-2 py-1 text-left ${i === focusIdx ?"bg-primary/10" :"hover:bg-muted"}`}
+ className={`block w-full px-3 py-1.5 text-left text-13 ${i === focusIdx ?"bg-primary/10" :"hover:bg-muted"}`}
  onMouseDown={() => commit(v)}
  >
  {v}
@@ -805,7 +805,7 @@ function EditableCategoryCell({
  <div
  ref={dropdownRef}
  style={{ position:"fixed", top: dropdownPos.top, bottom: dropdownPos.bottom, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 220), zIndex: 9999 }}
- className="rounded-md border border-border bg-background shadow-lg text-13"
+ className="rounded-md border border-border bg-white shadow-lg text-13"
  >
  <div className="max-h-48 overflow-auto">
  {filtered.length === 0 ? (
@@ -935,7 +935,7 @@ function EditableAccountCell({
  <div
  ref={dropdownRef}
  style={{ position:"fixed", top: dropdownPos.top, bottom: dropdownPos.bottom, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 180), zIndex: 9999 }}
- className="rounded-md border border-border bg-background shadow-lg"
+ className="rounded-md border border-border bg-white shadow-lg"
  >
  <div className="max-h-48 overflow-auto">
  {filtered.length === 0 ? (

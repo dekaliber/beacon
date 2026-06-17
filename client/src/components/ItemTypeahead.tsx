@@ -169,7 +169,7 @@ export function ItemTypeahead({
               ? { bottom: window.innerHeight - anchorRect.top + 4 }
               : { top: anchorRect.bottom + 4 }),
           }}
-          className="rounded-md border border-border bg-background shadow-lg"
+          className="rounded-md border border-border bg-white shadow-lg"
         >
           <div className="border-b border-border p-2">
             <input

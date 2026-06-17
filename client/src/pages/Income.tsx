@@ -239,7 +239,7 @@ function EditableTypeaheadCell({
  <div
  ref={dropdownRef}
  style={{ position:"fixed", top: dropdownPos.top, bottom: dropdownPos.bottom, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 180), zIndex: 9999 }}
- className="rounded-md border border-border bg-background shadow-lg"
+ className="rounded-md border border-border bg-white shadow-lg"
  >
  <div className="max-h-48 overflow-auto">
  {filtered.length === 0 ? (
@@ -390,7 +390,7 @@ function EditableCategoryCell({
  <div
  ref={dropdownRef}
  style={{ position:"fixed", top: dropdownPos.top, bottom: dropdownPos.bottom, left: dropdownPos.left, minWidth: Math.max(dropdownPos.minWidth, 220), zIndex: 9999 }}
- className="rounded-md border border-border bg-background shadow-lg text-13"
+ className="rounded-md border border-border bg-white shadow-lg text-13"
  >
  <div className="max-h-48 overflow-auto">
  {filtered.length === 0 ? (
@@ -509,11 +509,16 @@ function EditableTaxStatusCell({ value, onSave }: { value: string | null; onSave
  const [editing, setEditing] = useState(false);
  const [dropdownPos, setDropdownPos] = useState<{ top?: number; bottom?: number; left: number; minWidth: number }>({ left: 0, minWidth: 0 });
  const ref = useRef<HTMLDivElement>(null);
+ const dropdownRef = useRef<HTMLDivElement>(null);
 
  useEffect(() => {
  if (!editing) return;
  const handler = (e: MouseEvent) => {
- if (ref.current && !ref.current.contains(e.target as Node)) setEditing(false);
+ const target = e.target as Node;
+ if (
+ ref.current && !ref.current.contains(target) &&
+ dropdownRef.current && !dropdownRef.current.contains(target)
+ ) setEditing(false);
  };
  document.addEventListener("mousedown", handler);
  return () => document.removeEventListener("mousedown", handler);
@@ -539,22 +544,24 @@ function EditableTaxStatusCell({ value, onSave }: { value: string | null; onSave
 
  return (
  <div ref={ref}>
- {editing ? (
+ {editing ? createPortal(
  <div
+ ref={dropdownRef}
  style={{ position:"fixed", top: dropdownPos.top, bottom: dropdownPos.bottom, left: dropdownPos.left, minWidth: dropdownPos.minWidth, zIndex: 9999 }}
- className="rounded-md border border-border bg-background shadow-lg"
+ className="rounded-md border border-border bg-white shadow-lg"
  >
  {DIVIDEND_TYPE_OPTIONS.map((opt) => (
  <button
  key={opt.value}
  type="button"
- className={`flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-muted ${opt.value === (value ??"") ?"bg-primary/10" :""}`}
+ className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-13 ${opt.value === (value ??"") ?"bg-primary/10" :"hover:bg-muted"}`}
  onClick={() => selectValue(opt.value)}
  >
- {opt.value ? <TaxStatusBadge taxClassification={opt.value} /> : <span className="text-muted-foreground italic">Not specified</span>}
+ {opt.value ? <TaxStatusBadge taxClassification={opt.value} /> : <span className="text-muted-foreground">Not specified</span>}
  </button>
  ))}
- </div>
+ </div>,
+ document.body
  ) : null}
  <span onClick={startEditing} className="cursor-pointer">
  {value
@@ -1164,7 +1171,7 @@ export function IncomePage() {
  />
  </td>
  <td className="w-[115px] py-2 pr-3">
- <TaxStatusBadge taxClassification={income.taxClassification} />
+ <EditableTaxStatusCell value={income.taxClassification} onSave={(v) => handleInlineUpdate(income.id,"taxClassification", v)} />
  </td>
  <td className="w-[185px] py-2 pr-3">
  <EditableTypeaheadCell
@@ -1477,25 +1484,14 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
  />
  </div>
 
+ <div className="grid grid-cols-2 gap-4">
  <div>
  <label className="block text-xs font-medium mb-1">Date</label>
  <DatePicker name="date" value={dateVal} onChange={(v) => { setDateVal(v); setErrors((er) => ({ ...er, date: undefined })); }} invalid={!!errors.date} className="w-full" />
  {errors.date && <p className="mt-1 text-xs text-down">{errors.date}</p>}
- {/* Relay: captures focus as it exits the date field and forwards to Category, but not on Shift+Tab backwards from Category */}
- <span tabIndex={0} className="sr-only" onFocus={(e) => { if (e.relatedTarget !== categoryTriggerRef.current) categoryTriggerRef.current?.focus(); }} />
+ {/* Relay: captures focus as it exits the date field and forwards to Account, but not on Shift+Tab backwards from Account */}
+ <span tabIndex={0} className="sr-only" onFocus={(e) => { if (e.relatedTarget !== accountTriggerRef.current) accountTriggerRef.current?.focus(); }} />
  </div>
-
- <div>
- <label className="block text-xs font-medium mb-1">Category</label>
- <CategoryTypeahead
- name="categoryId"
- defaultValue={income?.categoryId ??""}
- categories={categories}
- triggerRef={categoryTriggerRef}
- onTabFromSearch={() => accountTriggerRef.current?.focus()}
- />
- </div>
-
  <div>
  <label className="block text-xs font-medium mb-1">Account</label>
  <ItemTypeahead
@@ -1505,11 +1501,23 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
  items={accounts}
  placeholder="Select account"
  triggerRef={accountTriggerRef}
- onTabFromSearch={() => submitBtnRef.current?.focus()}
+ onTabFromSearch={() => categoryTriggerRef.current?.focus()}
  error={!!errors.accountId}
  onSelect={() => setErrors((e) => ({ ...e, accountId: undefined }))}
  />
  {errors.accountId && <p className="mt-1 text-xs text-down">{errors.accountId}</p>}
+ </div>
+ </div>
+
+ <div>
+ <label className="block text-xs font-medium mb-1">Category</label>
+ <CategoryTypeahead
+ name="categoryId"
+ defaultValue={income?.categoryId ??""}
+ categories={categories}
+ triggerRef={categoryTriggerRef}
+ onTabFromSearch={() => submitBtnRef.current?.focus()}
+ />
  </div>
 
  {/* Collapsible optional section */}
