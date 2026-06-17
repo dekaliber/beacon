@@ -3873,6 +3873,36 @@ function barPath(x: number, y: number, w: number, h: number, tl: number, tr: num
  return`M${x + tl},${y} H${x + w - tr} Q${x + w},${y} ${x + w},${y + tr} V${y + h - br} Q${x + w},${y + h} ${x + w - br},${y + h} H${x + bl} Q${x},${y + h} ${x},${y + h - bl} V${y + tl} Q${x},${y} ${x + tl},${y} Z`;
 }
 
+// Absorption priority for a negative premium segment: same type/other status
+// first, then other type/other status, then other type/same status.
+const ABSORB_ORDER: Record<string, string[]> = {
+ premiumCC: ["pendingCC", "pendingCSP", "premiumCSP"],
+ premiumCSP: ["pendingCSP", "pendingCC", "premiumCC"],
+ pendingCC: ["premiumCC", "premiumCSP", "pendingCSP"],
+ pendingCSP: ["premiumCSP", "premiumCC", "pendingCC"],
+};
+
+// Net any negative segment against the positive segments (in priority order) so
+// the stacked bar never overlaps. Only an overall-negative week leaves a
+// remainder (barNeg ≤ 0) to render below the axis; the rest are heights ≥ 0.
+function netWeekBars(raw: { premiumCSP: number; premiumCC: number; pendingCSP: number; pendingCC: number }) {
+ const v: Record<string, number> = { ...raw };
+ let neg = 0;
+ for (const cat of ["premiumCSP", "premiumCC", "pendingCSP", "pendingCC"]) {
+ if (v[cat] >= 0) continue;
+ let deficit = -v[cat];
+ v[cat] = 0;
+ for (const absorber of ABSORB_ORDER[cat]) {
+ if (deficit <= 0) break;
+ const take = Math.min(Math.max(v[absorber], 0), deficit);
+ v[absorber] -= take;
+ deficit -= take;
+ }
+ neg -= deficit;
+ }
+ return { barCSP: v.premiumCSP, barCC: v.premiumCC, barPendCSP: v.pendingCSP, barPendCC: v.pendingCC, barNeg: neg };
+}
+
 function PerformanceCharts({
  openPositions,
  closedPositions,
@@ -3942,14 +3972,16 @@ function PerformanceCharts({
  // Bar chart: capped 15-week window centered on the current week
  const weeklyData = useMemo(() => {
  if (windowStartMs == null || windowEndMs == null) return [];
- const weeks: { week: string; premiumCSP: number; premiumCC: number; pendingCSP: number; pendingCC: number; isFuture: boolean }[] = [];
+ const weeks: { week: string; premiumCSP: number; premiumCC: number; pendingCSP: number; pendingCC: number; barCSP: number; barCC: number; barPendCSP: number; barPendCC: number; barNeg: number; isFuture: boolean }[] = [];
  for (let ms = windowStartMs; ms <= windowEndMs; ms += WEEK_MS) {
+ const premiumCSP = weekPnlMap.csp.get(ms) ?? 0;
+ const premiumCC = weekPnlMap.cc.get(ms) ?? 0;
+ const pendingCSP = pendingPnlMap.csp.get(ms) ?? 0;
+ const pendingCC = pendingPnlMap.cc.get(ms) ?? 0;
  weeks.push({
  week: weekFridayLabel(ms),
- premiumCSP: weekPnlMap.csp.get(ms) ?? 0,
- premiumCC: weekPnlMap.cc.get(ms) ?? 0,
- pendingCSP: pendingPnlMap.csp.get(ms) ?? 0,
- pendingCC: pendingPnlMap.cc.get(ms) ?? 0,
+ premiumCSP, premiumCC, pendingCSP, pendingCC,
+ ...netWeekBars({ premiumCSP, premiumCC, pendingCSP, pendingCC }),
  isFuture: ms > currentWeekMs,
  });
  }
@@ -4003,7 +4035,7 @@ function PerformanceCharts({
  )}
  </div>
  <ResponsiveContainer width="100%" height={180}>
- <BarChart data={weeklyData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+ <BarChart data={weeklyData} stackOffset="sign" margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
  <XAxis
  dataKey="week"
@@ -4023,10 +4055,13 @@ function PerformanceCharts({
  cursor={{ fill:"var(--color-muted)" }}
  content={({ active, payload, label }) => {
  if (!active || !payload?.length) return null;
- const csp = (payload.find((p) => p.dataKey ==="premiumCSP")?.value ?? 0) as number;
- const cc = (payload.find((p) => p.dataKey ==="premiumCC")?.value ?? 0) as number;
- const pendingCSP = (payload.find((p) => p.dataKey ==="pendingCSP")?.value ?? 0) as number;
- const pendingCC = (payload.find((p) => p.dataKey ==="pendingCC")?.value ?? 0) as number;
+ // Show raw totals (not the netted bar heights) so the breakdown still
+ // reflects actual closed/pending premium, including negative closes.
+ const row = (payload[0]?.payload ?? {}) as { premiumCSP?: number; premiumCC?: number; pendingCSP?: number; pendingCC?: number };
+ const csp = row.premiumCSP ?? 0;
+ const cc = row.premiumCC ?? 0;
+ const pendingCSP = row.pendingCSP ?? 0;
+ const pendingCC = row.pendingCC ?? 0;
  const realized = csp + cc;
  const pending = pendingCSP + pendingCC;
  return (
@@ -4068,50 +4103,50 @@ function PerformanceCharts({
  />
  {/* CSP realized — solid violet, bottom of stack */}
  <Bar
- dataKey="premiumCSP"
+ dataKey="barCSP"
  stackId="a"
  maxBarSize={32}
  shape={(props: any) => {
- const { x, y, width, height, premiumCC, pendingCSP, pendingCC } = props as {
+ const { x, y, width, height, barCC, barPendCSP, barPendCC } = props as {
  x: number; y: number; width: number; height: number;
- premiumCC: number; pendingCSP: number; pendingCC: number;
+ barCC: number; barPendCSP: number; barPendCC: number;
  };
  if (!height || height <= 0) return <g />;
- const isTop = (premiumCC ?? 0) <= 0 && (pendingCSP ?? 0) <= 0 && (pendingCC ?? 0) <= 0;
+ const isTop = (barCC ?? 0) <= 0 && (barPendCSP ?? 0) <= 0 && (barPendCC ?? 0) <= 0;
  const r = 3;
  return <path d={barPath(x, y, width, height, isTop ? r : 0, isTop ? r : 0, r, r)} fill="var(--color-violet)" />;
  }}
  />
  {/* CC realized — solid blue, above CSP */}
  <Bar
- dataKey="premiumCC"
+ dataKey="barCC"
  stackId="a"
  maxBarSize={32}
  shape={(props: any) => {
- const { x, y, width, height, premiumCSP, pendingCSP, pendingCC } = props as {
+ const { x, y, width, height, barCSP, barPendCSP, barPendCC } = props as {
  x: number; y: number; width: number; height: number;
- premiumCSP: number; pendingCSP: number; pendingCC: number;
+ barCSP: number; barPendCSP: number; barPendCC: number;
  };
  if (!height || height <= 0) return <g />;
- const isTop = (pendingCSP ?? 0) <= 0 && (pendingCC ?? 0) <= 0;
- const isBottom = (premiumCSP ?? 0) <= 0;
+ const isTop = (barPendCSP ?? 0) <= 0 && (barPendCC ?? 0) <= 0;
+ const isBottom = (barCSP ?? 0) <= 0;
  const r = 3;
  return <path d={barPath(x, y, width, height, isTop ? r : 0, isTop ? r : 0, isBottom ? r : 0, isBottom ? r : 0)} fill="var(--color-blue)" />;
  }}
  />
  {/* CSP pending — striped violet, above CC realized */}
  <Bar
- dataKey="pendingCSP"
+ dataKey="barPendCSP"
  stackId="a"
  maxBarSize={32}
  shape={(props: any) => {
- const { x, y, width, height, premiumCSP, premiumCC, pendingCC } = props as {
+ const { x, y, width, height, barCSP, barCC, barPendCC } = props as {
  x: number; y: number; width: number; height: number;
- premiumCSP: number; premiumCC: number; pendingCC: number;
+ barCSP: number; barCC: number; barPendCC: number;
  };
  if (!height || height <= 0 || !width || width <= 0) return <g />;
- const isTop = (pendingCC ?? 0) <= 0;
- const isBottom = (premiumCSP ?? 0) <= 0 && (premiumCC ?? 0) <= 0;
+ const isTop = (barPendCC ?? 0) <= 0;
+ const isBottom = (barCSP ?? 0) <= 0 && (barCC ?? 0) <= 0;
  const r = 3;
  const d = barPath(x, y, width, height, isTop ? r : 0, isTop ? r : 0, isBottom ? r : 0, isBottom ? r : 0);
  const clipId =`pending-csp-${Math.round(x * 10)}`;
@@ -4137,16 +4172,16 @@ function PerformanceCharts({
  />
  {/* CC pending — striped blue, top of stack */}
  <Bar
- dataKey="pendingCC"
+ dataKey="barPendCC"
  stackId="a"
  maxBarSize={32}
  shape={(props: any) => {
- const { x, y, width, height, premiumCSP, premiumCC, pendingCSP } = props as {
+ const { x, y, width, height, barCSP, barCC, barPendCSP } = props as {
  x: number; y: number; width: number; height: number;
- premiumCSP: number; premiumCC: number; pendingCSP: number;
+ barCSP: number; barCC: number; barPendCSP: number;
  };
  if (!height || height <= 0 || !width || width <= 0) return <g />;
- const isBottom = (premiumCSP ?? 0) <= 0 && (premiumCC ?? 0) <= 0 && (pendingCSP ?? 0) <= 0;
+ const isBottom = (barCSP ?? 0) <= 0 && (barCC ?? 0) <= 0 && (barPendCSP ?? 0) <= 0;
  const r = 3;
  const d = barPath(x, y, width, height, r, r, isBottom ? r : 0, isBottom ? r : 0);
  const clipId =`pending-cc-${Math.round(x * 10)}`;
@@ -4168,6 +4203,18 @@ function PerformanceCharts({
  {lines}
  </g>
  );
+ }}
+ />
+ {/* Net loss — solid red, below axis, only when the week is overall negative */}
+ <Bar
+ dataKey="barNeg"
+ stackId="a"
+ maxBarSize={32}
+ shape={(props: any) => {
+ const { x, y, width, height } = props as { x: number; y: number; width: number; height: number };
+ if (!height || height <= 0) return <g />;
+ const r = 3;
+ return <path d={barPath(x, y, width, height, 0, 0, r, r)} fill="var(--color-down)" />;
  }}
  />
  {targetWeekly != null && (
