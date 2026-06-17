@@ -3924,15 +3924,26 @@ function PerformanceCharts({
  }, [settings?.startingWeek, weekPnlMap]);
 
  const currentWeekMs = getWeekStart(new Date()).getTime();
- const projectionEndMs = currentWeekMs + 12 * 7 * 86_400_000;
 
- // Bar chart: W1 → current week + 12
+ // Visible span is capped to MAX_CHART_WEEKS with the current week centered.
+ // When the start date is too recent to show `half` weeks before "now", the
+ // window is pinned to the start and extended forward (current week sits as
+ // far forward as the start-date floor allows) while still spanning 15 weeks.
+ const WEEK_MS = 7 * 86_400_000;
+ const MAX_CHART_WEEKS = 15;
+ const { windowStartMs, windowEndMs } = useMemo(() => {
+ if (firstTradeWeekMs == null) return { windowStartMs: null, windowEndMs: null };
+ const half = Math.floor(MAX_CHART_WEEKS / 2);
+ const start = Math.max(currentWeekMs - half * WEEK_MS, firstTradeWeekMs);
+ const end = start + (MAX_CHART_WEEKS - 1) * WEEK_MS;
+ return { windowStartMs: start, windowEndMs: end };
+ }, [firstTradeWeekMs, currentWeekMs]);
+
+ // Bar chart: capped 15-week window centered on the current week
  const weeklyData = useMemo(() => {
- if (firstTradeWeekMs == null) return [];
+ if (windowStartMs == null || windowEndMs == null) return [];
  const weeks: { week: string; premiumCSP: number; premiumCC: number; pendingCSP: number; pendingCC: number; isFuture: boolean }[] = [];
- let weekNum = 0;
- for (let ms = firstTradeWeekMs; ms <= projectionEndMs; ms += 7 * 86_400_000) {
- weekNum++;
+ for (let ms = windowStartMs; ms <= windowEndMs; ms += WEEK_MS) {
  weeks.push({
  week: weekFridayLabel(ms),
  premiumCSP: weekPnlMap.csp.get(ms) ?? 0,
@@ -3943,20 +3954,23 @@ function PerformanceCharts({
  });
  }
  return weeks;
- }, [firstTradeWeekMs, weekPnlMap, pendingPnlMap, currentWeekMs, projectionEndMs]);
+ }, [windowStartMs, windowEndMs, weekPnlMap, pendingPnlMap, currentWeekMs]);
 
- // Cumulative chart: W1 → current week + 12
+ // Cumulative chart: capped 15-week window centered on the current week.
  // actual is null for future weeks so the line stops at the current week
  // target uses 1-based week number so W1 target = 1 × targetWeekly (not zero)
  const cumulativeData = useMemo(() => {
- if (firstTradeWeekMs == null) return [];
+ if (firstTradeWeekMs == null || windowStartMs == null || windowEndMs == null) return [];
  let cumulative = 0;
  const points: { week: string; actual: number | null; target: number }[] = [];
  let weekNum = 0;
- for (let ms = firstTradeWeekMs; ms <= projectionEndMs; ms += 7 * 86_400_000) {
+ // Iterate from the true program start so cumulative + weekNum stay accurate,
+ // but only emit the points that fall inside the visible window.
+ for (let ms = firstTradeWeekMs; ms <= windowEndMs; ms += WEEK_MS) {
  weekNum++;
  const isPast = ms <= currentWeekMs;
  if (isPast) cumulative += (weekPnlMap.cc.get(ms) ?? 0) + (weekPnlMap.csp.get(ms) ?? 0);
+ if (ms < windowStartMs) continue;
  points.push({
  week: weekFridayLabel(ms),
  actual: isPast ? cumulative : null,
@@ -3964,7 +3978,7 @@ function PerformanceCharts({
  });
  }
  return points;
- }, [firstTradeWeekMs, weekPnlMap, targetAnnual, currentWeekMs, projectionEndMs]);
+ }, [firstTradeWeekMs, weekPnlMap, targetAnnual, currentWeekMs, windowStartMs, windowEndMs]);
 
  // Delta for the header: actual vs target at the last week with real data
  const lastDataPoint = [...cumulativeData].reverse().find((d) => d.actual != null);
@@ -3996,7 +4010,7 @@ function PerformanceCharts({
  tick={{ fontSize: 10, fill:"var(--color-muted-foreground)" }}
  axisLine={false}
  tickLine={false}
- interval="preserveStartEnd"
+ interval={0}
  />
  <YAxis
  tick={{ fontSize: 10, fill:"var(--color-muted-foreground)" }}
@@ -4205,7 +4219,7 @@ function PerformanceCharts({
  tick={{ fontSize: 10, fill:"var(--color-muted-foreground)" }}
  axisLine={false}
  tickLine={false}
- interval="preserveStartEnd"
+ interval={0}
  />
  <YAxis
  tick={{ fontSize: 10, fill:"var(--color-muted-foreground)" }}
