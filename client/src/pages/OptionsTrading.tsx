@@ -3903,6 +3903,16 @@ function netWeekBars(raw: { premiumCSP: number; premiumCC: number; pendingCSP: n
  return { barCSP: v.premiumCSP, barCC: v.premiumCC, barPendCSP: v.pendingCSP, barPendCC: v.pendingCC, barNeg: neg };
 }
 
+// Segments shorter than this many pixels are dropped, and the segment beneath
+// them takes the rounded top corners instead — otherwise a solid bar gets a
+// squared-off top capped by an invisible sub-pixel sliver. The y-scale is
+// shared across the stack, so any rendered segment's height/value ratio
+// converts a sibling's dollar value into its pixel height.
+const MIN_SEG_PX = 1;
+function segVisible(value: number, refPx: number, refValue: number) {
+ return value > 0 && refValue > 0 && (value / refValue) * refPx >= MIN_SEG_PX;
+}
+
 function PerformanceCharts({
  openPositions,
  closedPositions,
@@ -4107,12 +4117,12 @@ function PerformanceCharts({
  stackId="a"
  maxBarSize={32}
  shape={(props: any) => {
- const { x, y, width, height, barCC, barPendCSP, barPendCC } = props as {
+ const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props as {
  x: number; y: number; width: number; height: number;
- barCC: number; barPendCSP: number; barPendCC: number;
+ barCSP: number; barCC: number; barPendCSP: number; barPendCC: number;
  };
- if (!height || height <= 0) return <g />;
- const isTop = (barCC ?? 0) <= 0 && (barPendCSP ?? 0) <= 0 && (barPendCC ?? 0) <= 0;
+ if (!height || height < MIN_SEG_PX) return <g />;
+ const isTop = !segVisible(barCC, height, barCSP) && !segVisible(barPendCSP, height, barCSP) && !segVisible(barPendCC, height, barCSP);
  const r = 3;
  return <path d={barPath(x, y, width, height, isTop ? r : 0, isTop ? r : 0, r, r)} fill="var(--color-violet)" />;
  }}
@@ -4123,13 +4133,13 @@ function PerformanceCharts({
  stackId="a"
  maxBarSize={32}
  shape={(props: any) => {
- const { x, y, width, height, barCSP, barPendCSP, barPendCC } = props as {
+ const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props as {
  x: number; y: number; width: number; height: number;
- barCSP: number; barPendCSP: number; barPendCC: number;
+ barCSP: number; barCC: number; barPendCSP: number; barPendCC: number;
  };
- if (!height || height <= 0) return <g />;
- const isTop = (barPendCSP ?? 0) <= 0 && (barPendCC ?? 0) <= 0;
- const isBottom = (barCSP ?? 0) <= 0;
+ if (!height || height < MIN_SEG_PX) return <g />;
+ const isTop = !segVisible(barPendCSP, height, barCC) && !segVisible(barPendCC, height, barCC);
+ const isBottom = !segVisible(barCSP, height, barCC);
  const r = 3;
  return <path d={barPath(x, y, width, height, isTop ? r : 0, isTop ? r : 0, isBottom ? r : 0, isBottom ? r : 0)} fill="var(--color-blue)" />;
  }}
@@ -4140,13 +4150,13 @@ function PerformanceCharts({
  stackId="a"
  maxBarSize={32}
  shape={(props: any) => {
- const { x, y, width, height, barCSP, barCC, barPendCC } = props as {
+ const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props as {
  x: number; y: number; width: number; height: number;
- barCSP: number; barCC: number; barPendCC: number;
+ barCSP: number; barCC: number; barPendCSP: number; barPendCC: number;
  };
- if (!height || height <= 0 || !width || width <= 0) return <g />;
- const isTop = (barPendCC ?? 0) <= 0;
- const isBottom = (barCSP ?? 0) <= 0 && (barCC ?? 0) <= 0;
+ if (!height || height < MIN_SEG_PX || !width || width <= 0) return <g />;
+ const isTop = !segVisible(barPendCC, height, barPendCSP);
+ const isBottom = !segVisible(barCSP, height, barPendCSP) && !segVisible(barCC, height, barPendCSP);
  const r = 3;
  const d = barPath(x, y, width, height, isTop ? r : 0, isTop ? r : 0, isBottom ? r : 0, isBottom ? r : 0);
  const clipId =`pending-csp-${Math.round(x * 10)}`;
@@ -4176,12 +4186,12 @@ function PerformanceCharts({
  stackId="a"
  maxBarSize={32}
  shape={(props: any) => {
- const { x, y, width, height, barCSP, barCC, barPendCSP } = props as {
+ const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props as {
  x: number; y: number; width: number; height: number;
- barCSP: number; barCC: number; barPendCSP: number;
+ barCSP: number; barCC: number; barPendCSP: number; barPendCC: number;
  };
- if (!height || height <= 0 || !width || width <= 0) return <g />;
- const isBottom = (barCSP ?? 0) <= 0 && (barCC ?? 0) <= 0 && (barPendCSP ?? 0) <= 0;
+ if (!height || height < MIN_SEG_PX || !width || width <= 0) return <g />;
+ const isBottom = !segVisible(barCSP, height, barPendCC) && !segVisible(barCC, height, barPendCC) && !segVisible(barPendCSP, height, barPendCC);
  const r = 3;
  const d = barPath(x, y, width, height, r, r, isBottom ? r : 0, isBottom ? r : 0);
  const clipId =`pending-cc-${Math.round(x * 10)}`;
@@ -4212,7 +4222,7 @@ function PerformanceCharts({
  maxBarSize={32}
  shape={(props: any) => {
  const { x, y, width, height } = props as { x: number; y: number; width: number; height: number };
- if (!height || height <= 0) return <g />;
+ if (!height || height < MIN_SEG_PX) return <g />;
  const r = 3;
  return <path d={barPath(x, y, width, height, 0, 0, r, r)} fill="var(--color-down)" />;
  }}
