@@ -1099,6 +1099,7 @@ export interface ActiveAssignedHolding {
   acquiredDate: string | null;
   openCallContracts: number; // outstanding CC contracts against this batch
   openCallAvgStrike: number | null; // contracts-weighted avg strike of those CCs
+  stockPriceAtAssignment: number | null; // underlying price at close on assignment date
   fromOptionsPositionId: string | null;
 }
 

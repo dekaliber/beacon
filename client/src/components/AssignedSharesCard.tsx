@@ -101,6 +101,7 @@ interface ActiveGroup {
   acquiredDate: string | null;
   openCallContracts: number;
   openCallAvgStrike: number | null;
+  stockPriceAtAssignment: number | null;
   shares: number;
 }
 
@@ -140,6 +141,7 @@ function groupActive(rows: ActiveAssignedHolding[]): ActiveGroup[] {
         // Same across the batch (matched by ticker|strike|expiry|account).
         openCallContracts: r.openCallContracts,
         openCallAvgStrike: r.openCallAvgStrike,
+        stockPriceAtAssignment: r.stockPriceAtAssignment,
         shares: r.shares,
       });
     }
@@ -333,6 +335,7 @@ export function AssignedSharesCard({
                   <th className={cn(thClass, "text-right")}>Shares</th>
                   <th className={thClass}>Open CC</th>
                   <th className={cn(thClass, "text-right")}>Avg CC Strike</th>
+                  <th className={cn(thClass, "text-right")}>@ Assign</th>
                   <th className={cn(thClass, "text-right")}>Current</th>
                   <th className={cn(thClass, "text-right")}>Mkt Value</th>
                   <th className={cn(thClass, "text-right")}>
@@ -412,6 +415,13 @@ export function AssignedSharesCard({
                       <td className={cn(tdClass, "text-right")}>
                         {g.openCallAvgStrike != null ? (
                           `$${fmtUSD(g.openCallAvgStrike)}`
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className={cn(tdClass, "text-right")}>
+                        {g.stockPriceAtAssignment != null ? (
+                          `$${fmtUSD(g.stockPriceAtAssignment)}`
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

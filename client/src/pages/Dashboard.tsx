@@ -326,12 +326,12 @@ export function Dashboard() {
  <Caption>vs last month</Caption>
  <Caption className="mt-0.5">
  <StatValue className="font-medium text-foreground">{fmtWhole(prevMonthMtd)}</StatValue>
- {" in"}{prevMonthName}{isCurrentMonth ?` 1–${daysElapsed}` :""}
+ {" in "}{prevMonthName}{isCurrentMonth ?` 1–${daysElapsed}` :""}
  </Caption>
  <p className="mt-0.5 text-xs font-medium">
  <StatValue className={momDelta! > 0 ?"text-down" :"text-up"}>
  {momDelta! > 0 ?"+" :"–"}{fmtWhole(Math.abs(momDelta!))}
- </StatValue>{""}
+ </StatValue>{" "}
  <Caption as="span">
  ({momDelta! > 0 ?"↑" :"↓"}{Math.abs(momDeltaPct)}%)
  </Caption>
@@ -402,7 +402,7 @@ export function Dashboard() {
  <StatValue className={`font-medium ${budgetRemaining < 0 ?"text-down" :"text-foreground"}`}>
  {fmtWhole(Math.abs(budgetRemaining))}
  </StatValue>
- {""}{budgetRemaining < 0 ?"over budget" :"remaining"}
+ {" "}{budgetRemaining < 0 ?"over budget" :"remaining"}
  </Caption>
  )}
  </div>
@@ -423,9 +423,9 @@ export function Dashboard() {
  </span>
  <span>
  <StatValue className={`font-medium ${over ?"text-down" :"text-ink"}`}>{fmtWhole(personalSpent)}</StatValue>
- {" /"}{fmtWhole(personalBudget)}
+ {" / "}{fmtWhole(personalBudget)}
  {personalRemaining !== null && (
- <span className={over ?" text-down" :""}>{""}({over ?"+" :"−"}{fmtWhole(Math.abs(personalRemaining!))})</span>
+ <span className={over ?" text-down" : ""}>{" "}({over ?"+" :"−"}{fmtWhole(Math.abs(personalRemaining!))})</span>
  )}
  </span>
  </div>
@@ -447,9 +447,9 @@ export function Dashboard() {
  </span>
  <span>
  <StatValue className={`font-medium ${over ?"text-down" :"text-ink"}`}>{fmtWhole(jointSpent)}</StatValue>
- {" /"}{fmtWhole(jointBudget)}
+ {" / "}{fmtWhole(jointBudget)}
  {jointRemaining !== null && (
- <span className={over ?" text-down" :""}>{""}({over ?"+" :"−"}{fmtWhole(Math.abs(jointRemaining!))})</span>
+ <span className={over ?" text-down" : ""}>{" "}({over ?"+" :"−"}{fmtWhole(Math.abs(jointRemaining!))})</span>
  )}
  </span>
  </div>

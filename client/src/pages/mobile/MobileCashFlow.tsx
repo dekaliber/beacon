@@ -9,7 +9,7 @@ import {
   Tooltip as RechartsTooltip,
   ReferenceLine,
 } from "recharts";
-import { AlertTriangle, TrendingDown, Landmark, Pencil, Info, X, TrendingUp, CreditCard, ArrowDownLeft, ArrowUpRight, Sparkles, Wallet, PlusCircle, Trash2 } from "lucide-react";
+import { AlertTriangle, TrendingDown, Landmark, Pencil, Info, X, TrendingUp, CreditCard, ArrowDownLeft, ArrowUpRight, Sparkles, Wallet, PlusCircle, Trash2, CornerDownRight } from "lucide-react";
 import { FlatCard } from "@/components/Card";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import { useApi } from "@/hooks/useApi";
@@ -581,23 +581,39 @@ function CCPaymentSheet({
               <p className="py-4 text-center tp-caption">No transactions found</p>
             ) : (
               <div className="rounded-md border border-border bg-card overflow-hidden">
-                {expenses.map((exp, i) => (
-                  <div
-                    key={exp.id}
-                    className={cn(
-                      "flex items-center justify-between gap-3 px-3 py-2.5 text-xs",
-                      i < expenses.length - 1 && "border-b border-border/50"
-                    )}
-                  >
-                    <span className="text-muted-foreground shrink-0 w-10">
-                      {fmtMD(exp.date.slice(0, 10))}
-                    </span>
-                    <span className="flex-1 truncate">{exp.vendor}</span>
-                    <StatValue className="text-down shrink-0">
-                      {formatCurrency(Math.abs(parseFloat(exp.amount)))}
-                    </StatValue>
-                  </div>
-                ))}
+                {expenses.map((exp) => {
+                  // Only show offsets booked to the same account — this view is specific
+                  // to the credit card, and the ledger total only sums same-account rows.
+                  const sameAccountOffsets = (exp.offsets ?? []).filter((o) => o.accountId === exp.accountId);
+                  return (
+                    <div key={exp.id}>
+                      <div className="flex items-center justify-between gap-3 px-3 py-2.5 text-xs border-b border-border/50">
+                        <span className="text-muted-foreground shrink-0 w-10">
+                          {fmtMD(exp.date.slice(0, 10))}
+                        </span>
+                        <span className="flex-1 truncate">{exp.vendor}</span>
+                        <StatValue className="text-down shrink-0">
+                          {formatCurrency(parseFloat(exp.amount))}
+                        </StatValue>
+                      </div>
+                      {sameAccountOffsets.map((offset) => (
+                        <div
+                          key={offset.id}
+                          className="flex items-center justify-between gap-3 px-3 py-2 text-xs border-b border-border/50 text-muted-foreground"
+                        >
+                          <span className="shrink-0 w-10">{fmtMD(offset.date.slice(0, 10))}</span>
+                          <span className="flex-1 flex items-center gap-1 truncate">
+                            <CornerDownRight className="h-3 w-3 flex-shrink-0 text-muted-foreground/50" />
+                            <span className="truncate">{offset.vendor || offset.description}</span>
+                          </span>
+                          <StatValue className="shrink-0">
+                            {formatCurrency(parseFloat(offset.amount))}
+                          </StatValue>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

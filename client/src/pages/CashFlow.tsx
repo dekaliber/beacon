@@ -27,6 +27,7 @@ import {
  Landmark,
  SquareCheckBig,
  Info,
+ CornerDownRight,
 } from"lucide-react";
 import { Card } from"@/components/Card";
 import { Tooltip } from"@/components/Tooltip";
@@ -656,17 +657,40 @@ function StatementDetailPanel({ event, rowMidY, onClose }: StatementDetailPanelP
  </tr>
  </thead>
  <tbody>
- {expenses.map((exp) => (
- <tr key={exp.id} className="border-b border-border/50">
+ {expenses.map((exp) => {
+ // Only show offsets booked to the same account — this view is specific
+ // to the credit card, and the ledger total only sums same-account rows.
+ const sameAccountOffsets = (exp.offsets ?? []).filter((o) => o.accountId === exp.accountId);
+ return (
+ <React.Fragment key={exp.id}>
+ <tr className="border-b border-border/50">
  <td className="py-1.5 pr-3 text-muted-foreground whitespace-nowrap">
  {fmtShort(exp.date.slice(0, 10))}
  </td>
  <td className="py-1.5 pr-2 max-w-[90px] truncate">{exp.vendor}</td>
  <td className="py-1.5 text-right tabular-nums font-mono text-down">
- {formatCurrency(Math.abs(parseFloat(exp.amount)))}
+ {formatCurrency(parseFloat(exp.amount))}
+ </td>
+ </tr>
+ {sameAccountOffsets.map((offset) => (
+ <tr key={offset.id} className="border-b border-border/50 text-muted-foreground">
+ <td className="py-1 pr-3 whitespace-nowrap">
+ {fmtShort(offset.date.slice(0, 10))}
+ </td>
+ <td className="py-1 pr-2 max-w-[90px]">
+ <span className="flex items-center gap-1 truncate">
+ <CornerDownRight className="h-3 w-3 flex-shrink-0 text-muted-foreground/50" />
+ <span className="truncate">{offset.vendor || offset.description}</span>
+ </span>
+ </td>
+ <td className="py-1 text-right tabular-nums font-mono">
+ {formatCurrency(parseFloat(offset.amount))}
  </td>
  </tr>
  ))}
+ </React.Fragment>
+ );
+ })}
  </tbody>
  </table>
  )}

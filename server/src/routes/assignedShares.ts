@@ -31,7 +31,7 @@ assignedSharesRoutes.get("/active", async (req, res) => {
           },
         },
         fromOptionsPosition: {
-          select: { strikePrice: true, expirationDate: true },
+          select: { strikePrice: true, expirationDate: true, stockPriceAtClose: true },
         },
       },
       orderBy: { acquiredDate: "asc" },
@@ -106,6 +106,9 @@ assignedSharesRoutes.get("/active", async (req, res) => {
         acquiredDate: l.acquiredDate ? l.acquiredDate.toISOString().slice(0, 10) : null,
         openCallContracts,
         openCallAvgStrike,
+        stockPriceAtAssignment: l.fromOptionsPosition!.stockPriceAtClose != null
+          ? Number(l.fromOptionsPosition!.stockPriceAtClose)
+          : null,
         fromOptionsPositionId: l.fromOptionsPositionId,
       };
     });
