@@ -5048,7 +5048,9 @@ function SummaryCards({
  // Build sub-period boundaries sorted by date
  const sorted = [...changesAfterStart].sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
  const periods: { startMs: number; basis: number }[] = [
- { startMs: annReturnFirstDate, basis: settings.startingBasis },
+ // Number(): startingBasis is a string at runtime (Prisma Decimal); without it
+ // `prevBasis + Number(delta)` string-concats into a billion-dollar basis.
+ { startMs: annReturnFirstDate, basis: Number(settings.startingBasis) },
 ];
  for (const c of sorted) {
  const changeMs = new Date(c.effectiveDate +"T12:00:00").getTime();
@@ -5124,7 +5126,9 @@ function SummaryCards({
  // Periods: each starts at a boundary (or the window start) and carries the
  // basis in effect and the unrealized mark at its start (0 before any holdings).
  const periods: { startMs: number; basis: number; uStart: number }[] = [
- { startMs: annReturnFirstDate, basis: settings.startingBasis, uStart: 0 },
+ // Number(): startingBasis arrives as a string (Prisma Decimal), so without
+ // coercion `prev.basis + delta` would string-concat into a billion-dollar basis.
+ { startMs: annReturnFirstDate, basis: Number(settings.startingBasis), uStart: 0 },
  ];
  for (const c of boundaries) {
  const changeMs = new Date(c.effectiveDate +"T12:00:00").getTime();
