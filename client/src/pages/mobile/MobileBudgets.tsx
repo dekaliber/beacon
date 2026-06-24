@@ -589,7 +589,7 @@ function BudgetPanelSection({
             <Metric
               plain
               label="Remaining spend target"
-              value={remainingDaily !== null ? fmt(remainingDaily) : "—"}
+              value={remainingDaily !== null ? (remainingDaily < 0 ? "−" : "") + fmt(remainingDaily) : "—"}
               valueClass={remainingDaily !== null && remainingDaily < 0 ? "text-down" : undefined}
               sub={daysLeft > 0 ? "per day" : isCurrentYear ? "month complete" : undefined}
             />
