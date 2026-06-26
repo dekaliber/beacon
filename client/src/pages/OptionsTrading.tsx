@@ -3965,25 +3965,44 @@ function PerformanceCharts({
 
  const currentWeekMs = getWeekStart(new Date()).getTime();
 
- // Visible span is capped to MAX_CHART_WEEKS with the current week centered.
- // When the start date is too recent to show `half` weeks before "now", the
- // window is pinned to the start and extended forward (current week sits as
- // far forward as the start-date floor allows) while still spanning 15 weeks.
  const WEEK_MS = 7 * 86_400_000;
  const MAX_CHART_WEEKS = 15;
- const { windowStartMs, windowEndMs } = useMemo(() => {
- if (firstTradeWeekMs == null) return { windowStartMs: null, windowEndMs: null };
- const half = Math.floor(MAX_CHART_WEEKS / 2);
- const start = Math.max(currentWeekMs - half * WEEK_MS, firstTradeWeekMs);
+
+ // Cumulative chart window: entirely backward-looking. The current week is the
+ // rightmost point with the 14 preceding weeks before it. When fewer than 15
+ // weeks have elapsed, pin to the start and extend forward to fill 15 weeks.
+ const { cumStartMs, cumEndMs } = useMemo(() => {
+ if (firstTradeWeekMs == null) return { cumStartMs: null, cumEndMs: null };
+ const start = Math.max(currentWeekMs - (MAX_CHART_WEEKS - 1) * WEEK_MS, firstTradeWeekMs);
  const end = start + (MAX_CHART_WEEKS - 1) * WEEK_MS;
- return { windowStartMs: start, windowEndMs: end };
+ return { cumStartMs: start, cumEndMs: end };
  }, [firstTradeWeekMs, currentWeekMs]);
 
- // Bar chart: capped 15-week window centered on the current week
+ // Furthest-out week carrying pending (open-position) premium, so the bar chart
+ // can extend forward to show premium we still expect to realize.
+ const lastPendingWeekMs = useMemo(() => {
+ const ms = [...pendingPnlMap.cc.keys(), ...pendingPnlMap.csp.keys()];
+ return ms.length ? Math.max(...ms) : null;
+ }, [pendingPnlMap]);
+
+ // Bar chart window: both backward- and forward-looking, always spanning 15
+ // weeks. The rightmost bar is the furthest-out pending expiration week (or the
+ // current week if there is no later pending premium), with 14 weeks before it.
+ // When that anchor is fewer than 15 weeks from the first trade week, the window
+ // pins to the first trade week and extends forward to fill 15 weeks instead.
+ const { barStartMs, barEndMs } = useMemo(() => {
+ if (firstTradeWeekMs == null) return { barStartMs: null, barEndMs: null };
+ const anchor = Math.max(currentWeekMs, lastPendingWeekMs ?? currentWeekMs);
+ const start = Math.max(anchor - (MAX_CHART_WEEKS - 1) * WEEK_MS, firstTradeWeekMs);
+ const end = start + (MAX_CHART_WEEKS - 1) * WEEK_MS;
+ return { barStartMs: start, barEndMs: end };
+ }, [firstTradeWeekMs, currentWeekMs, lastPendingWeekMs]);
+
+ // Bar chart: capped 15-week window ending on the furthest pending expiration
  const weeklyData = useMemo(() => {
- if (windowStartMs == null || windowEndMs == null) return [];
+ if (barStartMs == null || barEndMs == null) return [];
  const weeks: { week: string; premiumCSP: number; premiumCC: number; pendingCSP: number; pendingCC: number; barCSP: number; barCC: number; barPendCSP: number; barPendCC: number; barNeg: number; isFuture: boolean }[] = [];
- for (let ms = windowStartMs; ms <= windowEndMs; ms += WEEK_MS) {
+ for (let ms = barStartMs; ms <= barEndMs; ms += WEEK_MS) {
  const premiumCSP = weekPnlMap.csp.get(ms) ?? 0;
  const premiumCC = weekPnlMap.cc.get(ms) ?? 0;
  const pendingCSP = pendingPnlMap.csp.get(ms) ?? 0;
@@ -3996,23 +4015,23 @@ function PerformanceCharts({
  });
  }
  return weeks;
- }, [windowStartMs, windowEndMs, weekPnlMap, pendingPnlMap, currentWeekMs]);
+ }, [barStartMs, barEndMs, weekPnlMap, pendingPnlMap, currentWeekMs]);
 
- // Cumulative chart: capped 15-week window centered on the current week.
+ // Cumulative chart: capped 15-week window ending on the current week.
  // actual is null for future weeks so the line stops at the current week
  // target uses 1-based week number so W1 target = 1 × targetWeekly (not zero)
  const cumulativeData = useMemo(() => {
- if (firstTradeWeekMs == null || windowStartMs == null || windowEndMs == null) return [];
+ if (firstTradeWeekMs == null || cumStartMs == null || cumEndMs == null) return [];
  let cumulative = 0;
  const points: { week: string; actual: number | null; target: number }[] = [];
  let weekNum = 0;
  // Iterate from the true program start so cumulative + weekNum stay accurate,
  // but only emit the points that fall inside the visible window.
- for (let ms = firstTradeWeekMs; ms <= windowEndMs; ms += WEEK_MS) {
+ for (let ms = firstTradeWeekMs; ms <= cumEndMs; ms += WEEK_MS) {
  weekNum++;
  const isPast = ms <= currentWeekMs;
  if (isPast) cumulative += (weekPnlMap.cc.get(ms) ?? 0) + (weekPnlMap.csp.get(ms) ?? 0);
- if (ms < windowStartMs) continue;
+ if (ms < cumStartMs) continue;
  points.push({
  week: weekFridayLabel(ms),
  actual: isPast ? cumulative : null,
@@ -4020,7 +4039,7 @@ function PerformanceCharts({
  });
  }
  return points;
- }, [firstTradeWeekMs, weekPnlMap, targetAnnual, currentWeekMs, windowStartMs, windowEndMs]);
+ }, [firstTradeWeekMs, weekPnlMap, targetAnnual, currentWeekMs, cumStartMs, cumEndMs]);
 
  // Delta for the header: actual vs target at the last week with real data
  const lastDataPoint = [...cumulativeData].reverse().find((d) => d.actual != null);
