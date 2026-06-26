@@ -3244,15 +3244,14 @@ function ReviewDividendModal({
 
  <div className="flex justify-between">
  <Button
- variant="ghost"
+ variant="secondary"
  onClick={handleDismiss}
  disabled={saving || dismissing}
- className="text-muted-foreground hover:text-foreground"
  >
  {dismissing ?"Dismissing…" :"Dismiss"}
  </Button>
  <div className="flex gap-2">
- <Button variant="ghost" onClick={onClose} disabled={saving || dismissing}>
+ <Button variant="secondary" onClick={onClose} disabled={saving || dismissing}>
  Cancel
  </Button>
  <Button onClick={handleConfirm} disabled={saving || dismissing}>
@@ -3331,7 +3330,7 @@ function EditConfirmedDividendModal({
  <div className="space-y-4">
  <p className="text-down">{fetchError}</p>
  <div className="flex justify-end">
- <Button variant="ghost" onClick={onClose}>Close</Button>
+ <Button variant="secondary" onClick={onClose}>Close</Button>
  </div>
  </div>
  ) : dividendInfo ? (
@@ -3402,7 +3401,7 @@ function EditConfirmedDividendModal({
  {error && <p className="text-down">{error}</p>}
 
  <div className="flex justify-end gap-2">
- <Button variant="ghost" onClick={onClose} disabled={saving}>
+ <Button variant="secondary" onClick={onClose} disabled={saving}>
  {dividendInfo.isDrip ?"Close" :"Cancel"}
  </Button>
  {!dividendInfo.isDrip && (
@@ -4139,8 +4138,8 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
  <div className="flex items-center gap-2 shrink-0">
  <Button
  size="sm"
- variant="ghost"
- className="text-xs h-7 px-2 text-muted-foreground"
+ variant="secondary"
+ className="text-xs h-7 px-2"
  onClick={async () => {
  try {
  await dismissPendingBuy(pb.id);
@@ -4202,8 +4201,8 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
  <div className="flex items-center gap-2 shrink-0">
  <Button
  size="sm"
- variant="ghost"
- className="text-xs h-7 px-2 text-muted-foreground"
+ variant="secondary"
+ className="text-xs h-7 px-2"
  onClick={async () => {
  try {
  await dismissPendingSale(ps.id);
@@ -4265,8 +4264,8 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
  <div className="flex items-center gap-2 shrink-0">
  <Button
  size="sm"
- variant="ghost"
- className="text-xs h-7 px-2 text-muted-foreground"
+ variant="secondary"
+ className="text-xs h-7 px-2"
  onClick={async () => {
  try {
  await dismissPendingDividend(pd.id);
