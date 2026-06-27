@@ -110,3 +110,40 @@ export async function fetchYahooClosingPrice(ticker: string, date: string): Prom
     return null;
   }
 }
+
+// ── Fetch display name + instrument type from Yahoo Finance ──────────────────
+// Used when creating a holding so it shows the company name (not just the
+// ticker). Falls back to the ticker symbol when the lookup yields no name.
+const QUOTE_TYPE_MAP: Record<string, string> = {
+  EQUITY: "Equity",
+  ETF: "ETF",
+  MUTUALFUND: "Mutual Fund",
+};
+
+export async function fetchYahooMeta(ticker: string): Promise<{ name: string; type: string | null }> {
+  try {
+    const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(ticker)}&quotesCount=5&newsCount=0&listsCount=0`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
+    });
+    if (!res.ok) {
+      console.warn(`[fetchYahooMeta] ${ticker}: HTTP ${res.status}`);
+      return { name: ticker, type: null };
+    }
+    const data = await res.json() as any;
+    const quotes: any[] = data?.quotes ?? [];
+    // Prefer exact symbol match, fall back to first result
+    const match =
+      quotes.find((q) => q.symbol?.toUpperCase() === ticker.toUpperCase()) ??
+      quotes[0];
+    const name = (match?.longname || match?.shortname || ticker) as string;
+    const type = match?.quoteType ? (QUOTE_TYPE_MAP[match.quoteType] ?? match.quoteType) : null;
+    if (name === ticker) {
+      console.warn(`[fetchYahooMeta] ${ticker}: no name found in results`, quotes.map((q) => q.symbol));
+    }
+    return { name, type };
+  } catch (err) {
+    console.warn(`[fetchYahooMeta] ${ticker}: exception`, err);
+    return { name: ticker, type: null };
+  }
+}

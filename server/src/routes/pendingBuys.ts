@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { getUserId } from "../middleware/auth.js";
+import { fetchYahooMeta } from "../services/yahoo.js";
 
 export const pendingBuyRoutes = Router();
 
@@ -49,18 +50,27 @@ pendingBuyRoutes.post("/:id/confirm", async (req, res) => {
   const acquiredAt = new Date(acquiredDate + "T20:00:00.000Z"); // treat as date-only (4pm ET)
   const amount = Math.round(quantity * costPerShare * 100) / 100;
 
+  // Resolve the display name/type up front (outside the transaction, since it's a
+  // network call) so a holding created from this assignment shows the company name
+  // rather than just the ticker. Only needed when the holding doesn't already exist.
+  const existingHolding = await prisma.investmentHolding.findFirst({
+    where: { accountId: pendingBuy.accountId, ticker: pendingBuy.ticker },
+    select: { id: true },
+  });
+  const meta = existingHolding ? null : await fetchYahooMeta(pendingBuy.ticker);
+
   const result = await prisma.$transaction(async (tx) => {
     // Find or create holding for this ticker in this account
     let holding = await tx.investmentHolding.findFirst({
       where: { accountId: pendingBuy.accountId, ticker: pendingBuy.ticker },
     });
     if (!holding) {
-      const name = pendingBuy.optionsPosition.ticker.symbol;
       holding = await tx.investmentHolding.create({
         data: {
           accountId: pendingBuy.accountId,
           ticker: pendingBuy.ticker,
-          name,
+          name: meta?.name ?? pendingBuy.ticker,
+          type: meta?.type ?? null,
         },
       });
     }

@@ -4,50 +4,14 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { getMetadata as getTiingoMeta, getDividendScanResult } from "../services/tiingo.js";
 import { searchCoins, getPrices, getPrice as getCoinGeckoPrice, getMarketChart } from "../services/coingecko.js";
-import { fetchYahooPrice, fetchYahooHistory, fetchYahooClosingPrice } from "../services/yahoo.js";
+import { fetchYahooPrice, fetchYahooHistory, fetchYahooClosingPrice, fetchYahooMeta } from "../services/yahoo.js";
 import { deactivateIfOrphaned } from "./instruments.js";
 import { getUserId } from "../middleware/auth.js";
 
 export const investmentRoutes = Router();
 
-// ── Helper: fetch display name + type from Yahoo Finance ────────────────────
-
-const QUOTE_TYPE_MAP: Record<string, string> = {
-  EQUITY: "Equity",
-  ETF: "ETF",
-  MUTUALFUND: "Mutual Fund",
-};
-
-async function fetchYahooMeta(ticker: string): Promise<{ name: string; type: string | null }> {
-  try {
-    const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(ticker)}&quotesCount=5&newsCount=0&listsCount=0`;
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
-    });
-    if (!res.ok) {
-      console.warn(`[fetchYahooMeta] ${ticker}: HTTP ${res.status}`);
-      return { name: ticker, type: null };
-    }
-    const data = await res.json() as any;
-    const quotes: any[] = data?.quotes ?? [];
-    // Prefer exact symbol match, fall back to first result
-    const match =
-      quotes.find((q) => q.symbol?.toUpperCase() === ticker.toUpperCase()) ??
-      quotes[0];
-    const name = (match?.longname || match?.shortname || ticker) as string;
-    const type = match?.quoteType ? (QUOTE_TYPE_MAP[match.quoteType] ?? match.quoteType) : null;
-    if (name === ticker) {
-      console.warn(`[fetchYahooMeta] ${ticker}: no name found in results`, quotes.map((q) => q.symbol));
-    }
-    return { name, type };
-  } catch (err) {
-    console.warn(`[fetchYahooMeta] ${ticker}: exception`, err);
-    return { name: ticker, type: null };
-  }
-}
-
-// Yahoo price helpers (fetchYahooPrice / fetchYahooHistory / fetchYahooClosingPrice)
-// live in ../services/yahoo.js and are imported above.
+// Yahoo helpers (fetchYahooPrice / fetchYahooHistory / fetchYahooClosingPrice /
+// fetchYahooMeta) live in ../services/yahoo.js and are imported above.
 
 // ── Helpers: trading-day calculations (Eastern time) ────────────────────────
 
