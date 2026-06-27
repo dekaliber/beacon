@@ -2373,7 +2373,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  try {
  const stored = localStorage.getItem(LS_LIVE_PRICES_KEY);
  if (stored) return new Map(Object.entries(JSON.parse(stored) as Record<string, number>));
- } catch {}
+ } catch { /* ignore unavailable/corrupt localStorage */ }
  return new Map();
  });
  const [editingPremId, setEditingPremId] = useState<string | null>(null);
@@ -2384,7 +2384,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const updateLivePrice = (ticker: string, price: number) => {
  setLivePrices((prev) => {
  const next = new Map(prev).set(ticker, price);
- try { localStorage.setItem(LS_LIVE_PRICES_KEY, JSON.stringify(Object.fromEntries(next))); } catch {}
+ try { localStorage.setItem(LS_LIVE_PRICES_KEY, JSON.stringify(Object.fromEntries(next))); } catch { /* ignore unavailable localStorage */ }
  return next;
  });
  };
@@ -2494,7 +2494,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  });
  const recordFetch = (date: Date) => {
  setLastFetchedAt(date);
- try { localStorage.setItem(LS_LAST_FETCHED_KEY, date.toISOString()); } catch {}
+ try { localStorage.setItem(LS_LAST_FETCHED_KEY, date.toISOString()); } catch { /* ignore unavailable localStorage */ }
  };
  const fetchAllQuotes = async () => {
  setRefreshingAll(true);
@@ -4392,22 +4392,12 @@ function PerformanceCharts({
 
 // ── Performance Table ──────────────────────────────────────────────────────────
 
-function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
- const [expanded, setExpanded] = useState(false);
+const _fmtDays = (d: number | null) => (d != null ? d.toFixed(1) :"—");
+const _fmtRate = (r: number | null) => (r != null ?`${r.toFixed(1)}%` :"—");
 
- if (positions.length === 0) return null;
-
- const symbols = Array.from(new Set(positions.map((p) => p.ticker.symbol))).sort();
- const aggregate = computePerformanceMetrics(positions);
- const byTicker = symbols.map((sym) => ({
- symbol: sym,
- metrics: computePerformanceMetrics(positions.filter((p) => p.ticker.symbol === sym)),
- }));
-
- const fmtDays = (d: number | null) => (d != null ? d.toFixed(1) :"—");
- const fmtRate = (r: number | null) => (r != null ?`${r.toFixed(1)}%` :"—");
-
- function MetricCells({ m }: { m: PerformanceMetrics }) {
+// Metric columns for one row of the performance table. Hoisted to module scope
+// (rather than nested in PerformanceTable) so it's a stable component identity.
+function MetricCells({ m }: { m: PerformanceMetrics }) {
  const tdCls ="px-4 py-2 text-right tabular-nums font-mono";
  return (
  <>
@@ -4415,13 +4405,13 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  <td className={tdCls}>{m.contractCount}</td>
  <td className={tdCls}>
  {m.winRate != null ? (
- <span className={m.winRate >= 50 ?"text-up" :"text-down"}>{fmtRate(m.winRate)}</span>
+ <span className={m.winRate >= 50 ?"text-up" :"text-down"}>{_fmtRate(m.winRate)}</span>
  ) :"—"}
  </td>
- <td className={tdCls}>{fmtRate(m.assignmentRate)}</td>
+ <td className={tdCls}>{_fmtRate(m.assignmentRate)}</td>
  <td className={tdCls}>
  {m.avgActualDays != null && m.avgExpectedDays != null ? (
- <span>{fmtDays(m.avgActualDays)}<span className="text-muted-foreground"> / {fmtDays(m.avgExpectedDays)}</span></span>
+ <span>{_fmtDays(m.avgActualDays)}<span className="text-muted-foreground"> / {_fmtDays(m.avgExpectedDays)}</span></span>
  ) :"—"}
  </td>
  <td className={tdCls}>
@@ -4452,7 +4442,19 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  </td>
  </>
  );
- }
+}
+
+function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
+ const [expanded, setExpanded] = useState(false);
+
+ if (positions.length === 0) return null;
+
+ const symbols = Array.from(new Set(positions.map((p) => p.ticker.symbol))).sort();
+ const aggregate = computePerformanceMetrics(positions);
+ const byTicker = symbols.map((sym) => ({
+ symbol: sym,
+ metrics: computePerformanceMetrics(positions.filter((p) => p.ticker.symbol === sym)),
+ }));
 
  return (
  <Card className="p-6">
@@ -5984,7 +5986,7 @@ export function OptionsTrading() {
  const raw = JSON.parse(stored) as Record<string, number>;
  return Object.fromEntries(Object.entries(raw).map(([t, p]) => [t, { price: p }]));
  }
- } catch {}
+ } catch { /* ignore unavailable/corrupt localStorage */ }
  return {};
  });
  const handlePricesUpdated = useCallback((prices: Map<string, number>) => {
