@@ -51,9 +51,10 @@ import { AssignedSharesCard, type SellCoveredCallSeed } from"@/components/Assign
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { DatePicker } from"@/components/DatePicker";
-import { Plus, ChevronDown, ChevronUp, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, CircleQuestionMark } from"lucide-react";
+import { Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, CircleQuestionMark } from"lucide-react";
 import { createPortal } from"react-dom";
 import { cn, parseAmount } from"@/lib/utils";
+import { getWeeklyExpiration, nextWeekExpiration, prevWeekExpiration, calcDTE, isNonTradingDay, etDateParts } from"@/lib/marketHolidays";
 import { SectionLabel, ColumnHeader, StatValue } from"@/components/Typography";
 import { optionsPricesAreFresh } from"@/lib/priceUtils";
 import { BeaconLoader } from"@/components/BeaconLoader";
@@ -454,15 +455,7 @@ interface PositionModalProps {
 }
 
 function getDefaultExpirationDate() {
- const d = new Date();
- const day = d.getDay(); // 0=Sun … 6=Sat
- const daysToFriday = day <= 5 ? 5 - day : 6;
- d.setDate(d.getDate() + daysToFriday);
- // Use local date parts to avoid UTC timezone shift from toISOString()
- const y = d.getFullYear();
- const m = String(d.getMonth() + 1).padStart(2,"0");
- const dd = String(d.getDate()).padStart(2,"0");
- return`${y}-${m}-${dd}`;
+ return getWeeklyExpiration();
 }
 
 function getDefaultOpenedAt() {
@@ -923,11 +916,36 @@ function PositionModal({ tickers, editing, prefill, onClose, onSaved, onDelete, 
  </div>
  <div>
  <label className="block text-xs font-medium mb-1">Expiration Date</label>
+ <div className="flex items-center w-full">
  <DatePicker
  required
  value={expirationDate} onChange={setExpirationDate}
- className="w-full"
+ className="w-[120px] shrink-0"
  />
+ <div className="ml-auto flex items-center gap-0.5">
+ {expirationDate && (
+ <span className="mr-1 text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+ {calcDTE(expirationDate)} DTE
+ </span>
+ )}
+ <button
+ type="button"
+ aria-label="Previous week"
+ onClick={() => setExpirationDate(prevWeekExpiration(expirationDate))}
+ className="rounded p-1 text-ink-3 hover:bg-muted-hover hover:text-ink transition-colors"
+ >
+ <ChevronLeft className="h-3.5 w-3.5" />
+ </button>
+ <button
+ type="button"
+ aria-label="Next week"
+ onClick={() => setExpirationDate(nextWeekExpiration(expirationDate))}
+ className="rounded p-1 text-ink-3 hover:bg-muted-hover hover:text-ink transition-colors"
+ >
+ <ChevronRight className="h-3.5 w-3.5" />
+ </button>
+ </div>
+ </div>
  </div>
  </div>
 
@@ -1122,11 +1140,7 @@ interface CloseModalProps {
 }
 
 function addOneWeek(dateIso: string): string {
- const dateOnly = dateIso.split("T")[0];
- const [y, m, d] = dateOnly.split("-").map(Number);
- const dt = new Date(Date.UTC(y, m - 1, d));
- dt.setUTCDate(dt.getUTCDate() + 7);
- return dt.toISOString().split("T")[0];
+ return nextWeekExpiration(dateIso.split("T")[0]);
 }
 
 function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountId }: CloseModalProps) {
@@ -1539,11 +1553,36 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  </div>
  <div>
  <label className="block text-xs font-medium mb-1">Expiration Date</label>
+ <div className="flex items-center w-full">
  <DatePicker
  required
  value={newExpirationDate} onChange={setNewExpirationDate}
- className="w-full"
+ className="w-[120px] shrink-0"
  />
+ <div className="ml-auto flex items-center gap-0.5">
+ {newExpirationDate && (
+ <span className="mr-1 text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+ {calcDTE(newExpirationDate)} DTE
+ </span>
+ )}
+ <button
+ type="button"
+ aria-label="Previous week"
+ onClick={() => setNewExpirationDate(prevWeekExpiration(newExpirationDate))}
+ className="rounded p-1 text-ink-3 hover:bg-muted-hover hover:text-ink transition-colors"
+ >
+ <ChevronLeft className="h-3.5 w-3.5" />
+ </button>
+ <button
+ type="button"
+ aria-label="Next week"
+ onClick={() => setNewExpirationDate(nextWeekExpiration(newExpirationDate))}
+ className="rounded p-1 text-ink-3 hover:bg-muted-hover hover:text-ink transition-colors"
+ >
+ <ChevronRight className="h-3.5 w-3.5" />
+ </button>
+ </div>
+ </div>
  </div>
  </div>
 
@@ -4582,112 +4621,24 @@ function CapitalDistributionBar({
 }
 
 // ── Market calendar helpers ─────────────────────────────────────────────────
-// Uses Intl.DateTimeFormat("America/New_York") throughout so DST is handled
-// correctly — no hardcoded UTC-4/UTC-5 offsets.
+// NYSE holiday / trading-day logic lives in @/lib/marketHolidays (isNonTradingDay,
+// etDateParts). The ET→UTC converter below stays local because it's only needed
+// for the intraday trading-hours math in the utilization analytics.
 
-const _etFmt = {
- date: new Intl.DateTimeFormat("en-US", {
- timeZone:"America/New_York",
- year:"numeric", month:"2-digit", day:"2-digit", weekday:"short",
- }),
- offset: new Intl.DateTimeFormat("en-US", {
+const _etOffsetFmt = new Intl.DateTimeFormat("en-US", {
  timeZone:"America/New_York", timeZoneName:"shortOffset",
- }),
-};
-const _WDAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-
-// Get ET date components + weekday (0=Sun…6=Sat) for any UTC timestamp.
-// Pass a midday-ish UTC time (not midnight) so the ET date matches the intended
-// calendar day for all US timezones.
-function _etDate(utcMs: number) {
- const parts = _etFmt.date.formatToParts(new Date(utcMs));
- const g = (t: string) => Number(parts.find(p => p.type === t)!.value);
- return {
- year: g("year"), month: g("month"), day: g("day"),
- dow: _WDAYS.indexOf(parts.find(p => p.type ==="weekday")!.value),
- };
-}
+});
 
 // Convert an ET clock time (year, month, day, hour, minute) to a UTC timestamp,
 // accounting for DST automatically via the shortOffset trick from priceUtils.ts.
 function _etToUTC(year: number, month: number, day: number, hour: number, minute = 0): number {
  const ref = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)); // noon UTC same calendar day
- const tzStr = _etFmt.offset.formatToParts(ref).find(p => p.type ==="timeZoneName")!.value;
+ const tzStr = _etOffsetFmt.formatToParts(ref).find(p => p.type ==="timeZoneName")!.value;
  const m = tzStr.match(/GMT([+-])(\d+)/)!;
  const offsetStr =`${m[1]}${m[2].padStart(2,"0")}:00`;
  const hh = String(hour).padStart(2,"0"), mm = String(minute).padStart(2,"0");
  const mo = String(month).padStart(2,"0"), dd = String(day).padStart(2,"0");
  return new Date(`${year}-${mo}-${dd}T${hh}:${mm}:00${offsetStr}`).getTime();
-}
-
-// ET weekday (0=Sun…6=Sat) for a calendar date (pass noon UTC to avoid day boundary).
-function _etDOW(year: number, month: number, day: number): number {
- return _etDate(Date.UTC(year, month - 1, day, 12, 0, 0)).dow;
-}
-
-// [year, month, day] of the observed holiday for a calendar date.
-function _observed(y: number, mo: number, d: number): [number, number, number] {
- const dow = _etDOW(y, mo, d);
- if (dow === 6) { const t = new Date(Date.UTC(y, mo - 1, d - 1, 12)); return [t.getUTCFullYear(), t.getUTCMonth()+1, t.getUTCDate()]; }
- if (dow === 0) { const t = new Date(Date.UTC(y, mo - 1, d + 1, 12)); return [t.getUTCFullYear(), t.getUTCMonth()+1, t.getUTCDate()]; }
- return [y, mo, d];
-}
-
-// [year, month, day] of the nth occurrence (n<0 = from end) of a weekday in a month.
-function _nthWD(year: number, month: number, weekday: number, n: number): [number, number, number] {
- const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
- if (n > 0) {
- for (let d = 1; d <= daysInMonth; d++) {
- if (_etDOW(year, month, d) === weekday) {
- const target = new Date(Date.UTC(year, month - 1, d + (n - 1) * 7, 12));
- return [target.getUTCFullYear(), target.getUTCMonth()+1, target.getUTCDate()];
- }
- }
- } else {
- let count = 0;
- for (let d = daysInMonth; d >= 1; d--) {
- if (_etDOW(year, month, d) === weekday) {
- count--;
- if (count === n) return [year, month, d];
- }
- }
- }
- throw new Error(`_nthWD: not found ${year}/${month} wd=${weekday} n=${n}`);
-}
-
-// [year, month, day] of Easter Sunday (Gregorian algorithm).
-function _easter(y: number): [number, number, number] {
- const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25);
- const g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4;
- const l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451);
- const mo=Math.floor((h+l-7*m+114)/31), dy=((h+l-7*m+114)%31)+1;
- return [y, mo, dy];
-}
-
-// Returns true if (etYear, etMonth, etDay) is a US market holiday.
-function isUSMarketHoliday(etYear: number, etMonth: number, etDay: number): boolean {
- const [eY, eM, eD] = _easter(etYear);
- const goodFri = new Date(Date.UTC(eY, eM-1, eD-2, 12));
- const holidays: Array<[number,number,number]> = [
- _observed(etYear, 1, 1), // New Year's Day
- _nthWD(etYear, 1, 1, 3), // MLK Day
- _nthWD(etYear, 2, 1, 3), // Presidents Day
- [goodFri.getUTCFullYear(), goodFri.getUTCMonth()+1, goodFri.getUTCDate()], // Good Friday
- _nthWD(etYear, 5, 1, -1), // Memorial Day
- ...(etYear >= 2021 ? [_observed(etYear, 6, 19)] : []), // Juneteenth
- _observed(etYear, 7, 4), // Independence Day
- _nthWD(etYear, 9, 1, 1), // Labor Day
- _nthWD(etYear, 11, 4, 4), // Thanksgiving
- _observed(etYear, 12, 25), // Christmas
-];
- return holidays.some(([y,m,d]) => y===etYear && m===etMonth && d===etDay);
-}
-
-// Returns true if the calendar day containing utcMs (evaluated in ET) is a
-// weekend or US market holiday. Pass a midday-ish UTC timestamp per _etDate's contract.
-function isNonTradingDay(utcMs: number): boolean {
- const { year, month, day, dow } = _etDate(utcMs + 12 * 3600_000);
- return dow === 0 || dow === 6 || isUSMarketHoliday(year, month, day);
 }
 
 // ── Summary Cards ──────────────────────────────────────────────────────────────
@@ -4892,7 +4843,7 @@ function SummaryCards({
  while (dayMs < windowEndMs) {
  // Anchor to UTC midnight so ET clock times are timezone-independent
  if (isNonTradingDay(dayMs)) { dayMs += DAY_MS; continue; }
- const { year: etY, month: etMo, day: etD } = _etDate(dayMs + 12 * 3600_000);
+ const { year: etY, month: etMo, day: etD } = etDateParts(dayMs + 12 * 3600_000);
  const tradingOpenMs = _etToUTC(etY, etMo, etD, 9, 30);
  const tradingCloseMs = Math.min(_etToUTC(etY, etMo, etD, 16, 0), windowEndMs);
 
