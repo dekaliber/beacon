@@ -625,7 +625,6 @@ function PositionModal({ tickers, editing, prefill, onClose, onSaved, onDelete, 
  finally { setQuoteFetching(false); }
  }, 600);
  return () => { if (quoteDebounce.current) clearTimeout(quoteDebounce.current); };
- // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [editing, selectedTicker, optionType, strikePrice, expirationDate]);
 
  const handleTickerSearch = (q: string) => {
@@ -2392,7 +2391,6 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  useEffect(() => {
  if (!seedLivePrices?.size) return;
  for (const [ticker, price] of seedLivePrices) updateLivePrice(ticker, price);
- // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [seedLivePrices]);
 
  const fetchAllStockPrices = () => {
@@ -2424,7 +2422,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const toggleColGroup = (g: ColGroupKey) =>
  setOpenColGroups((prev) => {
  const next = new Set(prev);
- next.has(g) ? next.delete(g) : next.add(g);
+ if (next.has(g)) next.delete(g); else next.add(g);
  return next;
  });
 
@@ -2475,8 +2473,8 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  } else {
  setQuoteErrors((prev) => new Map(prev).set(p.id,"No price available"));
  }
- } catch (e: any) {
- const msg = e?.message ??"Failed to fetch";
+ } catch (e) {
+ const msg = e instanceof Error ? e.message :"Failed to fetch";
  setQuoteErrors((prev) => new Map(prev).set(p.id, msg));
  } finally {
  setFetchingQuotes((prev) => { const s = new Set(prev); s.delete(p.id); return s; });
@@ -2531,7 +2529,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const toggleGroup = (id: string) =>
  setExpandedGroups((prev) => {
  const next = new Set(prev);
- next.has(id) ? next.delete(id) : next.add(id);
+ if (next.has(id)) next.delete(id); else next.add(id);
  return next;
  });
 
@@ -3373,7 +3371,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  const toggleWeek = (key: string) =>
  setCollapsedWeeks((prev) => {
  const next = new Set(prev);
- next.has(key) ? next.delete(key) : next.add(key);
+ if (next.has(key)) next.delete(key); else next.add(key);
  return next;
  });
 
@@ -3381,7 +3379,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  const toggleColGroup = (g: ClosedColGroupKey) =>
  setOpenColGroups((prev) => {
  const next = new Set(prev);
- next.has(g) ? next.delete(g) : next.add(g);
+ if (next.has(g)) next.delete(g); else next.add(g);
  return next;
  });
 
@@ -3947,10 +3945,20 @@ function netWeekBars(raw: { premiumCSP: number; premiumCC: number; pendingCSP: n
 // squared-off top capped by an invisible sub-pixel sliver. The y-scale is
 // shared across the stack, so any rendered segment's height/value ratio
 // converts a sibling's dollar value into its pixel height.
+const WEEK_MS = 7 * 86_400_000;
+const MAX_CHART_WEEKS = 15;
+
 const MIN_SEG_PX = 1;
 function segVisible(value: number, refPx: number, refValue: number) {
  return value > 0 && refValue > 0 && (value / refValue) * refPx >= MIN_SEG_PX;
 }
+
+// Props Recharts passes to a <Bar shape> render callback (position + the datum's
+// stacked-segment values). Recharts types this as `any`; we narrow to what we read.
+type BarShapeProps = {
+ x: number; y: number; width: number; height: number;
+ barCSP: number; barCC: number; barPendCSP: number; barPendCC: number;
+};
 
 function PerformanceCharts({
  openPositions,
@@ -3993,19 +4001,17 @@ function PerformanceCharts({
  }, [openPositions]);
 
  // First trade week: use the setting if provided, otherwise first week with a close
+ const startingWeek = settings?.startingWeek;
  const firstTradeWeekMs = useMemo(() => {
- if (settings?.startingWeek) {
- return getWeekStart(new Date(settings.startingWeek +"T12:00:00")).getTime();
+ if (startingWeek) {
+ return getWeekStart(new Date(startingWeek +"T12:00:00")).getTime();
  }
  const allMs = [...weekPnlMap.cc.keys(), ...weekPnlMap.csp.keys()];
  if (allMs.length === 0) return null;
  return Math.min(...allMs);
- }, [settings?.startingWeek, weekPnlMap]);
+ }, [startingWeek, weekPnlMap]);
 
  const currentWeekMs = getWeekStart(new Date()).getTime();
-
- const WEEK_MS = 7 * 86_400_000;
- const MAX_CHART_WEEKS = 15;
 
  // Cumulative chart window: entirely backward-looking. The current week is the
  // rightmost point with the 14 preceding weeks before it. When fewer than 15
@@ -4174,11 +4180,8 @@ function PerformanceCharts({
  dataKey="barCSP"
  stackId="a"
  maxBarSize={32}
- shape={(props: any) => {
- const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props as {
- x: number; y: number; width: number; height: number;
- barCSP: number; barCC: number; barPendCSP: number; barPendCC: number;
- };
+ shape={(props: BarShapeProps) => {
+ const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props;
  if (!height || height < MIN_SEG_PX) return <g />;
  const isTop = !segVisible(barCC, height, barCSP) && !segVisible(barPendCSP, height, barCSP) && !segVisible(barPendCC, height, barCSP);
  const r = 3;
@@ -4190,11 +4193,8 @@ function PerformanceCharts({
  dataKey="barCC"
  stackId="a"
  maxBarSize={32}
- shape={(props: any) => {
- const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props as {
- x: number; y: number; width: number; height: number;
- barCSP: number; barCC: number; barPendCSP: number; barPendCC: number;
- };
+ shape={(props: BarShapeProps) => {
+ const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props;
  if (!height || height < MIN_SEG_PX) return <g />;
  const isTop = !segVisible(barPendCSP, height, barCC) && !segVisible(barPendCC, height, barCC);
  const isBottom = !segVisible(barCSP, height, barCC);
@@ -4207,11 +4207,8 @@ function PerformanceCharts({
  dataKey="barPendCSP"
  stackId="a"
  maxBarSize={32}
- shape={(props: any) => {
- const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props as {
- x: number; y: number; width: number; height: number;
- barCSP: number; barCC: number; barPendCSP: number; barPendCC: number;
- };
+ shape={(props: BarShapeProps) => {
+ const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props;
  if (!height || height < MIN_SEG_PX || !width || width <= 0) return <g />;
  const isTop = !segVisible(barPendCC, height, barPendCSP);
  const isBottom = !segVisible(barCSP, height, barPendCSP) && !segVisible(barCC, height, barPendCSP);
@@ -4243,11 +4240,8 @@ function PerformanceCharts({
  dataKey="barPendCC"
  stackId="a"
  maxBarSize={32}
- shape={(props: any) => {
- const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props as {
- x: number; y: number; width: number; height: number;
- barCSP: number; barCC: number; barPendCSP: number; barPendCC: number;
- };
+ shape={(props: BarShapeProps) => {
+ const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props;
  if (!height || height < MIN_SEG_PX || !width || width <= 0) return <g />;
  const isBottom = !segVisible(barCSP, height, barPendCC) && !segVisible(barCC, height, barPendCC) && !segVisible(barPendCSP, height, barPendCC);
  const r = 3;
@@ -4278,8 +4272,8 @@ function PerformanceCharts({
  dataKey="barNeg"
  stackId="a"
  maxBarSize={32}
- shape={(props: any) => {
- const { x, y, width, height } = props as { x: number; y: number; width: number; height: number };
+ shape={(props: BarShapeProps) => {
+ const { x, y, width, height } = props;
  if (!height || height < MIN_SEG_PX) return <g />;
  const r = 3;
  return <path d={barPath(x, y, width, height, 0, 0, r, r)} fill="var(--color-down)" />;
@@ -5813,7 +5807,7 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
  const toggleHighlight = () =>
  setHighlightedRows((prev) => {
  const next = new Set(prev);
- next.has(i) ? next.delete(i) : next.add(i);
+ if (next.has(i)) next.delete(i); else next.add(i);
  return next;
  });
  return (
@@ -6244,11 +6238,12 @@ export function OptionsTrading() {
  />
  )}
 
+ {importModalOpen && (
  <ImportOptionsModal
- open={importModalOpen}
  onClose={() => setImportModalOpen(false)}
  onComplete={() => { setImportModalOpen(false); refetchPositions(); refetchTickers(); }}
  />
+ )}
  </div>
  );
 }
@@ -6342,8 +6337,7 @@ function parseOptionType(s: string):"CALL" |"PUT" | null {
  return null;
 }
 
-function ImportOptionsModal({ open, onClose, onComplete }: {
- open: boolean;
+function ImportOptionsModal({ onClose, onComplete }: {
  onClose: () => void;
  onComplete: () => void;
 }) {
@@ -6353,16 +6347,6 @@ function ImportOptionsModal({ open, onClose, onComplete }: {
  const [importing, setImporting] = useState(false);
  const [result, setResult] = useState<{ imported: number; errors: Array<{ row: number; message: string }> } | null>(null);
  const fileRef = useRef<HTMLInputElement>(null);
-
- useEffect(() => {
- if (open) {
- setStep("upload");
- setRows([]);
- setResult(null);
- setImporting(false);
- setShowErrorsOnly(false);
- }
- }, [open]);
 
  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
  const file = e.target.files?.[0];
@@ -6491,7 +6475,7 @@ function ImportOptionsModal({ open, onClose, onComplete }: {
  };
 
  return (
- <Modal open={open} onClose={onClose} title="Import Options">
+ <Modal open onClose={onClose} title="Import Options">
  {step ==="upload" && (
  <div className="space-y-4">
  <p className="text-muted-foreground">
