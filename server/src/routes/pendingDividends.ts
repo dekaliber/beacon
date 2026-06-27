@@ -273,7 +273,7 @@ async function runScan(): Promise<void> {
               where: { holdingId_exDate: { holdingId: holding.id, exDate } },
             });
             if (existing) {
-              console.log(`[${ts()}] ${tag} [${event.exDate}] ${holding.ticker}@${holding.accountId}: skipped — PendingDividend already exists (status: ${existing.status})`);
+              console.log(`[${ts()}] ${tag} [${event.exDate}] ${tickerLabel}@${holding.accountId}: skipped — PendingDividend already exists (status: ${existing.status})`);
               continue;
             }
 
@@ -291,13 +291,13 @@ async function runScan(): Promise<void> {
               },
             });
             if (existingActivity) {
-              console.log(`[${ts()}] ${tag} [${event.exDate}] ${holding.ticker}@${holding.accountId}: skipped — DIVIDEND activity already recorded (id: ${existingActivity.id})`);
+              console.log(`[${ts()}] ${tag} [${event.exDate}] ${tickerLabel}@${holding.accountId}: skipped — DIVIDEND activity already recorded (id: ${existingActivity.id})`);
               continue;
             }
 
             const shares = await getSharesAtDate(holding.id, exDate);
             if (shares <= 0) {
-              console.log(`[${ts()}] ${tag} [${event.exDate}] ${holding.ticker}@${holding.accountId}: skipped — 0 shares at ex-date`);
+              console.log(`[${ts()}] ${tag} [${event.exDate}] ${tickerLabel}@${holding.accountId}: skipped — 0 shares at ex-date`);
               continue;
             }
 
@@ -325,7 +325,7 @@ async function runScan(): Promise<void> {
               update: {}, // No-op if it already exists
             });
             console.log(
-              `[${ts()}] ${tag} [${event.exDate}] ${holding.ticker}@${holding.accountId}: created PendingDividend — ` +
+              `[${ts()}] ${tag} [${event.exDate}] ${tickerLabel}@${holding.accountId}: created PendingDividend — ` +
               `${shares} shares × $${event.perShareAmount} = $${estimatedTotal}`,
             );
           }
