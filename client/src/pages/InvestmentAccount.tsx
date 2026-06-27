@@ -266,18 +266,18 @@ function TickerSearch({
  return (
  <div className="space-y-3">
  {/* Mode toggle */}
- <div className="flex rounded-md border border-border overflow-hidden">
+ <div className="flex rounded-md border border-border overflow-hidden text-13 font-medium">
  <button
  type="button"
  onClick={() => handleModeChange("stocks")}
- className={`flex-1 px-3 py-1.5 font-medium transition-colors ${mode ==="stocks" ?"bg-primary text-primary-foreground" :"bg-background text-muted-foreground hover:bg-muted"}`}
+ className={`flex-1 py-2 px-3 transition-colors ${mode ==="stocks" ?"bg-primary text-primary-foreground" :"bg-background text-foreground hover:bg-muted"}`}
  >
  Stocks &amp; Funds
  </button>
  <button
  type="button"
  onClick={() => handleModeChange("crypto")}
- className={`flex-1 px-3 py-1.5 font-medium transition-colors border-l border-border ${mode ==="crypto" ?"bg-primary text-primary-foreground" :"bg-background text-muted-foreground hover:bg-muted"}`}
+ className={`flex-1 py-2 px-3 transition-colors border-l border-border ${mode ==="crypto" ?"bg-primary text-primary-foreground" :"bg-background text-foreground hover:bg-muted"}`}
  >
  Crypto
  </button>
@@ -2318,18 +2318,18 @@ function SellModal({
  {step ==="input" ? (
  <div className="space-y-4">
  {/* Sell / Transfer mode toggle */}
- <div className="flex rounded border border-border overflow-hidden text-xs font-medium">
+ <div className="flex rounded-md border border-border overflow-hidden text-13 font-medium">
  <button
  type="button"
  onClick={() => { setMode("sell"); setDestAccountId(""); setError(null); }}
- className={`flex-1 py-2 transition-colors ${mode ==="sell" ?"bg-primary text-primary-foreground" :"bg-background text-foreground hover:bg-muted"}`}
+ className={`flex-1 py-2 px-3 transition-colors ${mode ==="sell" ?"bg-primary text-primary-foreground" :"bg-background text-foreground hover:bg-muted"}`}
  >
  Sell
  </button>
  <button
  type="button"
  onClick={() => { setMode("transfer"); setDestAccountId(""); setError(null); }}
- className={`flex-1 py-2 transition-colors border-l border-border ${mode ==="transfer" ?"bg-primary text-primary-foreground" :"bg-background text-foreground hover:bg-muted"}`}
+ className={`flex-1 py-2 px-3 transition-colors border-l border-border ${mode ==="transfer" ?"bg-primary text-primary-foreground" :"bg-background text-foreground hover:bg-muted"}`}
  >
  Transfer to another account
  </button>
@@ -2340,18 +2340,18 @@ function SellModal({
  </p>
 
  {/* Lot selection mode toggle */}
- <div className="flex rounded border border-border overflow-hidden text-xs font-medium">
+ <div className="flex rounded-md border border-border overflow-hidden text-13 font-medium">
  <button
  type="button"
  onClick={() => setSelectionMode("method")}
- className={`flex-1 py-2 transition-colors ${selectionMode ==="method" ?"bg-primary text-primary-foreground" :"bg-background text-foreground hover:bg-muted"}`}
+ className={`flex-1 py-2 px-3 transition-colors ${selectionMode ==="method" ?"bg-primary text-primary-foreground" :"bg-background text-foreground hover:bg-muted"}`}
  >
  By cost basis method
  </button>
  <button
  type="button"
  onClick={() => setSelectionMode("lots")}
- className={`flex-1 py-2 transition-colors border-l border-border ${selectionMode ==="lots" ?"bg-primary text-primary-foreground" :"bg-background text-foreground hover:bg-muted"}`}
+ className={`flex-1 py-2 px-3 transition-colors border-l border-border ${selectionMode ==="lots" ?"bg-primary text-primary-foreground" :"bg-background text-foreground hover:bg-muted"}`}
  >
  Specific lots
  </button>

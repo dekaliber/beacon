@@ -808,18 +808,18 @@ function PositionModal({ tickers, editing, prefill, onClose, onSaved, onDelete, 
  {/* Type */}
  <div>
  <label className="block text-xs font-medium mb-1">Option Type</label>
- <div className="flex rounded-md border border-border overflow-hidden font-medium">
+ <div className="flex rounded-md border border-border overflow-hidden text-13 font-medium">
  <button
  type="button"
  onClick={() => setOptionType("CALL")}
- className={`flex-1 py-2 transition-colors ${optionType ==="CALL" ?"bg-primary text-primary-foreground" :"bg-background text-foreground hover:bg-muted"}`}
+ className={`flex-1 py-2 px-3 transition-colors ${optionType ==="CALL" ?"bg-primary text-primary-foreground" :"bg-background text-foreground hover:bg-muted"}`}
  >
  Covered Call
  </button>
  <button
  type="button"
  onClick={() => setOptionType("PUT")}
- className={`flex-1 py-2 transition-colors border-l border-border ${optionType ==="PUT" ?"bg-primary text-primary-foreground" :"bg-background text-foreground hover:bg-muted"}`}
+ className={`flex-1 py-2 px-3 transition-colors border-l border-border ${optionType ==="PUT" ?"bg-primary text-primary-foreground" :"bg-background text-foreground hover:bg-muted"}`}
  >
  Cash-Secured Put
  </button>
@@ -1328,7 +1328,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  {/* Outcome selector */}
  <div>
  <label className="block text-xs font-medium mb-1">Outcome</label>
- <div className="grid grid-cols-2 rounded-md border border-border overflow-hidden font-medium">
+ <div className="grid grid-cols-2 rounded-md border border-border overflow-hidden text-13 font-medium">
  {outcomeOptions.map((o, i) => (
  <button
  key={o.value}
@@ -1744,7 +1744,7 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
  <form onSubmit={handleSubmit} noValidate className="space-y-4">
  <div>
  <label className="block text-xs font-medium mb-1">Outcome</label>
- <div className="grid grid-cols-2 rounded-md border border-border overflow-hidden font-medium">
+ <div className="grid grid-cols-2 rounded-md border border-border overflow-hidden text-13 font-medium">
  {outcomeOptions.map((o, i) => (
  <button
  key={o.value}
