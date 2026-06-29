@@ -150,6 +150,12 @@ export function DatePicker({
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  // Segmented-edit state for the standalone MM/DD/YYYY field: which of the three
+  // sections (0=month, 1=day, 2=year) is "live", and whether the next digit
+  // should replace it (fresh) rather than append. pendingSelRef carries a caret
+  // range to re-apply after a controlled setText (which would otherwise reset it).
+  const selRef = useRef<{ sec: number; fresh: boolean } | null>(null);
+  const pendingSelRef = useRef<[number, number] | null>(null);
 
   const selected = useMemo(() => parseYMD(value), [value]);
   const todayYMD = localToday();
@@ -159,6 +165,16 @@ export function DatePicker({
   useEffect(() => {
     if (!focused) setText(ymdToDisplay(value, compactFmt));
   }, [value, focused, compactFmt]);
+
+  // After a segmented edit re-renders the controlled input, restore the caret /
+  // selection that the keydown handler computed (React resets it to the end).
+  useEffect(() => {
+    if (pendingSelRef.current) {
+      const [s, e] = pendingSelRef.current;
+      pendingSelRef.current = null;
+      inputRef.current?.setSelectionRange(s, e);
+    }
+  });
 
   // Close on outside click — panel is portalled to <body> (separate subtree), so
   // check both refs. Mirrors MultiSelectDropdown.
@@ -232,10 +248,8 @@ export function DatePicker({
   };
 
   // ── Text-field handlers ──────────────────────────────────────────────
-  const handleTextChange = (raw: string) => {
-    // Compact (ghost) cells allow free m/d/yy typing; standalone fields auto-mask.
-    const next = compactFmt ? raw : maskDate(raw);
-    setText(next);
+  // Validate/commit an already-formatted display string (no re-masking).
+  const commitTyped = (next: string) => {
     if (next.trim() === "") {
       setRangeError(null);
       if (!confirmOnEnter) onChange("");
@@ -253,8 +267,142 @@ export function DatePicker({
     }
   };
 
+  const handleTextChange = (raw: string) => {
+    // Compact (ghost) cells allow free m/d/yy typing; standalone fields auto-mask.
+    const next = compactFmt ? raw : maskDate(raw);
+    setText(next);
+    commitTyped(next);
+  };
+
+  // ── Segmented editing (standalone MM/DD/YYYY only) ───────────────────
+  // Locate the section (0=month, 1=day, 2=year) containing a caret offset, and
+  // the [start, end] bounds of each section, by walking the "/" separators.
+  const sectionBounds = (str: string) => {
+    const segs = str.split("/");
+    const bounds: { start: number; end: number }[] = [];
+    let pos = 0;
+    for (const seg of segs) {
+      bounds.push({ start: pos, end: pos + seg.length });
+      pos += seg.length + 1; // +1 for the "/"
+    }
+    return { segs, bounds };
+  };
+  const sectionAt = (str: string, caret: number) => {
+    const { bounds } = sectionBounds(str);
+    for (let i = 0; i < bounds.length; i++) {
+      if (caret <= bounds[i].end) return i;
+    }
+    return bounds.length - 1;
+  };
+  // Select a whole section and mark it "live + fresh" so the next digit replaces it.
+  const selectSection = (idx: number, str = text) => {
+    const { bounds } = sectionBounds(str);
+    const b = bounds[Math.min(idx, bounds.length - 1)];
+    if (!b) return;
+    selRef.current = { sec: idx, fresh: true };
+    requestAnimationFrame(() => inputRef.current?.setSelectionRange(b.start, b.end));
+  };
+
+  // Native-style segment editing: type over month/day/year independently without
+  // reflowing the digit stream or flinging the caret to the end. Returns true when
+  // the key was handled. Only engages for the full MM/DD/YYYY template (2 slashes).
+  const handleSegmentKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): boolean => {
+    if (compactFmt) return false;
+    const el = inputRef.current;
+    if (!el || e.altKey || e.ctrlKey || e.metaKey) return false;
+    const str = text;
+    const parts = str.split("/");
+    if (parts.length !== 3) return false; // not yet a full template — let the mask build it
+
+    const caret = el.selectionStart ?? 0;
+    const caretEnd = el.selectionEnd ?? caret;
+    const sec = sectionAt(str, caret);
+    const live = selRef.current?.sec === sec && selRef.current.fresh;
+    const fresh = caretEnd > caret || live; // a span selection also means "replace"
+
+    const isDigit = /^[0-9]$/.test(e.key);
+    if (isDigit) {
+      e.preventDefault();
+      const segMax = sec === 0 ? 12 : sec === 1 ? 31 : 9999;
+      const segLen = sec === 2 ? 4 : 2;
+      const cur = fresh ? "" : parts[sec];
+      let nextSeg = cur + e.key;
+      // Over-max (e.g. month "1"+"3") — restart the section with the new digit.
+      if (Number(nextSeg) > segMax) nextSeg = e.key;
+
+      let advance = nextSeg.length >= segLen;
+      // Early advance when a second digit could never form a valid value
+      // (month ≥2 → 2x>12, day ≥4 → 4x>31).
+      if (!advance && sec !== 2 && Number(nextSeg) * 10 > segMax) advance = true;
+
+      let caretSec = sec;
+      if (advance && sec !== 2) {
+        nextSeg = nextSeg.padStart(segLen, "0"); // "6" → "06" as we leave the section
+        caretSec = sec + 1;
+      } else if (advance) {
+        caretSec = sec; // year is the last section — stay put at its end
+      }
+      parts[sec] = nextSeg;
+      const newStr = parts.join("/");
+      setText(newStr);
+      commitTyped(newStr);
+
+      const { bounds } = sectionBounds(newStr);
+      if (advance && caretSec < bounds.length && caretSec !== sec) {
+        selRef.current = { sec: caretSec, fresh: true };
+        pendingSelRef.current = [bounds[caretSec].start, bounds[caretSec].end];
+      } else {
+        selRef.current = { sec, fresh: false };
+        const end = bounds[sec].end;
+        pendingSelRef.current = [end, end];
+      }
+      return true;
+    }
+
+    if (e.key === "Backspace") {
+      e.preventDefault();
+      if (!fresh && parts[sec].length > 0) {
+        parts[sec] = parts[sec].slice(0, -1);
+        const newStr = parts.join("/");
+        setText(newStr);
+        commitTyped(newStr);
+        const { bounds } = sectionBounds(newStr);
+        selRef.current = { sec, fresh: false };
+        pendingSelRef.current = [bounds[sec].end, bounds[sec].end];
+      } else if (sec > 0) {
+        selectSection(sec - 1);
+      }
+      return true;
+    }
+
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      const nextSec = e.key === "ArrowLeft" ? Math.max(0, sec - 1) : Math.min(2, sec + 1);
+      selectSection(nextSec);
+      return true;
+    }
+
+    // "/" advances to the next section, like the native date field.
+    if (e.key === "/" || e.key === ":") {
+      e.preventDefault();
+      selectSection(Math.min(2, sec + 1));
+      return true;
+    }
+
+    return false;
+  };
+
+  // On click/focus, select the section under the caret so typing overwrites it.
+  const handleSegmentClick = () => {
+    if (compactFmt) return;
+    const el = inputRef.current;
+    if (!el || el.value.split("/").length !== 3) return;
+    selectSection(sectionAt(el.value, el.selectionStart ?? 0));
+  };
+
   const handleBlur = () => {
     setFocused(false);
+    selRef.current = null;
     if (confirmOnEnter) {
       // Discard the unconfirmed edit and restore the committed value.
       setText(ymdToDisplay(value, compactFmt));
@@ -531,8 +679,16 @@ export function DatePicker({
           placeholder={effectivePlaceholder}
           value={text}
           onChange={(e) => handleTextChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onFocus={() => setFocused(true)}
+          onKeyDown={(e) => {
+            if (handleSegmentKeyDown(e)) return;
+            handleKeyDown(e);
+          }}
+          onClick={handleSegmentClick}
+          onFocus={() => {
+            setFocused(true);
+            // Tab-in: select the month section so typing overwrites (native behavior).
+            if (!compactFmt && text.split("/").length === 3) selectSection(0);
+          }}
           onBlur={(e) => {
             handleBlur();
             if (onDismiss) {
