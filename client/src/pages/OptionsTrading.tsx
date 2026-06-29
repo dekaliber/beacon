@@ -3949,15 +3949,17 @@ const WEEK_MS = 7 * 86_400_000;
 const MAX_CHART_WEEKS = 15;
 
 const MIN_SEG_PX = 1;
-function segVisible(value: number, refPx: number, refValue: number) {
- return value > 0 && refValue > 0 && (value / refValue) * refPx >= MIN_SEG_PX;
+function segVisible(value: number | undefined, refPx: number, refValue: number | undefined) {
+ return value != null && refValue != null && value > 0 && refValue > 0 && (value / refValue) * refPx >= MIN_SEG_PX;
 }
 
 // Props Recharts passes to a <Bar shape> render callback (position + the datum's
 // stacked-segment values). Recharts types this as `any`; we narrow to what we read.
 type BarShapeProps = {
  x: number; y: number; width: number; height: number;
- barCSP: number; barCC: number; barPendCSP: number; barPendCC: number;
+ // Sibling stack values, spread onto shape props by Recharts at runtime but
+ // absent from its static type — optional so the callback stays assignable.
+ barCSP?: number; barCC?: number; barPendCSP?: number; barPendCC?: number;
 };
 
 function PerformanceCharts({
