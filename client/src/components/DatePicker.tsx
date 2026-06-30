@@ -156,6 +156,10 @@ export function DatePicker({
   // range to re-apply after a controlled setText (which would otherwise reset it).
   const selRef = useRef<{ sec: number; fresh: boolean } | null>(null);
   const pendingSelRef = useRef<[number, number] | null>(null);
+  // True when the field was just focused by a pointer, so onFocus defers section
+  // selection to the click handler (which knows where the user clicked) instead
+  // of defaulting to the month. Keyboard (Tab) focus leaves this false.
+  const pointerFocusRef = useRef(false);
 
   const selected = useMemo(() => parseYMD(value), [value]);
   const todayYMD = localToday();
@@ -394,6 +398,7 @@ export function DatePicker({
 
   // On click/focus, select the section under the caret so typing overwrites it.
   const handleSegmentClick = () => {
+    pointerFocusRef.current = false;
     if (compactFmt) return;
     const el = inputRef.current;
     if (!el || el.value.split("/").length !== 3) return;
@@ -403,6 +408,7 @@ export function DatePicker({
   const handleBlur = () => {
     setFocused(false);
     selRef.current = null;
+    pointerFocusRef.current = false;
     if (confirmOnEnter) {
       // Discard the unconfirmed edit and restore the committed value.
       setText(ymdToDisplay(value, compactFmt));
@@ -683,11 +689,17 @@ export function DatePicker({
             if (handleSegmentKeyDown(e)) return;
             handleKeyDown(e);
           }}
+          onMouseDown={() => {
+            pointerFocusRef.current = true;
+          }}
           onClick={handleSegmentClick}
           onFocus={() => {
             setFocused(true);
-            // Tab-in: select the month section so typing overwrites (native behavior).
-            if (!compactFmt && text.split("/").length === 3) selectSection(0);
+            // Tab-in (no pointer): select the month section so typing overwrites
+            // (native behavior). Pointer focus defers to onClick's clicked section.
+            if (!compactFmt && !pointerFocusRef.current && text.split("/").length === 3) {
+              selectSection(0);
+            }
           }}
           onBlur={(e) => {
             handleBlur();
