@@ -395,7 +395,7 @@ pendingDividendRoutes.get("/confirmed/:activityId", async (req, res) => {
 
   const activity = await prisma.investmentActivity.findUnique({
     where: { id: activityId },
-    select: { date: true, amount: true, notes: true },
+    select: { date: true, amount: true, notes: true, pricePerShare: true, shares: true },
   });
   if (!activity) return res.status(404).json({ error: "Activity not found" });
 
@@ -409,8 +409,11 @@ pendingDividendRoutes.get("/confirmed/:activityId", async (req, res) => {
     notes: activity.notes,
     exDate: pending.exDate.toISOString(),
     ticker: pending.ticker,
-    perShareAmount: Number(pending.perShareAmount),
-    sharesAtExDate: Number(pending.sharesAtExDate),
+    // Confirmed per-share/shares live on the activity (the user may have
+    // corrected the Tiingo estimate at confirmation). Fall back to the pending
+    // row's original estimate only if the activity columns are unset.
+    perShareAmount: Number(activity.pricePerShare ?? pending.perShareAmount),
+    sharesAtExDate: Number(activity.shares ?? pending.sharesAtExDate),
   });
 });
 
@@ -630,6 +633,8 @@ pendingDividendRoutes.post("/:id/confirm", async (req, res) => {
     // 3. Mark the pending dividend as confirmed, updating paymentDate to the
     // user-provided date. The original paymentDate was a system estimate
     // (ex-date + 4 days); the date entered at confirmation is the actual one.
+    // The pending row's perShareAmount/sharesAtExDate intentionally retain the
+    // original Tiingo estimate; the user-confirmed values live on the activity.
     const confirmedPending = await tx.pendingDividend.update({
       where: { id },
       data: {
@@ -765,7 +770,9 @@ pendingDividendRoutes.post("/:id/confirm-reinvest", async (req, res) => {
 
     // 5. Mark the pending dividend as confirmed, updating paymentDate to the
     // reinvestment date. For a DRIP the reinvestment date is the economic
-    // equivalent of the cash payment date.
+    // equivalent of the cash payment date. The pending row's
+    // perShareAmount/sharesAtExDate intentionally retain the original Tiingo
+    // estimate; the user-confirmed values live on the activity.
     const confirmedPending = await tx.pendingDividend.update({
       where: { id },
       data: {
