@@ -685,6 +685,11 @@ budgetRoutes.get("/:year/category-outliers", async (req, res) => {
   const curYear  = effectiveToday.getUTCFullYear();
   const curMonth = effectiveToday.getUTCMonth() + 1; // 1-indexed
   const curDay   = effectiveToday.getUTCDate();
+  const daysInCurMonth = new Date(Date.UTC(curYear, curMonth, 0)).getUTCDate();
+  // Once the current month is fully complete, compare it against the previous
+  // month's full range too — clamping to curDay would otherwise drop the tail
+  // end of a longer previous month (e.g. a complete 30-day June vs. 31-day May).
+  const curMonthComplete = curDay === daysInCurMonth;
 
   const comparison = (req.query.comparison as string) ?? "mom";
   let prevMonth: number, prevMonthYear: number, prevDay: number;
@@ -692,12 +697,12 @@ budgetRoutes.get("/:year/category-outliers", async (req, res) => {
     prevMonth     = curMonth;
     prevMonthYear = curYear - 1;
     const daysInPrevMonth = new Date(Date.UTC(curYear - 1, curMonth, 0)).getUTCDate();
-    prevDay = Math.min(curDay, daysInPrevMonth);
+    prevDay = curMonthComplete ? daysInPrevMonth : Math.min(curDay, daysInPrevMonth);
   } else {
     prevMonth     = curMonth === 1 ? 12 : curMonth - 1;
     prevMonthYear = curMonth === 1 ? curYear - 1 : curYear;
     const daysInPrevMonth = new Date(Date.UTC(prevMonthYear, prevMonth, 0)).getUTCDate();
-    prevDay = Math.min(curDay, daysInPrevMonth);
+    prevDay = curMonthComplete ? daysInPrevMonth : Math.min(curDay, daysInPrevMonth);
   }
 
   const curStart  = new Date(Date.UTC(curYear,       curMonth - 1, 1));
@@ -774,7 +779,7 @@ budgetRoutes.get("/:year/category-outliers", async (req, res) => {
     outliers,
     currentMonthLabel:  `${SRV_MONTHS[curMonth - 1]} ${curYear}`,
     previousMonthLabel: `${SRV_MONTHS[prevMonth - 1]} ${prevMonthYear}`,
-    comparisonNote: `Day 1–${curDay}`,
+    comparisonNote: curMonthComplete ? "Full month" : `Day 1–${curDay}`,
     scaleCap,
   });
 });
@@ -829,9 +834,13 @@ budgetRoutes.get("/:year/category-outliers-ytd", async (req, res) => {
     : null;
 
   const prevYear = curYear - 1;
-  // Cap comparison day at the number of days in the same month of prior year
+  // Cap comparison day at the number of days in the same month of prior year,
+  // unless the current month is fully complete — then compare full months so a
+  // shorter current month doesn't truncate a longer prior-year month's tail end.
+  const daysInCurMonth = new Date(Date.UTC(curYear, curMonthIdx + 1, 0)).getUTCDate();
+  const curMonthComplete = curDay === daysInCurMonth;
   const daysInPrevYearMonth = new Date(Date.UTC(prevYear, curMonthIdx + 1, 0)).getUTCDate();
-  const prevDay = Math.min(curDay, daysInPrevYearMonth);
+  const prevDay = curMonthComplete ? daysInPrevYearMonth : Math.min(curDay, daysInPrevYearMonth);
 
   const curStart  = new Date(Date.UTC(curYear,  0, 1));
   const curEnd    = new Date(Date.UTC(curYear,  curMonthIdx, curDay, 23, 59, 59, 999));
