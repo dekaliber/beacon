@@ -58,7 +58,7 @@ export function Categories() {
  if (editing) {
  await updateCategory(editing.id, data);
  } else {
- await createCategory({ ...data, kind: modalKind });
+ await createCategory({ ...data, kind: data.kind ?? modalKind });
  }
  setModalOpen(false);
  setEditing(null);
