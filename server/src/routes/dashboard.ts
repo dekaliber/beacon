@@ -958,11 +958,14 @@ dashboardRoutes.get("/", async (req, res) => {
   const isCurrentMonthReq = year === refDate.getUTCFullYear() && month === refDate.getUTCMonth() + 1;
   const daysInCurMonth    = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const compareDay        = isCurrentMonthReq ? refDate.getUTCDate() : daysInCurMonth;
+  const curMonthComplete  = compareDay === daysInCurMonth;
   const prevMonthYear2    = month === 1 ? year - 1 : year;
   const prevMonthNum2     = month === 1 ? 12 : month - 1;
   const daysInPrevMonth2  = new Date(prevMonthYear2, prevMonthNum2, 0).getDate();
-  // Past months: compare against the full prior month, not just the same day count.
-  const prevCompareDay    = isCurrentMonthReq ? Math.min(compareDay, daysInPrevMonth2) : daysInPrevMonth2;
+  // Past/complete months: compare against the full prior month, not just the
+  // same day count — clamping would drop the tail of a longer prior month
+  // (e.g. a complete 30-day June vs. 31-day May).
+  const prevCompareDay    = (isCurrentMonthReq && !curMonthComplete) ? Math.min(compareDay, daysInPrevMonth2) : daysInPrevMonth2;
 
   const prevMtdStart = new Date(Date.UTC(prevMonthYear2, prevMonthNum2 - 1, 1));
   const prevMtdEnd   = new Date(Date.UTC(prevMonthYear2, prevMonthNum2 - 1, prevCompareDay, 23, 59, 59, 999));
