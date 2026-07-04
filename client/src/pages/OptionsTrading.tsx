@@ -3331,6 +3331,7 @@ interface ClosedPositionsTableProps {
  openSplitGroupIds: Set<string>;
  onEdit: (p: OptionsPosition) => void;
  onDelete: (p: OptionsPosition) => void;
+ tabBarRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 const CLOSED_COL_GROUPS = [
@@ -3339,32 +3340,31 @@ const CLOSED_COL_GROUPS = [
 ] as const;
 type ClosedColGroupKey = (typeof CLOSED_COL_GROUPS)[number]["key"];
 
-function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds, onEdit, onDelete }: ClosedPositionsTableProps) {
+function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds, onEdit, onDelete, tabBarRef }: ClosedPositionsTableProps) {
  const [confirmDelete, setConfirmDelete] = useState<OptionsPosition | null>(null);
  const [openColGroups, setOpenColGroups] = useState<Set<ClosedColGroupKey>>(new Set(["pnl"]));
+ const [tickerSearchQuery, setTickerSearchQuery] = useState(""); // raw input value
+ const [appliedTickerSearch, setAppliedTickerSearch] = useState(""); // committed on Enter
  const tableContainerRef = useRef<HTMLDivElement>(null);
  const theadRef = useRef<HTMLTableSectionElement>(null);
  const portalScrollRef = useRef<HTMLDivElement>(null);
  const [stickyRect, setStickyRect] = useState<{ left: number; width: number; colWidths: number[] } | null>(null);
 
- // Collapse weeks older than the previous week by default.
+ // Collapse every week except the most recent one (by close/expiration date) by default.
  const [collapsedWeeks, setCollapsedWeeks] = useState<Set<string>>(() => {
- const now = new Date();
- const todayDow = now.getUTCDay();
- const thisMonday = new Date(now);
- thisMonday.setUTCDate(now.getUTCDate() - (todayDow === 0 ? 6 : todayDow - 1));
- const prevWeekMonday = new Date(thisMonday);
- prevWeekMonday.setUTCDate(thisMonday.getUTCDate() - 7);
- const threshold = prevWeekMonday.toISOString().slice(0, 10);
- const collapsed = new Set<string>();
+ const weekKeys = new Set<string>();
  for (const p of positions) {
  const closeDateStr = p.closedAt ? p.closedAt.split("T")[0] : p.expirationDate.split("T")[0];
  const d = new Date(closeDateStr +"T00:00:00Z");
  const dow = d.getUTCDay();
  const monday = new Date(d);
  monday.setUTCDate(d.getUTCDate() - (dow === 0 ? 6 : dow - 1));
- const key = monday.toISOString().slice(0, 10);
- if (key < threshold) collapsed.add(key);
+ weekKeys.add(monday.toISOString().slice(0, 10));
+ }
+ const mostRecentWeek = [...weekKeys].sort().at(-1);
+ const collapsed = new Set<string>();
+ for (const key of weekKeys) {
+ if (key !== mostRecentWeek) collapsed.add(key);
  }
  return collapsed;
  });
@@ -3438,6 +3438,14 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  return Number(a.premiumPerShare) - Number(b.premiumPerShare);
  });
 
+ // Ticker search: when active, every week group renders fully expanded
+ // (ignoring collapsedWeeks) showing only the rows matching the ticker.
+ const tickerQuery = appliedTickerSearch.trim().toLowerCase();
+ const searchActive = tickerQuery.length > 0;
+ const filteredSorted = searchActive
+ ? sorted.filter((p) => p.ticker.symbol.toLowerCase().includes(tickerQuery))
+ : sorted;
+
  const outcomeLabel: Record<string, string> = {
  EXPIRED_WORTHLESS:"Expired Worthless",
  CLOSED_EARLY:"Closed Early",
@@ -3510,6 +3518,25 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
 
  return (
  <>
+ {tabBarRef?.current && createPortal(
+ <div className="ml-auto flex items-center gap-2 py-1.5">
+ <div className="relative">
+ <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+ <input
+ type="text"
+ value={tickerSearchQuery}
+ onChange={(e) => { setTickerSearchQuery(e.target.value); if (!e.target.value.trim()) setAppliedTickerSearch(""); }}
+ onKeyDown={(e) => {
+ if (e.key ==="Enter") setAppliedTickerSearch(tickerSearchQuery);
+ if (e.key ==="Escape") { setTickerSearchQuery(""); setAppliedTickerSearch(""); }
+ }}
+ placeholder="Search ticker..."
+ className="h-9 w-44 rounded-md border border-border bg-background pl-8 pr-3 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+ />
+ </div>
+ </div>,
+ tabBarRef.current
+ )}
  <div ref={tableContainerRef} className="overflow-x-auto" onScroll={(e) => { if (portalScrollRef.current) portalScrollRef.current.scrollLeft = e.currentTarget.scrollLeft; }}>
  <table className="w-full text-left border-collapse min-w-[700px]">
  <colgroup>
@@ -3585,7 +3612,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  // Group sorted rows by close week (keyed by Monday of that week).
  // Use closedAt when present; fall back to expirationDate for expired-worthless positions.
  const weekGroups: Array<{ monday: string; label: string; positions: typeof sorted }> = [];
- for (const p of sorted) {
+ for (const p of filteredSorted) {
  const closeDateStr = p.closedAt ? p.closedAt.split("T")[0] : p.expirationDate.split("T")[0];
  const expDay = new Date(closeDateStr +"T00:00:00Z");
  const dow = expDay.getUTCDay(); // 0=Sun … 6=Sat
@@ -3595,7 +3622,8 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  friday.setUTCDate(monday.getUTCDate() + 4);
  const key = monday.toISOString().slice(0, 10);
  const monLabel = monday.toLocaleDateString("en-US", { month:"short", day:"numeric", timeZone:"UTC" });
- const friLabel = friday.toLocaleDateString("en-US", { day:"numeric", timeZone:"UTC" });
+ const crossesMonth = friday.getUTCMonth() !== monday.getUTCMonth();
+ const friLabel = friday.toLocaleDateString("en-US", crossesMonth ? { month:"short", day:"numeric", timeZone:"UTC" } : { day:"numeric", timeZone:"UTC" });
  const year = friday.getUTCFullYear();
  const label =`${monLabel} – ${friLabel}, ${year}`;
  const existing = weekGroups.find((g) => g.monday === key);
@@ -3603,15 +3631,29 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  else weekGroups.push({ monday: key, label, positions: [p] });
  }
 
+ if (searchActive && weekGroups.length === 0) {
+ return [
+ <tr key="no-search-results">
+ <td colSpan={20} className="text-center py-12 tp-caption">
+ No closed positions match "{appliedTickerSearch.trim()}".
+ </td>
+ </tr>,
+ ];
+ }
+
  return weekGroups.flatMap(({ monday, label, positions }) => {
- const isCollapsed = collapsedWeeks.has(monday);
+ const isCollapsed = searchActive ? false : collapsedWeeks.has(monday);
  const weekPnl = positions.reduce((sum, p) => sum + (calcPosition(p).pnl ?? 0), 0);
  return [
- <tr key={`week-${label}`} className="group border-y border-border cursor-pointer hover:bg-muted select-none" onClick={() => toggleWeek(monday)}>
- <td colSpan={5} className="py-1.5 pl-4 sticky left-0 z-[2] group-hover:bg-muted">
+ <tr
+ key={`week-${label}`}
+ className={cn("group border-y border-border select-none", searchActive ?"" :"cursor-pointer hover:bg-muted")}
+ onClick={() => { if (!searchActive) toggleWeek(monday); }}
+ >
+ <td colSpan={5} className={cn("py-1.5 pl-4 sticky left-0 z-[2]", searchActive ?"" :"group-hover:bg-muted")}>
  <div className="flex items-center gap-1.5">
  <SectionLabel as="span" className="text-foreground">{label}</SectionLabel>
- {isCollapsed ? <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" /> : <ChevronUp className="h-3 w-3 text-muted-foreground shrink-0" />}
+ {!searchActive && (isCollapsed ? <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" /> : <ChevronUp className="h-3 w-3 text-muted-foreground shrink-0" />)}
  </div>
  </td>
  <td colSpan={15} className="py-1.5 pr-4 text-right">
@@ -6187,6 +6229,7 @@ export function OptionsTrading() {
  openSplitGroupIds={new Set(openPositions.filter((p) => p.splitGroupId).map((p) => p.splitGroupId as string))}
  onEdit={(p) => setEditCloseModal(p)}
  onDelete={handleDelete}
+ tabBarRef={tabBarRef}
  />
  )}
  </div>
