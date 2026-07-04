@@ -42,6 +42,9 @@ const PAGE_SHORTCUTS: Record<string, ShortcutEntry[]> = {
   "/income": [
     { key: "A", description: "Add income" },
   ],
+  "/options": [
+    { key: "A", description: "Open position" },
+  ],
 };
 
 function KeyboardShortcutsButton() {

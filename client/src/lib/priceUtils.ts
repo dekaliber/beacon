@@ -1,4 +1,5 @@
 import type { InvestmentHolding } from "@/types";
+import { etDateParts, isMarketHolidayYMD } from "./marketHolidays";
 
 // Next 8 PM ET cutoff for stocks/funds — same logic used client and server side.
 export function nextStockCutoff(now: Date): Date {
@@ -17,27 +18,34 @@ export function formatQuantity(value: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 8 });
 }
 
-// Returns a Date representing 8:00 PM Eastern today.
-// Uses the current ET UTC offset (via shortOffset) so DST is handled automatically.
-function cutoffToday8pmET(now: Date): Date {
+// Returns the UTC ms timestamp for a given hour (0-23) ET, on the ET calendar
+// day containing refMs. Uses the current ET UTC offset (via shortOffset) so
+// DST is handled automatically.
+function etTimeOnDay(refMs: number, hour: number): number {
+  const d = new Date(refMs);
   const dateParts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(now);
+  }).formatToParts(d);
 
   const get = (type: string) => dateParts.find((p) => p.type === type)!.value;
 
   const tzPart = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
     timeZoneName: "shortOffset",
-  }).formatToParts(now).find((p) => p.type === "timeZoneName")!.value;
+  }).formatToParts(d).find((p) => p.type === "timeZoneName")!.value;
 
   const offsetMatch = tzPart.match(/GMT([+-])(\d+)/)!;
   const offsetStr = `${offsetMatch[1]}${offsetMatch[2].padStart(2, "0")}:00`;
 
-  return new Date(`${get("year")}-${get("month")}-${get("day")}T20:00:00${offsetStr}`);
+  return new Date(`${get("year")}-${get("month")}-${get("day")}T${String(hour).padStart(2, "0")}:00:00${offsetStr}`).getTime();
+}
+
+// Returns a Date representing 8:00 PM Eastern today.
+function cutoffToday8pmET(now: Date): Date {
+  return new Date(etTimeOnDay(now.getTime(), 20));
 }
 
 // Crypto markets trade 24/7. Refresh crypto prices if they are older than this.
@@ -52,63 +60,58 @@ function currentHourET(now: Date): number {
   );
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// True if the ET calendar day containing refMs is an NYSE trading day
+// (not a weekend, not a market holiday).
+function isTradingDay(refMs: number): boolean {
+  const { year, month, day, dow } = etDateParts(refMs);
+  return dow !== 0 && dow !== 6 && !isMarketHolidayYMD(year, month, day);
+}
+
+// UTC ms timestamp of 5 PM ET (market close) on the ET calendar day containing refMs.
+function etCloseBoundary(refMs: number): number {
+  return etTimeOnDay(refMs, 17);
+}
+
+// Returns the UTC ms timestamp of the most recent NYSE market close (5 PM ET)
+// that has already occurred as of `nowMs`, walking back over weekends and
+// holidays as needed (e.g. a Monday-holiday week resolves back to the
+// preceding Friday's close).
+function mostRecentTradingClose(nowMs: number): number {
+  if (isTradingDay(nowMs) && nowMs >= etCloseBoundary(nowMs)) {
+    return etCloseBoundary(nowMs);
+  }
+  let cursorMs = nowMs - DAY_MS;
+  while (!isTradingDay(cursorMs)) {
+    cursorMs -= DAY_MS;
+  }
+  return etCloseBoundary(cursorMs);
+}
+
 /**
  * Returns true if cached options prices from `lastFetchedAt` are still fresh —
- * i.e. no new trading session has opened since they were captured.
+ * i.e. no new market close has occurred since they were captured, and we're
+ * not currently inside the trading window (where prices are live and should
+ * always be refreshed on load).
  *
- * Rules:
- *  1. The last fetch must have been at or after 5 PM ET on a weekday (post-close).
- *     If it was pre-close or on a weekend, prices are always considered stale.
- *  2. If we are currently on a weekend, markets are closed → still fresh.
- *  3. If we are on the same ET calendar day as the fetch → still fresh.
- *  4. If we are on a later weekday but still before 8 AM ET → still fresh
- *     (pre-market; no new session has started yet).
- *  5. Otherwise (weekday, 8 AM ET or later, different day) → stale; re-fetch.
- *
- * This correctly handles overnight (e.g. fetch Mon 5 PM, check Tue 12 AM),
- * weekends (fetch Fri 5 PM, check Sat/Sun/Mon pre-8 AM), and pre-market
- * mornings without running unnecessary Tradier API calls.
+ * This is anchored to "has a trading-day close happened since the last fetch"
+ * rather than "what day of the week was the last fetch", so it's stable no
+ * matter what day the last fetch itself happened to run on — including a
+ * fetch that ran on a weekend/holiday (e.g. catching up on Friday's close
+ * data on Saturday). Holidays are taken into account via marketHolidays.ts,
+ * so e.g. a Monday holiday correctly pushes "the next trading day" to Tuesday.
  */
 export function optionsPricesAreFresh(lastFetchedAt: Date): boolean {
-  const now = new Date();
-
-  const etInfo = (d: Date) => {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/New_York",
-      weekday: "short",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "numeric",
-      hour12: false,
-    }).formatToParts(d);
-    return {
-      weekday: parts.find((p) => p.type === "weekday")!.value,
-      date: `${parts.find((p) => p.type === "year")!.value}-${parts.find((p) => p.type === "month")!.value}-${parts.find((p) => p.type === "day")!.value}`,
-      hour: parseInt(parts.find((p) => p.type === "hour")!.value, 10),
-    };
-  };
-
-  const fetch = etInfo(lastFetchedAt);
-  const cur   = etInfo(now);
-
-  // Rule 1: fetch must have been post-close on a weekday
-  if (["Sat", "Sun"].includes(fetch.weekday) || fetch.hour < 17) return false;
-
-  // Rule 2: currently a weekend → markets closed, prices still valid
-  if (["Sat", "Sun"].includes(cur.weekday)) return true;
-
-  // Rule 3: same ET calendar day → still in the same post-close window
-  if (fetch.date === cur.date) return true;
-
-  // Rule 4: later weekday but pre-market (before 8 AM ET) → no new session yet
-  return cur.hour < 8;
+  if (isWithinOptionsTradingWindow()) return false;
+  return lastFetchedAt.getTime() >= mostRecentTradingClose(Date.now());
 }
 
 /**
  * Returns true if the current wall-clock time falls within the options trading
- * window: weekdays, 8 AM – 5 PM ET (regular market hours are 9:30 AM – 4 PM,
+ * window: trading days, 8 AM – 5 PM ET (regular market hours are 9:30 AM – 4 PM,
  * with ±1 h buffer for pre/after-market quotes Tradier may have available).
+ * Weekends and NYSE holidays are never within the window.
  *
  * Used to gate automatic page-load quote refreshes on the Options page so we
  * don't burn Tradier API calls on nights, weekends, or holidays when prices
@@ -116,18 +119,9 @@ export function optionsPricesAreFresh(lastFetchedAt: Date): boolean {
  */
 export function isWithinOptionsTradingWindow(): boolean {
   const now = new Date();
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    weekday: "short",
-    hour: "numeric",
-    hour12: false,
-  }).formatToParts(now);
-
-  const weekday = parts.find((p) => p.type === "weekday")!.value; // "Mon"–"Sun"
-  const hour = parseInt(parts.find((p) => p.type === "hour")!.value, 10);
-
-  const isWeekday = !["Sat", "Sun"].includes(weekday);
-  return isWeekday && hour >= 8 && hour < 17;
+  if (!isTradingDay(now.getTime())) return false;
+  const hour = currentHourET(now);
+  return hour >= 8 && hour < 17;
 }
 
 // Returns true if any holding has a stale price and a refresh should be triggered.

@@ -6056,6 +6056,24 @@ export function OptionsTrading() {
  refetchRealizedAssigned();
  };
 
+ // "A" keyboard shortcut to open the "Open Position" modal, matching the
+ // Expenses/Income pages convention.
+ useEffect(() => {
+ const handleKeyDown = (e: KeyboardEvent) => {
+ if (positionModal || closeModal || editCloseModal || confirmDraftModal || settingsModal || importModalOpen) return;
+ const target = e.target as HTMLElement;
+ if (["INPUT","TEXTAREA","SELECT"].includes(target.tagName) || target.isContentEditable) return;
+ if (e.key ==="a" || e.key ==="A") {
+ // Prevent the keystroke from also landing in the modal's
+ // auto-focused ticker field once it mounts.
+ e.preventDefault();
+ setPositionModal("new");
+ }
+ };
+ document.addEventListener("keydown", handleKeyDown);
+ return () => document.removeEventListener("keydown", handleKeyDown);
+ }, [positionModal, closeModal, editCloseModal, confirmDraftModal, settingsModal, importModalOpen]);
+
  const tabClass = (active: boolean) =>
  cn(
 "px-4 py-2 font-medium border-b-2 transition-colors",
