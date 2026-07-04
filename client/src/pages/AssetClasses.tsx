@@ -153,7 +153,7 @@ export function AssetClassesPage() {
  >
  <Target className="h-4 w-4 shrink-0" />
  <span>
- Target allocations sum to{""}
+ Target allocations sum to{" "}
  <strong>{leafTotal.toFixed(1)}%</strong>
  {Math.abs(leafTotal - 100) < 0.1
  ?" — fully allocated!"

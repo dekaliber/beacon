@@ -1381,7 +1381,7 @@ export function Recurring() {
  }
  >
  <p>
- This will stop generating future transfers for{""}
+ This will stop generating future transfers for{" "}
  <span className="font-medium text-foreground">"{archiveTransferTarget?.description}"</span>.
  Past confirmed transfers will not be affected.
  </p>
@@ -1412,7 +1412,7 @@ export function Recurring() {
  }
  >
  <p>
- This will end{""}
+ This will end{" "}
  <span className="font-medium text-foreground">"{archiveTarget?.description}"</span> as
  of today. Future pending instances will be removed, and no new instances will be
  generated. Past recorded expenses will not be affected.
@@ -1465,7 +1465,7 @@ export function Recurring() {
  }
  >
  <p>
- This <em>permanently</em> removes the recurring transaction for{""}
+ This <em>permanently</em> removes the recurring transaction for{" "}
  <span className="font-medium text-foreground">"{deleteTarget?.description}"</span>.
  To gracefully end a series instead, use <em>Archive</em>.
  </p>
@@ -1483,7 +1483,7 @@ export function Recurring() {
  {pastExpenses.length > 0 && (
  <div>
  <p className="mb-1.5 text-xs font-medium text-foreground">
- Past transactions ({pastExpenses.length}) —{""}
+ Past transactions ({pastExpenses.length}) —{" "}
  <span className="font-normal">will be preserved as standalone expenses</span>
  </p>
  <div className="max-h-36 overflow-y-auto rounded-md border border-border divide-y divide-border text-xs">
@@ -1501,7 +1501,7 @@ export function Recurring() {
  {futureExpenses.length > 0 && (
  <div>
  <p className="mb-1.5 text-xs font-medium text-foreground">
- Upcoming instances ({futureExpenses.length}) —{""}
+ Upcoming instances ({futureExpenses.length}) —{" "}
  <span className="font-normal">will be permanently deleted</span>
  </p>
  <div className="max-h-36 overflow-y-auto rounded-md border border-border divide-y divide-border text-xs">
@@ -1578,7 +1578,7 @@ export function Recurring() {
  {/* Group */}
  <div>
  <label className="block text-xs font-medium mb-1">
- Group{""}
+ Group{" "}
  <span className="font-normal text-muted-foreground">(optional)</span>
  </label>
  <input
@@ -1593,7 +1593,7 @@ export function Recurring() {
  {/* End date */}
  <div>
  <label className="block text-xs font-medium mb-1">
- End date{""}
+ End date{" "}
  <span className="font-normal text-muted-foreground">(optional)</span>
  </label>
  <DatePicker
@@ -1603,7 +1603,7 @@ export function Recurring() {
  />
  {endDateIsRetroactive && (
  <p className="mt-1.5 rounded-md bg-warn-soft px-3 py-2 text-xs text-warn-deep">
- This end date is in the past. Any recorded expenses in this series after{""}
+ This end date is in the past. Any recorded expenses in this series after{" "}
  <span className="font-medium">{editForm.endDate}</span> will be permanently
  deleted.
  </p>

@@ -1840,7 +1840,7 @@ function AddManualInvestmentModal({
  <div className="grid grid-cols-2 gap-4">
  <div>
  <label className="block text-xs font-medium mb-1">
- Total Cost{""}
+ Total Cost{" "}
  <span className="font-normal text-muted-foreground">(optional)</span>
  </label>
  <DollarInput value={totalCost} onChange={setTotalCost} placeholder="0.00" />
@@ -3196,7 +3196,7 @@ function ReviewDividendModal({
  <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
  <p>
  Price × shares ({formatCurrency(parseFloat(reinvestPrice) * parseFloat(reinvestQuantity))}) differs
- from the total amount ({formatCurrency(parseFloat(totalAmount))}) by{""}
+ from the total amount ({formatCurrency(parseFloat(totalAmount))}) by{" "}
  {formatCurrency(reinvestDiscrepancy)}. Adjust values as needed.
  </p>
  </div>
@@ -5140,7 +5140,7 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
  <span>
  {result.imported} new transaction{result.imported !== 1 ?"s" :""}
  {result.dividendsImported > 0 &&`, ${result.dividendsImported} dividend${result.dividendsImported !== 1 ?"s" :""}`}
- {""}imported
+ {" "}imported
  {(result.total - result.imported) > 0 &&` · ${result.total - result.imported} transaction${result.total - result.imported !== 1 ?"s" :""} already existed`}
  {result.dividendsSkipped > 0 &&` · ${result.dividendsSkipped} dividend${result.dividendsSkipped !== 1 ?"s" :""} already existed`}
  </span>
@@ -5933,7 +5933,7 @@ export function InvestmentAccount() {
  <SectionLabel className="mb-1">Current Balance</SectionLabel>
  <DisplayStat as="p" className="tp-kpi-l">{formatCurrency(account.balance)}</DisplayStat>
  <p className="tp-fineprint mt-2">
- Cash position — balance managed in{""}
+ Cash position — balance managed in{" "}
  <button className="text-primary underline" onClick={() => navigate("/accounts")}>
  Accounts
  </button>

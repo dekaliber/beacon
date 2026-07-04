@@ -179,7 +179,7 @@ function DayTooltip({
  >
  <span className="truncate max-w-[160px]" style={e.isRecurring ? undefined : { color:"var(--color-muted-foreground)" }}>
  <span className="inline-block w-3 text-center font-medium opacity-70">{e.isJoint ?"J" :"P"}</span>
- {""}{e.vendor}
+ {" "}{e.vendor}
  </span>
  <span className="font-medium whitespace-nowrap">
  {formatCurrency(e.amount)}

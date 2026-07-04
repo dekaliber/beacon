@@ -852,7 +852,7 @@ export function WithdrawalsPage() {
  className="text-primary underline underline-offset-2"
  >
  Configure withdrawal rate settings
- </button>{""}
+ </button>{" "}
  to calculate your withdrawal rate.
  </p>
  )}

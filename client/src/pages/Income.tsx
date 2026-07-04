@@ -1767,7 +1767,7 @@ function ImportModal({
  ?` Category must match one of your income categories (e.g. ${categoryNames.slice(0, 3).join(",")}${categoryNames.length > 3 ?"…" :""}).`
  :" Category must match an existing income category."
  }
- {""}Account name must match an existing Checking, Savings, or Investment account.
+ {" "}Account name must match an existing Checking, Savings, or Investment account.
  Source is optional.
  </p>
  <div>

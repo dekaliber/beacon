@@ -833,7 +833,7 @@ export function TaxEstimatorPage() {
  <Modal
  open={paymentScheduleOpen}
  onClose={() => { saveQuarterlyPayments(); setPaymentScheduleOpen(false); }}
- title={`${useTmt ?"TMT" :""}Payment Schedule · ${year}`}
+ title={`${useTmt ?"TMT " :""}Payment Schedule · ${year}`}
  className="max-w-3xl"
  >
  {(() => {
@@ -958,7 +958,7 @@ export function TaxEstimatorPage() {
  <Modal
  open={caPaymentScheduleOpen}
  onClose={() => { saveQuarterlyPayments(); setCaPaymentScheduleOpen(false); }}
- title={`${useCaTmt ?"CA TMT" :"CA"}Payment Schedule · ${year}`}
+ title={`${useCaTmt ?"CA TMT " :"CA "}Payment Schedule · ${year}`}
  className="max-w-3xl"
  >
  {(() => {

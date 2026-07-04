@@ -414,7 +414,7 @@ function TagModal({ open, onClose, onSave, onDelete, tag }: TagModalProps) {
 
  <div>
  <label className="block text-xs font-medium mb-1">
- Group{""}
+ Group{" "}
  <span className="font-normal text-muted-foreground">(optional)</span>
  </label>
  <input

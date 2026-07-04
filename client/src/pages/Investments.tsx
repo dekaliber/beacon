@@ -524,11 +524,11 @@ function RebalanceModal({
  />
  <p className="tp-caption">
  {rebalanceMode ==="buy-only" ? (
- <>Buy into under-allocated classes until each is within{""}
+ <>Buy into under-allocated classes until each is within{" "}
  <span className="font-medium">{tolerancePct.toFixed(1)}%</span> of target.
  Over-allocated classes are not sold.</>
  ) : (
- <>Buy under-allocated and sell over-allocated classes to bring each within{""}
+ <>Buy under-allocated and sell over-allocated classes to bring each within{" "}
  <span className="font-medium">{tolerancePct.toFixed(1)}%</span> of target.</>
  )}
  </p>
@@ -699,10 +699,10 @@ function AllocationCard({
  </div>
  </div>
  <p className="text-muted-foreground">
- No target allocation configured.{""}
+ No target allocation configured.{" "}
  <Link to="/settings/asset-allocation" className="text-primary underline underline-offset-2">
  Set targets
- </Link>{""}
+ </Link>{" "}
  to see how your portfolio compares.
  </p>
  </Card>
@@ -1410,13 +1410,13 @@ if (!displayAccounts) return <BeaconLoader />;
  <LineChart className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-40" />
  <p className="font-semibold text-lg mb-1">No investment accounts</p>
  <p className="text-muted-foreground">
- Add accounts in{""}
+ Add accounts in{" "}
  <button
  className="text-primary underline"
  onClick={() => navigate("/accounts")}
  >
  Accounts
- </button>{""}
+ </button>{" "}
  to get started.
  </p>
  </Card>
