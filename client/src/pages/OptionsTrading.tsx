@@ -1155,11 +1155,12 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  const [investmentAccountId, setInvestmentAccountId] = useState(position.investmentAccountId ??"");
  const [bankingAccountId, setBankingAccountId] = useState(defaultBankingAccountId ??"");
 
- // Partial close (splitting): allowed for standalone (non-rolled) positions with
- // more than one contract. Rolled-chain legs are excluded — splitting them would
- // break the chain-rollup stats — so they always close the full position.
+ // Partial close (splitting) is allowed whenever a position has more than one
+ // contract, including legs mid roll-chain — the split-off leg is reported as
+ // its own standalone trade rather than folded into the chain's rollup stats.
+ // Partial *rolling* an already-chained leg is still unsupported (see the roll
+ // route), so that combination stays gated below once isRolled is known.
  const isChained = position.groupId != null;
- const showSplit = !isChained && position.contracts > 1;
  const [contractsToClose, setContractsToClose] = useState(position.contracts.toString());
 
  const { data: investmentAccounts } = useApi(() => getInvestmentAccounts(), []);
@@ -1181,6 +1182,9 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  const isExpired = outcome ==="EXPIRED_WORTHLESS";
  const isAssigned = outcome ==="ASSIGNED";
  const isRolled = outcome ==="ROLLED";
+ // Rolling a chained leg only supports a full roll (backend still rejects a
+ // partial roll once groupId is set); every other outcome can split freely.
+ const showSplit = position.contracts > 1 && !(isRolled && isChained);
 
  // On mount: if the option has already expired, fetch the closing price on the
  // expiration date and default to ASSIGNED when the contract finished in-the-money.
@@ -1285,9 +1289,9 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  ROLLED:"CLOSED",
  ASSIGNED:"ASSIGNED",
  };
- // Full close. For a splittable position the"contracts to close" field
- // doubles as the assigned count; for a chained leg the legacy
- // contractsAssigned field is used.
+ // Full close. When splitting is available the"contracts to close" field
+ // doubles as the assigned count; otherwise (single contract, or rolling a
+ // chained leg) the legacy contractsAssigned field is used.
  const assignedCount = isAssigned
  ? (showSplit ? n : (contractsAssigned ? parseInt(contractsAssigned, 10) : null))
  : null;
@@ -1349,8 +1353,9 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  </div>
  </div>
 
- {/* Contracts to close — splitting. Hidden for single-contract and chained
- (rolled) positions, which always act on the full size. */}
+ {/* Contracts to close — splitting. Hidden for single-contract positions,
+ and for rolling a chained leg (partial rolls of an already-rolled
+ position aren't supported), which always act on the full size. */}
  {showSplit && (() => {
  const n = parseInt(contractsToClose, 10);
  const remaining = Number.isInteger(n) ? position.contracts - n : null;
@@ -3906,7 +3911,13 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  )}
 
  {confirmDelete && createPortal((() => {
- const isUndo = confirmDelete.splitGroupId != null && confirmDelete.groupId == null && openSplitGroupIds.has(confirmDelete.splitGroupId);
+ // "Undo split" applies to a split-off leg whose still-open sibling remains
+ // (splitGroupId present in the open set). Two shapes: a standalone split leg
+ // (no groupId), or the terminal leg of a spun-off clone chain (has a chain
+ // summary). Intermediate rolled clone legs fall through to a plain delete.
+ const isUndo = confirmDelete.splitGroupId != null
+ && openSplitGroupIds.has(confirmDelete.splitGroupId)
+ && (confirmDelete.groupId == null || chainSummaryByFinalLegId.has(confirmDelete.id));
  const n = confirmDelete.contractsAssigned ?? confirmDelete.contracts;
  return (
  <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">

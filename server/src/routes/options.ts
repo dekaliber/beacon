@@ -859,8 +859,21 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
 
 // Partial close: split N contracts off an OPEN position into a new closed leg,
 // leaving the remainder open. Supports EXPIRED_WORTHLESS / CLOSED_EARLY / ASSIGNED.
-// Rolls go through the roll endpoint (which opens a replacement leg). Splitting a
-// position that is already part of a roll chain is rejected (see below).
+// Rolls go through the roll endpoint (which opens a replacement leg).
+//
+// Two code paths, chosen by whether the position is part of a roll chain:
+//  • Standalone (no groupId): shrink the original, spin off one closed leg.
+//  • Chained (groupId set): clone the ENTIRE chain into a fresh group, scaled to
+//    N contracts, and close that clone's final leg. Every original leg shrinks
+//    by N, so both the shrunken original chain and the spun-off clone chain stay
+//    internally uniform (all legs same contract count) — which every chain-rollup
+//    stat relies on. Because the slice is a real chain, it inherits the prior
+//    rolls' premium: its P&L is (chain net premium − close cost) per share, not
+//    just the final leg's economics.
+//
+// Fee policy (both paths): all pre-existing fees stay on the originals; the
+// spun-off leg carries only the freshly-entered close fee. Keeps per-share
+// premium math clean and conserves total fees across the split.
 const partialCloseSchema = z.object({
   contracts: z.coerce.number().int().positive(),
   outcome: z.enum(["EXPIRED_WORTHLESS", "CLOSED_EARLY", "ASSIGNED"]),
@@ -893,35 +906,97 @@ optionsRoutes.post("/positions/:id/partial-close", async (req, res) => {
   });
   if (!original) return res.status(404).json({ error: "Position not found or already closed" });
 
-  // Splitting a leg that participates in a roll chain would break the chain-rollup
-  // stats (which assume every leg shares one contract count and one final outcome).
-  // Rare in practice; disallow for now and require a full-position action instead.
-  if (original.groupId) {
-    return res.status(409).json({ error: "Cannot partially close a rolled position. Close or roll the full position instead." });
-  }
   if (n >= original.contracts) {
     return res.status(409).json({ error: "Use a full close when closing all contracts." });
   }
 
-  const newLeg = await prisma.$transaction(async (tx) => {
-    // Stamp a split group on the original the first time it is split so all
-    // siblings (and the shrinking original) can be grouped in the UI.
-    const splitGroupId = original.splitGroupId ?? `split_${original.id}`;
-    if (!original.splitGroupId) {
-      await tx.optionsPosition.update({
-        where: { id: original.id },
-        data: { splitGroupId },
+  // Close-side fields for the leg that actually closes (the final leg of the
+  // split). Identical for both the standalone and chained paths.
+  const closeData = {
+    status: OUTCOME_STATUS[outcome],
+    outcome,
+    closedAt: outcome === "EXPIRED_WORTHLESS" ? null : closedAt ? new Date(closedAt) : new Date(),
+    closePremiumPerShare: outcome === "ASSIGNED" ? null : closePremiumPerShare ?? null,
+    feesClose: feesClose ?? null,
+    contractsAssigned: outcome === "ASSIGNED" ? n : null,
+    stockPriceAtClose: outcome === "ASSIGNED" ? stockPriceAtClose ?? null : null,
+  };
+
+  const newLeg = await prisma.$transaction(async (tx): Promise<ClosedPositionWithRelations> => {
+    if (original.groupId) {
+      // ── Chained: clone the whole roll chain (scaled to N) into a new group ──
+      const chainLegs = await tx.optionsPosition.findMany({
+        where: { groupId: original.groupId, isActive: true },
+        orderBy: { sequenceInGroup: "asc" },
       });
+      // Shared split group ties the shrunken original chain to the spun-off clone
+      // so the UI can relate them (and offer an "undo split"). Keyed on the chain.
+      const splitGroupId = original.splitGroupId ?? `split_${original.groupId}`;
+      const newGroup = await tx.optionsPositionGroup.create({ data: { userId } });
+
+      let finalClone: ClosedPositionWithRelations | undefined;
+      for (const leg of chainLegs) {
+        // Shrink the original leg; stamp the split group (idempotent).
+        await tx.optionsPosition.update({
+          where: { id: leg.id },
+          data: { contracts: leg.contracts - n, splitGroupId },
+        });
+
+        const isFinal = leg.id === original.id;
+        const clone = await tx.optionsPosition.create({
+          data: {
+            userId,
+            tickerId: leg.tickerId,
+            groupId: newGroup.id,
+            sequenceInGroup: leg.sequenceInGroup,
+            splitGroupId,
+            optionType: leg.optionType,
+            side: leg.side,
+            strikePrice: leg.strikePrice,
+            expirationDate: leg.expirationDate,
+            openedAt: leg.openedAt,
+            contracts: n,
+            premiumPerShare: leg.premiumPerShare,
+            feesOpen: null,
+            shareCostBasis: leg.shareCostBasis,
+            stockPriceAtOpen: leg.stockPriceAtOpen,
+            deltaAtOpen: leg.deltaAtOpen,
+            deltaAtOpenCapturedAt: leg.deltaAtOpenCapturedAt,
+            assignedFromStrikePrice: leg.assignedFromStrikePrice,
+            assignedFromExpirationDate: leg.assignedFromExpirationDate,
+            investmentAccountId: isFinal
+              ? (outcome === "ASSIGNED" ? (investmentAccountId ?? leg.investmentAccountId) : leg.investmentAccountId)
+              : leg.investmentAccountId,
+            bankingAccountId: isFinal ? (bankingAccountId ?? null) : null,
+            // Prior (already-rolled) legs copy their existing close terms; the
+            // final leg takes the freshly-entered close details.
+            ...(isFinal ? closeData : {
+              status: leg.status,
+              outcome: leg.outcome,
+              closedAt: leg.closedAt,
+              closePremiumPerShare: leg.closePremiumPerShare,
+              feesClose: null,
+              contractsAssigned: leg.contractsAssigned,
+              stockPriceAtClose: leg.stockPriceAtClose,
+            }),
+          },
+          include: { ticker: true, group: true, pendingBuy: true, pendingSale: true },
+        });
+        if (isFinal) finalClone = clone;
+      }
+      return finalClone!;
     }
 
-    // Reduce the original to the remaining open contracts. Per design, all open
-    // fees stay on the original (no proration); the new leg carries feesOpen=null.
+    // ── Standalone: shrink the original, spin off one closed leg ──
+    const splitGroupId = original.splitGroupId ?? `split_${original.id}`;
+    if (!original.splitGroupId) {
+      await tx.optionsPosition.update({ where: { id: original.id }, data: { splitGroupId } });
+    }
     await tx.optionsPosition.update({
       where: { id: original.id },
       data: { contracts: original.contracts - n },
     });
 
-    // Spin off the closed leg, copying the original's open-side terms.
     return tx.optionsPosition.create({
       data: {
         userId,
@@ -943,14 +1018,7 @@ optionsRoutes.post("/positions/:id/partial-close", async (req, res) => {
         assignedFromExpirationDate: original.assignedFromExpirationDate,
         investmentAccountId: outcome === "ASSIGNED" ? (investmentAccountId ?? original.investmentAccountId) : original.investmentAccountId,
         bankingAccountId: bankingAccountId ?? null,
-        // Close fields
-        status: OUTCOME_STATUS[outcome],
-        outcome,
-        closedAt: outcome === "EXPIRED_WORTHLESS" ? null : closedAt ? new Date(closedAt) : new Date(),
-        closePremiumPerShare: outcome === "ASSIGNED" ? null : closePremiumPerShare ?? null,
-        feesClose: feesClose ?? null,
-        contractsAssigned: outcome === "ASSIGNED" ? n : null,
-        stockPriceAtClose: outcome === "ASSIGNED" ? stockPriceAtClose ?? null : null,
+        ...closeData,
       },
       include: { ticker: true, group: true, pendingBuy: true, pendingSale: true },
     });
@@ -1154,17 +1222,39 @@ optionsRoutes.delete("/positions/:id", async (req, res) => {
   });
   if (!leg) return res.status(404).json({ error: "Not found" });
 
-  // A closed split leg is "undone" by returning its contracts to the still-open
-  // original in the same split group and removing its accounting side-effects.
-  // Excludes rolled-off legs (groupId set): those have a downstream replacement
-  // in their roll chain, so a merge-back would orphan it — they delete plainly.
-  const mergeTarget = leg.splitGroupId && leg.status !== "OPEN" && !leg.groupId
+  // A closed split leg is "undone" by returning its N contracts to the still-open
+  // sibling it was split from, then removing its accounting side-effects. The
+  // still-open sibling is found via the shared splitGroupId. Two shapes:
+  //  • Standalone split → `leg` has no chain; sibling is a single open leg.
+  //  • Chained split → `leg` is the terminal leg (outcome !== ROLLED) of a
+  //    spun-off clone chain; sibling is the still-open ORIGINAL chain (a
+  //    different, non-null group). Undo restores N to every leg of that chain
+  //    and tears down the whole clone chain.
+  //
+  // The two lookups are kept distinct — never a single findFirst on splitGroupId
+  // alone — because a chain born from a partial *roll* shares its splitGroupId
+  // with the standalone position it rolled off of, so an unqualified match could
+  // return the wrong sibling. The chained lookup pins groupId (not null, not this
+  // leg's own group); the standalone lookup only runs when `leg` has no group.
+  const splittable = !!leg.splitGroupId && leg.status !== "OPEN";
+
+  const chainUndoSibling = splittable && leg.groupId != null && leg.outcome !== "ROLLED"
     ? await prisma.optionsPosition.findFirst({
-        where: { userId, splitGroupId: leg.splitGroupId, status: "OPEN", isActive: true },
+        where: {
+          userId, splitGroupId: leg.splitGroupId!, status: "OPEN", isActive: true,
+          groupId: { not: null }, NOT: { groupId: leg.groupId },
+        },
+      })
+    : null;
+  const isChainUndo = chainUndoSibling != null;
+
+  const mergeTarget = splittable && leg.groupId == null
+    ? await prisma.optionsPosition.findFirst({
+        where: { userId, splitGroupId: leg.splitGroupId!, status: "OPEN", isActive: true },
       })
     : null;
 
-  if (mergeTarget) {
+  if (mergeTarget || isChainUndo) {
     // Refuse to silently undo an assignment that has already been converted into a
     // lot — the user must revert that downstream record first.
     if (leg.pendingBuy && leg.pendingBuy.status !== "PENDING") {
@@ -1175,8 +1265,33 @@ optionsRoutes.delete("/positions/:id", async (req, res) => {
     }
   }
 
+  let returnedContracts = 0;
   await prisma.$transaction(async (tx) => {
+    if (chainUndoSibling) {
+      const n = leg.contracts; // clone chains are uniform: every leg holds N
+      returnedContracts = n;
+      // Return N contracts to every leg of the still-open original chain.
+      const siblingLegs = await tx.optionsPosition.findMany({
+        where: { groupId: chainUndoSibling.groupId!, isActive: true },
+      });
+      for (const s of siblingLegs) {
+        await tx.optionsPosition.update({ where: { id: s.id }, data: { contracts: s.contracts + n } });
+      }
+      // Tear down the spun-off clone chain and its accounting side-effects.
+      const cloneLegs = await tx.optionsPosition.findMany({
+        where: { groupId: leg.groupId!, isActive: true },
+      });
+      await tx.income.deleteMany({ where: { optionsPositionId: { in: cloneLegs.map((l) => l.id) } } });
+      if (leg.pendingBuy) await tx.pendingBuy.delete({ where: { id: leg.pendingBuy.id } });
+      if (leg.pendingSale) await tx.pendingSale.delete({ where: { id: leg.pendingSale.id } });
+      for (const cl of cloneLegs) {
+        await tx.optionsPosition.update({ where: { id: cl.id }, data: { isActive: false } });
+      }
+      return;
+    }
+
     if (mergeTarget) {
+      returnedContracts = leg.contracts;
       await tx.optionsPosition.update({
         where: { id: mergeTarget.id },
         data: { contracts: mergeTarget.contracts + leg.contracts },
@@ -1194,7 +1309,7 @@ optionsRoutes.delete("/positions/:id", async (req, res) => {
     });
   });
 
-  res.json({ merged: mergeTarget != null, returnedContracts: mergeTarget ? leg.contracts : 0 });
+  res.json({ merged: mergeTarget != null || isChainUndo, returnedContracts });
 });
 
 // ── Stock Quote (Tradier) ──────────────────────────────────────────────────────
