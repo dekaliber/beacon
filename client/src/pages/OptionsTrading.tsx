@@ -2889,9 +2889,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <>
  <td className={cn(ctd,"border-l border-border/50")}>
  {chainNet != null && (
- isExpired
- ? <span className={cn(chainNet >= 0 ?"text-up" :"text-down")}>{chainNet >= 0 ?"+" :"−"}${fmtUSD(Math.abs(chainNet))}</span>
- : <span className="text-muted-foreground">${fmtUSD(Math.abs(chainNet))}</span>
+ <span className="text-muted-foreground">${fmtUSD(Math.abs(chainNet))}</span>
  )}
  </td>
  <td className={ctd} />
@@ -2906,9 +2904,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  ) : (
  <td className={cn(ctd,"border-l border-border/50")}>
  {chainNet != null && (
- isExpired
- ? <span className={cn(chainNet >= 0 ?"text-up" :"text-down")}>{chainNet >= 0 ?"+" :"−"}${fmtUSD(Math.abs(chainNet))}</span>
- : <span className="text-muted-foreground">${fmtUSD(Math.abs(chainNet))}</span>
+ <span className="text-muted-foreground">${fmtUSD(Math.abs(chainNet))}</span>
  )}
  </td>
  )}
