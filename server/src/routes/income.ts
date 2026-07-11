@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { getUserId } from "../middleware/auth.js";
+import { parseLocalDate } from "../lib/localDate.js";
 
 export const incomeRoutes = Router();
 
@@ -55,7 +56,7 @@ const incomeSchema = z.object({
   amount: z.number().positive(),
   categoryId: z.string().optional(),
   source: z.string().optional(),
-  date: z.string().transform((s) => new Date(s)),
+  date: z.string().transform((s) => parseLocalDate(s)),
   notes: z.string().optional(),
   accountId: z.string(),
   tagIds: z.array(z.string()).optional(),
@@ -107,7 +108,7 @@ incomeRoutes.get("/", async (req, res) => {
   if (req.query.startDate || req.query.endDate) {
     where.date = {
       ...(req.query.startDate ? { gte: new Date(req.query.startDate as string) } : {}),
-      ...(req.query.endDate ? { lte: new Date(req.query.endDate as string) } : {}),
+      ...(req.query.endDate ? { lte: new Date((req.query.endDate as string) + "T23:59:59.999Z") } : {}),
     };
   }
 
@@ -344,7 +345,7 @@ const importRowSchema = z.object({
   amount: z.number().positive("Amount must be positive"),
   categoryId: z.string().optional(),
   source: z.string().optional(),
-  date: z.string().transform((s) => new Date(s)),
+  date: z.string().transform((s) => parseLocalDate(s)),
   accountId: z.string(),
 });
 

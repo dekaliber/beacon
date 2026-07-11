@@ -4,6 +4,7 @@ import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { generateUpcomingExpenses, computeNextOccurrence } from "./recurrence.js";
 import { getUserId } from "../middleware/auth.js";
+import { parseLocalDate } from "../lib/localDate.js";
 
 export const expenseRoutes = Router();
 
@@ -13,7 +14,7 @@ const expenseSchema = z.object({
   amount: z.number().refine((v) => v !== 0, "Amount cannot be zero"),
   description: z.string().min(1),
   vendor: z.string(),
-  date: z.string().transform((s) => new Date(s)),
+  date: z.string().transform((s) => parseLocalDate(s)),
   notes: z.string().optional(),
   categoryId: z.string().nullable().optional(),
   accountId: z.string(),
@@ -92,7 +93,7 @@ expenseRoutes.get("/", async (req, res) => {
   if (req.query.startDate || req.query.endDate) {
     where.date = {
       ...(req.query.startDate ? { gte: new Date(req.query.startDate as string) } : {}),
-      ...(req.query.endDate ? { lte: new Date(req.query.endDate as string) } : {}),
+      ...(req.query.endDate ? { lte: new Date((req.query.endDate as string) + "T23:59:59.999Z") } : {}),
     };
   }
 
@@ -404,7 +405,7 @@ const importRowSchema = z.object({
   amount: z.number().refine((v) => v !== 0, "Amount cannot be zero"),
   description: z.string().min(1),
   vendor: z.string().min(1),
-  date: z.string().transform((s) => new Date(s)),
+  date: z.string().transform((s) => parseLocalDate(s)),
   categoryId: z.string().nullable().optional(),
   accountId: z.string(),
 });
