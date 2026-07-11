@@ -305,7 +305,7 @@ expenseRoutes.get("/vendor-category", async (req, res) => {
   const today = (req.query.today as string) || new Date().toISOString().slice(0, 10);
   const groups = await prisma.expense.groupBy({
     by: ["categoryId"],
-    where: { account: { userId }, vendor: { equals: vendor, mode: "insensitive" }, date: { lte: new Date(today) }, categoryId: { not: null } },
+    where: { account: { userId }, vendor: { equals: vendor, mode: "insensitive" }, date: { lte: new Date(today + "T23:59:59.999Z") }, categoryId: { not: null } },
     _count: { categoryId: true },
     orderBy: { _count: { categoryId: "desc" } },
     take: 1,
@@ -321,7 +321,7 @@ expenseRoutes.get("/vendor-account", async (req, res) => {
 
   const today = (req.query.today as string) || new Date().toISOString().slice(0, 10);
   const expense = await prisma.expense.findFirst({
-    where: { account: { userId }, vendor: { equals: vendor, mode: "insensitive" }, date: { lte: new Date(today) } },
+    where: { account: { userId }, vendor: { equals: vendor, mode: "insensitive" }, date: { lte: new Date(today + "T23:59:59.999Z") } },
     orderBy: { date: "desc" },
     select: { accountId: true },
   });
