@@ -1453,7 +1453,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  Investment Account <span className="text-muted-foreground font-normal">{accountLabel}</span>
  </label>
  {lotLocked ? (
- <div className="rounded-md border border-border bg-muted px-3 py-2 text-foreground">
+ <div className="rounded-md border border-border bg-muted px-3 py-2 text-13 text-foreground">
  {eligible.find((a) => a.id === investmentAccountId)?.name ??"—"}
  <span className="ml-2 text-xs text-muted-foreground">(linked via assigned lot)</span>
  </div>
@@ -1842,7 +1842,7 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
  Investment Account <span className="text-muted-foreground font-normal">{accountLabel}</span>
  </label>
  {lotLocked ? (
- <div className="rounded-md border border-border bg-muted px-3 py-2 text-foreground">
+ <div className="rounded-md border border-border bg-muted px-3 py-2 text-13 text-foreground">
  {eligible.find((a) => a.id === investmentAccountId)?.name ??"—"}
  <span className="ml-2 text-xs text-muted-foreground">(linked via assigned lot)</span>
  </div>
