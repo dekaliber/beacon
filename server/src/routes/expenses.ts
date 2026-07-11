@@ -187,7 +187,10 @@ expenseRoutes.get("/", async (req, res) => {
       params.push(req.query.startDate as string);
     }
     if (req.query.endDate) {
-      conds.push(`e.date <= $${p++}::timestamp`);
+      // End-of-day inclusive: records are stored at local (Pacific) midnight
+      // (07:00/08:00Z), so a bare `<= endDate::timestamp` (UTC midnight) would
+      // drop everything dated on the endDate itself.
+      conds.push(`e.date < ($${p++}::date + interval '1 day')`);
       params.push(req.query.endDate as string);
     }
 
