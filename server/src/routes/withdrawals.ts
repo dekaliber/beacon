@@ -210,10 +210,15 @@ withdrawalRoutes.get("/summary", async (req, res) => {
         ...(interestId ? [{ categoryId: interestId }] : []),
         // Cap Gains Distribution
         ...(capGainsDivId ? [{ categoryId: capGainsDivId }] : []),
-        // Sale proceeds to banking account
+        // Sale proceeds to banking account. Exclude options-premium income, which is
+        // also subtype CAPITAL_GAIN (short-term) and often lands in a cash account but
+        // is not a stock-sale withdrawal. Options premium is identified by a linked
+        // optionsPositionId OR the "Options Premium" category (the latter also covers
+        // historical rows with no leg link); real sale proceeds have neither.
         {
           subtype: "CAPITAL_GAIN" as const,
           account: { type: { in: ["CHECKING", "SAVINGS"] } },
+          NOT: { OR: [{ optionsPositionId: { not: null } }, { category: { name: "Options Premium" } }] },
         },
         // Return of capital
         { subtype: "RETURN_OF_CAPITAL" as const },
@@ -306,7 +311,8 @@ withdrawalRoutes.get("/", async (req, res) => {
           : []),
         ...(interestId ? [{ categoryId: interestId }] : []),
         ...(capGainsDivId ? [{ categoryId: capGainsDivId }] : []),
-        { subtype: "CAPITAL_GAIN" as const, account: { type: { in: ["CHECKING", "SAVINGS"] } } },
+        // Sale proceeds to banking account (exclude options premium — see /summary above).
+        { subtype: "CAPITAL_GAIN" as const, account: { type: { in: ["CHECKING", "SAVINGS"] } }, NOT: { OR: [{ optionsPositionId: { not: null } }, { category: { name: "Options Premium" } }] } },
         { subtype: "RETURN_OF_CAPITAL" as const },
       ],
     },

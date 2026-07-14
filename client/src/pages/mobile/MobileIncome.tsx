@@ -471,9 +471,12 @@ function IncomeRow({
           {income.subtype === "DIVIDEND" && (
             <span className="shrink-0 rounded-full px-1.5 py-0.5 text-10 font-medium bg-violet-soft text-violet-deep">Dividend</span>
           )}
-          {income.subtype === "CAPITAL_GAIN" && (
-            <span className="shrink-0 rounded-full px-1.5 py-0.5 text-10 font-medium bg-blue-soft text-blue-deep">Sale</span>
-          )}
+          {(() => {
+            const isOptions = income.optionsPositionId != null || income.category?.name === "Options Premium";
+            if (isOptions) return <span className="shrink-0 rounded-full px-1.5 py-0.5 text-10 font-medium bg-teal-soft text-teal-deep">Options</span>;
+            if (income.subtype === "CAPITAL_GAIN") return <span className="shrink-0 rounded-full px-1.5 py-0.5 text-10 font-medium bg-blue-soft text-blue-deep">Sale</span>;
+            return null;
+          })()}
         </div>
         <span className={`shrink-0 font-semibold ${!upcoming && income.isCashReceived ? "text-up" : "text-muted-foreground"}`}>
           +{formatCurrency(income.amount)}
