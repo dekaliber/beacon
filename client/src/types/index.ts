@@ -154,6 +154,7 @@ export interface Income {
   taxableAmount: string | null;
   isCashReceived: boolean;
   activityId: string | null;
+  optionsPositionId: string | null;
   account: Account;
   tags: IncomeTag[];
   transactionGroup: TransactionGroup | null;

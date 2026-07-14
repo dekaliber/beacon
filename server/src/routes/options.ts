@@ -82,16 +82,28 @@ async function applyCloseSideEffects(
     });
   }
 
-  // If a PENDING buy already exists but the investment account changed, redirect it to the new account.
+  // Keep a still-PENDING buy in sync with the position while it awaits confirmation:
+  // refresh the derived cost basis, quantity, acquired date, and account from the
+  // (possibly edited) position — e.g. a fee/premium correction made via "Edit Position
+  // Details". Once the buy is confirmed into a lot the basis is committed and is NOT
+  // touched here; adjust it directly on the lot (PUT /investments/lots/:id) if needed.
   if (
     updated.pendingBuy &&
     updated.pendingBuy.status === "PENDING" &&
-    updated.investmentAccountId &&
-    updated.pendingBuy.accountId !== updated.investmentAccountId
+    updated.investmentAccountId
   ) {
+    const shares = (updated.contractsAssigned ?? updated.contracts) * 100;
+    const totalFees = (Number(updated.feesOpen) || 0) + (Number(updated.feesClose) || 0);
+    const costPerShare =
+      Number(updated.strikePrice) - Number(updated.premiumPerShare) + totalFees / shares;
     await prisma.pendingBuy.update({
       where: { id: updated.pendingBuy.id },
-      data: { accountId: updated.investmentAccountId },
+      data: {
+        accountId: updated.investmentAccountId,
+        quantity: shares,
+        costPerShare: Math.max(0, costPerShare),
+        acquiredDate: updated.closedAt ?? updated.expirationDate,
+      },
     });
   }
 
@@ -127,25 +139,40 @@ async function applyCloseSideEffects(
     });
   }
 
-  // If a PENDING sale already exists but the investment account changed, redirect it.
+  // Keep a still-PENDING sale in sync with the position while it awaits confirmation:
+  // refresh the derived sale price (amount realized/share), quantity, date, and account
+  // from the (possibly edited) position. Once the sale is confirmed into a SALE activity
+  // the realized gain is committed and is NOT touched here.
   if (
     updated.pendingSale &&
     updated.pendingSale.status === "PENDING" &&
-    updated.investmentAccountId &&
-    updated.pendingSale.accountId !== updated.investmentAccountId
+    updated.investmentAccountId
   ) {
+    const shares = (updated.contractsAssigned ?? updated.contracts) * 100;
+    const totalFees = (Number(updated.feesOpen) || 0) + (Number(updated.feesClose) || 0);
+    const pricePerShare =
+      Number(updated.strikePrice) + Number(updated.premiumPerShare) - totalFees / shares;
     await prisma.pendingSale.update({
       where: { id: updated.pendingSale.id },
-      data: { accountId: updated.investmentAccountId },
+      data: {
+        accountId: updated.investmentAccountId,
+        quantity: shares,
+        pricePerShare: Math.max(0, pricePerShare),
+        saleDate: updated.expirationDate,
+      },
     });
   }
 
-  // Auto-create an Income record for income-generating close outcomes
+  // Sync the "Options Premium" Income record for income-generating close outcomes.
+  // Note we do NOT gate on bankingAccountId here: an already-linked income row must
+  // re-sync whenever the position's economics change (e.g. correcting open/close fees
+  // via "Edit Position Details", which sends no bankingAccountId) — otherwise the row's
+  // amount/taxableAmount silently drift from the position. A banking account is only
+  // required to *create* a brand-new income row (see the create branch below).
   if (
-    bankingAccountId &&
-    (updated.outcome === "EXPIRED_WORTHLESS" ||
-      updated.outcome === "CLOSED_EARLY" ||
-      updated.outcome === "ASSIGNED")
+    updated.outcome === "EXPIRED_WORTHLESS" ||
+    updated.outcome === "CLOSED_EARLY" ||
+    updated.outcome === "ASSIGNED"
   ) {
     // Helper: net premium for a single position leg
     const legNet = (pos: {
@@ -201,10 +228,20 @@ async function applyCloseSideEffects(
       const closeDay = new Date(Date.UTC(rawDate.getUTCFullYear(), rawDate.getUTCMonth(), rawDate.getUTCDate()));
       const incomeDate = nextBusinessDay(closeDay);
 
-      // Assigned premiums fold into cost basis (puts) or sale proceeds (calls),
-      // so they are not independently taxable — zero out taxableAmount to exclude
-      // them from the Tax Estimator while preserving the income record for cash-flow tracking.
-      const taxableAmount = updated.outcome === "ASSIGNED" ? 0 : netAmount;
+      // Option premium is short-term capital gain/loss for a retail writer (IRS
+      // Pub 550): writing an option that expires worthless, or closing/rolling a
+      // written option, realizes STCG/STCL regardless of holding period. So the
+      // income record is booked as CAPITAL_GAIN below, not ordinary income.
+      //
+      // The lone exception is the *assigned* leg: its premium folds into the stock
+      // leg instead (reduces cost basis for puts, increases sale proceeds for calls)
+      // and surfaces as capital gain on the sale — so we exclude only that leg's own
+      // net premium from taxableAmount. Intermediate rolled/closed legs in the chain
+      // (bought to close at a gain or loss) remain independently taxable; zeroing the
+      // whole chain would silently drop those roll gains/losses from the estimator.
+      const taxableAmount = updated.outcome === "ASSIGNED"
+        ? round2(netAmount - legNet(updated))
+        : netAmount;
 
       // Sync key: the stable optionsPositionId FK. Fall back to a legacy match by
       // clean source + amount (only on rows not yet linked) so any position whose
@@ -223,11 +260,25 @@ async function applyCloseSideEffects(
       }
 
       if (existingIncome) {
+        // Re-sync the linked row. Keep its existing account unless the caller
+        // supplied a new bankingAccountId (accountId is non-nullable, so never
+        // overwrite it with null when editing position details).
         await prisma.income.update({
           where: { id: existingIncome.id },
-          data: { amount: netAmount, taxableAmount, accountId: bankingAccountId, source, optionsPositionId: updated.id },
+          data: {
+            amount: netAmount,
+            taxableAmount,
+            subtype: "CAPITAL_GAIN",
+            taxClassification: "CAPITAL_GAIN",
+            accountId: bankingAccountId ?? existingIncome.accountId,
+            source,
+            optionsPositionId: updated.id,
+          },
         });
-      } else {
+      } else if (bankingAccountId) {
+        // Only create a new row when we have an account to attach it to. Without
+        // one (e.g. a position-details edit on a position that never had its
+        // premium banked), there is nothing to create and nothing to update.
         await prisma.income.create({
           data: {
             amount: netAmount,
@@ -235,7 +286,8 @@ async function applyCloseSideEffects(
             source,
             date: incomeDate,
             accountId: bankingAccountId,
-            taxClassification: "ORDINARY",
+            subtype: "CAPITAL_GAIN",
+            taxClassification: "CAPITAL_GAIN",
             taxableAmount,
             optionsPositionId: updated.id,
           },

@@ -4,6 +4,7 @@ import { ArrowLeft, CalendarCheck2, Check, ChevronLeft, ChevronRight, ChevronDow
 import { Card } from"@/components/Card";
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
+import { Tooltip } from"@/components/Tooltip";
 import { useApi } from"@/hooks/useApi";
 import { getIncome, getAllGainSnapshots, getTaxAssumptions, updateTaxAssumptions, updateTaxQuarterlyPayments, getDataRange } from"@/api";
 import { formatCurrency, formatDate, parseAmount } from"@/lib/utils";
@@ -205,6 +206,13 @@ function getCapGainSplit(income: Income): CapGainSplit {
  collectibleLtcg: isCollectible ? ltcgRaw : 0,
  };
  }
+ // Option-premium income carries no linked investment activity, but writing/closing
+ // equity options is always short-term for a retail writer (IRS Pub 550). Detect it
+ // by the options link or the dedicated "Options Premium" category (the latter also
+ // covers historical rows not yet linked to a position leg) and book the taxable
+ // amount (signed; roll losses are negative) as STCG so it nets correctly.
+ if (income.optionsPositionId != null || income.category?.name ==="Options Premium")
+ return { stcg: getTaxableAmt(income), ltcg: 0, collectibleLtcg: 0 };
  // No activity linked — treat full taxable amount as regular LTCG
  return { stcg: 0, ltcg: getTaxableAmt(income), collectibleLtcg: 0 };
 }
@@ -294,6 +302,26 @@ function RateBadge({ label, className ="" }: { label: string; className?: string
  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${className}`}>
  {label}
  </span>
+ );
+}
+
+// Info affordance for an assigned option-premium row. The cash premium (row
+// `amount`) and the taxable amount diverge because the assigned leg's premium is
+// taxed in the share sale (folded into proceeds) rather than here — `folded` is
+// that difference (amount − taxable). Explains the otherwise-surprising split.
+function AssignedPremiumNote({ folded, taxable }: { folded: number; taxable: number }) {
+ const fmt = (n: number) => (n < 0 ?"−" :"") + formatCurrency(Math.abs(n));
+ return (
+ <Tooltip content={
+ <span className="block max-w-[16rem] whitespace-normal text-left leading-snug">
+ <span className="font-medium">{fmt(folded)}</span> of this premium is from the assigned
+ contract and is taxed through the share sale (added to proceeds). The{" "}
+ <span className="font-medium">{fmt(taxable)}</span> shown here is the net gain/loss from the
+ intermediate rolls and closes, taxed on its own.
+ </span>
+ }>
+ <CircleQuestionMark className="h-3.5 w-3.5 text-muted-foreground/40" />
+ </Tooltip>
  );
 }
 
@@ -1852,6 +1880,9 @@ export function TaxEstimatorPage() {
  : group.bucket ==="capital_gain"
  ? (split!.stcg + split!.ltcg + split!.collectibleLtcg)
  : getTaxableAmt(inc);
+ const isOptionPremium = inc.optionsPositionId != null || inc.category?.name ==="Options Premium";
+ const folded = Math.round((Number(inc.amount) - taxable) * 100) / 100;
+ const showFoldNote = isOptionPremium && Math.abs(folded) >= 0.005;
  return (
  <tr key={inc.id} className="hover:bg-muted">
  <td className="py-1.5 text-muted-foreground">{formatDate(inc.date)}</td>
@@ -1861,6 +1892,7 @@ export function TaxEstimatorPage() {
  {(split?.collectibleLtcg ?? 0) !== 0 && (
  <span className="rounded border border-warn-line bg-warn-soft px-1.5 py-0.5 text-xs font-medium text-warn-deep">collectible</span>
  )}
+ {showFoldNote && <AssignedPremiumNote folded={folded} taxable={taxable} />}
  </span>
  </td>
  <td className="py-1.5 text-muted-foreground">{inc.account.name}</td>
@@ -1900,6 +1932,9 @@ export function TaxEstimatorPage() {
  : group.bucket ==="capital_gain"
  ? (split!.stcg + split!.ltcg + split!.collectibleLtcg)
  : getTaxableAmt(inc);
+ const isOptionPremium = inc.optionsPositionId != null || inc.category?.name ==="Options Premium";
+ const folded = Math.round((Number(inc.amount) - taxable) * 100) / 100;
+ const showFoldNote = isOptionPremium && Math.abs(folded) >= 0.005;
  return (
  <div key={inc.id} className="flex items-start justify-between py-2">
  <div>
@@ -1908,6 +1943,7 @@ export function TaxEstimatorPage() {
  {(split?.collectibleLtcg ?? 0) !== 0 && (
  <span className="rounded border border-warn-line bg-warn-soft px-1.5 py-0.5 text-xs font-medium text-warn-deep">collectible</span>
  )}
+ {showFoldNote && <AssignedPremiumNote folded={folded} taxable={taxable} />}
  </p>
  <p className="tp-caption">{formatDate(inc.date)} · {inc.account.name}</p>
  {split && (split.stcg !== 0 || split.ltcg !== 0 || split.collectibleLtcg !== 0) && (
