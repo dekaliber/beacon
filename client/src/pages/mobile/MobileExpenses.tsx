@@ -4,7 +4,7 @@ import { PageHeadingMenu } from "@/components/PageHeadingMenu";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import { useApi } from "@/hooks/useApi";
 import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpense, deleteExpense, getExpenseVendors, getTags, createTag, createRecurrenceRule, getVendorCategory, getVendorAccount } from "@/api";
-import { formatCurrency, formatDate, localToday, cn } from "@/lib/utils";
+import { formatCurrency, formatDate, localToday, cn, parseAmount } from "@/lib/utils";
 import type { Account, Category, Expense, Tag } from "@/types";
 import { SectionLabel } from "@/components/Typography";
 
@@ -429,7 +429,7 @@ function MobileExpenseModal({
     e.preventDefault();
     setError(null);
     const fd = new FormData(e.currentTarget);
-    const amount = parseFloat(fd.get("amount") as string);
+    const amount = parseAmount(fd.get("amount") as string);
     if (!fd.get("amount") || isNaN(amount) || amount === 0) { setError("Amount is required"); return; }
     if (!(fd.get("description") as string).trim()) { setError("Description is required"); return; }
     if (!fd.get("accountId")) { setError("Account is required"); return; }
@@ -442,7 +442,7 @@ function MobileExpenseModal({
         const rule = await createRecurrenceRule({
           description: fd.get("description") as string,
           vendor: fd.get("vendor") as string,
-          amount: parseFloat(fd.get("amount") as string),
+          amount: parseAmount(fd.get("amount") as string),
           frequency: recurringFrequency,
           interval: parseInt(recurringInterval) || 1,
           startDate: fd.get("date") as string,
@@ -453,7 +453,7 @@ function MobileExpenseModal({
         recurrenceRuleId = rule.id;
       }
       const data: Record<string, unknown> = {
-        amount: parseFloat(fd.get("amount") as string),
+        amount: parseAmount(fd.get("amount") as string),
         description: fd.get("description") as string,
         vendor: fd.get("vendor") as string,
         date: fd.get("date") as string,

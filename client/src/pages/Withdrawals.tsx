@@ -285,7 +285,7 @@ function TransferModal({
  const newErrors: typeof errors = {};
  if (!form.fromAccountId) newErrors.fromAccountId ="Select a source account";
  if (!form.toAccountId) newErrors.toAccountId ="Select a destination account";
- const amount = parseFloat(form.amount);
+ const amount = parseAmount(form.amount);
  if (!form.amount || isNaN(amount) || amount <= 0) newErrors.amount ="Enter a valid amount";
  if (!form.date) newErrors.date ="Date is required";
  if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }

@@ -440,7 +440,7 @@ function TransferFullscreen({
       setError("Please fill in all required fields.");
       return;
     }
-    const amount = parseFloat(form.amount);
+    const amount = parseAmount(form.amount);
     if (isNaN(amount) || amount <= 0) {
       setError("Amount must be a positive number.");
       return;

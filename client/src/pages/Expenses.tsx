@@ -993,6 +993,14 @@ function EditableAmountCell({ value, onSave, isOffset }: { value: string; onSave
  }
  };
 
+ const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+ const cleaned = e.clipboardData.getData("text").replace(/[$,\s]/g,"");
+ if (cleaned ==="" || cleaned ==="-" || /^-?\d*\.?\d{0,2}$/.test(cleaned)) {
+ e.preventDefault();
+ setEditValue(cleaned);
+ }
+ };
+
  if (editing) {
  return (
  <div className="relative">
@@ -1002,6 +1010,7 @@ function EditableAmountCell({ value, onSave, isOffset }: { value: string; onSave
  type="text"
  value={editValue}
  onChange={handleChange}
+ onPaste={handlePaste}
  onBlur={commit}
  onKeyDown={(e) => {
  if (e.key ==="Enter") { e.preventDefault(); commit(); }

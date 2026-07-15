@@ -3,7 +3,7 @@ import { Plus, X, ChevronDown, ChevronRight, Check, ArrowUp, Trash2, Calendar, S
 import { BeaconLoader } from "@/components/BeaconLoader";
 import { useApi } from "@/hooks/useApi";
 import { getIncome, getAccounts, getFlatCategories, createIncome, updateIncome, deleteIncome } from "@/api";
-import { formatCurrency, formatDate, localToday, cn } from "@/lib/utils";
+import { formatCurrency, formatDate, localToday, cn, parseAmount } from "@/lib/utils";
 import type { Account, Category, Income } from "@/types";
 import { SectionLabel } from "@/components/Typography";
 
@@ -216,13 +216,13 @@ function MobileIncomeModal({
     e.preventDefault();
     setError(null);
     const fd = new FormData(e.currentTarget);
-    const amount = parseFloat(fd.get("amount") as string);
+    const amount = parseAmount(fd.get("amount") as string);
     if (!fd.get("amount") || isNaN(amount) || amount <= 0) { setError("Amount is required"); return; }
     if (!fd.get("accountId")) { setError("Account is required"); return; }
     setSaving(true);
     try {
       const data: Record<string, unknown> = {
-        amount: parseFloat(fd.get("amount") as string),
+        amount: parseAmount(fd.get("amount") as string),
         source: (fd.get("source") as string) || undefined,
         date: fd.get("date") as string,
         accountId: fd.get("accountId") as string,
