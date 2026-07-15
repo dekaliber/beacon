@@ -29,7 +29,7 @@ import {
  deleteTransfer,
  getDataRange,
 } from"@/api";
-import { formatCurrency, formatDate } from"@/lib/utils";
+import { formatCurrency, formatDate, parseAmount } from"@/lib/utils";
 import { useDemo } from"@/context/DemoContext";
 import type { WithdrawalEvent, WithdrawalType, InvestmentSettings } from"@/types";
 import { BeaconLoader } from"@/components/BeaconLoader";
@@ -105,7 +105,7 @@ function WithdrawalSettingsModal({
  const handleSave = async () => {
  setSaving(true);
  const denominatorVal = useOverride
- ? (parseFloat(denominator) > 0 ? parseFloat(denominator) : null)
+ ? (parseAmount(denominator) > 0 ? parseAmount(denominator) : null)
  : null;
  const targetVal = targetPct !==""
  ? (parseFloat(targetPct) / 100 || null)

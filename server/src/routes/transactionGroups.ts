@@ -13,6 +13,18 @@ const groupInclude = {
   },
 };
 
+// Helper: pick the default primary expense from a group's members.
+// Prefer the earliest expense that has no offsetting transaction; if every
+// member is offset, fall back to the earliest expense overall.
+function pickDefaultPrimaryId(
+  members: { id: string; date: Date; _count: { offsets: number } }[]
+): string | null {
+  if (members.length === 0) return null;
+  const byDateAsc = [...members].sort((a, b) => a.date.getTime() - b.date.getTime());
+  const earliestUnoffset = byDateAsc.find((m) => m._count.offsets === 0);
+  return (earliestUnoffset ?? byDateAsc[0]).id;
+}
+
 // Helper: auto-delete a group if it has 0 or 1 remaining members
 async function cleanupGroup(groupId: string): Promise<void> {
   const count = await prisma.expense.count({
@@ -48,10 +60,10 @@ transactionGroupRoutes.post("/", async (req, res) => {
 
   const { expenseIds } = parsed.data;
 
-  // Fetch the expenses to find the oldest (default primary) and check existing groups
+  // Fetch the expenses to pick the default primary and check existing groups
   const expenses = await prisma.expense.findMany({
     where: { id: { in: expenseIds }, parentExpenseId: null, account: { userId } },
-    select: { id: true, date: true, transactionGroupId: true },
+    select: { id: true, date: true, transactionGroupId: true, _count: { select: { offsets: true } } },
     orderBy: { date: "asc" },
   });
 
@@ -59,7 +71,7 @@ transactionGroupRoutes.post("/", async (req, res) => {
     return res.status(400).json({ error: "At least 2 valid (non-offset) expenses are required" });
   }
 
-  const oldestExpense = expenses[0]; // already sorted asc by date
+  const defaultPrimaryId = pickDefaultPrimaryId(expenses);
 
   // Collect existing group IDs that will be vacated
   const existingGroupIds = new Set(
@@ -82,7 +94,7 @@ transactionGroupRoutes.post("/", async (req, res) => {
     // Create the new group, connecting all expenses
     const group = await tx.transactionGroup.create({
       data: {
-        primaryExpenseId: oldestExpense.id,
+        primaryExpenseId: defaultPrimaryId,
         expenses: {
           connect: expenses.map((e) => ({ id: e.id })),
         },
@@ -176,15 +188,15 @@ transactionGroupRoutes.patch("/:id", async (req, res) => {
       removeExpenseIds.includes(updated.primaryExpenseId ?? "") ||
       !updated.primaryExpenseId
     ) {
-      const oldest = await tx.expense.findFirst({
+      const remaining = await tx.expense.findMany({
         where: { transactionGroupId: groupId, parentExpenseId: null },
-        orderBy: { date: "asc" },
-        select: { id: true },
+        select: { id: true, date: true, _count: { select: { offsets: true } } },
       });
-      if (oldest) {
+      const nextPrimaryId = pickDefaultPrimaryId(remaining);
+      if (nextPrimaryId) {
         await tx.transactionGroup.update({
           where: { id: groupId },
-          data: { primaryExpenseId: oldest.id },
+          data: { primaryExpenseId: nextPrimaryId },
         });
       }
     }
