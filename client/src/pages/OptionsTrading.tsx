@@ -51,7 +51,7 @@ import { AssignedSharesCard, type SellCoveredCallSeed } from"@/components/Assign
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { DatePicker } from"@/components/DatePicker";
-import { Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, CircleQuestionMark } from"lucide-react";
+import { Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, CircleQuestionMark, EyeOff } from"lucide-react";
 import { createPortal } from"react-dom";
 import { cn, parseAmount } from"@/lib/utils";
 import { getWeeklyExpiration, nextWeekExpiration, prevWeekExpiration, calcDTE, isNonTradingDay, etDateParts } from"@/lib/marketHolidays";
@@ -159,6 +159,7 @@ function normalizePosition(p: OptionsPosition): OptionsPosition {
  contractsAssigned: p.contractsAssigned != null ? Number(p.contractsAssigned) : null,
  stockPriceAtClose: p.stockPriceAtClose != null ? Number(p.stockPriceAtClose) : null,
  currentPremiumPerShare: p.currentPremiumPerShare != null ? Number(p.currentPremiumPerShare) : null,
+ excludeFromLivePnl: p.excludeFromLivePnl ?? false,
  isDraft: p.isDraft ?? false,
  };
 }
@@ -503,6 +504,7 @@ function PositionModal({ tickers, editing, prefill, onClose, onSaved, onDelete, 
  const [deltaAtOpenCapturedAt, setDeltaAtOpenCapturedAt] = useState<string | null>(editing?.deltaAtOpenCapturedAt ?? null);
  const [deltaAtOpenStatus, setDeltaAtOpenStatus] = useState<"idle" |"fetching" |"success" |"error">("idle");
  const [notes, setNotes] = useState(editing?.notes ??"");
+ const [excludeFromLivePnl, setExcludeFromLivePnl] = useState(editing?.excludeFromLivePnl ?? false);
  const [groupId] = useState(editing?.groupId ??"");
  const [investmentAccountId, setInvestmentAccountId] = useState(editing?.investmentAccountId ?? prefill?.investmentAccountId ??"");
  const [selectedBatchKey, setSelectedBatchKey] = useState<string>(() => {
@@ -721,6 +723,7 @@ function PositionModal({ tickers, editing, prefill, onClose, onSaved, onDelete, 
  deltaAtOpen: deltaAtOpenStr ? parseFloat(deltaAtOpenStr) : null,
  deltaAtOpenCapturedAt: deltaAtOpenCapturedAt ?? null,
  notes: notes || null,
+ excludeFromLivePnl,
  investmentAccountId: investmentAccountId || null,
  assignedFromStrikePrice: selectedBatchKey ? parseFloat(selectedBatchKey.split("|")[0]) : null,
  assignedFromExpirationDate: selectedBatchKey ? selectedBatchKey.split("|")[1] : null,
@@ -1100,6 +1103,22 @@ function PositionModal({ tickers, editing, prefill, onClose, onSaved, onDelete, 
  className="w-full rounded-md border border-border px-3 py-2 resize-none focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
  />
  </div>
+
+ {/* Exclude from Total Live P&L — e.g. a covered call you expect to let get assigned */}
+ {!isDraft && (
+ <div className="rounded-md border border-border p-3">
+ <label className="flex cursor-pointer items-center gap-2">
+ <input
+ type="checkbox"
+ checked={excludeFromLivePnl}
+ onChange={(e) => setExcludeFromLivePnl(e.target.checked)}
+ className="h-4 w-4 rounded border-border"
+ />
+ <span className="text-13 font-normal">Exclude from Total Live P&L</span>
+ </label>
+ <p className="tp-caption mt-1.5 ml-6">Keep this position's mark out of the Total Live P&L rollup — useful for a position you plan to let expire or get assigned rather than close.</p>
+ </div>
+ )}
 
  {error && <p className="text-down">{error}</p>}
 
@@ -2607,6 +2626,27 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  ? (p.premiumPerShare - curPrem) * 100 * p.contracts - (p.feesOpen ?? 0)
  : null;
  const chainLivePnl = hasChain && livePnl != null ? priorPnl + livePnl : null;
+ // Shared Live P&L cell body — excluded positions hide the number behind an
+ // eye-off icon (its value would otherwise distort the Total Live P&L rollup);
+ // the actual amount — plus the roll-chain net, when applicable — lives in the tooltip.
+ const livePnlCell = livePnl == null
+ ? <span className="text-muted-foreground">—</span>
+ : p.excludeFromLivePnl
+ ? <Tooltip content={
+ <div className="tp-caption text-left leading-relaxed">
+ <div>Excludes <span className="font-medium text-foreground">{livePnl >= 0 ?"+" :"−"}${fmtUSD(Math.abs(livePnl))}</span> from Total Live P&L</div>
+ {chainLivePnl != null && (
+ <div>Net Live P&L: <span className="font-medium text-foreground">{chainLivePnl >= 0 ?"+" :"−"}${fmtUSD(Math.abs(chainLivePnl))}</span></div>
+ )}
+ </div>
+ }>
+ <span className="inline-flex items-center text-muted-foreground/50 hover:text-muted-foreground/70 transition-colors">
+ <EyeOff className="h-3.5 w-3.5 shrink-0" />
+ </span>
+ </Tooltip>
+ : <span className={cn(livePnl >= 0 ?"text-up" :"text-down")}>
+ {livePnl >= 0 ?"+" :"−"}${fmtUSD(Math.abs(livePnl))}
+ </span>;
  const pctOtmNow = stockNow != null
  ? (p.strikePrice - stockNow) / stockNow * 100
  : null;
@@ -2809,11 +2849,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  : <span className="text-muted-foreground">—</span>}
  </td>
  <td className={tdNum}>
- {livePnl != null
- ? <span className={cn(livePnl >= 0 ?"text-up" :"text-down")}>
- {livePnl >= 0 ?"+" :"−"}${fmtUSD(Math.abs(livePnl))}
- </span>
- : <span className="text-muted-foreground">—</span>}
+ {livePnlCell}
  </td>
  <td className={tdNum}>
  {livePnl != null && c.totalPremiumNet !== 0
@@ -2825,11 +2861,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  </>
  ) : (
  <td className={cn(tdNum,"border-l border-border/50")}>
- {livePnl != null
- ? <span className={cn(livePnl >= 0 ?"text-up" :"text-down")}>
- {livePnl >= 0 ?"+" :"−"}${fmtUSD(Math.abs(livePnl))}
- </span>
- : <span className="text-muted-foreground">—</span>}
+ {livePnlCell}
  </td>
  )}
 
@@ -2941,14 +2973,14 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  )}
  </td>
  <td className={ctd}>
- {chainLivePnl != null && (
+ {chainLivePnl != null && !p.excludeFromLivePnl && (
  <span className={cn("font-medium", chainLivePnl >= 0 ?"text-up" :"text-down")}>
  {chainLivePnl >= 0 ?"+" :"−"}${fmtUSD(Math.abs(chainLivePnl))}
  </span>
  )}
  </td>
  <td className={ctd}>
- {chainLivePnl != null && chainNet != null && chainNet !== 0 && (
+ {chainLivePnl != null && !p.excludeFromLivePnl && chainNet != null && chainNet !== 0 && (
  <span className={cn("font-medium", chainLivePnl >= 0 ?"text-up" :"text-down")}>
  {fmtPct(chainLivePnl / chainNet * 100)}
  </span>
@@ -2957,7 +2989,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  </>
  ) : (
  <td className={cn(ctd,"border-l border-border/50")}>
- {chainLivePnl != null && (
+ {chainLivePnl != null && !p.excludeFromLivePnl && (
  <span className={cn("font-medium", chainLivePnl >= 0 ?"text-up" :"text-down")}>
  {chainLivePnl >= 0 ?"+" :"−"}${fmtUSD(Math.abs(chainLivePnl))}
  </span>
@@ -2983,8 +3015,12 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  totalPremiumPendingClose += calcPosition(p).totalPremiumNet;
  const curPrem = p.currentPremiumPerShare ?? null;
  if (curPrem != null) {
+ // Excluded positions still count toward Cost to Close (the factual cost to
+ // buy back everything now) but are kept out of the Total Live P&L rollup.
+ if (!p.excludeFromLivePnl) {
  const pnl = (p.premiumPerShare - curPrem) * 100 * p.contracts - (p.feesOpen ?? 0);
  totalLivePnl = (totalLivePnl ?? 0) + pnl;
+ }
  totalCurrentPremium = (totalCurrentPremium ?? 0) + curPrem * 100 * p.contracts;
  }
  const stockNow = livePrices.get(p.ticker.symbol) ?? null;
@@ -5102,7 +5138,7 @@ function SummaryCards({
  // Matches the per-row livePnl used in OpenPositionsTable's footer.
  const totalLivePnl = openPositions.reduce<number | null>((acc, p) => {
  const curPrem = p.currentPremiumPerShare ?? null;
- if (curPrem == null) return acc;
+ if (curPrem == null || p.excludeFromLivePnl) return acc;
  const pnl = (p.premiumPerShare - curPrem) * 100 * p.contracts - (p.feesOpen ?? 0);
  return (acc ?? 0) + pnl;
  }, null);
@@ -5369,7 +5405,7 @@ function SummaryCards({
  <div className="flex items-center gap-1.5">
  <SectionLabel as="span">Total Marked P&L</SectionLabel>
  <CardInfoTooltip>
- Rollup of premium collected, current P&L of open positions, and total P&L of underlying shares. The % is a <span className="font-medium text-foreground">time-weighted return on basis</span> (chained across any basis adjustments so deposits aren't counted as gains) and is <span className="font-medium text-foreground">not</span> annualized.
+ Rollup of premium collected, current P&L of open positions, and total P&L of underlying shares. Positions flagged <span className="font-medium text-foreground">Exclude from Total Live P&L</span> in their edit modal are left out of the open-position mark. The % is a <span className="font-medium text-foreground">time-weighted return on basis</span> (chained across any basis adjustments so deposits aren't counted as gains) and is <span className="font-medium text-foreground">not</span> annualized.
  {capitalChanges.some((c) => c.snapshotExcludesOptions) && (
  <span className="block mt-1">Note: a back-dated basis adjustment valued only assigned shares at that date, excluding open-option P&L.</span>
  )}

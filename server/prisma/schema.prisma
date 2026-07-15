@@ -1023,6 +1023,7 @@ model OptionsPosition {
   shareCostBasis  Decimal?   @db.Decimal(18, 8) // CC only: per-share cost basis of underlying
   stockPriceAtOpen          Decimal? @db.Decimal(12, 4)
   currentPremiumPerShare    Decimal? @db.Decimal(12, 4) // last manually-entered market price for live P&L
+  excludeFromLivePnl        Boolean  @default(false)     // omit this position from the Total Live P&L rollup (e.g. a CC expected to be assigned)
   deltaAtOpen               Decimal? @db.Decimal(10, 6) // option delta captured at time of logging
   deltaAtOpenCapturedAt     DateTime?                   // UTC timestamp when deltaAtOpen was fetched
   notes           String?
