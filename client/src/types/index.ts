@@ -647,6 +647,9 @@ export interface WithdrawalEvent {
   isEditable: boolean;
   incomeId?: string;
   transferId?: string;
+  // True for a future-dated transfer that has not yet cleared. Rendered as a
+  // tentative row and excluded from all totals.
+  isPending?: boolean;
 }
 
 export interface WithdrawalMonthlySummary {

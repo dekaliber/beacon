@@ -11,6 +11,7 @@ import {
   Trash2,
   ChevronRight as ChevronRightIcon,
   ArrowUpRight,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/Button";
 import { useApi } from "@/hooks/useApi";
@@ -256,8 +257,9 @@ function MonthDetailSheet({
     ? new Date(`${month}-01T12:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" })
     : "";
 
+  // Pending transfers haven't cleared, so they don't count toward the month total.
   const total = events.reduce(
-    (s, e) => s + (e.type === "reinvestment" ? -1 : 1) * parseFloat(e.amount),
+    (s, e) => e.isPending ? s : s + (e.type === "reinvestment" ? -1 : 1) * parseFloat(e.amount),
     0,
   );
 
@@ -290,7 +292,7 @@ function MonthDetailSheet({
               const isIncome = !event.isEditable;
               const amount = (event.type === "reinvestment" ? -1 : 1) * parseFloat(event.amount);
               return (
-                <div key={event.id} className="px-4 py-3 space-y-1.5">
+                <div key={event.id} className={cn("px-4 py-3 space-y-1.5", event.isPending && "italic opacity-60")}>
                   {/* Top row: badge + amount */}
                   <div className="flex items-center justify-between gap-2">
                     <TypeBadge type={event.type} />
@@ -614,9 +616,12 @@ function TransferFullscreen({
             </div>
           )}
           {!isPastOrToday && !editingTransferId && (
-            <div className="rounded-md bg-sky-soft border border-sky-soft px-3 py-2.5 text-sm text-sky-deep">
-              This is a future transfer. Account balances will be updated automatically when the
-              date arrives.
+            <div className="flex items-start gap-2 rounded-md bg-blue-soft px-3 py-2.5 text-xs text-blue-deep">
+              <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+              <p>
+                This is a future transfer. Account balances will be updated automatically when the
+                date arrives.
+              </p>
             </div>
           )}
 
@@ -868,7 +873,7 @@ export function MobileWithdrawals() {
 
           {monthGroups.map(([month, monthEvents]) => {
             const monthTotal = monthEvents.reduce(
-              (s, e) => s + (e.type === "reinvestment" ? -1 : 1) * parseFloat(e.amount),
+              (s, e) => e.isPending ? s : s + (e.type === "reinvestment" ? -1 : 1) * parseFloat(e.amount),
               0,
             );
             const monthRate = effectiveDenominator > 0

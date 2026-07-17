@@ -12,6 +12,7 @@ import {
  ChevronRight,
  Settings2,
  CircleQuestionMark,
+ Info,
 } from"lucide-react";
 import { Card } from"@/components/Card";
 import { Button } from"@/components/Button";
@@ -446,9 +447,12 @@ function TransferModal({
 
  {/* Future transfer notice */}
  {!isPastOrToday && !editingTransferId && (
- <div className="rounded-md bg-sky-soft border border-sky-soft px-3 py-2 text-sky-deep">
+ <div className="flex items-start gap-2 rounded-md bg-blue-soft px-3 py-2.5 text-xs text-blue-deep">
+ <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+ <p>
  This is a future transfer. Account balances will be updated automatically when the
  date arrives.
+ </p>
  </div>
  )}
 
@@ -485,9 +489,10 @@ function WithdrawalRow({
  onDelete: (event: WithdrawalEvent) => void;
 }) {
  const isIncome = !event.isEditable;
+ const pendingClass = event.isPending ?"italic opacity-60" :"";
 
  return (
- <tr className="group bg-white hover:bg-muted">
+ <tr className={`group bg-white hover:bg-muted ${pendingClass}`}>
  {/* Date */}
  <td className="py-2.5 pl-6 pr-2 text-13 whitespace-nowrap">
  <span className={isIncome ?"text-muted-foreground" :""}>
@@ -588,8 +593,10 @@ function MonthSection({
  onDelete: (event: WithdrawalEvent) => void;
 }) {
  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+ // Pending transfers haven't cleared, so they don't count toward the month total
+ // (or the annualized rate derived from it).
  const total = events.reduce(
- (s, e) => s + (e.type ==="reinvestment" ? -1 : 1) * parseFloat(e.amount),
+ (s, e) => e.isPending ? s : s + (e.type ==="reinvestment" ? -1 : 1) * parseFloat(e.amount),
  0
  );
 

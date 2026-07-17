@@ -82,6 +82,9 @@ interface WithdrawalEvent {
   isEditable: boolean;
   incomeId?: string;
   transferId?: string;
+  // True for a future-dated transfer that has not yet cleared. Shown as a
+  // tentative row so it can be edited or deleted; excluded from all totals.
+  isPending?: boolean;
 }
 
 const DIVIDEND_CATEGORY = "Dividend";
@@ -323,11 +326,12 @@ withdrawalRoutes.get("/", async (req, res) => {
     orderBy: { date: "desc" },
   });
 
-  // INVESTMENT→BANKING transfer rows (withdrawals)
+  // INVESTMENT→BANKING transfer rows (withdrawals). Unconfirmed rows are future-dated
+  // transfers that have not cleared yet; they are listed as pending so they remain
+  // editable, and are excluded from every total.
   const outTransferRows = await prisma.transfer.findMany({
     where: {
       date: { gte: startOfYear, lte: endOfYear },
-      isConfirmed: true,
       fromAccount: { type: "INVESTMENT", isJoint: false, userId },
       toAccount: { type: { in: ["CHECKING", "SAVINGS"] }, isJoint: false, userId },
     },
@@ -342,7 +346,6 @@ withdrawalRoutes.get("/", async (req, res) => {
   const inTransferRows = await prisma.transfer.findMany({
     where: {
       date: { gte: startOfYear, lte: endOfYear },
-      isConfirmed: true,
       fromAccount: { type: { in: ["CHECKING", "SAVINGS"] }, isJoint: false, userId },
       toAccount: { type: "INVESTMENT", isJoint: false, userId },
     },
@@ -384,6 +387,7 @@ withdrawalRoutes.get("/", async (req, res) => {
     amount: row.amount.toString(),
     isEditable: true,
     transferId: row.id,
+    isPending: !row.isConfirmed,
   }));
 
   // Map BANKING→INVESTMENT transfer rows (reinvestments, stored as positive but rendered negative)
@@ -397,6 +401,7 @@ withdrawalRoutes.get("/", async (req, res) => {
     amount: row.amount.toString(),
     isEditable: true,
     transferId: row.id,
+    isPending: !row.isConfirmed,
   }));
 
   // Merge all events and sort descending by date
