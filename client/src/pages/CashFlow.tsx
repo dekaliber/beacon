@@ -278,8 +278,8 @@ function CCPaymentCells({ event, accountId, onSaved, amountClassName, onDetailCl
  <div className="flex items-center gap-1">
  <button
  onClick={handleSave}
- disabled={saving}
- className="rounded p-0.5 hover:bg-muted text-up"
+ disabled={saving || !Number.isFinite(parseAmount(value))}
+ className="rounded p-0.5 hover:bg-muted text-up disabled:opacity-40"
  title="Save"
  >
  <Check className="h-3.5 w-3.5" />
@@ -527,7 +527,7 @@ function AdjustmentEventRow({ event, onSaved }: AdjustmentEventRowProps) {
  <div className="flex items-center gap-1">
  <button
  onClick={handleSave}
- disabled={saving}
+ disabled={saving || !Number.isFinite(parseAmount(amount))}
  className="rounded p-0.5 hover:bg-muted text-up disabled:opacity-40"
  title="Save"
  >

@@ -633,7 +633,7 @@ function CCPaymentSheet({
             <button
               type="button"
               onClick={handleConfirm}
-              disabled={saving || !value || parseFloat(value) <= 0}
+              disabled={saving || !Number.isFinite(parseAmount(value))}
               className="flex-1 rounded-md bg-gradient-to-b from-primary to-primary-deep py-2.5 text-sm font-medium border border-primary/60 shadow-accent text-white hover:brightness-105 active:brightness-95 disabled:opacity-50"
             >
               {saving ? "Saving…" : "Confirm"}
