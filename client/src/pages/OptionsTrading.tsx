@@ -51,7 +51,7 @@ import { AssignedSharesCard, type SellCoveredCallSeed } from"@/components/Assign
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { DatePicker } from"@/components/DatePicker";
-import { Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, CircleQuestionMark, EyeOff } from"lucide-react";
+import { Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, CircleQuestionMark, EyeOff, CornerDownRight } from"lucide-react";
 import { createPortal } from"react-dom";
 import { cn, parseAmount } from"@/lib/utils";
 import { getWeeklyExpiration, nextWeekExpiration, prevWeekExpiration, calcDTE, isNonTradingDay, etDateParts } from"@/lib/marketHolidays";
@@ -118,6 +118,17 @@ function fmtDate(iso: string) {
 function fmtDateTimeShort(iso: string) {
  const d = new Date(iso);
  return`${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
+}
+
+// Compact "time ago" from a past instant. Minutes under an hour, then h/m,
+// then days — enough to signal how stale a delta quote is at a glance.
+function fmtAgo(fromMs: number, nowMs: number = Date.now()): string {
+ const mins = Math.max(0, Math.round((nowMs - fromMs) / 60_000));
+ if (mins < 1) return"just now";
+ if (mins < 60) return`${mins} min ago`;
+ const hrs = Math.floor(mins / 60), rem = mins % 60;
+ if (hrs < 24) return rem ?`${hrs}h ${rem}m ago` :`${hrs}h ago`;
+ return`${Math.round(hrs / 24)}d ago`;
 }
 
 function fmtDateTimeFull(iso: string): string {
@@ -2842,17 +2853,27 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  {showRollInfo && (() => {
  const absDelta = p.currentDelta != null ? Math.abs(p.currentDelta) : null;
  const deltaColor = absDelta == null ?"" : absDelta < 0.65 ?"text-up" : absDelta <= 0.8 ?"text-warn" :"text-down";
- const deltaAsOf = p.currentDeltaAsOf != null
- ? new Date(p.currentDeltaAsOf).toLocaleString("en-US", { timeZone:"America/New_York", month:"numeric", day:"numeric", hour:"numeric", minute:"2-digit" })
- : null;
+ let deltaAsOf: string | null = null;
+ if (p.currentDeltaAsOf != null) {
+ const asOf = new Date(p.currentDeltaAsOf);
+ const etDay = (d: Date) => d.toLocaleDateString("en-US", { timeZone:"America/New_York" });
+ const sameDay = etDay(asOf) === etDay(new Date());
+ const time = asOf.toLocaleString("en-US", { timeZone:"America/New_York", hour:"numeric", minute:"2-digit" });
+ const stamp = sameDay ? time :`${asOf.toLocaleString("en-US", { timeZone:"America/New_York", month:"numeric", day:"numeric" })}, ${time}`;
+ deltaAsOf =`${stamp} ET (${fmtAgo(asOf.getTime())})`;
+ }
  return (
  <Tooltip content={
  <div className="tp-caption text-left leading-relaxed">
  <div>Extrinsic Value: <span className="font-medium text-foreground">${fmtUSD(extrinsicNow!)}</span></div>
  <div>Extrinsic Ratio: <span className={cn("font-medium", extrinsicRatio != null && extrinsicRatio < 20 ?"text-warn" :"text-foreground")}>{extrinsicRatio != null ?`${extrinsicRatio.toFixed(1)}%` :"—"}</span></div>
  <div>Current Delta: {p.currentDelta != null ? <span className={cn("font-medium", deltaColor)}>{Number(p.currentDelta).toFixed(3)}</span> : <span className="text-muted-foreground">—</span>}</div>
- {deltaAsOf != null && <div className="text-muted-foreground">Delta as of {deltaAsOf} ET</div>}
- <div className="mt-1 max-w-[190px] whitespace-normal text-muted-foreground">Quotes may be delayed — verify on a live platform before trading.</div>
+ {deltaAsOf != null && (
+ <div className="flex items-center gap-1 text-muted-foreground">
+ <CornerDownRight className="h-3 w-3 shrink-0" />
+ <span>As of {deltaAsOf}</span>
+ </div>
+ )}
  </div>
  }>
  <span className="inline-flex items-center p-0.5 text-muted-foreground/40 hover:text-warn transition-colors">
