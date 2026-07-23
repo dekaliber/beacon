@@ -717,6 +717,7 @@ export interface OptionsPosition {
   shareCostBasis: number | null;
   stockPriceAtOpen: number | null;
   currentPremiumPerShare: number | null;
+  currentDelta: number | null;
   excludeFromLivePnl: boolean;
   deltaAtOpen: number | null;
   deltaAtOpenCapturedAt: string | null; // ISO UTC datetime
@@ -766,6 +767,7 @@ export type OptionsPositionInput = {
   shareCostBasis?: number | null;
   stockPriceAtOpen?: number | null;
   currentPremiumPerShare?: number | null;
+  currentDelta?: number | null;
   excludeFromLivePnl?: boolean;
   deltaAtOpen?: number | null;
   deltaAtOpenCapturedAt?: string | null;

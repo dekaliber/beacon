@@ -786,6 +786,7 @@ const positionOpenSchema = z.object({
   shareCostBasis: z.coerce.number().positive().nullable().optional(),
   stockPriceAtOpen: z.coerce.number().positive().nullable().optional(),
   currentPremiumPerShare: z.coerce.number().nonnegative().nullable().optional(),
+  currentDelta: z.coerce.number().nullable().optional(),
   excludeFromLivePnl: z.boolean().optional(),
   deltaAtOpen: z.coerce.number().nullable().optional(),
   deltaAtOpenCapturedAt: z.string().nullable().optional(), // ISO datetime string

@@ -159,6 +159,7 @@ function normalizePosition(p: OptionsPosition): OptionsPosition {
  contractsAssigned: p.contractsAssigned != null ? Number(p.contractsAssigned) : null,
  stockPriceAtClose: p.stockPriceAtClose != null ? Number(p.stockPriceAtClose) : null,
  currentPremiumPerShare: p.currentPremiumPerShare != null ? Number(p.currentPremiumPerShare) : null,
+ currentDelta: p.currentDelta != null ? Number(p.currentDelta) : null,
  excludeFromLivePnl: p.excludeFromLivePnl ?? false,
  isDraft: p.isDraft ?? false,
  };
@@ -2401,7 +2402,9 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  });
  const [editingPremId, setEditingPremId] = useState<string | null>(null);
  const [editingPremValue, setEditingPremValue] = useState("");
- const [fetchingQuotes, setFetchingQuotes] = useState<Set<string>>(new Set());
+ // Per-row fetch tracking is retained for the (currently hidden) line-level
+ // refresh control; the setter still runs so re-enabling it needs no rewiring.
+ const [, setFetchingQuotes] = useState<Set<string>>(new Set());
  const [quoteErrors, setQuoteErrors] = useState<Map<string, string>>(new Map());
 
  const updateLivePrice = (ticker: string, price: number) => {
@@ -2492,7 +2495,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  });
  const lastPrice = quote.lastPrice;
  if (lastPrice != null) {
- await updateOptionsPosition(p.id, { currentPremiumPerShare: lastPrice });
+ await updateOptionsPosition(p.id, { currentPremiumPerShare: lastPrice, currentDelta: quote.delta ?? null });
  onPositionUpdated();
  } else {
  setQuoteErrors((prev) => new Map(prev).set(p.id,"No price available"));
@@ -2656,6 +2659,20 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const curAnnRet = livePnl != null && c.capitalAtRisk > 0 && daysInTrade > 0
  ? (livePnl / c.capitalAtRisk) * (365 / daysInTrade) * 100
  : null;
+
+ // Roll-candidacy metrics for ITM positions. Intrinsic value is the amount by
+ // which the option is in the money (CALL: stock − strike; PUT: strike − stock);
+ // extrinsic is whatever premium remains above it — the portion that decays and
+ // is worth buying back / rolling. A thin extrinsic ratio (or a high delta)
+ // signals the option is deep enough that assignment is likely.
+ const intrinsicNow = stockNow != null
+ ? Math.max(0, p.optionType ==="CALL" ? stockNow - p.strikePrice : p.strikePrice - stockNow)
+ : null;
+ const extrinsicNow = curPrem != null && intrinsicNow != null ? curPrem - intrinsicNow : null;
+ const extrinsicRatio = extrinsicNow != null && curPrem != null && curPrem > 0
+ ? (extrinsicNow / curPrem) * 100
+ : null;
+ const showRollInfo = isItm && extrinsicNow != null;
 
  // Chain-level metrics
  const realBreakeven = hasChain ? c.breakeven - priorPnl / (p.contracts * 100) : null;
@@ -2822,16 +2839,23 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  : <span className="text-muted-foreground">{quoteErrors.get(p.id) ?"err" :"—"}</span>}
  </span>
  )}
- {!isExpired && (
- <button
- onClick={() => fetchQuoteForPosition(p)}
- disabled={fetchingQuotes.has(p.id)}
- title="Fetch live price from Tradier"
- className="p-0.5 rounded text-muted-foreground/30 hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-40"
- >
- <RefreshCw className={cn("h-3 w-3", fetchingQuotes.has(p.id) &&"animate-spin")} />
- </button>
- )}
+ {showRollInfo && (() => {
+ const absDelta = p.currentDelta != null ? Math.abs(p.currentDelta) : null;
+ const deltaColor = absDelta == null ?"" : absDelta < 0.65 ?"text-up" : absDelta <= 0.8 ?"text-warn" :"text-down";
+ return (
+ <Tooltip content={
+ <div className="tp-caption text-left leading-relaxed">
+ <div>Extrinsic Value: <span className="font-medium text-foreground">${fmtUSD(extrinsicNow!)}</span></div>
+ <div>Extrinsic Ratio: <span className={cn("font-medium", extrinsicRatio != null && extrinsicRatio < 20 ?"text-warn" :"text-foreground")}>{extrinsicRatio != null ?`${extrinsicRatio.toFixed(1)}%` :"—"}</span></div>
+ <div>Current Delta: {p.currentDelta != null ? <span className={cn("font-medium", deltaColor)}>{Number(p.currentDelta).toFixed(3)}</span> : <span className="text-muted-foreground">—</span>}</div>
+ </div>
+ }>
+ <span className="inline-flex items-center p-0.5 text-muted-foreground/40 hover:text-warn transition-colors">
+ <Info className="h-3 w-3" />
+ </span>
+ </Tooltip>
+ );
+ })()}
  </div>
  </td>
  <td className={tdClass}>
