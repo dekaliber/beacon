@@ -1024,6 +1024,7 @@ model OptionsPosition {
   stockPriceAtOpen          Decimal? @db.Decimal(12, 4)
   currentPremiumPerShare    Decimal? @db.Decimal(12, 4) // last manually-entered market price for live P&L
   currentDelta              Decimal? @db.Decimal(10, 6) // option delta captured alongside the current premium quote
+  currentDeltaAsOf          DateTime?                   // Tradier greeks.updated_at (UTC) for currentDelta — surfaces staleness
   excludeFromLivePnl        Boolean  @default(false)     // omit this position from the Total Live P&L rollup (e.g. a CC expected to be assigned)
   deltaAtOpen               Decimal? @db.Decimal(10, 6) // option delta captured at time of logging
   deltaAtOpenCapturedAt     DateTime?                   // UTC timestamp when deltaAtOpen was fetched

@@ -718,6 +718,7 @@ export interface OptionsPosition {
   stockPriceAtOpen: number | null;
   currentPremiumPerShare: number | null;
   currentDelta: number | null;
+  currentDeltaAsOf: string | null; // ISO UTC — Tradier greek time for currentDelta
   excludeFromLivePnl: boolean;
   deltaAtOpen: number | null;
   deltaAtOpenCapturedAt: string | null; // ISO UTC datetime
@@ -768,6 +769,7 @@ export type OptionsPositionInput = {
   stockPriceAtOpen?: number | null;
   currentPremiumPerShare?: number | null;
   currentDelta?: number | null;
+  currentDeltaAsOf?: string | null;
   excludeFromLivePnl?: boolean;
   deltaAtOpen?: number | null;
   deltaAtOpenCapturedAt?: string | null;
@@ -949,6 +951,7 @@ export type OptionQuote = {
   openInterest: number | null;
   inTheMoney: boolean | null;
   delta: number | null;
+  deltaUpdatedAt: string | null; // ISO UTC — Tradier greeks.updated_at (delta computation time)
   capturedAt: string | null; // ISO UTC timestamp
 };
 

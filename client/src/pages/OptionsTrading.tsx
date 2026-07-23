@@ -2495,7 +2495,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  });
  const lastPrice = quote.lastPrice;
  if (lastPrice != null) {
- await updateOptionsPosition(p.id, { currentPremiumPerShare: lastPrice, currentDelta: quote.delta ?? null });
+ await updateOptionsPosition(p.id, { currentPremiumPerShare: lastPrice, currentDelta: quote.delta ?? null, currentDeltaAsOf: quote.deltaUpdatedAt ?? null });
  onPositionUpdated();
  } else {
  setQuoteErrors((prev) => new Map(prev).set(p.id,"No price available"));
@@ -2842,12 +2842,17 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  {showRollInfo && (() => {
  const absDelta = p.currentDelta != null ? Math.abs(p.currentDelta) : null;
  const deltaColor = absDelta == null ?"" : absDelta < 0.65 ?"text-up" : absDelta <= 0.8 ?"text-warn" :"text-down";
+ const deltaAsOf = p.currentDeltaAsOf != null
+ ? new Date(p.currentDeltaAsOf).toLocaleString("en-US", { timeZone:"America/New_York", month:"numeric", day:"numeric", hour:"numeric", minute:"2-digit" })
+ : null;
  return (
  <Tooltip content={
  <div className="tp-caption text-left leading-relaxed">
  <div>Extrinsic Value: <span className="font-medium text-foreground">${fmtUSD(extrinsicNow!)}</span></div>
  <div>Extrinsic Ratio: <span className={cn("font-medium", extrinsicRatio != null && extrinsicRatio < 20 ?"text-warn" :"text-foreground")}>{extrinsicRatio != null ?`${extrinsicRatio.toFixed(1)}%` :"—"}</span></div>
  <div>Current Delta: {p.currentDelta != null ? <span className={cn("font-medium", deltaColor)}>{Number(p.currentDelta).toFixed(3)}</span> : <span className="text-muted-foreground">—</span>}</div>
+ {deltaAsOf != null && <div className="text-muted-foreground">Delta as of {deltaAsOf} ET</div>}
+ <div className="mt-1 max-w-[190px] whitespace-normal text-muted-foreground">Quotes may be delayed — verify on a live platform before trading.</div>
  </div>
  }>
  <span className="inline-flex items-center p-0.5 text-muted-foreground/40 hover:text-warn transition-colors">

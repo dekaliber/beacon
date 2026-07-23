@@ -787,6 +787,7 @@ const positionOpenSchema = z.object({
   stockPriceAtOpen: z.coerce.number().positive().nullable().optional(),
   currentPremiumPerShare: z.coerce.number().nonnegative().nullable().optional(),
   currentDelta: z.coerce.number().nullable().optional(),
+  currentDeltaAsOf: z.string().nullable().optional(), // ISO datetime string (Tradier greek time)
   excludeFromLivePnl: z.boolean().optional(),
   deltaAtOpen: z.coerce.number().nullable().optional(),
   deltaAtOpenCapturedAt: z.string().nullable().optional(), // ISO datetime string
@@ -883,6 +884,9 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
   }
   if (typeof data.deltaAtOpenCapturedAt === "string") {
     data.deltaAtOpenCapturedAt = new Date(data.deltaAtOpenCapturedAt);
+  }
+  if (typeof data.currentDeltaAsOf === "string") {
+    data.currentDeltaAsOf = new Date(data.currentDeltaAsOf);
   }
   // Extract bankingAccountId: persist it on the position so edit modal can re-populate it,
   // and also use it below to create/update the Income record.
@@ -1557,6 +1561,13 @@ optionsRoutes.get("/option-quote", async (req, res) => {
     const lastPrice: number | null = option.last ?? null;
     const mark = bid != null && ask != null ? (bid + ask) / 2 : lastPrice;
     const delta: number | null = option.greeks?.delta ?? null;
+    // Tradier's greeks.updated_at is a bare "YYYY-MM-DD HH:MM:SS" string in UTC
+    // (an ET reading lands in the future). Normalize to ISO so the client can
+    // format it and show how stale the delta actually is.
+    const rawGreekTime: string | null = option.greeks?.updated_at ?? null;
+    const deltaUpdatedAt = rawGreekTime
+      ? new Date(rawGreekTime.replace(" ", "T") + "Z").toISOString()
+      : null;
 
     res.json({
       bid,
@@ -1568,6 +1579,7 @@ optionsRoutes.get("/option-quote", async (req, res) => {
       openInterest: option.open_interest ?? null,
       inTheMoney: option.in_the_money ?? null,
       delta,
+      deltaUpdatedAt,
       capturedAt: new Date().toISOString(),
     });
   } catch (e) {
