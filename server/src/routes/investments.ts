@@ -370,22 +370,9 @@ investmentRoutes.get("/allocation", async (req, res) => {
       }
     }
 
-    // Credit banking (checking/savings) balances — consistent with how the
-    // Asset Composition section on the client counts them as cash.
-    const bankingAccounts = await prisma.account.findMany({
-      where: { type: { in: ["CHECKING", "SAVINGS"] }, isActive: true, userId },
-      select: { balance: true },
-    });
-    for (const acct of bankingAccounts) {
-      const bal = parseFloat(acct.balance.toString());
-      if (bal <= 0) continue;
-      totalValue += bal;
-      if (cashDuId) {
-        duValues.set(cashDuId, (duValues.get(cashDuId) ?? 0) + bal);
-      } else {
-        unclassifiedValue += bal;
-      }
-    }
+    // Banking (checking/savings) balances are intentionally excluded here — they
+    // count toward overall net worth on the Dashboard, not the Investments page.
+    // This keeps allocation focused on investments and their settlement cash.
 
     // 5. Build ordered response ───────────────────────────────────────────────
     // actualPct is computed relative to classifiedValue so that unclassified
