@@ -4,7 +4,7 @@
   "private": true,
   "description": "Personal financial management application",
   "scripts": {
-    "predev": "kill $(lsof -ti:3001) 2>/dev/null || true",
+    "predev": "kill $(lsof -ti:3001) 2>/dev/null; kill $(lsof -ti:5173) 2>/dev/null || true",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "cd server && npm run dev",
     "dev:client": "wait-on tcp:3001 && cd client && npm run dev",

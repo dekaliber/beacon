@@ -5616,7 +5616,12 @@ const DEFAULT_PARAMS: ScreenerParams = {
  minVolume: undefined,
 };
 
-function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: OptionsTicker[]; onDraftCreated: (ticker: string, underlyingPrice: number | null) => void }) {
+function OptionScreener({ trackedTickers, holdingTickers, recentTickers, onDraftCreated }: {
+ trackedTickers: OptionsTicker[];
+ holdingTickers: string[];
+ recentTickers: string[];
+ onDraftCreated: (ticker: string, underlyingPrice: number | null) => void;
+}) {
  const [isOpen, setIsOpen] = useState(false);
  const [params, setParams] = useState<ScreenerParams>(DEFAULT_PARAMS);
  const [tickerInput, setTickerInput] = useState("");
@@ -5697,7 +5702,8 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
  }
  };
 
- const trackedSymbols = trackedTickers.map((t) => t.symbol);
+ const suggestedHoldingTickers = holdingTickers.filter((s) => !params.tickers.includes(s));
+ const suggestedRecentTickers = recentTickers.filter((s) => !params.tickers.includes(s));
 
  return (
  <Card>
@@ -5752,10 +5758,23 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
  style={{ background:"transparent", border:"none", boxShadow:"none", borderRadius: 0, padding: 0 }}
  />
  </div>
- {/* Quick-add tracked tickers */}
- {trackedSymbols.filter((s) => !params.tickers.includes(s)).length > 0 && (
- <div className="flex flex-wrap gap-1 pt-2">
- {trackedSymbols.filter((s) => !params.tickers.includes(s)).map((sym) => (
+ {/* Quick-add: current holdings (uncovered), then recently traded */}
+ {(suggestedHoldingTickers.length > 0 || suggestedRecentTickers.length > 0) && (
+ <div className="flex flex-wrap items-center gap-1 pt-2">
+ {suggestedHoldingTickers.map((sym) => (
+ <button
+ key={sym}
+ type="button"
+ onClick={() => addTicker(sym)}
+ className="rounded border border-border px-1.5 py-0.5 tp-caption hover:border-primary hover:text-primary transition-colors"
+ >
+ + {sym}
+ </button>
+ ))}
+ {suggestedHoldingTickers.length > 0 && suggestedRecentTickers.length > 0 && (
+ <span className="h-4 w-px bg-border mx-1" />
+ )}
+ {suggestedRecentTickers.map((sym) => (
  <button
  key={sym}
  type="button"
@@ -5795,7 +5814,18 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
 
  {/* DTE */}
  <div>
- <label className="block text-xs font-medium mb-1">DTE Range</label>
+ <div className="flex items-baseline gap-2 mb-1">
+ <label className="text-xs font-medium">DTE Range</label>
+ {(params.minDTE != null || params.maxDTE != null) && (
+ <button
+ type="button"
+ onClick={() => { setParam("minDTE", undefined); setParam("maxDTE", undefined); }}
+ className="text-xs text-primary hover:text-primary/80 transition-colors"
+ >
+ clear
+ </button>
+ )}
+ </div>
  <div className="flex items-center gap-1.5">
  <input
  type="number"
@@ -5819,7 +5849,18 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
 
  {/* Delta */}
  <div>
- <label className="block text-xs font-medium mb-1">Delta Range</label>
+ <div className="flex items-baseline gap-2 mb-1">
+ <label className="text-xs font-medium">Delta Range</label>
+ {(params.minDelta != null || params.maxDelta != null) && (
+ <button
+ type="button"
+ onClick={() => { setParam("minDelta", undefined); setParam("maxDelta", undefined); }}
+ className="text-xs text-primary hover:text-primary/80 transition-colors"
+ >
+ clear
+ </button>
+ )}
+ </div>
  <div className="flex items-center gap-1.5">
  <input
  type="number"
@@ -5845,36 +5886,21 @@ function OptionScreener({ trackedTickers, onDraftCreated }: { trackedTickers: Op
  </div>
  </div>
 
- {/* Min OI */}
- <div>
- <label className="block text-xs font-medium mb-1">Min OI</label>
- <input
- type="number"
- value={params.minOI ?? ""}
- min={0}
- onFocus={(e) => e.target.select()}
- onChange={(e) => { const v = e.target.value; setParam("minOI", v === "" ? undefined : Math.max(0, parseInt(v) || 0)); }}
- className="w-16 rounded-md border border-border bg-background px-3 py-2 text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
- />
- </div>
-
- {/* Min Volume */}
- <div>
- <label className="block text-xs font-medium mb-1">Min Volume</label>
- <input
- type="number"
- value={params.minVolume ?? ""}
- min={0}
- onFocus={(e) => e.target.select()}
- onChange={(e) => { const v = e.target.value; setParam("minVolume", v === "" ? undefined : Math.max(0, parseInt(v) || 0)); }}
- className="w-16 rounded-md border border-border bg-background px-3 py-2 text-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
- />
- </div>
-
  {/* Strike Price — only when exactly 1 ticker */}
  {params.tickers.length === 1 && (
  <div>
- <label className="block text-xs font-medium mb-1">Strike Price</label>
+ <div className="flex items-baseline gap-2 mb-1">
+ <label className="text-xs font-medium">Strike Price</label>
+ {(params.strikeMin != null || params.strikeMax != null) && (
+ <button
+ type="button"
+ onClick={() => { setParam("strikeMin", undefined); setParam("strikeMax", undefined); }}
+ className="text-xs text-primary hover:text-primary/80 transition-colors"
+ >
+ clear
+ </button>
+ )}
+ </div>
  <div className="flex items-center gap-1.5">
  <input
  type="number"
@@ -6128,6 +6154,42 @@ export function OptionsTrading() {
  () => [...new Set((activeHoldings ?? []).map((r) => r.ticker))],
  [activeHoldings]
  );
+
+ // Screener quick-add row 1: current holdings (assigned lots) that still have
+ // shares not already tied up as covered-call collateral.
+ const uncoveredHoldingTickers = useMemo(() => {
+ const byTicker = new Map<string, { shares: number; covered: number }>();
+ for (const h of activeHoldings ?? []) {
+ const covered = Math.min(h.openCallContracts * 100, h.shares);
+ const entry = byTicker.get(h.ticker) ?? { shares: 0, covered: 0 };
+ entry.shares += h.shares;
+ entry.covered += covered;
+ byTicker.set(h.ticker, entry);
+ }
+ return [...byTicker.entries()]
+ .filter(([, v]) => v.covered < v.shares)
+ .map(([ticker]) => ticker)
+ .sort();
+ }, [activeHoldings]);
+
+ // Screener quick-add row 2: the 10 most recently traded tickers (by openedAt)
+ // that aren't already in the holdings row above.
+ const recentlyTradedTickers = useMemo(() => {
+ const holdingSet = new Set(uncoveredHoldingTickers);
+ const lastTradedAt = new Map<string, number>();
+ for (const p of allPositions ?? []) {
+ if (p.isDraft) continue;
+ const sym = p.ticker.symbol;
+ const t = new Date(p.openedAt).getTime();
+ if ((lastTradedAt.get(sym) ?? 0) < t) lastTradedAt.set(sym, t);
+ }
+ return [...lastTradedAt.entries()]
+ .filter(([sym]) => !holdingSet.has(sym))
+ .sort((a, b) => b[1] - a[1])
+ .slice(0, 10)
+ .map(([sym]) => sym);
+ }, [allPositions, uncoveredHoldingTickers]);
+
  const [assignedQuotes, setAssignedQuotes] = useState<Record<string, { price: number }>>(() => {
  // Seed from the same localStorage cache that OpenPositionsTable uses for livePrices,
  // so assigned-lot prices are available even when the staleness guard skips the fetch.
@@ -6362,7 +6424,12 @@ export function OptionsTrading() {
  <PerformanceTable positions={normalizedPositions.filter((p) => !p.isDraft)} />
 
  {/* Option Screener */}
- <OptionScreener trackedTickers={tickers ?? []} onDraftCreated={handleDraftCreated} />
+ <OptionScreener
+ trackedTickers={tickers ?? []}
+ holdingTickers={uncoveredHoldingTickers}
+ recentTickers={recentlyTradedTickers}
+ onDraftCreated={handleDraftCreated}
+ />
 
  {/* Modals */}
  {(positionModal !== null) && (
