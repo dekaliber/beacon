@@ -1160,6 +1160,30 @@ function PositionModal({ tickers, editing, prefill, onClose, onSaved, onDelete, 
  );
 }
 
+const LS_LAST_FETCHED_KEY ="options_last_fetched_at";
+const LS_LIVE_PRICES_KEY ="options_live_prices";
+
+// Stock price to use for an assignment decision/field. Reuses the page's own
+// cached underlying quote (same Tradier-backed source as the table's price
+// column) when it was captured at or after the option's 4pm ET expiration
+// close — the common case, since refreshing premiums after the close is how
+// most of these get reviewed. Otherwise fetches a fresh Tradier quote rather
+// than falling back to a second, inconsistent price source.
+async function getAssignmentStockPrice(symbol: string, expirationDateStr: string): Promise<number> {
+ const expiryCloseMs = new Date(expirationDateStr +"T20:00:00.000Z").getTime();
+ try {
+ const lastFetchedRaw = localStorage.getItem(LS_LAST_FETCHED_KEY);
+ const lastFetchedMs = lastFetchedRaw ? new Date(lastFetchedRaw).getTime() : null;
+ if (lastFetchedMs != null && lastFetchedMs >= expiryCloseMs) {
+ const stored = localStorage.getItem(LS_LIVE_PRICES_KEY);
+ const cached = stored ? (JSON.parse(stored) as Record<string, number>)[symbol] : null;
+ if (cached != null) return cached;
+ }
+ } catch { /* ignore unavailable/corrupt localStorage */ }
+ const quote = await getUnderlyingQuote(symbol);
+ return quote.price;
+}
+
 // ── Close Position Modal ───────────────────────────────────────────────────────
 
 interface CloseModalProps {
@@ -1217,8 +1241,8 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  // partial roll once groupId is set); every other outcome can split freely.
  const showSplit = position.contracts > 1 && !(isRolled && isChained);
 
- // On mount: if the option has already expired, fetch the closing price on the
- // expiration date and default to ASSIGNED when the contract finished in-the-money.
+ // On mount: if the option has already expired, resolve the assignment stock
+ // price and default to ASSIGNED when the contract finished in-the-money.
  // For a CALL: ITM when price > strike. For a PUT: ITM when price < strike.
  // The existing isAssigned effects cascade from this and fill in the other fields.
  useEffect(() => {
@@ -1227,10 +1251,9 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  if (Date.now() <= expiryUtc.getTime()) return; // not yet expired
 
  let cancelled = false;
- getTickerPrice(position.ticker.symbol, expirationDateStr)
- .then((r) => {
+ getAssignmentStockPrice(position.ticker.symbol, expirationDateStr)
+ .then((price) => {
  if (cancelled) return;
- const price = r.price;
  const strike = position.strikePrice;
  const itm = position.optionType ==="CALL" ? price > strike : price < strike;
  if (itm) setOutcome("ASSIGNED");
@@ -1253,8 +1276,8 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  if (!isAssigned) return;
  let cancelled = false;
  setAssignedPriceFetching(true);
- getTickerPrice(position.ticker.symbol, expirationDateStr)
- .then((r) => { if (!cancelled) setStockPriceAtClose(r.price.toFixed(2)); })
+ getAssignmentStockPrice(position.ticker.symbol, expirationDateStr)
+ .then((price) => { if (!cancelled) setStockPriceAtClose(price.toFixed(2)); })
  .catch(() => {})
  .finally(() => { if (!cancelled) setAssignedPriceFetching(false); });
  return () => { cancelled = true; };
@@ -1727,8 +1750,8 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
  if (!isAssigned || stockPriceAtClose) return;
  let cancelled = false;
  setAssignedPriceFetching(true);
- getTickerPrice(position.ticker.symbol, expirationDateStr)
- .then((r) => { if (!cancelled) setStockPriceAtClose(r.price.toFixed(2)); })
+ getAssignmentStockPrice(position.ticker.symbol, expirationDateStr)
+ .then((price) => { if (!cancelled) setStockPriceAtClose(price.toFixed(2)); })
  .catch(() => {})
  .finally(() => { if (!cancelled) setAssignedPriceFetching(false); });
  return () => { cancelled = true; };
@@ -2365,9 +2388,6 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
  </Modal>
  );
 }
-
-const LS_LAST_FETCHED_KEY ="options_last_fetched_at";
-const LS_LIVE_PRICES_KEY ="options_live_prices";
 
 // ── Open Positions Table ───────────────────────────────────────────────────────
 
