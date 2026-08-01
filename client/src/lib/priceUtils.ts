@@ -18,10 +18,10 @@ export function formatQuantity(value: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 8 });
 }
 
-// Returns the UTC ms timestamp for a given hour (0-23) ET, on the ET calendar
+// Returns the UTC ms timestamp for a given hour/minute ET, on the ET calendar
 // day containing refMs. Uses the current ET UTC offset (via shortOffset) so
 // DST is handled automatically.
-function etTimeOnDay(refMs: number, hour: number): number {
+function etTimeOnDay(refMs: number, hour: number, minute = 0): number {
   const d = new Date(refMs);
   const dateParts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
@@ -40,7 +40,7 @@ function etTimeOnDay(refMs: number, hour: number): number {
   const offsetMatch = tzPart.match(/GMT([+-])(\d+)/)!;
   const offsetStr = `${offsetMatch[1]}${offsetMatch[2].padStart(2, "0")}:00`;
 
-  return new Date(`${get("year")}-${get("month")}-${get("day")}T${String(hour).padStart(2, "0")}:00:00${offsetStr}`).getTime();
+  return new Date(`${get("year")}-${get("month")}-${get("day")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00${offsetStr}`).getTime();
 }
 
 // Returns a Date representing 8:00 PM Eastern today.
@@ -69,12 +69,14 @@ function isTradingDay(refMs: number): boolean {
   return dow !== 0 && dow !== 6 && !isMarketHolidayYMD(year, month, day);
 }
 
-// UTC ms timestamp of 5 PM ET (market close) on the ET calendar day containing refMs.
+// UTC ms timestamp of 4:15 PM ET — market close (4 PM) plus a short buffer for
+// late-arriving closing prints, the latest time we'd expect an updated quote —
+// on the ET calendar day containing refMs.
 function etCloseBoundary(refMs: number): number {
-  return etTimeOnDay(refMs, 17);
+  return etTimeOnDay(refMs, 16, 15);
 }
 
-// Returns the UTC ms timestamp of the most recent NYSE market close (5 PM ET)
+// Returns the UTC ms timestamp of the most recent NYSE market close (4:15 PM ET)
 // that has already occurred as of `nowMs`, walking back over weekends and
 // holidays as needed (e.g. a Monday-holiday week resolves back to the
 // preceding Friday's close).
@@ -109,8 +111,9 @@ export function optionsPricesAreFresh(lastFetchedAt: Date): boolean {
 
 /**
  * Returns true if the current wall-clock time falls within the options trading
- * window: trading days, 8 AM – 5 PM ET (regular market hours are 9:30 AM – 4 PM,
- * with ±1 h buffer for pre/after-market quotes Tradier may have available).
+ * window: trading days, 8 AM – 4:15 PM ET (regular market hours are 9:30 AM –
+ * 4 PM, with a 1 h buffer before open for pre-market quotes Tradier may have
+ * available, and a short buffer after close for late-arriving closing prints).
  * Weekends and NYSE holidays are never within the window.
  *
  * Used to gate automatic page-load quote refreshes on the Options page so we
@@ -120,8 +123,7 @@ export function optionsPricesAreFresh(lastFetchedAt: Date): boolean {
 export function isWithinOptionsTradingWindow(): boolean {
   const now = new Date();
   if (!isTradingDay(now.getTime())) return false;
-  const hour = currentHourET(now);
-  return hour >= 8 && hour < 17;
+  return currentHourET(now) >= 8 && now.getTime() < etCloseBoundary(now.getTime());
 }
 
 // Returns true if any holding has a stale price and a refresh should be triggered.
@@ -129,7 +131,7 @@ export function isWithinOptionsTradingWindow(): boolean {
 // For stock/fund holdings: prices are considered stale once it is past 8PM Eastern
 // today and the last fetch predates that cutoff. Mutual fund NAVs are typically
 // published 1-2 hours after the 4PM ET close, so 8PM gives them plenty of time.
-// No refreshes are triggered after 5PM ET — markets are closed and prices won't change.
+// No refreshes are triggered after 4:15PM ET — markets are closed and prices won't change.
 //
 // For crypto holdings: prices are considered stale if older than 5 minutes, since
 // crypto trades continuously 24/7.
@@ -139,7 +141,7 @@ export function isPriceRefreshNeeded(holdings: InvestmentHolding[]): boolean {
   const now = new Date();
   const cutoff = cutoffToday8pmET(now);
   const prevCutoff = new Date(cutoff.getTime() - 24 * 60 * 60 * 1000);
-  const afterMarketClose = currentHourET(now) >= 17;
+  const afterMarketClose = now.getTime() >= etCloseBoundary(now.getTime());
 
   for (const holding of holdings) {
     if (!holding.priceUpdatedAt) return true;
@@ -150,7 +152,7 @@ export function isPriceRefreshNeeded(holdings: InvestmentHolding[]): boolean {
       // Crypto: refresh if price is older than 5 minutes
       if (now.getTime() - lastUpdated.getTime() > CRYPTO_PRICE_MAX_AGE_MS) return true;
     } else {
-      // Stocks / funds: no refreshes after 5PM ET (market closed, prices frozen)
+      // Stocks / funds: no refreshes after 4:15PM ET (market closed, prices frozen)
       if (afterMarketClose) continue;
       if (lastUpdated < prevCutoff) return true;
       if (now >= cutoff && lastUpdated < cutoff) return true;

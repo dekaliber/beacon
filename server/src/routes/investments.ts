@@ -1213,15 +1213,24 @@ function cutoffToday8pmET(now: Date): Date {
   return new Date(`${get("year")}-${get("month")}-${get("day")}T20:00:00${offsetStr}`);
 }
 
-function currentHourET(now: Date): number {
-  return parseInt(
-    new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false })
-      .formatToParts(now)
-      .find((p) => p.type === "hour")!.value,
-    10,
-  );
+// Server-side mirror of the client's etCloseBoundary — 4:15 PM ET, i.e. market
+// close (4 PM) plus a short buffer for late-arriving closing prints.
+function marketCloseBoundaryET(now: Date): Date {
+  const dateParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const get = (type: string) => dateParts.find((p) => p.type === type)!.value;
+  const tzPart = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    timeZoneName: "shortOffset",
+  }).formatToParts(now).find((p) => p.type === "timeZoneName")!.value;
+  const offsetMatch = tzPart.match(/GMT([+-])(\d+)/)!;
+  const offsetStr = `${offsetMatch[1]}${offsetMatch[2].padStart(2, "0")}:00`;
+  return new Date(`${get("year")}-${get("month")}-${get("day")}T16:15:00${offsetStr}`);
 }
-
 
 function isTickerStale(updatedAt: Date | null, isCrypto: boolean, now: Date): boolean {
   if (!updatedAt) return true;
@@ -1792,8 +1801,9 @@ investmentRoutes.get("/prices/:ticker", async (req, res) => {
     const existing = await prisma.tickerPrice.findUnique({ where: { ticker } });
     if (existing) {
       const ageMs = Date.now() - existing.updatedAt.getTime();
-      // After 5 PM ET markets are closed — any cached price is good for the rest of the day.
-      const marketClosed = !isCrypto && currentHourET(new Date()) >= 17;
+      // After 4:15 PM ET markets are closed — any cached price is good for the rest of the day.
+      const now = new Date();
+      const marketClosed = !isCrypto && now.getTime() >= marketCloseBoundaryET(now).getTime();
       if (marketClosed || ageMs < cacheMaxAgeMs) {
         return res.json({
           ticker,

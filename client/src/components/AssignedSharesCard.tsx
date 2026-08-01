@@ -26,6 +26,14 @@ const fmtMDY = (iso: string) =>
 // >= 0 is a positive outcome (selling assigned stock at/above the strike).
 const pnlColor = (n: number) => (n < 0 ? "text-down" : "text-up");
 
+// ROR color: red below 0%, amber between 0% and the user's target annual
+// return (OptionsSettings.targetReturn, a fraction), green at or above it.
+const rorColor = (ror: number, targetReturn: number | null | undefined) => {
+  if (ror < 0) return "text-down";
+  const targetPct = (targetReturn ?? 0) * 100;
+  return ror >= targetPct ? "text-up" : "text-warn";
+};
+
 const thClass =
   "px-3 py-2 text-left font-mono text-10 font-medium tracking-[0.11em] uppercase text-[var(--color-ink-3)] whitespace-nowrap";
 const tdClass = "px-3 py-2 text-13 font-mono tabular-nums whitespace-nowrap";
@@ -94,8 +102,6 @@ interface ActiveGroup {
   key: string;
   ticker: string;
   accountId: string;
-  accountName: string | null;
-  accountColor: string | null;
   assignmentStrike: number;
   assignmentExpiration: string;
   acquiredDate: string | null;
@@ -103,6 +109,8 @@ interface ActiveGroup {
   openCallAvgStrike: number | null;
   stockPriceAtAssignment: number | null;
   shares: number;
+  cspPremium: number;
+  ccPremiumSinceAssignment: number;
 }
 
 interface RealizedGroup {
@@ -115,6 +123,8 @@ interface RealizedGroup {
   realizedPnl: number;
   latestSaleDate: string;
   via: "CC" | "Direct" | "Mixed";
+  cspPremium: number;
+  ccPremiumSinceAssignment: number;
 }
 
 function groupActive(rows: ActiveAssignedHolding[]): ActiveGroup[] {
@@ -128,13 +138,13 @@ function groupActive(rows: ActiveAssignedHolding[]): ActiveGroup[] {
       if (r.acquiredDate && (!existing.acquiredDate || r.acquiredDate < existing.acquiredDate)) {
         existing.acquiredDate = r.acquiredDate;
       }
+      existing.cspPremium += r.cspPremium;
+      existing.ccPremiumSinceAssignment += r.ccPremiumSinceAssignment;
     } else {
       map.set(key, {
         key,
         ticker: r.ticker,
         accountId: r.accountId,
-        accountName: r.accountName,
-        accountColor: r.accountColor,
         assignmentStrike: r.assignmentStrike,
         assignmentExpiration: r.assignmentExpiration,
         acquiredDate: r.acquiredDate,
@@ -143,6 +153,8 @@ function groupActive(rows: ActiveAssignedHolding[]): ActiveGroup[] {
         openCallAvgStrike: r.openCallAvgStrike,
         stockPriceAtAssignment: r.stockPriceAtAssignment,
         shares: r.shares,
+        cspPremium: r.cspPremium,
+        ccPremiumSinceAssignment: r.ccPremiumSinceAssignment,
       });
     }
   }
@@ -163,6 +175,8 @@ function groupRealized(rows: RealizedDisposition[]): RealizedGroup[] {
       if (r.saleDate > existing.latestSaleDate) existing.latestSaleDate = r.saleDate;
       if (r.viaCoveredCall) existing.hasCC = true;
       else existing.hasDirect = true;
+      existing.cspPremium += r.cspPremium;
+      existing.ccPremiumSinceAssignment += r.ccPremiumSinceAssignment;
     } else {
       map.set(key, {
         key,
@@ -176,6 +190,8 @@ function groupRealized(rows: RealizedDisposition[]): RealizedGroup[] {
         via: "Direct",
         hasCC: r.viaCoveredCall,
         hasDirect: !r.viaCoveredCall,
+        cspPremium: r.cspPremium,
+        ccPremiumSinceAssignment: r.ccPremiumSinceAssignment,
       });
     }
   }
@@ -187,15 +203,55 @@ function groupRealized(rows: RealizedDisposition[]): RealizedGroup[] {
     .sort((a, b) => (a.latestSaleDate < b.latestSaleDate ? 1 : -1));
 }
 
-function AccountChip({ name, color }: { name: string | null; color: string | null }) {
-  return (
-    <span
-      className="inline-block rounded-md px-2 py-0.5 text-13 text-foreground"
-      style={{ backgroundColor: color ?? "var(--color-swatch-1)" }}
-    >
-      {name ?? "—"}
-    </span>
-  );
+// Per-row derived metrics for the Assigned Lots (active) tab — pulled out of
+// the row renderer so the summary footer can reduce over the exact same
+// numbers rather than recomputing (and risking drift from) its own copy.
+function computeActiveRowMetrics(g: ActiveGroup, price: number | null, todayLocalMidnight: Date) {
+  const mktValue = price != null ? price * g.shares : null;
+  const unreal = price != null ? (price - g.assignmentStrike) * g.shares : null;
+  const pct =
+    price != null ? ((price - g.assignmentStrike) / g.assignmentStrike) * 100 : null;
+  const coveredShares = Math.min(g.openCallContracts * 100, g.shares);
+  const uncoveredShares = g.shares - coveredShares;
+  const canSellCC = uncoveredShares >= 100;
+
+  // CC cap: when the covered call is ITM (price > CC strike), the covered
+  // shares will be called away at the strike — cap their upside.
+  const ccStrike = g.openCallAvgStrike;
+  const ccIsItm = price != null && ccStrike != null && price > ccStrike && coveredShares > 0;
+  const cappedUnreal = ccIsItm && price != null && ccStrike != null
+    ? (ccStrike - g.assignmentStrike) * coveredShares + (price - g.assignmentStrike) * uncoveredShares
+    : null;
+  const cappedPct = ccIsItm && cappedUnreal != null
+    ? (cappedUnreal / (g.assignmentStrike * g.shares)) * 100
+    : null;
+  const missedUpside = ccIsItm && unreal != null && cappedUnreal != null ? unreal - cappedUnreal : null;
+
+  const costBasis = g.assignmentStrike * g.shares;
+  const uncappedPct = pct ?? 0;
+  const missedPct = missedUpside != null && costBasis > 0 ? (missedUpside / costBasis) * 100 : 0;
+
+  // Realized premium since assignment: the original CSP's (+ any pre-assignment
+  // roll chain) premium plus any CC premium already locked in (closed/expired/
+  // assigned) against this lot — a still-open CC's premium isn't counted until
+  // it closes. ROR annualizes it against the same capital-at-risk / elapsed-time
+  // convention used for a single option's return elsewhere on this page.
+  const totPrem = g.cspPremium + g.ccPremiumSinceAssignment;
+  // Whole calendar days (today's local midnight vs. the assignment's), not live
+  // wall-clock time — otherwise this would drift downward throughout the day
+  // and jump back up at midnight.
+  const daysElapsed = g.acquiredDate
+    ? (todayLocalMidnight.getTime() - new Date(g.acquiredDate + "T00:00:00").getTime()) / 86_400_000
+    : null;
+  const ror = costBasis > 0 && daysElapsed != null && daysElapsed > 0
+    ? (totPrem / costBasis) * (365 / daysElapsed) * 100
+    : null;
+
+  return {
+    price, mktValue, unreal, pct, coveredShares, uncoveredShares, canSellCC,
+    ccStrike, ccIsItm, cappedUnreal, cappedPct, missedUpside,
+    costBasis, uncappedPct, missedPct, totPrem, daysElapsed, ror,
+  };
 }
 
 // Renders a right-aligned P&L value with a fixed-width icon slot to its right.
@@ -247,6 +303,7 @@ export function AssignedSharesCard({
   active,
   realized,
   onSellCoveredCall,
+  targetReturn,
 }: {
   externalQuotes?: Record<string, { price: number }>;
   // The parent owns this data (and its refresh), so the card stays in sync when
@@ -256,6 +313,8 @@ export function AssignedSharesCard({
   // Opens the position modal pre-filled to write a CC against this lot. Shown
   // per row only when the lot has uncovered shares.
   onSellCoveredCall?: (seed: SellCoveredCallSeed) => void;
+  // Fraction (e.g. 0.15 for 15%), from OptionsSettings — the ROR color threshold.
+  targetReturn?: number | null;
 }) {
   const [tab, setTab] = useState<"active" | "realized">("active");
 
@@ -281,6 +340,74 @@ export function AssignedSharesCard({
 
   const activeGroups = useMemo(() => groupActive(active ?? []), [active]);
   const realizedGroups = useMemo(() => groupRealized(realized?.rows ?? []), [realized]);
+  // Today's local midnight — the reference point for "days since assignment" on
+  // the active tab, so ROR is a stable whole-day count rather than one that
+  // drifts as the current wall-clock time ticks forward through the day.
+  // Recomputed (not memoized) each render — trivial cost, and avoids going
+  // stale if the page is left open across a midnight boundary.
+  const todayLocalMidnight = new Date();
+  todayLocalMidnight.setHours(0, 0, 0, 0);
+
+  const activeRows = activeGroups.map((g) => ({
+    g,
+    ...computeActiveRowMetrics(g, quotes[g.ticker]?.price ?? null, todayLocalMidnight),
+  }));
+
+  // Summary footer for the Assigned Lots tab: Mkt Value / Unrealized P&L are
+  // plain sums; % Gain is total unrealized P&L over total original cost (not
+  // market value); ROR is weighted by each position's original cost, so e.g.
+  // a $10k position at 50% counts the same as a $20k position at 25%.
+  const activeTotals = activeRows.reduce(
+    (acc, r) => {
+      acc.mktValue += r.mktValue ?? 0;
+      acc.unreal += r.cappedUnreal ?? r.unreal ?? 0;
+      acc.cost += r.costBasis;
+      acc.totPrem += r.totPrem;
+      if (r.ror != null) {
+        acc.rorNumer += r.ror * r.costBasis;
+        acc.rorDenom += r.costBasis;
+      }
+      return acc;
+    },
+    { mktValue: 0, unreal: 0, cost: 0, totPrem: 0, rorNumer: 0, rorDenom: 0 }
+  );
+  const activeTotalPct = activeTotals.cost > 0 ? (activeTotals.unreal / activeTotals.cost) * 100 : null;
+  const activeWeightedRor = activeTotals.rorDenom > 0 ? activeTotals.rorNumer / activeTotals.rorDenom : null;
+
+  const realizedRows = realizedGroups.map((g) => {
+    const avgSale = g.shares > 0 ? g.proceeds / g.shares : 0;
+    const costBasis = g.assignmentStrike * g.shares;
+    const pct = costBasis > 0 ? (g.realizedPnl / costBasis) * 100 : 0;
+    // Same premium + ROR convention as the Assigned Lots tab: total realized
+    // premium (originating CSP chain + any CC already closed/expired/assigned
+    // against this batch) annualized against cost at the assigned strike,
+    // elapsed from assignment to the final sale in this batch.
+    const totPrem = g.cspPremium + g.ccPremiumSinceAssignment;
+    const daysElapsed =
+      (new Date(g.latestSaleDate + "T00:00:00").getTime() -
+        new Date(g.assignmentExpiration + "T00:00:00").getTime()) / 86_400_000;
+    const ror = costBasis > 0 && daysElapsed > 0
+      ? (totPrem / costBasis) * (365 / daysElapsed) * 100
+      : null;
+    return { g, avgSale, costBasis, pct, totPrem, ror };
+  });
+
+  // Summary footer for the Closed Lots tab: same weighting convention as above.
+  const realizedTotals = realizedRows.reduce(
+    (acc, r) => {
+      acc.realizedPnl += r.g.realizedPnl;
+      acc.cost += r.costBasis;
+      acc.totPrem += r.totPrem;
+      if (r.ror != null) {
+        acc.rorNumer += r.ror * r.costBasis;
+        acc.rorDenom += r.costBasis;
+      }
+      return acc;
+    },
+    { realizedPnl: 0, cost: 0, totPrem: 0, rorNumer: 0, rorDenom: 0 }
+  );
+  const realizedTotalPct = realizedTotals.cost > 0 ? (realizedTotals.realizedPnl / realizedTotals.cost) * 100 : null;
+  const realizedWeightedRor = realizedTotals.rorDenom > 0 ? realizedTotals.rorNumer / realizedTotals.rorDenom : null;
 
   const tabClass = (isActive: boolean) =>
     cn(
@@ -329,12 +456,11 @@ export function AssignedSharesCard({
               <thead>
                 <tr className="border-b border-border">
                   <th className={thClass}>Ticker</th>
-                  <th className={thClass}>Account</th>
                   <th className={thClass}>Assigned</th>
-                  <th className={cn(thClass, "text-right")}>Assign Strike</th>
+                  <th className={cn(thClass, "text-right")}>@ Strike</th>
                   <th className={cn(thClass, "text-right")}>Shares</th>
-                  <th className={thClass}>Open CC</th>
-                  <th className={cn(thClass, "text-right")}>Avg CC Strike</th>
+                  <th className={cn(thClass, "text-right")}>Open CC</th>
+                  <th className={cn(thClass, "text-right")}>Avg Strike</th>
                   <th className={cn(thClass, "text-right")}>@ Assign</th>
                   <th className={cn(thClass, "text-right")}>Current</th>
                   <th className={cn(thClass, "text-right")}>Mkt Value</th>
@@ -350,43 +476,17 @@ export function AssignedSharesCard({
                       <span className="ml-1 w-3.5 shrink-0" />
                     </span>
                   </th>
-                  <th className={cn(thClass, "text-right")}><span className="sr-only">Actions</span></th>
+                  <th className={cn(thClass, "text-right border-l border-border/50")}>Tot Prem</th>
+                  <th className={cn(thClass, "text-right")}>ROR</th>
+                  <th className={cn(thClass.replace("px-3", "pr-3"), "text-right")}><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
-                {activeGroups.map((g) => {
-                  const price = quotes[g.ticker]?.price ?? null;
-                  const mktValue = price != null ? price * g.shares : null;
-                  const unreal =
-                    price != null ? (price - g.assignmentStrike) * g.shares : null;
-                  const pct =
-                    price != null
-                      ? ((price - g.assignmentStrike) / g.assignmentStrike) * 100
-                      : null;
-                  const coveredShares = Math.min(g.openCallContracts * 100, g.shares);
-                  const uncoveredShares = g.shares - coveredShares;
-                  const canSellCC = uncoveredShares >= 100;
-
-                  // CC cap: when the covered call is ITM (price > CC strike), the
-                  // covered shares will be called away at the strike — cap their upside.
-                  const ccStrike = g.openCallAvgStrike;
-                  const ccIsItm = price != null && ccStrike != null && price > ccStrike && coveredShares > 0;
-                  const cappedUnreal = ccIsItm && price != null && ccStrike != null
-                    ? (ccStrike - g.assignmentStrike) * coveredShares
-                      + (price - g.assignmentStrike) * uncoveredShares
-                    : null;
-                  const cappedPct = ccIsItm && cappedUnreal != null
-                    ? (cappedUnreal / (g.assignmentStrike * g.shares)) * 100
-                    : null;
-                  const missedUpside = ccIsItm && unreal != null && cappedUnreal != null
-                    ? unreal - cappedUnreal
-                    : null;
-
-                  const costBasis = g.assignmentStrike * g.shares;
-                  const uncappedPct = pct ?? 0;
-                  const missedPct = missedUpside != null && costBasis > 0
-                    ? (missedUpside / costBasis) * 100
-                    : 0;
+                {activeRows.map(({
+                  g, price, mktValue, unreal, pct, coveredShares, uncoveredShares, canSellCC,
+                  ccStrike, ccIsItm, cappedUnreal, cappedPct, missedUpside,
+                  uncappedPct, missedPct, totPrem, ror,
+                }) => {
                   const baseTipData =
                     ccIsItm && ccStrike != null && cappedUnreal != null && cappedPct != null && missedUpside != null
                       ? { ccStrike, cappedUnreal, uncappedUnreal: unreal!, missedUpside, cappedPct, uncappedPct, missedPct }
@@ -395,19 +495,22 @@ export function AssignedSharesCard({
                   const pctTipData = baseTipData ? { ...baseTipData, mode: "pct" as const } : null;
 
                   return (
-                    <tr key={g.key} className="border-b border-border hover:bg-muted">
+                    <tr
+                      key={g.key}
+                      className={cn(
+                        "border-b border-border",
+                        uncoveredShares > 0 ? "bg-row-reimbursement hover:bg-row-reimbursement-hover" : "hover:bg-muted"
+                      )}
+                    >
                       <td className={cn(tdClass, "font-bold font-mono")}>{g.ticker}</td>
-                      <td className={tdBody}>
-                        <AccountChip name={g.accountName} color={g.accountColor} />
-                      </td>
                       <td className={tdBody}>
                         {g.acquiredDate ? fmtMDY(g.acquiredDate) : "—"}
                       </td>
                       <td className={cn(tdClass, "text-right")}>${fmtUSD(g.assignmentStrike)}</td>
                       <td className={cn(tdClass, "text-right")}>{fmtShares(g.shares)}</td>
-                      <td className={tdClass}>
+                      <td className={cn(tdClass, "text-right")}>
                         {coveredShares > 0 ? (
-                          <span>{fmtShares(Math.min(coveredShares, g.shares))} sh</span>
+                          fmtShares(Math.min(coveredShares, g.shares))
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
@@ -446,7 +549,13 @@ export function AssignedSharesCard({
                         onTipEnter={handleTipEnter}
                         onTipLeave={handleTipLeave}
                       />
-                      <td className={cn(tdClass, "text-right")}>
+                      <td className={cn(tdClass, "text-right border-l border-border/50", pnlColor(totPrem))}>
+                        {fmtSigned(totPrem)}
+                      </td>
+                      <td className={cn(tdClass, "text-right", ror != null ? rorColor(ror, targetReturn) : "")}>
+                        {ror != null ? fmtPct(ror) : "—"}
+                      </td>
+                      <td className={cn(tdClass.replace("px-3", "pr-3"), "text-right")}>
                         {onSellCoveredCall != null && (
                           canSellCC ? (
                             <Tooltip content="Sell covered call">
@@ -477,6 +586,35 @@ export function AssignedSharesCard({
                   );
                 })}
               </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-border font-semibold">
+                  <td className={cn(tdBody, "font-semibold")} colSpan={8}>Total</td>
+                  <td className={cn(tdClass, "text-right")}>
+                    ${fmtUSD(activeTotals.mktValue)}
+                  </td>
+                  <PnlCell
+                    value={fmtSigned(activeTotals.unreal)}
+                    colorClass={pnlColor(activeTotals.unreal)}
+                    iconTipData={null}
+                    onTipEnter={handleTipEnter}
+                    onTipLeave={handleTipLeave}
+                  />
+                  <PnlCell
+                    value={activeTotalPct != null ? fmtPct(activeTotalPct) : "—"}
+                    colorClass={activeTotalPct != null ? pnlColor(activeTotalPct) : ""}
+                    iconTipData={null}
+                    onTipEnter={handleTipEnter}
+                    onTipLeave={handleTipLeave}
+                  />
+                  <td className={cn(tdClass, "text-right border-l border-border/50", pnlColor(activeTotals.totPrem))}>
+                    {fmtSigned(activeTotals.totPrem)}
+                  </td>
+                  <td className={cn(tdClass, "text-right", activeWeightedRor != null ? rorColor(activeWeightedRor, targetReturn) : "")}>
+                    {activeWeightedRor != null ? fmtPct(activeWeightedRor) : "—"}
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
             </table>
           )
         ) : realizedGroups.length === 0 ? (
@@ -494,13 +632,12 @@ export function AssignedSharesCard({
                 <th className={cn(thClass, "text-right")}>% Gain</th>
                 <th className={cn(thClass, "text-right")}>Last Sale</th>
                 <th className={thClass}>Via</th>
+                <th className={cn(thClass, "text-right border-l border-border/50")}>Tot Prem</th>
+                <th className={cn(thClass, "text-right")}>ROR</th>
               </tr>
             </thead>
             <tbody>
-              {realizedGroups.map((g) => {
-                const avgSale = g.shares > 0 ? g.proceeds / g.shares : 0;
-                const costBasis = g.assignmentStrike * g.shares;
-                const pct = costBasis > 0 ? (g.realizedPnl / costBasis) * 100 : 0;
+              {realizedRows.map(({ g, avgSale, pct, totPrem, ror }) => {
                 return (
                   <tr key={g.key} className="border-b border-border hover:bg-muted">
                     <td className={cn(tdClass, "font-bold font-mono")}>{g.ticker}</td>
@@ -527,10 +664,34 @@ export function AssignedSharesCard({
                         {g.via === "CC" ? "Covered call" : g.via}
                       </span>
                     </td>
+                    <td className={cn(tdClass, "text-right border-l border-border/50", pnlColor(totPrem))}>
+                      {fmtSigned(totPrem)}
+                    </td>
+                    <td className={cn(tdClass, "text-right", ror != null ? rorColor(ror, targetReturn) : "")}>
+                      {ror != null ? fmtPct(ror) : "—"}
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-border font-semibold">
+                <td className={cn(tdBody, "font-semibold")} colSpan={5}>Total</td>
+                <td className={cn(tdClass, "text-right", pnlColor(realizedTotals.realizedPnl))}>
+                  {fmtSigned(realizedTotals.realizedPnl)}
+                </td>
+                <td className={cn(tdClass, "text-right", realizedTotalPct != null ? pnlColor(realizedTotalPct) : "")}>
+                  {realizedTotalPct != null ? fmtPct(realizedTotalPct) : "—"}
+                </td>
+                <td colSpan={2} />
+                <td className={cn(tdClass, "text-right border-l border-border/50", pnlColor(realizedTotals.totPrem))}>
+                  {fmtSigned(realizedTotals.totPrem)}
+                </td>
+                <td className={cn(tdClass, "text-right", realizedWeightedRor != null ? rorColor(realizedWeightedRor, targetReturn) : "")}>
+                  {realizedWeightedRor != null ? fmtPct(realizedWeightedRor) : "—"}
+                </td>
+              </tr>
+            </tfoot>
           </table>
         )}
       </div>

@@ -29,5 +29,12 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    // FSEvents (macOS's native file-watch API) has been silently dropping change
+    // events partway through dev sessions, leaving Vite serving stale transforms
+    // until the process is restarted. Polling checks disk directly instead of
+    // relying on OS-level notifications, trading a little CPU for reliability.
+    watch: {
+      usePolling: true,
+    },
   },
 });

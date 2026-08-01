@@ -1108,6 +1108,8 @@ export interface ActiveAssignedHolding {
   openCallAvgStrike: number | null; // contracts-weighted avg strike of those CCs
   stockPriceAtAssignment: number | null; // underlying price at close on assignment date
   fromOptionsPositionId: string | null;
+  cspPremium: number; // this lot's originating CSP (+ any pre-assignment roll chain) net premium
+  ccPremiumSinceAssignment: number; // batch-level: realized (closed/expired/assigned) CC premium against this lot; still-open CCs excluded
 }
 
 export interface RealizedDisposition {
@@ -1121,6 +1123,8 @@ export interface RealizedDisposition {
   realizedPnl: number;
   saleDate: string; // YYYY-MM-DD
   viaCoveredCall: boolean;
+  cspPremium: number; // batch-level: originating CSP (+ roll chain) net premium
+  ccPremiumSinceAssignment: number; // batch-level: realized (closed/expired/assigned) CC premium against this batch; still-open CCs excluded
 }
 
 export const getActiveAssignedHoldings = () =>

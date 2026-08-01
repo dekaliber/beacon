@@ -4060,6 +4060,31 @@ function weekFridayLabel(mondayMs: number): string {
  return`${fri.getMonth() + 1}/${fri.getDate()}`;
 }
 
+// First of the month, local midnight — the monthly analogue of getWeekStart.
+// A fixed-ms stride doesn't work for months (28-31 days), so monthly window
+// math below steps via addMonths() instead of a WEEK_MS-style constant.
+function getMonthStart(date: Date): Date {
+ const d = new Date(date);
+ d.setHours(0, 0, 0, 0);
+ d.setDate(1);
+ return d;
+}
+
+function addMonths(ms: number, n: number): number {
+ const d = new Date(ms);
+ d.setMonth(d.getMonth() + n);
+ return d.getTime();
+}
+
+// Label a month abbreviation + 2-digit year (e.g."Jul '26") — a 12-month
+// window routinely crosses a year boundary, unlike the 15-week bar window.
+function monthLabel(monthStartMs: number): string {
+ const d = new Date(monthStartMs);
+ const month = d.toLocaleDateString("en-US", { month:"short" });
+ const year = String(d.getFullYear()).slice(2);
+ return`${month} '${year}`;
+}
+
 // SVG path for a rect with per-corner radii (tl/tr/br/bl = top-left/top-right/bottom-right/bottom-left)
 function barPath(x: number, y: number, w: number, h: number, tl: number, tr: number, br: number, bl: number) {
  return`M${x + tl},${y} H${x + w - tr} Q${x + w},${y} ${x + w},${y + tr} V${y + h - br} Q${x + w},${y + h} ${x + w - br},${y + h} H${x + bl} Q${x},${y + h} ${x},${y + h - bl} V${y + tl} Q${x},${y} ${x + tl},${y} Z`;
@@ -4102,6 +4127,7 @@ function netWeekBars(raw: { premiumCSP: number; premiumCC: number; pendingCSP: n
 // converts a sibling's dollar value into its pixel height.
 const WEEK_MS = 7 * 86_400_000;
 const MAX_CHART_WEEKS = 15;
+const MAX_CHART_MONTHS = 12;
 
 const MIN_SEG_PX = 1;
 function segVisible(value: number | undefined, refPx: number, refValue: number | undefined) {
@@ -4121,13 +4147,24 @@ function PerformanceCharts({
  openPositions,
  closedPositions,
  settings,
+ capitalChanges,
 }: {
  openPositions: OptionsPosition[];
  closedPositions: OptionsPosition[];
  settings: OptionsSettings | null;
+ capitalChanges: OptionsCapitalChange[];
 }) {
- const targetAnnual = settings ? settings.startingBasis * settings.targetReturn : null;
+ // Current basis (starting basis + capital changes to date), not the original
+ // starting basis alone — so the weekly/monthly target tracks deposits and
+ // withdrawals instead of staying pinned to whatever basis was set initially.
+ const currentBasis = computeCurrentBasis(settings, capitalChanges);
+ const targetAnnual = settings && currentBasis != null ? currentBasis * settings.targetReturn : null;
  const targetWeekly = targetAnnual != null ? targetAnnual / 52 : null;
+ const targetMonthly = targetAnnual != null ? targetAnnual / 12 : null;
+
+ // Weekly/Monthly toggle for the "Premium Collected" bar chart only — the
+ // Cumulative Performance chart below it stays on its own weekly cadence.
+ const [chartPeriod, setChartPeriod] = useState<"weekly" | "monthly">("weekly");
 
  // Shared week-bucketed PnL maps split by option type (CC = CALL, CSP = PUT)
  const weekPnlMap = useMemo(() => {
@@ -4219,6 +4256,85 @@ function PerformanceCharts({
  return weeks;
  }, [barStartMs, barEndMs, weekPnlMap, pendingPnlMap, currentWeekMs]);
 
+ // Monthly analogue of weekPnlMap/pendingPnlMap, for the bar chart's Monthly
+ // toggle — same source loops, bucketed by month instead of week.
+ const monthPnlMap = useMemo(() => {
+ const cc = new Map<number, number>();
+ const csp = new Map<number, number>();
+ for (const p of closedPositions) {
+ const closeDate = p.closedAt ? new Date(p.closedAt) : new Date(p.expirationDate.split("T")[0]);
+ const ms = getMonthStart(closeDate).getTime();
+ const pnl = calcPosition(p).pnl ?? 0;
+ if (p.optionType ==="CALL") cc.set(ms, (cc.get(ms) ?? 0) + pnl);
+ else csp.set(ms, (csp.get(ms) ?? 0) + pnl);
+ }
+ return { cc, csp };
+ }, [closedPositions]);
+
+ const pendingMonthPnlMap = useMemo(() => {
+ const cc = new Map<number, number>();
+ const csp = new Map<number, number>();
+ for (const p of openPositions) {
+ const expDate = new Date(p.expirationDate.split("T")[0] +"T20:00:00Z");
+ const ms = getMonthStart(expDate).getTime();
+ const net = calcPosition(p).totalPremiumNet;
+ if (p.optionType ==="CALL") cc.set(ms, (cc.get(ms) ?? 0) + net);
+ else csp.set(ms, (csp.get(ms) ?? 0) + net);
+ }
+ return { cc, csp };
+ }, [openPositions]);
+
+ const firstTradeMonthMs = useMemo(() => {
+ if (startingWeek) {
+ return getMonthStart(new Date(startingWeek +"T12:00:00")).getTime();
+ }
+ const allMs = [...monthPnlMap.cc.keys(), ...monthPnlMap.csp.keys()];
+ if (allMs.length === 0) return null;
+ return Math.min(...allMs);
+ }, [startingWeek, monthPnlMap]);
+
+ const currentMonthMs = getMonthStart(new Date()).getTime();
+
+ const lastPendingMonthMs = useMemo(() => {
+ const ms = [...pendingMonthPnlMap.cc.keys(), ...pendingMonthPnlMap.csp.keys()];
+ return ms.length ? Math.max(...ms) : null;
+ }, [pendingMonthPnlMap]);
+
+ // Bar chart window, monthly cadence: same fixed-width/anchor logic as the
+ // weekly barStartMs/barEndMs above, just stepped via addMonths() since months
+ // aren't a fixed number of ms.
+ const { monthlyBarStartMs, monthlyBarEndMs } = useMemo(() => {
+ if (firstTradeMonthMs == null) return { monthlyBarStartMs: null, monthlyBarEndMs: null };
+ const anchor = Math.max(currentMonthMs, lastPendingMonthMs ?? currentMonthMs);
+ const start = Math.max(addMonths(anchor, -(MAX_CHART_MONTHS - 1)), firstTradeMonthMs);
+ const end = addMonths(start, MAX_CHART_MONTHS - 1);
+ return { monthlyBarStartMs: start, monthlyBarEndMs: end };
+ }, [firstTradeMonthMs, currentMonthMs, lastPendingMonthMs]);
+
+ // Bar chart: capped 12-month window ending on the furthest pending expiration
+ const monthlyData = useMemo(() => {
+ if (monthlyBarStartMs == null || monthlyBarEndMs == null) return [];
+ const months: typeof weeklyData = [];
+ for (let ms = monthlyBarStartMs; ms <= monthlyBarEndMs; ms = addMonths(ms, 1)) {
+ const premiumCSP = monthPnlMap.csp.get(ms) ?? 0;
+ const premiumCC = monthPnlMap.cc.get(ms) ?? 0;
+ const pendingCSP = pendingMonthPnlMap.csp.get(ms) ?? 0;
+ const pendingCC = pendingMonthPnlMap.cc.get(ms) ?? 0;
+ months.push({
+ // Field name kept as "week" (not renamed to "month") so it stays a
+ // generic x-axis label field shared with weeklyData below.
+ week: monthLabel(ms),
+ premiumCSP, premiumCC, pendingCSP, pendingCC,
+ ...netWeekBars({ premiumCSP, premiumCC, pendingCSP, pendingCC }),
+ isFuture: ms > currentMonthMs,
+ });
+ }
+ return months;
+ }, [monthlyBarStartMs, monthlyBarEndMs, monthPnlMap, pendingMonthPnlMap, currentMonthMs]);
+
+ const barChartData = chartPeriod ==="weekly" ? weeklyData : monthlyData;
+ const targetPeriodic = chartPeriod ==="weekly" ? targetWeekly : targetMonthly;
+
  // Cumulative chart: capped 15-week window ending on the current week.
  // actual is null for future weeks so the line stops at the current week
  // target uses 1-based week number so W1 target = 1 × targetWeekly (not zero)
@@ -4254,19 +4370,36 @@ function PerformanceCharts({
 
  return (
  <div className="grid grid-cols-2 gap-4">
- {/* Weekly Premium Bar Chart */}
+ {/* Premium Bar Chart */}
  <Card className="p-6">
- <div className="flex items-center justify-between mb-3">
- <SectionLabel>Weekly Premium Collected</SectionLabel>
- {targetWeekly != null && (
+ <div className="flex items-start justify-between gap-2 mb-3">
+ <SectionLabel>Premium Collected</SectionLabel>
+ <div className="flex items-center gap-3">
+ {targetPeriodic != null && (
  <div className="flex items-center gap-1.5">
  <svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--color-muted-foreground)" strokeWidth="1.5" strokeDasharray="4 3" strokeOpacity="0.7" /></svg>
- <span className="tp-caption">Target ${fmtUSD(targetWeekly)}/wk</span>
+ <span className="tp-caption">Target ${fmtUSD(targetPeriodic)}/{chartPeriod ==="weekly" ?"wk" :"mo"}</span>
  </div>
  )}
+ <div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-secondary p-0.5 text-xs font-medium">
+ {(["weekly","monthly"] as const).map((v) => (
+ <button
+ key={v}
+ onClick={() => setChartPeriod(v)}
+ className={`rounded-md px-2 py-1 capitalize transition-colors ${
+ chartPeriod === v
+ ?"bg-background text-foreground shadow-sm"
+ :"text-muted-foreground hover:text-foreground"
+ }`}
+ >
+ {v.charAt(0).toUpperCase() + v.slice(1)}
+ </button>
+ ))}
+ </div>
+ </div>
  </div>
  <ResponsiveContainer width="100%" height={180}>
- <BarChart data={weeklyData} stackOffset="sign" margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+ <BarChart data={barChartData} stackOffset="sign" margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
  <XAxis
  dataKey="week"
@@ -4436,9 +4569,9 @@ function PerformanceCharts({
  return <path d={barPath(x, y, width, height, 0, 0, r, r)} fill="var(--color-down)" />;
  }}
  />
- {targetWeekly != null && (
+ {targetPeriodic != null && (
  <ReferenceLine
- y={targetWeekly}
+ y={targetPeriodic}
  stroke="var(--color-muted-foreground)"
  strokeDasharray="4 3"
  strokeWidth={1.5}
@@ -6411,13 +6544,14 @@ export function OptionsTrading() {
  </Card>
 
  {/* Assigned stock (acquired via assigned CSPs) */}
- <AssignedSharesCard externalQuotes={assignedQuotes} active={activeHoldings} realized={realizedAssignedData} onSellCoveredCall={handleSellCoveredCall} />
+ <AssignedSharesCard externalQuotes={assignedQuotes} active={activeHoldings} realized={realizedAssignedData} onSellCoveredCall={handleSellCoveredCall} targetReturn={settings?.targetReturn ?? null} />
 
  {/* Performance Charts */}
  <PerformanceCharts
  openPositions={openPositions}
  closedPositions={closedPositions}
  settings={settings ?? null}
+ capitalChanges={capitalChanges ?? []}
  />
 
  {/* Performance Table */}
