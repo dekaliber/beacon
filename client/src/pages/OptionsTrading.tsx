@@ -56,6 +56,7 @@ import { DatePicker } from"@/components/DatePicker";
 import { Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, CircleQuestionMark, EyeOff, CornerDownRight, AlertTriangle } from"lucide-react";
 import { createPortal } from"react-dom";
 import { cn, parseAmount, localToday } from"@/lib/utils";
+import { earningsBeforeExpiry, earningsWarningText } from"@/lib/earnings";
 import { getWeeklyExpiration, nextWeekExpiration, prevWeekExpiration, calcDTE, isNonTradingDay, etDateParts } from"@/lib/marketHolidays";
 import { SectionLabel, ColumnHeader, StatValue } from"@/components/Typography";
 import { optionsPricesAreFresh } from"@/lib/priceUtils";
@@ -115,26 +116,6 @@ function fmtDate(iso: string) {
  // date-only strings (YYYY-MM-DD) should not be timezone-shifted
  const [y, m, d] = iso.split("T")[0].split("-").map(Number);
  return`${m}/${d}/${String(y).slice(2)}`;
-}
-
-// ── Earnings-before-expiry warning ──────────────────────────────────────────
-// An earnings call inside the holding period is the main gap-risk event for a
-// short option, so we flag any expiration that sits on the far side of one.
-
-// True when the earnings call lands before the option expires. Same-day earnings
-// only count when they're before the open — an after-close call on expiration day
-// happens once the contract has already settled.
-function earningsBeforeExpiry(e: EarningsInfo | null | undefined, expiration: string): boolean {
- if (!e) return false;
- const exp = expiration.split("T")[0];
- return e.date < exp || (e.date === exp && e.timing ==="BMO");
-}
-
-// "Earnings expected after close on 8/4"
-function earningsWarningText(e: EarningsInfo): string {
- const [, m, d] = e.date.split("-").map(Number);
- const when = e.timing ==="BMO" ?"before open" :"after close";
- return`Earnings expected ${when} on ${m}/${d}`;
 }
 
 function fmtDateTimeShort(iso: string) {

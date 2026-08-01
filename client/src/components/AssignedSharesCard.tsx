@@ -1,13 +1,16 @@
 import { useState, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { BanknoteArrowUp, BanknoteX, CircleAlert } from "lucide-react";
+import { BanknoteArrowUp, BanknoteX, CircleAlert, CalendarDays } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Tooltip } from "@/components/Tooltip";
-import { cn } from "@/lib/utils";
+import { cn, localToday } from "@/lib/utils";
+import { earningsWithinDays, earningsWarningText } from "@/lib/earnings";
 import {
   getUnderlyingQuotes,
+  getOptionsEarnings,
   type ActiveAssignedHolding,
   type RealizedDisposition,
+  type EarningsInfo,
 } from "@/api";
 
 const fmtUSD = (n: number) =>
@@ -338,6 +341,20 @@ export function AssignedSharesCard({
   }, [externalQuotes, activeTickers.join(",")]);
   const quotes = externalQuotes ?? ownQuotes;
 
+  // Upcoming earnings per held ticker. Unlike an option row there's no
+  // expiration to measure against here, so proximity is the trigger — see
+  // EARNINGS_SOON_DAYS.
+  const [earningsMap, setEarningsMap] = useState<Record<string, EarningsInfo | null>>({});
+  useEffect(() => {
+    if (activeTickers.length === 0) return;
+    let cancelled = false;
+    getOptionsEarnings(activeTickers, localToday())
+      .then((e) => { if (!cancelled) setEarningsMap(e); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTickers.join(",")]);
+
   const activeGroups = useMemo(() => groupActive(active ?? []), [active]);
   const realizedGroups = useMemo(() => groupRealized(realized?.rows ?? []), [realized]);
   // Today's local midnight — the reference point for "days since assignment" on
@@ -493,6 +510,8 @@ export function AssignedSharesCard({
                       : null;
                   const amountTipData = baseTipData ? { ...baseTipData, mode: "amount" as const } : null;
                   const pctTipData = baseTipData ? { ...baseTipData, mode: "pct" as const } : null;
+                  const earnings = earningsMap[g.ticker.toUpperCase()] ?? null;
+                  const earningsSoon = earningsWithinDays(earnings);
 
                   return (
                     <tr
@@ -502,7 +521,18 @@ export function AssignedSharesCard({
                         uncoveredShares > 0 ? "bg-row-warn hover:bg-row-warn-hover" : "hover:bg-muted"
                       )}
                     >
-                      <td className={cn(tdClass, "font-bold font-mono")}>{g.ticker}</td>
+                      <td className={cn(tdClass, "font-bold font-mono")}>
+                        <div className="flex items-center gap-1.5">
+                          <span>{g.ticker}</span>
+                          {earningsSoon && (
+                            <Tooltip content={earningsWarningText(earnings!)}>
+                              <span className="inline-flex items-center text-warn">
+                                <CalendarDays className="h-3 w-3" />
+                              </span>
+                            </Tooltip>
+                          )}
+                        </div>
+                      </td>
                       <td className={tdBody}>
                         {g.acquiredDate ? fmtMDY(g.acquiredDate) : "—"}
                       </td>

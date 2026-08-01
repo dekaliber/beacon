@@ -129,10 +129,25 @@ export interface EarningsInfo {
   isEstimate: boolean;
 }
 
-let crumbSession: { cookie: string; crumb: string } | null = null;
+type CrumbSession = { cookie: string; crumb: string };
 
-async function getCrumbSession(force = false): Promise<{ cookie: string; crumb: string } | null> {
+let crumbSession: CrumbSession | null = null;
+// Concurrent callers share one mint — two tables loading at once shouldn't cost
+// two cookie + crumb round-trips.
+let crumbMint: Promise<CrumbSession | null> | null = null;
+
+async function getCrumbSession(force = false): Promise<CrumbSession | null> {
   if (crumbSession && !force) return crumbSession;
+  if (crumbMint && !force) return crumbMint;
+  crumbMint = mintCrumbSession();
+  try {
+    return await crumbMint;
+  } finally {
+    crumbMint = null;
+  }
+}
+
+async function mintCrumbSession(): Promise<CrumbSession | null> {
   crumbSession = null;
   try {
     // fc.yahoo.com answers with an error body but sets the A3 consent cookie,
@@ -213,7 +228,48 @@ function etDateAndHour(ms: number): { date: string; hour: number } {
 // us well clear of Yahoo's rate limits. The raw timestamp is cached (not the
 // derived EarningsInfo) so the "already passed" filter always uses a live date.
 const EARNINGS_TTL_MS = 6 * 60 * 60 * 1000;
-const earningsCache = new Map<string, { at: number; ts: number | null; isEstimate: boolean }>();
+type EarningsEntry = { at: number; ts: number | null; isEstimate: boolean };
+const earningsCache = new Map<string, EarningsEntry>();
+
+// Symbols currently being fetched. The cache is only written once a request
+// resolves, so without this two callers landing together (the Open Positions
+// table and the Assigned Lots card both mount at page load, with overlapping
+// tickers) would each miss the cache and each hit Yahoo for the same symbols.
+const inFlight = new Map<string, Promise<EarningsEntry | null>>();
+
+// One Yahoo round-trip for a batch of symbols. Never rejects: a failed lookup
+// yields nulls and writes nothing, so the next call retries rather than
+// caching the failure.
+async function fetchEarningsBatch(batch: string[]): Promise<Map<string, EarningsEntry | null>> {
+  const result = new Map<string, EarningsEntry | null>();
+  const quotes = await fetchYahooQuotes(batch);
+  if (quotes == null) {
+    for (const sym of batch) result.set(sym, null);
+    return result;
+  }
+  const now = Date.now();
+  for (const q of quotes) {
+    const sym = String(q?.symbol ?? "").toUpperCase();
+    if (!sym) continue;
+    // earningsTimestampStart is the forward-looking one; plain earningsTimestamp
+    // can still point at the last reported quarter.
+    const entry: EarningsEntry = {
+      at: now,
+      ts: q.earningsTimestampStart ?? q.earningsTimestamp ?? null,
+      isEstimate: q.isEarningsDateEstimate === true,
+    };
+    earningsCache.set(sym, entry);
+    result.set(sym, entry);
+  }
+  // Symbols Yahoo dropped from the response have no earnings coverage.
+  for (const sym of batch) {
+    if (result.has(sym)) continue;
+    const entry: EarningsEntry = { at: now, ts: null, isEstimate: false };
+    earningsCache.set(sym, entry);
+    result.set(sym, entry);
+  }
+  return result;
+}
 
 // Next earnings date per symbol. `today` (YYYY-MM-DD) filters out dates that
 // have already passed; symbols with no upcoming date map to null.
@@ -226,49 +282,45 @@ export async function fetchYahooEarnings(
   if (wanted.length === 0) return out;
 
   const now = Date.now();
-  const toEarnings = (ts: number | null, isEstimate: boolean): EarningsInfo | null => {
-    if (ts == null) return null;
-    const { date, hour } = etDateAndHour(ts * 1000);
+  const toEarnings = (e: EarningsEntry | null): EarningsInfo | null => {
+    if (e?.ts == null) return null;
+    const { date, hour } = etDateAndHour(e.ts * 1000);
     if (date < today) return null;
     // Yahoo pins pre-market calls to their actual morning time; anything from
     // midday onward (typically a 4:00 PM ET placeholder) reads as after-close.
-    return { date, timing: hour < 12 ? "BMO" : "AMC", isEstimate };
+    return { date, timing: hour < 12 ? "BMO" : "AMC", isEstimate: e.isEstimate };
   };
 
-  const stale: string[] = [];
+  const pending: Promise<void>[] = [];
+  const fresh: string[] = [];
+
   for (const sym of wanted) {
     const hit = earningsCache.get(sym);
-    if (hit && now - hit.at < EARNINGS_TTL_MS) out.set(sym, toEarnings(hit.ts, hit.isEstimate));
-    else stale.push(sym);
-  }
-  if (stale.length === 0) return out;
-
-  for (let i = 0; i < stale.length; i += 50) {
-    const batch = stale.slice(i, i + 50);
-    const quotes = await fetchYahooQuotes(batch);
-    if (quotes == null) {
-      // Lookup failed — surface null without caching, so the next call retries.
-      for (const sym of batch) if (!out.has(sym)) out.set(sym, null);
+    if (hit && now - hit.at < EARNINGS_TTL_MS) {
+      out.set(sym, toEarnings(hit));
       continue;
     }
-    for (const q of quotes) {
-      const sym = String(q?.symbol ?? "").toUpperCase();
-      if (!sym) continue;
-      // earningsTimestampStart is the forward-looking one; plain earningsTimestamp
-      // can still point at the last reported quarter.
-      const ts: number | null = q.earningsTimestampStart ?? q.earningsTimestamp ?? null;
-      const isEstimate = q.isEarningsDateEstimate === true;
-      earningsCache.set(sym, { at: now, ts, isEstimate });
-      out.set(sym, toEarnings(ts, isEstimate));
+    const existing = inFlight.get(sym);
+    if (existing) {
+      pending.push(existing.then((e) => { out.set(sym, toEarnings(e)); }));
+      continue;
     }
-    // Symbols Yahoo dropped from the response have no earnings coverage.
-    for (const sym of batch) {
-      if (out.has(sym)) continue;
-      earningsCache.set(sym, { at: now, ts: null, isEstimate: false });
-      out.set(sym, null);
-    }
+    fresh.push(sym);
   }
 
+  for (let i = 0; i < fresh.length; i += 50) {
+    const batch = fresh.slice(i, i + 50);
+    const batchPromise = fetchEarningsBatch(batch);
+    for (const sym of batch) {
+      const p = batchPromise.then((m) => m.get(sym) ?? null);
+      inFlight.set(sym, p);
+      pending.push(p.then((e) => { out.set(sym, toEarnings(e)); }));
+    }
+    // Release the in-flight slots once settled; callers already hold the promise.
+    void batchPromise.finally(() => { for (const sym of batch) inFlight.delete(sym); });
+  }
+
+  await Promise.all(pending);
   return out;
 }
 
