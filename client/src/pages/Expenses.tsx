@@ -2389,11 +2389,11 @@ function ExpenseRowWithOffsets({
  const showOffsetDropZone = dragState?.started && dragState?.sourceType ==="offset" && dragState?.sourceParentId === expense.id;
 
  const rowBg = isUncategorized
- ?"bg-row-uncategorized hover:bg-row-uncategorized-hover"
+ ?"bg-row-down hover:bg-row-down-hover"
  : isRecurring
- ?"bg-row-recurring hover:bg-row-recurring-hover"
+ ?"bg-row-accent hover:bg-row-accent-hover"
  : expense.isReimbursementExpected && !isFullyReimbursed
- ?"bg-row-reimbursement hover:bg-row-reimbursement-hover"
+ ?"bg-row-warn hover:bg-row-warn-hover"
  :"hover:bg-muted";
 
  const upcomingClass = isUpcoming ?"italic opacity-60" :"";

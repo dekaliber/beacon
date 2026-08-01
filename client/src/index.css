@@ -71,12 +71,15 @@
   --color-slate-soft:  color-mix(in oklab, var(--color-ink) 5%, transparent);
 
   /* ── Row tints — §07; brighten on hover ──────────────────────────────── */
-  --color-row-recurring:           color-mix(in oklab, var(--color-primary) 7%, transparent);
-  --color-row-recurring-hover:     color-mix(in oklab, var(--color-primary) 11%, transparent);
-  --color-row-reimbursement:       color-mix(in oklab, var(--color-warn) 9%, transparent);
-  --color-row-reimbursement-hover: color-mix(in oklab, var(--color-warn) 14%, transparent);
-  --color-row-uncategorized:       color-mix(in oklab, var(--color-down) 7%, transparent);
-  --color-row-uncategorized-hover: color-mix(in oklab, var(--color-down) 11%, transparent);
+  /* Named for the status hue each is built from, not the feature that first
+     used it: these tint any row carrying that status (row-warn covers
+     reimbursements, expired options, and earnings warnings alike). */
+  --color-row-accent:       color-mix(in oklab, var(--color-primary) 7%, transparent);
+  --color-row-accent-hover: color-mix(in oklab, var(--color-primary) 11%, transparent);
+  --color-row-warn:         color-mix(in oklab, var(--color-warn) 9%, transparent);
+  --color-row-warn-hover:   color-mix(in oklab, var(--color-warn) 14%, transparent);
+  --color-row-down:         color-mix(in oklab, var(--color-down) 7%, transparent);
+  --color-row-down-hover:   color-mix(in oklab, var(--color-down) 11%, transparent);
   /* Opaque equivalents for frozen/sticky cells (z-raised cells can't use the
      translucent tint — scrolling content would bleed through). Derived with
      the same math the browser uses to composite the translucent tint over the
@@ -89,17 +92,17 @@
      is ~#fbfcfd — the same value the plain "white" frozen cells use, so the
      tints composite over a base consistent with the untinted rows. Compositing
      over the raw background reads too dark. */
-  --color-row-uncategorized-solid:        color-mix(in srgb, var(--color-down) 7%,  #fbfcfd);
-  --color-row-uncategorized-solid-hover:  color-mix(in srgb, var(--color-down) 11%, #fbfcfd);
-  --color-row-reimbursement-solid:        color-mix(in srgb, var(--color-warn) 9%,  #fbfcfd);
-  --color-row-reimbursement-solid-hover:  color-mix(in srgb, var(--color-warn) 14%, #fbfcfd);
+  --color-row-down-solid:        color-mix(in srgb, var(--color-down) 7%,  #fbfcfd);
+  --color-row-down-solid-hover:  color-mix(in srgb, var(--color-down) 11%, #fbfcfd);
+  --color-row-warn-solid:        color-mix(in srgb, var(--color-warn) 9%,  #fbfcfd);
+  --color-row-warn-solid-hover:  color-mix(in srgb, var(--color-warn) 14%, #fbfcfd);
   /* Opaque row separator for tinted frozen cells. Scrolling rows keep the
      translucent --color-border, which border-collapse compounds over the tint
      and reads darker than the same border over a single opaque fill. The
      compound doesn't model cleanly (a color-mix that doubles the tint overshoots
      ~2x), so this stays an eye-matched hex — a 1px line where near-white
      cross-monitor drift is negligible. */
-  --color-row-uncategorized-edge:        #ece4e5;
+  --color-row-down-edge:        #ece4e5;
 
   /* ── Chart series — §05; ordered data-viz palette ────────────────────── */
   --color-chart-1:  oklch(0.56 0.15 268);

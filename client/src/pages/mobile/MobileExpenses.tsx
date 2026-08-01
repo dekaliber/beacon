@@ -877,9 +877,9 @@ function ExpenseRow({
   const isNegative = parseFloat(expense.amount) < 0;
 
   const rowBg = upcoming || isOffset || fullyOffset ? "" :
-    !expense.categoryId ? "bg-row-uncategorized" :
-    expense.recurrenceRuleId ? "bg-row-recurring" :
-    expense.isReimbursementExpected ? "bg-row-reimbursement" : "";
+    !expense.categoryId ? "bg-row-down" :
+    expense.recurrenceRuleId ? "bg-row-accent" :
+    expense.isReimbursementExpected ? "bg-row-warn" : "";
 
   const mutedText = fullyOffset ? "text-ink-4" : "";
 

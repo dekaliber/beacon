@@ -589,7 +589,7 @@ function RuleTable({
  <tr
  key={rule.id}
  ref={rule.id === highlightId ? highlightRowRef : undefined}
- className={`${dimmed ?"opacity-60" :""} ${rule.id === highlightId ?`transition-colors duration-1000${highlightFading ?"" :" bg-row-reimbursement-hover"}` :""}`}
+ className={`${dimmed ?"opacity-60" :""} ${rule.id === highlightId ?`transition-colors duration-1000${highlightFading ?"" :" bg-row-warn-hover"}` :""}`}
  >
  <td className="py-3 pr-4">
  <p className="font-medium">{rule.description}</p>

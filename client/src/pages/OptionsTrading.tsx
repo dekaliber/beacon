@@ -2807,19 +2807,19 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  // above --color-background (which ≈ --color-muted), so a token fill would erase
  // the hover step. #fbfcfd matches the lightened surface and stays lighter than
  // the bg-muted hover. Near-white, so cross-monitor drift is negligible.
- const stickyBg = isExpired ?"bg-row-reimbursement-solid" : isItm ?"bg-row-uncategorized-solid" :"bg-[#fbfcfd]";
- const stickyHover = isExpired ?"group-hover:bg-row-reimbursement-solid-hover" : isItm ?"group-hover:bg-row-uncategorized-solid-hover" : isGrouped ?"group-hover:bg-muted-hover" :"group-hover:bg-muted";
+ const stickyBg = isExpired ?"bg-row-warn-solid" : isItm ?"bg-row-down-solid" :"bg-[#fbfcfd]";
+ const stickyHover = isExpired ?"group-hover:bg-row-warn-solid-hover" : isItm ?"group-hover:bg-row-down-solid-hover" : isGrouped ?"group-hover:bg-muted-hover" :"group-hover:bg-muted";
  // Frozen cells are z-raised + opaque, so the row's collapsed bottom border
  // gets painted over. Re-draw it on the cell itself (matches the tr's
  // border-b condition: omitted when a roll sub-row follows). Tinted rows use
  // an opaque edge so it can't compound the translucent tint like the
- // scrolling side's collapsed border does — see --color-row-uncategorized-edge.
- const bEdge = isItm ?"border-b border-b-row-uncategorized-edge" :"border-b border-b-border";
+ // scrolling side's collapsed border does — see --color-row-down-edge.
+ const bEdge = isItm ?"border-b border-b-row-down-edge" :"border-b border-b-border";
  const stickyTd = (_leftPx: number, extra?: string, textOnly = false) =>
  cn(textOnly ? tdTextClass : tdClass,"sticky z-[2]", !hasChain && bEdge, stickyHover, stickyBg, extra);
 
  const primaryRow = (
- <tr key={p.id} className={cn("group", hasChain ?"" :"border-b border-border", isExpired ?"hover:bg-row-reimbursement-hover" : isItm ?"hover:bg-row-uncategorized-hover" : isGrouped ?"hover:bg-muted-hover" :"hover:bg-muted", isGrouped &&"bg-muted", isExpired ?"bg-row-reimbursement" : isItm ?"bg-row-uncategorized" :"", isDraftRow &&"italic opacity-60")}>
+ <tr key={p.id} className={cn("group", hasChain ?"" :"border-b border-border", isExpired ?"hover:bg-row-warn-hover" : isItm ?"hover:bg-row-down-hover" : isGrouped ?"hover:bg-muted-hover" :"hover:bg-muted", isGrouped &&"bg-muted", isExpired ?"bg-row-warn" : isItm ?"bg-row-down" :"", isDraftRow &&"italic opacity-60")}>
  {/* ── Group 1: Position (always visible, frozen) ── */}
  <td style={{ left: 0 }} className={stickyTd(0, isGrouped ?"pl-8 pr-2" :"pl-4 pr-2", true)}>
  <div className="flex items-center gap-1.5">
@@ -3041,7 +3041,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  );
 
  const chainRow = hasChain ? (
- <tr key={`${p.id}-chain`} className={cn("group","border-b border-border", isExpired ?"hover:bg-row-reimbursement-hover" : isItm ?"hover:bg-row-uncategorized-hover" : isGrouped ?"hover:bg-muted-hover" :"hover:bg-muted", isGrouped &&"bg-muted", isExpired ?"bg-row-reimbursement" : isItm ?"bg-row-uncategorized" :"")}>
+ <tr key={`${p.id}-chain`} className={cn("group","border-b border-border", isExpired ?"hover:bg-row-warn-hover" : isItm ?"hover:bg-row-down-hover" : isGrouped ?"hover:bg-muted-hover" :"hover:bg-muted", isGrouped &&"bg-muted", isExpired ?"bg-row-warn" : isItm ?"bg-row-down" :"")}>
  {/* Label — frozen */}
  <td style={{ left: 0 }} className={cn(ctd,"sticky z-[2]", bEdge, stickyHover, stickyBg, isGrouped ?"pl-8 pr-2" :"pl-4 pr-2","font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-10")}>roll</td>
  <td style={{ left: 80 }} className={cn(ctd,"sticky z-[2]", bEdge, stickyHover, stickyBg)} />
@@ -6231,7 +6231,7 @@ function OptionScreener({ trackedTickers, holdingTickers, recentTickers, onDraft
  return (
  <React.Fragment key={i}>
  {banner && (
- <tr className="border-b border-border bg-row-reimbursement">
+ <tr className="border-b border-border bg-row-warn">
  <td colSpan={16} className="px-4 py-2">
  <div className="flex items-center gap-2 text-xs text-warn-deep">
  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />

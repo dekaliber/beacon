@@ -499,7 +499,7 @@ export function AssignedSharesCard({
                       key={g.key}
                       className={cn(
                         "border-b border-border",
-                        uncoveredShares > 0 ? "bg-row-reimbursement hover:bg-row-reimbursement-hover" : "hover:bg-muted"
+                        uncoveredShares > 0 ? "bg-row-warn hover:bg-row-warn-hover" : "hover:bg-muted"
                       )}
                     >
                       <td className={cn(tdClass, "font-bold font-mono")}>{g.ticker}</td>
