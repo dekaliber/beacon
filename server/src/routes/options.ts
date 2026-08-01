@@ -4,7 +4,7 @@ import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { getUserId } from "../middleware/auth.js";
 import { nextBusinessDay } from "../lib/businessDays.js";
-import { fetchYahooClosingPrice } from "../services/yahoo.js";
+import { fetchYahooClosingPrice, fetchYahooEarnings } from "../services/yahoo.js";
 
 export const optionsRoutes = Router();
 
@@ -1421,6 +1421,30 @@ optionsRoutes.get("/stock-quotes", async (req, res) => {
       }
     }
     res.json(result);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    res.status(500).json({ error: message });
+  }
+});
+
+// ── Upcoming Earnings (Yahoo) ─────────────────────────────────────────────────
+// GET /earnings?symbols=NVDA,CEG&today=YYYY-MM-DD
+//   →  { NVDA: { date, timing, isEstimate } | null, … }
+// Tradier serves no corporate-events data, so earnings dates come from Yahoo.
+
+optionsRoutes.get("/earnings", async (req, res) => {
+  const { symbols, today } = req.query as Record<string, string | undefined>;
+  if (!symbols) return res.status(400).json({ error: "Missing symbols" });
+  if (!today || !/^\d{4}-\d{2}-\d{2}$/.test(today)) {
+    return res.status(400).json({ error: "Missing or invalid today (expected YYYY-MM-DD)" });
+  }
+
+  const symbolList = symbols.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+  if (symbolList.length === 0) return res.status(400).json({ error: "No valid symbols provided" });
+
+  try {
+    const earnings = await fetchYahooEarnings(symbolList, today);
+    res.json(Object.fromEntries(earnings));
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
     res.status(500).json({ error: message });

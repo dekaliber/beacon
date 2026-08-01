@@ -28,6 +28,7 @@ import {
  getInvestmentAccounts,
  getOptionAssignedBatches,
  runOptionsScreener,
+ getOptionsEarnings,
  getActiveAssignedHoldings,
  getRealizedDispositions,
  getOptionsBenchmark,
@@ -42,6 +43,7 @@ import {
  type OptionOutcome,
  type ScreenerResult,
  type ScreenerParams,
+ type EarningsInfo,
 } from"@/api";
 import type { TickerSearchResult } from"@/types";
 import { useNotifications } from"@/context/NotificationContext";
@@ -51,9 +53,9 @@ import { AssignedSharesCard, type SellCoveredCallSeed } from"@/components/Assign
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { DatePicker } from"@/components/DatePicker";
-import { Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, CircleQuestionMark, EyeOff, CornerDownRight } from"lucide-react";
+import { Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, CircleQuestionMark, EyeOff, CornerDownRight, AlertTriangle } from"lucide-react";
 import { createPortal } from"react-dom";
-import { cn, parseAmount } from"@/lib/utils";
+import { cn, parseAmount, localToday } from"@/lib/utils";
 import { getWeeklyExpiration, nextWeekExpiration, prevWeekExpiration, calcDTE, isNonTradingDay, etDateParts } from"@/lib/marketHolidays";
 import { SectionLabel, ColumnHeader, StatValue } from"@/components/Typography";
 import { optionsPricesAreFresh } from"@/lib/priceUtils";
@@ -113,6 +115,26 @@ function fmtDate(iso: string) {
  // date-only strings (YYYY-MM-DD) should not be timezone-shifted
  const [y, m, d] = iso.split("T")[0].split("-").map(Number);
  return`${m}/${d}/${String(y).slice(2)}`;
+}
+
+// ── Earnings-before-expiry warning ──────────────────────────────────────────
+// An earnings call inside the holding period is the main gap-risk event for a
+// short option, so we flag any expiration that sits on the far side of one.
+
+// True when the earnings call lands before the option expires. Same-day earnings
+// only count when they're before the open — an after-close call on expiration day
+// happens once the contract has already settled.
+function earningsBeforeExpiry(e: EarningsInfo | null | undefined, expiration: string): boolean {
+ if (!e) return false;
+ const exp = expiration.split("T")[0];
+ return e.date < exp || (e.date === exp && e.timing ==="BMO");
+}
+
+// "Earnings expected after close on 8/4"
+function earningsWarningText(e: EarningsInfo): string {
+ const [, m, d] = e.date.split("-").map(Number);
+ const when = e.timing ==="BMO" ?"before open" :"after close";
+ return`Earnings expected ${when} on ${m}/${d}`;
 }
 
 function fmtDateTimeShort(iso: string) {
@@ -551,6 +573,27 @@ function PositionModal({ tickers, editing, prefill, onClose, onSaved, onDelete, 
  );
  const hasAssignedBatches = assignedBatches && assignedBatches.length > 0;
 
+ // Upcoming earnings for the selected ticker, so the expiration field can flag
+ // an expiry that straddles the call. selectedTicker falls back to the raw input,
+ // so debounce it — otherwise every keystroke fires a lookup on a partial symbol.
+ const [earningsSymbol, setEarningsSymbol] = useState("");
+ useEffect(() => {
+ const sym = selectedTicker.trim().toUpperCase();
+ const t = setTimeout(() => setEarningsSymbol(sym), 400);
+ return () => clearTimeout(t);
+ }, [selectedTicker]);
+ const { data: earningsMap } = useApi(
+ () =>
+ earningsSymbol
+ ? getOptionsEarnings([earningsSymbol], localToday())
+ : Promise.resolve({} as Record<string, EarningsInfo | null>),
+ [earningsSymbol]
+ );
+ // Keyed on the symbol the data was fetched for, so a stale map can't warn
+ // against the wrong ticker while a new lookup is in flight.
+ const earnings = earningsSymbol ? earningsMap?.[earningsSymbol] ?? null : null;
+ const showEarningsWarning = earningsBeforeExpiry(earnings, expirationDate);
+
  // Prefill path ("Sell covered call" shortcut): once the assigned batches load,
  // select the originating lot and pull its contractsRemaining / cost basis —
  // mirroring what choosing the lot from the picker would set. Runs once.
@@ -929,7 +972,16 @@ function PositionModal({ tickers, editing, prefill, onClose, onSaved, onDelete, 
  </div>
  </div>
  <div>
- <label className="block text-xs font-medium mb-1">Expiration Date</label>
+ <label className="flex items-center gap-1 text-xs font-medium mb-1">
+ Expiration Date
+ {showEarningsWarning && (
+ <Tooltip content={earningsWarningText(earnings!)}>
+ <span className="inline-flex items-center text-warn">
+ <AlertTriangle className="h-3 w-3" />
+ </span>
+ </Tooltip>
+ )}
+ </label>
  <div className="flex items-center w-full">
  <DatePicker
  required
@@ -2476,6 +2528,17 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [tickerKey]);
 
+ // Upcoming earnings per ticker, used to flag expirations that straddle a call.
+ const [earningsMap, setEarningsMap] = useState<Record<string, EarningsInfo | null>>({});
+ useEffect(() => {
+ const symbols = [...new Set([...positions, ...draftPositions].map((p) => p.ticker.symbol))];
+ if (symbols.length === 0) return;
+ getOptionsEarnings(symbols, localToday())
+ .then(setEarningsMap)
+ .catch(() => {});
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [tickerKey]);
+
  const isColOpen = (g: ColGroupKey) => openColGroups.has(g);
  const toggleColGroup = (g: ColGroupKey) =>
  setOpenColGroups((prev) => {
@@ -2705,6 +2768,11 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  : null;
  const showRollInfo = isItm && extrinsicNow != null;
 
+ // Earnings landing inside the holding period — gap risk the expiry date alone
+ // doesn't convey.
+ const earnings = earningsMap[p.ticker.symbol.toUpperCase()] ?? null;
+ const hasEarningsRisk = earningsBeforeExpiry(earnings, p.expirationDate);
+
  // Chain-level metrics
  const realBreakeven = hasChain ? c.breakeven - priorPnl / (p.contracts * 100) : null;
  const chainFirstMs = hasChain ? chainFirstOpenedMap.get(p.groupId!) ?? null : null;
@@ -2768,7 +2836,18 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  </span>
  </td>
  <td style={{ left: 152 }} className={stickyTd(152)}>${fmtUSD(p.strikePrice)}</td>
- <td style={{ left: 232 }} className={stickyTd(232,"border-r border-r-border/40", true)}>{fmtDate(p.expirationDate)}</td>
+ <td style={{ left: 232 }} className={stickyTd(232,"border-r border-r-border/40", true)}>
+ <div className="flex items-center gap-1">
+ <span className={cn(hasEarningsRisk &&"text-warn")}>{fmtDate(p.expirationDate)}</span>
+ {hasEarningsRisk && (
+ <Tooltip content={earningsWarningText(earnings!)}>
+ <span className="inline-flex items-center p-0.5 text-warn">
+ <AlertTriangle className="h-3 w-3" />
+ </span>
+ </Tooltip>
+ )}
+ </div>
+ </td>
 
  {/* ── Group 2: Trade Details ── */}
  {isColOpen("details") ? (
@@ -2962,7 +3041,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  );
 
  const chainRow = hasChain ? (
- <tr key={`${p.id}-chain`} className={cn("group","border-b border-border", isExpired ?"hover:bg-row-reimbursement-hover" : isItm ?"hover:bg-row-uncategorized-hover" : isGrouped ?"hover:bg-muted-hover" :"hover:bg-muted", isGrouped &&"bg-muted", isExpired ?"bg-warn-soft/50" : isItm ?"bg-row-uncategorized" :"")}>
+ <tr key={`${p.id}-chain`} className={cn("group","border-b border-border", isExpired ?"hover:bg-row-reimbursement-hover" : isItm ?"hover:bg-row-uncategorized-hover" : isGrouped ?"hover:bg-muted-hover" :"hover:bg-muted", isGrouped &&"bg-muted", isExpired ?"bg-row-reimbursement" : isItm ?"bg-row-uncategorized" :"")}>
  {/* Label — frozen */}
  <td style={{ left: 0 }} className={cn(ctd,"sticky z-[2]", bEdge, stickyHover, stickyBg, isGrouped ?"pl-8 pr-2" :"pl-4 pr-2","font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-10")}>roll</td>
  <td style={{ left: 80 }} className={cn(ctd,"sticky z-[2]", bEdge, stickyHover, stickyBg)} />
@@ -5759,6 +5838,7 @@ function OptionScreener({ trackedTickers, holdingTickers, recentTickers, onDraft
  const [params, setParams] = useState<ScreenerParams>(DEFAULT_PARAMS);
  const [tickerInput, setTickerInput] = useState("");
  const [results, setResults] = useState<ScreenerResult[] | null>(null);
+ const [earningsMap, setEarningsMap] = useState<Record<string, EarningsInfo | null>>({});
  const [highlightedRows, setHighlightedRows] = useState<Set<number>>(new Set());
  const [contractsMap, setContractsMap] = useState<Map<number, number>>(new Map());
  const [addingRow, setAddingRow] = useState<number | null>(null);
@@ -5797,6 +5877,10 @@ function OptionScreener({ trackedTickers, holdingTickers, recentTickers, onDraft
  setHighlightedRows(new Set());
  setContractsMap(new Map());
  setAddedRows(new Set());
+ // Non-blocking: results render regardless of whether earnings resolve.
+ getOptionsEarnings(params.tickers, localToday())
+ .then(setEarningsMap)
+ .catch(() => setEarningsMap({}));
  } catch (e) {
  setError(e instanceof Error ? e.message :"Screener failed");
  } finally {
@@ -5834,6 +5918,23 @@ function OptionScreener({ trackedTickers, holdingTickers, recentTickers, onDraft
  setAddingRow(null);
  }
  };
+
+ // Results arrive sorted ticker → expiration → strike, so the first row whose
+ // expiry clears the earnings call is where that ticker's warning belongs —
+ // every row below it carries the same risk.
+ const earningsBanners = useMemo(() => {
+ const banners = new Map<number, EarningsInfo>();
+ if (!results) return banners;
+ const flagged = new Set<string>();
+ results.forEach((r, i) => {
+ if (flagged.has(r.ticker)) return;
+ const e = earningsMap[r.ticker.toUpperCase()] ?? null;
+ if (!earningsBeforeExpiry(e, r.expiration)) return;
+ flagged.add(r.ticker);
+ banners.set(i, e!);
+ });
+ return banners;
+ }, [results, earningsMap]);
 
  const suggestedHoldingTickers = holdingTickers.filter((s) => !params.tickers.includes(s));
  const suggestedRecentTickers = recentTickers.filter((s) => !params.tickers.includes(s));
@@ -6126,9 +6227,20 @@ function OptionScreener({ trackedTickers, holdingTickers, recentTickers, onDraft
  if (next.has(i)) next.delete(i); else next.add(i);
  return next;
  });
+ const banner = earningsBanners.get(i);
  return (
+ <React.Fragment key={i}>
+ {banner && (
+ <tr className="border-b border-border bg-row-reimbursement">
+ <td colSpan={16} className="px-4 py-2">
+ <div className="flex items-center gap-2 text-xs text-warn-deep">
+ <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+ <span>Warning: {earningsWarningText(banner)}</span>
+ </div>
+ </td>
+ </tr>
+ )}
  <tr
- key={i}
  onClick={toggleHighlight}
  className={cn(
 "border-b border-border transition-colors whitespace-nowrap cursor-pointer",
@@ -6208,6 +6320,7 @@ function OptionScreener({ trackedTickers, holdingTickers, recentTickers, onDraft
  </Tooltip>
  </td>
  </tr>
+ </React.Fragment>
  );
  })}
  </tbody>

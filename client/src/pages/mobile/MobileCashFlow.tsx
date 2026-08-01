@@ -742,7 +742,7 @@ function MobileEventsLedger({
                   onClick: () => isCCPayment ? onCCPaymentTap?.(event) : onInjectionTap?.(event),
                   className: cn(
                     "w-full text-left border-b border-border/50 px-4 py-2.5 active:bg-muted transition-colors",
-                    isInjection && "bg-warn-soft/50 active:bg-warn-soft/60",
+                    isInjection && "bg-row-reimbursement active:bg-row-reimbursement-hover",
                   ),
                 }
               : {

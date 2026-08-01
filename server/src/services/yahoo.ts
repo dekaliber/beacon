@@ -111,6 +111,167 @@ export async function fetchYahooClosingPrice(ticker: string, date: string): Prom
   }
 }
 
+// ── Upcoming earnings dates (Yahoo Finance) ─────────────────────────────────
+// Tradier has no corporate-events feed, so earnings dates come from Yahoo's
+// quote endpoint. That endpoint requires a session cookie plus a matching
+// crumb, so we mint a session once, reuse it, and re-mint on the first 401.
+
+const YAHOO_UA = "Mozilla/5.0";
+
+export type EarningsTiming = "BMO" | "AMC";
+
+export interface EarningsInfo {
+  /** Earnings date in ET, as YYYY-MM-DD. */
+  date: string;
+  /** Before market open vs. after market close, derived from the ET hour. */
+  timing: EarningsTiming;
+  /** True when Yahoo is projecting the date rather than quoting a confirmed one. */
+  isEstimate: boolean;
+}
+
+let crumbSession: { cookie: string; crumb: string } | null = null;
+
+async function getCrumbSession(force = false): Promise<{ cookie: string; crumb: string } | null> {
+  if (crumbSession && !force) return crumbSession;
+  crumbSession = null;
+  try {
+    // fc.yahoo.com answers with an error body but sets the A3 consent cookie,
+    // which is what the crumb is issued against.
+    const cookieRes = await fetch("https://fc.yahoo.com", { headers: { "User-Agent": YAHOO_UA } });
+    const setCookies =
+      typeof (cookieRes.headers as any).getSetCookie === "function"
+        ? (cookieRes.headers as any).getSetCookie() as string[]
+        : [cookieRes.headers.get("set-cookie") ?? ""];
+    const cookie = setCookies.map((c) => c.split(";")[0]).filter(Boolean).join("; ");
+    if (!cookie) return null;
+
+    const crumbRes = await fetch("https://query1.finance.yahoo.com/v1/test/getcrumb", {
+      headers: { "User-Agent": YAHOO_UA, Cookie: cookie, Accept: "text/plain" },
+    });
+    if (!crumbRes.ok) return null;
+    const crumb = (await crumbRes.text()).trim();
+    // A logged-out/blocked response comes back as HTML rather than a bare token.
+    if (!crumb || crumb.includes("<")) return null;
+
+    crumbSession = { cookie, crumb };
+    return crumbSession;
+  } catch {
+    return null;
+  }
+}
+
+// Batched v7 quotes. Returns null (rather than []) when the call fails, so
+// callers can tell "no data" apart from "lookup failed" and skip caching.
+async function fetchYahooQuotes(symbols: string[], retry = true): Promise<any[] | null> {
+  const session = await getCrumbSession();
+  if (!session) return null;
+  try {
+    const url =
+      `https://query1.finance.yahoo.com/v7/finance/quote` +
+      `?symbols=${symbols.map(encodeURIComponent).join(",")}` +
+      `&crumb=${encodeURIComponent(session.crumb)}`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": YAHOO_UA, Cookie: session.cookie, Accept: "application/json" },
+    });
+    if (res.status === 401 || res.status === 403) {
+      // Cookie/crumb pair went stale — mint a fresh one and try once more.
+      if (!retry) return null;
+      await getCrumbSession(true);
+      return fetchYahooQuotes(symbols, false);
+    }
+    if (!res.ok) return null;
+    const data = (await res.json()) as any;
+    const raw = data?.quoteResponse?.result;
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return null;
+  }
+}
+
+// ET calendar date + hour for an instant, used to bucket an earnings call into
+// before-open vs. after-close.
+function etDateAndHour(ms: number): { date: string; hour: number } {
+  const d = new Date(ms);
+  const date = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+  const hour = parseInt(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/New_York",
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).format(d),
+    10
+  );
+  return { date, hour };
+}
+
+// Earnings dates move rarely, so a few hours of staleness is harmless and keeps
+// us well clear of Yahoo's rate limits. The raw timestamp is cached (not the
+// derived EarningsInfo) so the "already passed" filter always uses a live date.
+const EARNINGS_TTL_MS = 6 * 60 * 60 * 1000;
+const earningsCache = new Map<string, { at: number; ts: number | null; isEstimate: boolean }>();
+
+// Next earnings date per symbol. `today` (YYYY-MM-DD) filters out dates that
+// have already passed; symbols with no upcoming date map to null.
+export async function fetchYahooEarnings(
+  symbols: string[],
+  today: string
+): Promise<Map<string, EarningsInfo | null>> {
+  const out = new Map<string, EarningsInfo | null>();
+  const wanted = [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))];
+  if (wanted.length === 0) return out;
+
+  const now = Date.now();
+  const toEarnings = (ts: number | null, isEstimate: boolean): EarningsInfo | null => {
+    if (ts == null) return null;
+    const { date, hour } = etDateAndHour(ts * 1000);
+    if (date < today) return null;
+    // Yahoo pins pre-market calls to their actual morning time; anything from
+    // midday onward (typically a 4:00 PM ET placeholder) reads as after-close.
+    return { date, timing: hour < 12 ? "BMO" : "AMC", isEstimate };
+  };
+
+  const stale: string[] = [];
+  for (const sym of wanted) {
+    const hit = earningsCache.get(sym);
+    if (hit && now - hit.at < EARNINGS_TTL_MS) out.set(sym, toEarnings(hit.ts, hit.isEstimate));
+    else stale.push(sym);
+  }
+  if (stale.length === 0) return out;
+
+  for (let i = 0; i < stale.length; i += 50) {
+    const batch = stale.slice(i, i + 50);
+    const quotes = await fetchYahooQuotes(batch);
+    if (quotes == null) {
+      // Lookup failed — surface null without caching, so the next call retries.
+      for (const sym of batch) if (!out.has(sym)) out.set(sym, null);
+      continue;
+    }
+    for (const q of quotes) {
+      const sym = String(q?.symbol ?? "").toUpperCase();
+      if (!sym) continue;
+      // earningsTimestampStart is the forward-looking one; plain earningsTimestamp
+      // can still point at the last reported quarter.
+      const ts: number | null = q.earningsTimestampStart ?? q.earningsTimestamp ?? null;
+      const isEstimate = q.isEarningsDateEstimate === true;
+      earningsCache.set(sym, { at: now, ts, isEstimate });
+      out.set(sym, toEarnings(ts, isEstimate));
+    }
+    // Symbols Yahoo dropped from the response have no earnings coverage.
+    for (const sym of batch) {
+      if (out.has(sym)) continue;
+      earningsCache.set(sym, { at: now, ts: null, isEstimate: false });
+      out.set(sym, null);
+    }
+  }
+
+  return out;
+}
+
 // ── Fetch display name + instrument type from Yahoo Finance ──────────────────
 // Used when creating a holding so it shows the company name (not just the
 // ticker). Falls back to the ticker symbol when the lookup yields no name.

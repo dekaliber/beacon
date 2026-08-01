@@ -1044,6 +1044,25 @@ export const getOptionAssignedBatches = (ticker: string, accountId: string) =>
     `/pending-buys/lots/by-assignment?ticker=${encodeURIComponent(ticker)}&accountId=${encodeURIComponent(accountId)}`
   );
 
+// ── Upcoming Earnings ─────────────────────────────────────────────────────────
+// Tradier has no corporate-events feed, so these come from Yahoo server-side.
+
+export type EarningsTiming = "BMO" | "AMC";
+
+export interface EarningsInfo {
+  /** Earnings date in ET, as YYYY-MM-DD. */
+  date: string;
+  /** Before market open vs. after market close. */
+  timing: EarningsTiming;
+  /** True when Yahoo is projecting the date rather than quoting a confirmed one. */
+  isEstimate: boolean;
+}
+
+export const getOptionsEarnings = (symbols: string[], today: string) =>
+  api.get<Record<string, EarningsInfo | null>>(
+    `/options/earnings?symbols=${encodeURIComponent(symbols.join(","))}&today=${today}`
+  );
+
 // ── Option Screener ───────────────────────────────────────────────────────────
 
 export interface ScreenerResult {

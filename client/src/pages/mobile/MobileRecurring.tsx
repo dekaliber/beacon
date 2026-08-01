@@ -1246,7 +1246,7 @@ export function MobileRecurring() {
                           onClick={() => setDetailRule(rule)}
                           className={cn(
                             "flex cursor-pointer items-center gap-3 px-4 py-3 active:bg-muted transition-colors",
-                            rule.id === highlightId && "bg-warn-soft"
+                            rule.id === highlightId && "bg-row-reimbursement-hover"
                           )}
                         >
                           <div className="min-w-0 flex-1">
