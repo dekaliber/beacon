@@ -4,7 +4,7 @@ import { BanknoteArrowUp, BanknoteX, CircleAlert, CalendarDays } from "lucide-re
 import { Card } from "@/components/Card";
 import { Tooltip } from "@/components/Tooltip";
 import { cn, localToday } from "@/lib/utils";
-import { earningsWithinDays, earningsWarningText } from "@/lib/earnings";
+import { earningsWithinDays, earningsWarningText, EARNINGS_IMMINENT_DAYS } from "@/lib/earnings";
 import {
   getUnderlyingQuotes,
   getOptionsEarnings,
@@ -512,6 +512,7 @@ export function AssignedSharesCard({
                   const pctTipData = baseTipData ? { ...baseTipData, mode: "pct" as const } : null;
                   const earnings = earningsMap[g.ticker.toUpperCase()] ?? null;
                   const earningsSoon = earningsWithinDays(earnings);
+                  const earningsImminent = earningsWithinDays(earnings, EARNINGS_IMMINENT_DAYS);
 
                   return (
                     <tr
@@ -526,7 +527,7 @@ export function AssignedSharesCard({
                           <span>{g.ticker}</span>
                           {earningsSoon && (
                             <Tooltip content={earningsWarningText(earnings!)}>
-                              <span className="inline-flex items-center text-warn">
+                              <span className={cn("inline-flex items-center", earningsImminent ? "text-down" : "text-warn")}>
                                 <CalendarDays className="h-3 w-3" />
                               </span>
                             </Tooltip>

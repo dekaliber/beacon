@@ -11,6 +11,11 @@ import { localToday } from "@/lib/utils";
 // call, short enough that the indicator stays meaningful rather than always-on.
 export const EARNINGS_SOON_DAYS = 30;
 
+// Inside this window earnings are imminent enough to escalate the indicator
+// from warn to down, separating "right around the corner" from "sometime this
+// month".
+export const EARNINGS_IMMINENT_DAYS = 7;
+
 // True when the earnings call lands before the option expires. Same-day earnings
 // only count when they're before the open — an after-close call on expiration day
 // happens once the contract has already settled.
