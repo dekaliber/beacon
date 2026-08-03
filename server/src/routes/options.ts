@@ -1443,7 +1443,22 @@ optionsRoutes.get("/earnings", async (req, res) => {
   if (symbolList.length === 0) return res.status(400).json({ error: "No valid symbols provided" });
 
   try {
-    const earnings = await fetchYahooEarnings(symbolList, today);
+    const { earnings, failed, failureReason } = await fetchYahooEarnings(symbolList, today);
+    // A failed upstream lookup used to return 200 with all-null values, which is
+    // indistinguishable from "none of these have upcoming earnings" — the client
+    // fails open either way, so a blocked host looked exactly like a quiet
+    // earnings calendar. Report it when every symbol failed.
+    if (failed.length === symbolList.length) {
+      console.warn(`[options/earnings] all ${symbolList.length} symbol(s) failed: ${failureReason}`);
+      return res.status(502).json({
+        error: "Upstream earnings lookup failed",
+        reason: failureReason,
+        symbols: symbolList,
+      });
+    }
+    if (failed.length > 0) {
+      console.warn(`[options/earnings] ${failed.length}/${symbolList.length} failed (${failed.join(",")}): ${failureReason}`);
+    }
     res.json(Object.fromEntries(earnings));
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";

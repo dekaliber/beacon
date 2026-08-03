@@ -147,6 +147,10 @@ async function getCrumbSession(force = false): Promise<CrumbSession | null> {
   }
 }
 
+// Why the last mint failed, surfaced so a blocked deployment is diagnosable
+// from the API response rather than looking like "no upcoming earnings".
+let lastCrumbFailure: string | null = null;
+
 async function mintCrumbSession(): Promise<CrumbSession | null> {
   crumbSession = null;
   try {
@@ -158,28 +162,48 @@ async function mintCrumbSession(): Promise<CrumbSession | null> {
         ? (cookieRes.headers as any).getSetCookie() as string[]
         : [cookieRes.headers.get("set-cookie") ?? ""];
     const cookie = setCookies.map((c) => c.split(";")[0]).filter(Boolean).join("; ");
-    if (!cookie) return null;
+    if (!cookie) {
+      lastCrumbFailure = `no set-cookie from fc.yahoo.com (HTTP ${cookieRes.status})`;
+      console.warn(`[yahoo:crumb] ${lastCrumbFailure}`);
+      return null;
+    }
 
     const crumbRes = await fetch("https://query1.finance.yahoo.com/v1/test/getcrumb", {
       headers: { "User-Agent": YAHOO_UA, Cookie: cookie, Accept: "text/plain" },
     });
-    if (!crumbRes.ok) return null;
+    if (!crumbRes.ok) {
+      lastCrumbFailure = `getcrumb HTTP ${crumbRes.status}`;
+      console.warn(`[yahoo:crumb] ${lastCrumbFailure}`);
+      return null;
+    }
     const crumb = (await crumbRes.text()).trim();
-    // A logged-out/blocked response comes back as HTML rather than a bare token.
-    if (!crumb || crumb.includes("<")) return null;
+    // A logged-out/blocked response comes back as HTML rather than a bare token
+    // — this is what a rate-limited or geo/IP-blocked host typically gets.
+    if (!crumb || crumb.includes("<")) {
+      lastCrumbFailure = crumb ? "getcrumb returned HTML, not a token (likely IP-blocked)" : "getcrumb returned empty";
+      console.warn(`[yahoo:crumb] ${lastCrumbFailure}`);
+      return null;
+    }
 
+    lastCrumbFailure = null;
     crumbSession = { cookie, crumb };
     return crumbSession;
-  } catch {
+  } catch (err) {
+    lastCrumbFailure = `mint threw: ${err instanceof Error ? err.message : String(err)}`;
+    console.warn(`[yahoo:crumb] ${lastCrumbFailure}`);
     return null;
   }
 }
 
-// Batched v7 quotes. Returns null (rather than []) when the call fails, so
-// callers can tell "no data" apart from "lookup failed" and skip caching.
-async function fetchYahooQuotes(symbols: string[], retry = true): Promise<any[] | null> {
+type QuoteResult =
+  | { ok: true; quotes: any[] }
+  | { ok: false; reason: string };
+
+// Batched v7 quotes. Reports *why* a lookup failed rather than collapsing every
+// failure to null, so a failed lookup stays distinguishable from "no data".
+async function fetchYahooQuotes(symbols: string[], retry = true): Promise<QuoteResult> {
   const session = await getCrumbSession();
-  if (!session) return null;
+  if (!session) return { ok: false, reason: lastCrumbFailure ?? "no crumb session" };
   try {
     const url =
       `https://query1.finance.yahoo.com/v7/finance/quote` +
@@ -190,16 +214,24 @@ async function fetchYahooQuotes(symbols: string[], retry = true): Promise<any[] 
     });
     if (res.status === 401 || res.status === 403) {
       // Cookie/crumb pair went stale — mint a fresh one and try once more.
-      if (!retry) return null;
+      if (!retry) {
+        console.warn(`[yahoo:quote] HTTP ${res.status} after crumb refresh — giving up`);
+        return { ok: false, reason: `quote HTTP ${res.status} after crumb refresh` };
+      }
       await getCrumbSession(true);
       return fetchYahooQuotes(symbols, false);
     }
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // 429 here is the signature of a rate-limited / datacenter-blocked host.
+      console.warn(`[yahoo:quote] HTTP ${res.status} for ${symbols.length} symbol(s)`);
+      return { ok: false, reason: `quote HTTP ${res.status}` };
+    }
     const data = (await res.json()) as any;
     const raw = data?.quoteResponse?.result;
-    return Array.isArray(raw) ? raw : [];
-  } catch {
-    return null;
+    return { ok: true, quotes: Array.isArray(raw) ? raw : [] };
+  } catch (err) {
+    console.warn(`[yahoo:quote] threw: ${err instanceof Error ? err.message : String(err)}`);
+    return { ok: false, reason: `quote threw: ${err instanceof Error ? err.message : String(err)}` };
   }
 }
 
@@ -237,16 +269,24 @@ const earningsCache = new Map<string, EarningsEntry>();
 // tickers) would each miss the cache and each hit Yahoo for the same symbols.
 const inFlight = new Map<string, Promise<EarningsEntry | null>>();
 
+// Reason the most recent upstream lookup failed, or null when the last one
+// succeeded. Reported by the route so a blocked host is visible from the
+// response instead of masquerading as "no upcoming earnings".
+let lastLookupFailure: string | null = null;
+
 // One Yahoo round-trip for a batch of symbols. Never rejects: a failed lookup
 // yields nulls and writes nothing, so the next call retries rather than
 // caching the failure.
 async function fetchEarningsBatch(batch: string[]): Promise<Map<string, EarningsEntry | null>> {
   const result = new Map<string, EarningsEntry | null>();
-  const quotes = await fetchYahooQuotes(batch);
-  if (quotes == null) {
+  const r = await fetchYahooQuotes(batch);
+  if (!r.ok) {
+    lastLookupFailure = r.reason;
     for (const sym of batch) result.set(sym, null);
     return result;
   }
+  lastLookupFailure = null;
+  const quotes = r.quotes;
   const now = Date.now();
   for (const q of quotes) {
     const sym = String(q?.symbol ?? "").toUpperCase();
@@ -271,15 +311,24 @@ async function fetchEarningsBatch(batch: string[]): Promise<Map<string, Earnings
   return result;
 }
 
+export interface EarningsLookup {
+  earnings: Map<string, EarningsInfo | null>;
+  /** Symbols whose upstream lookup errored — distinct from having no date. */
+  failed: string[];
+  /** Why the lookup failed, when it did. */
+  failureReason: string | null;
+}
+
 // Next earnings date per symbol. `today` (YYYY-MM-DD) filters out dates that
 // have already passed; symbols with no upcoming date map to null.
 export async function fetchYahooEarnings(
   symbols: string[],
   today: string
-): Promise<Map<string, EarningsInfo | null>> {
+): Promise<EarningsLookup> {
   const out = new Map<string, EarningsInfo | null>();
+  const failed: string[] = [];
   const wanted = [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))];
-  if (wanted.length === 0) return out;
+  if (wanted.length === 0) return { earnings: out, failed, failureReason: null };
 
   const now = Date.now();
   const toEarnings = (e: EarningsEntry | null): EarningsInfo | null => {
@@ -302,7 +351,10 @@ export async function fetchYahooEarnings(
     }
     const existing = inFlight.get(sym);
     if (existing) {
-      pending.push(existing.then((e) => { out.set(sym, toEarnings(e)); }));
+      pending.push(existing.then((e) => {
+        if (e == null) failed.push(sym);
+        out.set(sym, toEarnings(e));
+      }));
       continue;
     }
     fresh.push(sym);
@@ -314,14 +366,19 @@ export async function fetchYahooEarnings(
     for (const sym of batch) {
       const p = batchPromise.then((m) => m.get(sym) ?? null);
       inFlight.set(sym, p);
-      pending.push(p.then((e) => { out.set(sym, toEarnings(e)); }));
+      // A null entry means the upstream call errored — an unknown-but-reachable
+      // symbol still gets a real entry with ts: null.
+      pending.push(p.then((e) => {
+        if (e == null) failed.push(sym);
+        out.set(sym, toEarnings(e));
+      }));
     }
     // Release the in-flight slots once settled; callers already hold the promise.
     void batchPromise.finally(() => { for (const sym of batch) inFlight.delete(sym); });
   }
 
   await Promise.all(pending);
-  return out;
+  return { earnings: out, failed, failureReason: failed.length > 0 ? lastLookupFailure : null };
 }
 
 // ── Fetch display name + instrument type from Yahoo Finance ──────────────────
