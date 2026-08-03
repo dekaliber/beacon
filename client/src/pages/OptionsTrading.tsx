@@ -1274,6 +1274,19 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  // partial roll once groupId is set); every other outcome can split freely.
  const showSplit = position.contracts > 1 && !(isRolled && isChained);
 
+ // Upcoming earnings for the rolled-to expiration — the new leg carries the
+ // same gap risk as a freshly opened position. Only fetched once ROLLED is
+ // picked, since the other outcomes have no forward expiration.
+ const { data: rollEarningsMap } = useApi(
+ () =>
+ isRolled
+ ? getOptionsEarnings([position.ticker.symbol], localToday())
+ : Promise.resolve({} as Record<string, EarningsInfo | null>),
+ [isRolled, position.ticker.symbol]
+ );
+ const rollEarnings = rollEarningsMap?.[position.ticker.symbol.toUpperCase()] ?? null;
+ const showRollEarningsWarning = earningsBeforeExpiry(rollEarnings, newExpirationDate);
+
  // On mount: if the option has already expired, resolve the assignment stock
  // price and default to ASSIGNED when the contract finished in-the-money.
  // For a CALL: ITM when price > strike. For a PUT: ITM when price < strike.
@@ -1643,7 +1656,16 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  </div>
  </div>
  <div>
- <label className="block text-xs font-medium mb-1">Expiration Date</label>
+ <label className="flex items-center gap-1 text-xs font-medium mb-1">
+ Expiration Date
+ {showRollEarningsWarning && (
+ <Tooltip content={earningsWarningText(rollEarnings!)}>
+ <span className="inline-flex items-center text-warn">
+ <AlertTriangle className="h-3 w-3" />
+ </span>
+ </Tooltip>
+ )}
+ </label>
  <div className="flex items-center w-full">
  <DatePicker
  required
