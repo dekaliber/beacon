@@ -607,6 +607,21 @@ async function computeCCPaymentEvents(
         cc.closingDay,
       ));
 
+      // Expense dates are stored at local (Pacific) midnight — 07:00/08:00Z —
+      // so UTC-midnight bounds land mid-day and slide the window a day early.
+      // Use half-open whole-day bounds, matching the expense list endpoint, so
+      // the sum covers exactly the rows the statement detail view lists.
+      const periodStart = new Date(Date.UTC(
+        prevClose.getUTCFullYear(),
+        prevClose.getUTCMonth(),
+        prevClose.getUTCDate() + 1,
+      ));
+      const periodEndExclusive = new Date(Date.UTC(
+        closeDate.getUTCFullYear(),
+        closeDate.getUTCMonth(),
+        closeDate.getUTCDate() + 1,
+      ));
+
       if (override) {
         paymentAmount = parseFloat(override.amount.toString());
         overrideId = override.id;
@@ -617,7 +632,7 @@ async function computeCCPaymentEvents(
         // whether the statement has already closed.
         const periodExpenses = await prisma.expense.aggregate({
           _sum: { amount: true },
-          where: { accountId: cc.id, date: { gt: prevClose, lte: closeDate } },
+          where: { accountId: cc.id, date: { gte: periodStart, lt: periodEndExclusive } },
         });
         paymentAmount = parseFloat(periodExpenses._sum.amount?.toString() ?? "0");
         confidence = "PROJECTED";
@@ -637,11 +652,7 @@ async function computeCCPaymentEvents(
         relatedAccountName: cc.name,
         periodStart: toDateStr(closeDate),
         periodEnd: toDateStr(dueDate),
-        statementPeriodStart: toDateStr(new Date(Date.UTC(
-          prevClose.getUTCFullYear(),
-          prevClose.getUTCMonth(),
-          prevClose.getUTCDate() + 1,
-        ))),
+        statementPeriodStart: toDateStr(periodStart),
         overrideId,
       });
     }
