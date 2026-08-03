@@ -17,15 +17,15 @@ export const EARNINGS_SOON_DAYS = 30;
 export const EARNINGS_IMMINENT_DAYS = 7;
 
 // True when the earnings call lands before the option expires. Same-day earnings
-// only count when they're before the open — an after-close call on expiration day
-// happens once the contract has already settled.
+// only count when they land before the 4pm close — an after-close call on
+// expiration day happens once the contract has already settled.
 export function earningsBeforeExpiry(
   e: EarningsInfo | null | undefined,
   expiration: string
 ): boolean {
   if (!e) return false;
   const exp = expiration.split("T")[0];
-  return e.date < exp || (e.date === exp && e.timing === "BMO");
+  return e.date < exp || (e.date === exp && e.timing !== "AMC");
 }
 
 // True when the earnings call falls within `days` of today. Used where there's
@@ -45,6 +45,9 @@ export function earningsWithinDays(
 // "Earnings expected after close on 8/4"
 export function earningsWarningText(e: EarningsInfo): string {
   const [, m, d] = e.date.split("-").map(Number);
-  const when = e.timing === "BMO" ? "before open" : "after close";
+  const when =
+    e.timing === "BMO" ? "before open" :
+    e.timing === "DMH" ? "during market hours" :
+    "after close";
   return `Earnings expected ${when} on ${m}/${d}`;
 }

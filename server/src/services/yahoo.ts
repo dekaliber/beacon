@@ -111,23 +111,15 @@ export async function fetchYahooClosingPrice(ticker: string, date: string): Prom
   }
 }
 
-// ── Upcoming earnings dates (Yahoo Finance) ─────────────────────────────────
-// Tradier has no corporate-events feed, so earnings dates come from Yahoo's
-// quote endpoint. That endpoint requires a session cookie plus a matching
-// crumb, so we mint a session once, reuse it, and re-mint on the first 401.
+// ── Upcoming earnings dates (Yahoo Finance) — FALLBACK PROVIDER ─────────────
+// Yahoo's quote endpoint requires a session cookie plus a matching crumb, and
+// the crumb endpoint 429s from datacenter IP ranges — so this works in local
+// development but not from a hosted deployment. Finnhub is the primary provider
+// (see earnings.ts); this remains so local dev works without an API key.
+
+import type { ProviderResult, RawEarnings, EarningsTiming } from "./earnings.js";
 
 const YAHOO_UA = "Mozilla/5.0";
-
-export type EarningsTiming = "BMO" | "AMC";
-
-export interface EarningsInfo {
-  /** Earnings date in ET, as YYYY-MM-DD. */
-  date: string;
-  /** Before market open vs. after market close, derived from the ET hour. */
-  timing: EarningsTiming;
-  /** True when Yahoo is projecting the date rather than quoting a confirmed one. */
-  isEstimate: boolean;
-}
 
 type CrumbSession = { cookie: string; crumb: string };
 
@@ -256,129 +248,36 @@ function etDateAndHour(ms: number): { date: string; hour: number } {
   return { date, hour };
 }
 
-// Earnings dates move rarely, so a few hours of staleness is harmless and keeps
-// us well clear of Yahoo's rate limits. The raw timestamp is cached (not the
-// derived EarningsInfo) so the "already passed" filter always uses a live date.
-const EARNINGS_TTL_MS = 6 * 60 * 60 * 1000;
-type EarningsEntry = { at: number; ts: number | null; isEstimate: boolean };
-const earningsCache = new Map<string, EarningsEntry>();
+// Yahoo earnings provider. Caching, request coalescing and the today-filter all
+// live in earnings.ts — this just turns a batch of symbols into raw results.
+export async function fetchYahooEarningsRaw(symbols: string[]): Promise<ProviderResult> {
+  const entries = new Map<string, RawEarnings>();
 
-// Symbols currently being fetched. The cache is only written once a request
-// resolves, so without this two callers landing together (the Open Positions
-// table and the Assigned Lots card both mount at page load, with overlapping
-// tickers) would each miss the cache and each hit Yahoo for the same symbols.
-const inFlight = new Map<string, Promise<EarningsEntry | null>>();
+  for (let i = 0; i < symbols.length; i += 50) {
+    const batch = symbols.slice(i, i + 50);
+    const r = await fetchYahooQuotes(batch);
+    if (!r.ok) return { ok: false, reason: r.reason };
 
-// Reason the most recent upstream lookup failed, or null when the last one
-// succeeded. Reported by the route so a blocked host is visible from the
-// response instead of masquerading as "no upcoming earnings".
-let lastLookupFailure: string | null = null;
-
-// One Yahoo round-trip for a batch of symbols. Never rejects: a failed lookup
-// yields nulls and writes nothing, so the next call retries rather than
-// caching the failure.
-async function fetchEarningsBatch(batch: string[]): Promise<Map<string, EarningsEntry | null>> {
-  const result = new Map<string, EarningsEntry | null>();
-  const r = await fetchYahooQuotes(batch);
-  if (!r.ok) {
-    lastLookupFailure = r.reason;
-    for (const sym of batch) result.set(sym, null);
-    return result;
-  }
-  lastLookupFailure = null;
-  const quotes = r.quotes;
-  const now = Date.now();
-  for (const q of quotes) {
-    const sym = String(q?.symbol ?? "").toUpperCase();
-    if (!sym) continue;
-    // earningsTimestampStart is the forward-looking one; plain earningsTimestamp
-    // can still point at the last reported quarter.
-    const entry: EarningsEntry = {
-      at: now,
-      ts: q.earningsTimestampStart ?? q.earningsTimestamp ?? null,
-      isEstimate: q.isEarningsDateEstimate === true,
-    };
-    earningsCache.set(sym, entry);
-    result.set(sym, entry);
-  }
-  // Symbols Yahoo dropped from the response have no earnings coverage.
-  for (const sym of batch) {
-    if (result.has(sym)) continue;
-    const entry: EarningsEntry = { at: now, ts: null, isEstimate: false };
-    earningsCache.set(sym, entry);
-    result.set(sym, entry);
-  }
-  return result;
-}
-
-export interface EarningsLookup {
-  earnings: Map<string, EarningsInfo | null>;
-  /** Symbols whose upstream lookup errored — distinct from having no date. */
-  failed: string[];
-  /** Why the lookup failed, when it did. */
-  failureReason: string | null;
-}
-
-// Next earnings date per symbol. `today` (YYYY-MM-DD) filters out dates that
-// have already passed; symbols with no upcoming date map to null.
-export async function fetchYahooEarnings(
-  symbols: string[],
-  today: string
-): Promise<EarningsLookup> {
-  const out = new Map<string, EarningsInfo | null>();
-  const failed: string[] = [];
-  const wanted = [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))];
-  if (wanted.length === 0) return { earnings: out, failed, failureReason: null };
-
-  const now = Date.now();
-  const toEarnings = (e: EarningsEntry | null): EarningsInfo | null => {
-    if (e?.ts == null) return null;
-    const { date, hour } = etDateAndHour(e.ts * 1000);
-    if (date < today) return null;
-    // Yahoo pins pre-market calls to their actual morning time; anything from
-    // midday onward (typically a 4:00 PM ET placeholder) reads as after-close.
-    return { date, timing: hour < 12 ? "BMO" : "AMC", isEstimate: e.isEstimate };
-  };
-
-  const pending: Promise<void>[] = [];
-  const fresh: string[] = [];
-
-  for (const sym of wanted) {
-    const hit = earningsCache.get(sym);
-    if (hit && now - hit.at < EARNINGS_TTL_MS) {
-      out.set(sym, toEarnings(hit));
-      continue;
+    for (const q of r.quotes) {
+      const sym = String(q?.symbol ?? "").toUpperCase();
+      if (!sym) continue;
+      // earningsTimestampStart is the forward-looking one; plain earningsTimestamp
+      // can still point at the last reported quarter.
+      const ts: number | null = q.earningsTimestampStart ?? q.earningsTimestamp ?? null;
+      if (ts == null) {
+        entries.set(sym, { date: null, timing: "AMC", isEstimate: false });
+        continue;
+      }
+      const { date, hour } = etDateAndHour(ts * 1000);
+      // Yahoo pins pre-market calls to their actual morning time; anything from
+      // midday onward (typically a 4:00 PM ET placeholder) reads as after-close.
+      // Yahoo has no during-market-hours signal, so DMH never comes from here.
+      const timing: EarningsTiming = hour < 12 ? "BMO" : "AMC";
+      entries.set(sym, { date, timing, isEstimate: q.isEarningsDateEstimate === true });
     }
-    const existing = inFlight.get(sym);
-    if (existing) {
-      pending.push(existing.then((e) => {
-        if (e == null) failed.push(sym);
-        out.set(sym, toEarnings(e));
-      }));
-      continue;
-    }
-    fresh.push(sym);
   }
 
-  for (let i = 0; i < fresh.length; i += 50) {
-    const batch = fresh.slice(i, i + 50);
-    const batchPromise = fetchEarningsBatch(batch);
-    for (const sym of batch) {
-      const p = batchPromise.then((m) => m.get(sym) ?? null);
-      inFlight.set(sym, p);
-      // A null entry means the upstream call errored — an unknown-but-reachable
-      // symbol still gets a real entry with ts: null.
-      pending.push(p.then((e) => {
-        if (e == null) failed.push(sym);
-        out.set(sym, toEarnings(e));
-      }));
-    }
-    // Release the in-flight slots once settled; callers already hold the promise.
-    void batchPromise.finally(() => { for (const sym of batch) inFlight.delete(sym); });
-  }
-
-  await Promise.all(pending);
-  return { earnings: out, failed, failureReason: failed.length > 0 ? lastLookupFailure : null };
+  return { ok: true, entries };
 }
 
 // ── Fetch display name + instrument type from Yahoo Finance ──────────────────

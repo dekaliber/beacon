@@ -1045,16 +1045,17 @@ export const getOptionAssignedBatches = (ticker: string, accountId: string) =>
   );
 
 // ── Upcoming Earnings ─────────────────────────────────────────────────────────
-// Tradier has no corporate-events feed, so these come from Yahoo server-side.
+// Tradier has no corporate-events feed, so these are resolved server-side
+// (Finnhub, falling back to Yahoo in local development).
 
-export type EarningsTiming = "BMO" | "AMC";
+/** Before market open, after market close, or during market hours. */
+export type EarningsTiming = "BMO" | "AMC" | "DMH";
 
 export interface EarningsInfo {
   /** Earnings date in ET, as YYYY-MM-DD. */
   date: string;
-  /** Before market open vs. after market close. */
   timing: EarningsTiming;
-  /** True when Yahoo is projecting the date rather than quoting a confirmed one. */
+  /** True when the provider is projecting the date rather than confirming it. */
   isEstimate: boolean;
 }
 

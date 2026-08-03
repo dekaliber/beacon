@@ -4,7 +4,8 @@ import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { getUserId } from "../middleware/auth.js";
 import { nextBusinessDay } from "../lib/businessDays.js";
-import { fetchYahooClosingPrice, fetchYahooEarnings } from "../services/yahoo.js";
+import { fetchYahooClosingPrice } from "../services/yahoo.js";
+import { fetchUpcomingEarnings } from "../services/earnings.js";
 
 export const optionsRoutes = Router();
 
@@ -1430,7 +1431,8 @@ optionsRoutes.get("/stock-quotes", async (req, res) => {
 // ── Upcoming Earnings (Yahoo) ─────────────────────────────────────────────────
 // GET /earnings?symbols=NVDA,CEG&today=YYYY-MM-DD
 //   →  { NVDA: { date, timing, isEstimate } | null, … }
-// Tradier serves no corporate-events data, so earnings dates come from Yahoo.
+// Tradier serves no corporate-events data, so earnings dates come from Finnhub
+// (falling back to Yahoo when no Finnhub key is configured — see earnings.ts).
 
 optionsRoutes.get("/earnings", async (req, res) => {
   const { symbols, today } = req.query as Record<string, string | undefined>;
@@ -1443,7 +1445,7 @@ optionsRoutes.get("/earnings", async (req, res) => {
   if (symbolList.length === 0) return res.status(400).json({ error: "No valid symbols provided" });
 
   try {
-    const { earnings, failed, failureReason } = await fetchYahooEarnings(symbolList, today);
+    const { earnings, failed, failureReason } = await fetchUpcomingEarnings(symbolList, today);
     // A failed upstream lookup used to return 200 with all-null values, which is
     // indistinguishable from "none of these have upcoming earnings" — the client
     // fails open either way, so a blocked host looked exactly like a quiet
