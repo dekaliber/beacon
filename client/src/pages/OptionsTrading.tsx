@@ -1196,6 +1196,30 @@ function PositionModal({ tickers, editing, prefill, onClose, onSaved, onDelete, 
 const LS_LAST_FETCHED_KEY ="options_last_fetched_at";
 const LS_LIVE_PRICES_KEY ="options_live_prices";
 
+// Cached live-price entries carry the time they were actually captured, so
+// staleness can be judged per ticker rather than trusting a single global
+// "we attempted a refresh" flag — a ticker Tradier silently drops from a
+// batch response (bad/missing field, rate limit) must not be treated as
+// current just because sibling tickers refreshed fine. Older cache entries
+// (pre-timestamp format: a bare number) are treated as having ts=0, i.e.
+// always stale, so they get refetched rather than trusted blindly.
+type LivePriceEntry = { price: number; ts: number };
+
+function readLivePriceCache(): Record<string, LivePriceEntry> {
+ try {
+ const stored = localStorage.getItem(LS_LIVE_PRICES_KEY);
+ if (!stored) return {};
+ const raw = JSON.parse(stored) as Record<string, number | LivePriceEntry>;
+ const out: Record<string, LivePriceEntry> = {};
+ for (const [ticker, v] of Object.entries(raw)) {
+ out[ticker] = typeof v ==="number" ? { price: v, ts: 0 } : v;
+ }
+ return out;
+ } catch {
+ return {};
+ }
+}
+
 // Stock price to use for an assignment decision/field. Reuses the page's own
 // cached underlying quote (same Tradier-backed source as the table's price
 // column) when it was captured at or after the option's 4pm ET expiration
@@ -1204,15 +1228,8 @@ const LS_LIVE_PRICES_KEY ="options_live_prices";
 // than falling back to a second, inconsistent price source.
 async function getAssignmentStockPrice(symbol: string, expirationDateStr: string): Promise<number> {
  const expiryCloseMs = new Date(expirationDateStr +"T20:00:00.000Z").getTime();
- try {
- const lastFetchedRaw = localStorage.getItem(LS_LAST_FETCHED_KEY);
- const lastFetchedMs = lastFetchedRaw ? new Date(lastFetchedRaw).getTime() : null;
- if (lastFetchedMs != null && lastFetchedMs >= expiryCloseMs) {
- const stored = localStorage.getItem(LS_LIVE_PRICES_KEY);
- const cached = stored ? (JSON.parse(stored) as Record<string, number>)[symbol] : null;
- if (cached != null) return cached;
- }
- } catch { /* ignore unavailable/corrupt localStorage */ }
+ const cached = readLivePriceCache()[symbol];
+ if (cached != null && cached.ts >= expiryCloseMs) return cached.price;
  const quote = await getUnderlyingQuote(symbol);
  return quote.price;
 }
@@ -2480,12 +2497,17 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const [stickyRect, setStickyRect] = useState<{ left: number; width: number; colWidths: number[] } | null>(null);
  // Live data: auto-fetched stock prices; editing buffer for the inline prem field
  const [livePrices, setLivePrices] = useState<Map<string, number>>(() => {
- try {
- const stored = localStorage.getItem(LS_LIVE_PRICES_KEY);
- if (stored) return new Map(Object.entries(JSON.parse(stored) as Record<string, number>));
- } catch { /* ignore unavailable/corrupt localStorage */ }
- return new Map();
+ const cache = readLivePriceCache();
+ return new Map(Object.entries(cache).map(([t, e]) => [t, e.price]));
  });
+ const [livePriceTs, setLivePriceTs] = useState<Map<string, number>>(() => {
+ const cache = readLivePriceCache();
+ return new Map(Object.entries(cache).map(([t, e]) => [t, e.ts]));
+ });
+ // Tickers whose most recent fetch attempt failed to return a fresh quote —
+ // the displayed price (if any) is a stale cache leftover. Surfaced in the
+ // UI rather than silently trusted; see readLivePriceCache above.
+ const [stalePriceTickers, setStalePriceTickers] = useState<Set<string>>(new Set());
  const [editingPremId, setEditingPremId] = useState<string | null>(null);
  const [editingPremValue, setEditingPremValue] = useState("");
  // Per-row fetch tracking is retained for the (currently hidden) line-level
@@ -2493,12 +2515,23 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const [, setFetchingQuotes] = useState<Set<string>>(new Set());
  const [quoteErrors, setQuoteErrors] = useState<Map<string, string>>(new Map());
 
- const updateLivePrice = (ticker: string, price: number) => {
- setLivePrices((prev) => {
- const next = new Map(prev).set(ticker, price);
- try { localStorage.setItem(LS_LIVE_PRICES_KEY, JSON.stringify(Object.fromEntries(next))); } catch { /* ignore unavailable localStorage */ }
- return next;
- });
+ const updateLivePrice = (ticker: string, price: number, ts: number = Date.now()) => {
+ setLivePrices((prev) => new Map(prev).set(ticker, price));
+ setLivePriceTs((prev) => new Map(prev).set(ticker, ts));
+ try {
+ const cache = readLivePriceCache();
+ cache[ticker] = { price, ts };
+ localStorage.setItem(LS_LIVE_PRICES_KEY, JSON.stringify(cache));
+ } catch { /* ignore unavailable localStorage */ }
+ };
+
+ // A ticker's cached price is trustworthy only if it was captured after the
+ // most recent market close relevant to it — mirrors optionsPricesAreFresh's
+ // logic but per-ticker, so one silently-failed symbol in a batch fetch
+ // doesn't hide behind a globally-fresh lastFetchedAt.
+ const isTickerPriceFresh = (ticker: string) => {
+ const ts = livePriceTs.get(ticker);
+ return ts != null && optionsPricesAreFresh(new Date(ts));
  };
 
  useEffect(() => {
@@ -2506,27 +2539,37 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  for (const [ticker, price] of seedLivePrices) updateLivePrice(ticker, price);
  }, [seedLivePrices]);
 
- const fetchAllStockPrices = () => {
+ const fetchAllStockPrices = async () => {
  const uniqueTickers = [...new Set([
  ...[...positions, ...draftPositions].map((p) => p.ticker.symbol),
  ...(extraTickers ?? []),
 ])];
  if (uniqueTickers.length === 0) return;
- getUnderlyingQuotes(uniqueTickers)
- .then((results) => {
+ try {
+ const results = await getUnderlyingQuotes(uniqueTickers);
  const priceMap = new Map<string, number>();
+ const now = Date.now();
  for (const [ticker, data] of Object.entries(results)) {
- updateLivePrice(ticker, data.price);
+ updateLivePrice(ticker, data.price, now);
  priceMap.set(ticker, data.price);
  }
+ // Anything requested but missing from the response failed to refresh
+ // (Tradier dropped/omitted it) — flag it instead of quietly keeping
+ // whatever stale value happens to be cached for it.
+ const missing = uniqueTickers.filter((t) => !results[t]);
+ setStalePriceTickers(new Set(missing));
  onPricesUpdated?.(priceMap);
- })
- .catch(() => {});
+ } catch {
+ // Whole batch failed — every requested ticker's cached price (if any) is
+ // now of unknown age; flag them all rather than trusting stale values.
+ setStalePriceTickers(new Set(uniqueTickers));
+ }
  };
 
  const tickerKey = [...positions, ...draftPositions].map((p) => p.ticker.symbol).join(",");
  useEffect(() => {
- if (lastFetchedAt != null && optionsPricesAreFresh(lastFetchedAt) && livePrices.size > 0) return;
+ const tickers = tickerKey ? tickerKey.split(",") : [];
+ if (lastFetchedAt != null && optionsPricesAreFresh(lastFetchedAt) && livePrices.size > 0 && tickers.every(isTickerPriceFresh)) return;
  fetchAllStockPrices();
  // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [tickerKey]);
@@ -2620,7 +2663,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  };
  const fetchAllQuotes = async () => {
  setRefreshingAll(true);
- fetchAllStockPrices();
+ await fetchAllStockPrices();
  const open = [...positions, ...draftPositions].filter((p) => p.status ==="OPEN" && calcPosition(p).daysLeft >= 0);
  for (let i = 0; i < open.length; i++) {
  await fetchQuoteForPosition(open[i]);
@@ -2633,11 +2676,14 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  // Auto-fetch on load unless we already captured post-close prices today.
  // If lastFetchedAt is null (no prior fetch) or was before today's 5 PM ET,
  // always fetch — regardless of the current time — so the page always shows prices.
+ // Also refetches if any individual ticker's cached price isn't itself fresh,
+ // even when the global lastFetchedAt flag looks fine (see isTickerPriceFresh).
  // Manual refreshes bypass this guard entirely.
  const positionIdsKey = [...positions, ...draftPositions].filter((p) => p.status ==="OPEN").map((p) => p.id).join(",");
  useEffect(() => {
  if (!positionIdsKey) return;
- if (lastFetchedAt != null && optionsPricesAreFresh(lastFetchedAt) && livePrices.size > 0) return;
+ const tickers = [...new Set([...positions, ...draftPositions].map((p) => p.ticker.symbol))];
+ if (lastFetchedAt != null && optionsPricesAreFresh(lastFetchedAt) && livePrices.size > 0 && tickers.every(isTickerPriceFresh)) return;
  fetchAllQuotes();
  // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [positionIdsKey]);
@@ -2838,8 +2884,8 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  {p.optionType ==="CALL" ?"CC" :"CSP"}
  </span>
  </td>
- <td style={{ left: 152 }} className={stickyTd(152)}>${fmtUSD(p.strikePrice)}</td>
- <td style={{ left: 232 }} className={stickyTd(232,"border-r border-r-border/40", true)}>
+ <td style={{ left: 140 }} className={stickyTd(140)}>${fmtUSD(p.strikePrice)}</td>
+ <td style={{ left: 220 }} className={stickyTd(220,"border-r border-r-border/40", true)}>
  <div className="flex items-center gap-1">
  <span className={cn(hasEarningsRisk &&"text-warn")}>{fmtDate(p.expirationDate)}</span>
  {hasEarningsRisk && (
@@ -2916,9 +2962,18 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  {isColOpen("live") ? (
  <>
  <td className={cn(tdClass,"border-l border-border/50")}>
+ <div className="flex items-center gap-1">
  {stockNow != null
  ?`$${fmtUSD(stockNow)}`
  : <span className="text-muted-foreground">—</span>}
+ {stalePriceTickers.has(p.ticker.symbol) && (
+ <Tooltip content={stockNow != null
+ ?"Latest price fetch failed — showing a stale cached value"
+ :"Latest price fetch failed"}>
+ <AlertTriangle className="h-3 w-3 text-warn shrink-0" />
+ </Tooltip>
+ )}
+ </div>
  </td>
  <td className={tdClass}>
  <div className="flex items-center gap-1">
@@ -3048,8 +3103,8 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  {/* Label — frozen */}
  <td style={{ left: 0 }} className={cn(ctd,"sticky z-[2]", bEdge, stickyHover, stickyBg, isGrouped ?"pl-8 pr-2" :"pl-4 pr-2","font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-10")}>roll</td>
  <td style={{ left: 80 }} className={cn(ctd,"sticky z-[2]", bEdge, stickyHover, stickyBg)} />
- <td style={{ left: 152 }} className={cn(ctd,"sticky z-[2]", bEdge, stickyHover, stickyBg)} />
- <td style={{ left: 232 }} className={cn(ctd,"sticky z-[2]", bEdge,"border-r border-r-border/40", stickyHover, stickyBg)} />
+ <td style={{ left: 140 }} className={cn(ctd,"sticky z-[2]", bEdge, stickyHover, stickyBg)} />
+ <td style={{ left: 220 }} className={cn(ctd,"sticky z-[2]", bEdge,"border-r border-r-border/40", stickyHover, stickyBg)} />
 
  {/* Details group — chain net per-share in Premium column */}
  {isColOpen("details") ? (
@@ -3219,7 +3274,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <table className="w-full text-left border-collapse min-w-[700px]">
  <colgroup>
  <col style={{ width:'80px', minWidth:'80px' }} />{/* Ticker — sticky */}
- <col style={{ width:'72px', minWidth:'72px' }} />{/* Type — sticky */}
+ <col style={{ width:'60px', minWidth:'60px' }} />{/* Type — sticky */}
  <col style={{ width:'80px', minWidth:'80px' }} />{/* Strike — sticky */}
  <col style={{ width:'80px', minWidth:'80px' }} />{/* Expiration — sticky */}
  </colgroup>
@@ -3256,8 +3311,8 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <tr className="border-b border-border">
  <th style={{ left: 0 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] pl-4 pr-2")}>Ticker</th>
  <th style={{ left: 80 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Type</th>
- <th style={{ left: 152 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Strike</th>
- <th style={{ left: 232 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] border-r border-border/50")}>Exp</th>
+ <th style={{ left: 140 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Strike</th>
+ <th style={{ left: 220 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] border-r border-border/50")}>Exp</th>
  {isColOpen("details") ? (
  <>
  <th className={cn(thClass,"border-l border-border/50")}>Contracts</th>
@@ -3454,8 +3509,8 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <tr className="border-b border-border">
  <th style={{ left: 0 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] pl-4 pr-2")}>Ticker</th>
  <th style={{ left: 80 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Type</th>
- <th style={{ left: 152 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Strike</th>
- <th style={{ left: 232 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] border-r border-border/50")}>Exp</th>
+ <th style={{ left: 140 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd]")}>Strike</th>
+ <th style={{ left: 220 }} className={cn(thClass,"sticky z-[3] bg-[#fbfcfd] border-r border-border/50")}>Exp</th>
  {isColOpen("details") ? (
  <>
  <th className={cn(thClass,"border-l border-border/50")}>Contracts</th>
@@ -6442,14 +6497,8 @@ export function OptionsTrading() {
  const [assignedQuotes, setAssignedQuotes] = useState<Record<string, { price: number }>>(() => {
  // Seed from the same localStorage cache that OpenPositionsTable uses for livePrices,
  // so assigned-lot prices are available even when the staleness guard skips the fetch.
- try {
- const stored = localStorage.getItem("options_live_prices");
- if (stored) {
- const raw = JSON.parse(stored) as Record<string, number>;
- return Object.fromEntries(Object.entries(raw).map(([t, p]) => [t, { price: p }]));
- }
- } catch { /* ignore unavailable/corrupt localStorage */ }
- return {};
+ const cache = readLivePriceCache();
+ return Object.fromEntries(Object.entries(cache).map(([t, e]) => [t, { price: e.price }]));
  });
  const handlePricesUpdated = useCallback((prices: Map<string, number>) => {
  setAssignedQuotes((prev) => {
