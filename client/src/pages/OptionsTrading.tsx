@@ -4879,8 +4879,11 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
 
  return (
  <Card className="p-6">
- <div className="pb-3 border-b border-border">
- <SectionLabel>Performance Details</SectionLabel>
+ <div className="pb-3 border-b border-border flex items-center gap-1.5">
+ <SectionLabel as="span">Performance Details (Fully Completed Trades)</SectionLabel>
+ <CardInfoTooltip>
+ Rolled positions are only counted here once every leg in the chain has closed — a roll with a still-open leg is excluded entirely until it fully closes
+ </CardInfoTooltip>
  </div>
  <div className="overflow-x-auto">
  <table className="w-full text-xs">
