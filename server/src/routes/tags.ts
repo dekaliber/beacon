@@ -22,6 +22,7 @@ tagRoutes.get("/", async (req, res) => {
         include: {
           expense: {
             select: {
+              date: true,
               amount: true,
               account: { select: { isJoint: true } },
               offsets: { select: { amount: true } },
@@ -35,6 +36,7 @@ tagRoutes.get("/", async (req, res) => {
   const result = tags.map((tag) => {
     let personalTotal = 0;
     let jointTotal = 0;
+    let lastUsedAt: Date | null = null;
     for (const et of tag.expenses) {
       const offsetSum = et.expense.offsets.reduce((s, o) => s + Number(o.amount), 0);
       const amt = Number(et.expense.amount) + offsetSum;
@@ -43,9 +45,10 @@ tagRoutes.get("/", async (req, res) => {
       } else {
         personalTotal += amt;
       }
+      if (!lastUsedAt || et.expense.date > lastUsedAt) lastUsedAt = et.expense.date;
     }
     const { expenses: _, ...rest } = tag;
-    return { ...rest, personalTotal, jointTotal };
+    return { ...rest, personalTotal, jointTotal, lastUsedAt };
   });
 
   res.json(result);

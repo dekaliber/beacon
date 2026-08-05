@@ -227,7 +227,12 @@ function TagPicker({
     return [...tags, ...localTags.filter((t) => !ids.has(t.id))];
   }, [tags, localTags]);
 
-  const sortedTags = useMemo(() => [...allTags].sort((a, b) => a.name.localeCompare(b.name)), [allTags]);
+  const sortedTags = useMemo(() => [...allTags].sort((a, b) => {
+    const aTime = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : -Infinity;
+    const bTime = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : -Infinity;
+    if (aTime !== bTime) return bTime - aTime;
+    return a.name.localeCompare(b.name);
+  }), [allTags]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return sortedTags;

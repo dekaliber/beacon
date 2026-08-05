@@ -53,6 +53,7 @@ export interface Tag {
   group: string | null;
   personalTotal: number;
   jointTotal: number;
+  lastUsedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
