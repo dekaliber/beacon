@@ -275,6 +275,14 @@ export async function fetchYahooEarningsRaw(symbols: string[]): Promise<Provider
       const timing: EarningsTiming = hour < 12 ? "BMO" : "AMC";
       entries.set(sym, { date, timing, isEstimate: q.isEarningsDateEstimate === true });
     }
+
+    // The quote call is batched, so a symbol missing from a successful response
+    // is one Yahoo doesn't cover — a real answer, not a failure. Record it
+    // explicitly, otherwise the caller would treat the gap as an error and
+    // re-query it forever.
+    for (const sym of batch) {
+      if (!entries.has(sym)) entries.set(sym, { date: null, timing: "UNK", isEstimate: false });
+    }
   }
 
   return { ok: true, entries };

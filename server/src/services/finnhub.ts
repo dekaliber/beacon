@@ -86,6 +86,7 @@ export async function fetchFinnhubEarningsRaw(symbols: string[]): Promise<Provid
   const to = addDays(from, WINDOW_DAYS);
 
   const entries = new Map<string, RawEarnings>();
+  const failedSymbols: string[] = [];
   let failure: string | null = null;
 
   // Simple fixed-size worker pool over the symbol list.
@@ -94,9 +95,19 @@ export async function fetchFinnhubEarningsRaw(symbols: string[]): Promise<Provid
     for (;;) {
       const sym = queue.shift();
       if (sym === undefined) return;
-      const r = await fetchOne(sym, from, to, token);
-      if (r.ok) entries.set(sym, r.value);
-      else if (failure == null) failure = r.reason;
+      let r = await fetchOne(sym, from, to, token);
+      if (!r.ok) {
+        // One retry: because each symbol is its own request, a single transient
+        // blip would otherwise drop just that ticker's warning.
+        await new Promise((res) => setTimeout(res, 250));
+        r = await fetchOne(sym, from, to, token);
+      }
+      if (r.ok) {
+        entries.set(sym, r.value);
+      } else {
+        failedSymbols.push(sym);
+        if (failure == null) failure = r.reason;
+      }
     }
   });
   await Promise.all(workers);
@@ -107,8 +118,10 @@ export async function fetchFinnhubEarningsRaw(symbols: string[]): Promise<Provid
     console.warn(`[finnhub] earnings lookup failed for ${symbols.length} symbol(s): ${failure}`);
     return { ok: false, reason: failure };
   }
-  if (failure != null) {
-    console.warn(`[finnhub] partial earnings failure (${entries.size}/${symbols.length} ok): ${failure}`);
+  if (failedSymbols.length > 0) {
+    console.warn(
+      `[finnhub] ${failedSymbols.length}/${symbols.length} symbol(s) failed (${failedSymbols.join(",")}): ${failure}`
+    );
   }
-  return { ok: true, entries };
+  return { ok: true, entries, failedSymbols };
 }

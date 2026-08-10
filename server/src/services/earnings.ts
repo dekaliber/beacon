@@ -33,7 +33,11 @@ export interface RawEarnings {
 }
 
 export type ProviderResult =
-  | { ok: true; entries: Map<string, RawEarnings> }
+  // `entries` must contain an entry for every symbol the provider actually
+  // resolved — including `date: null` for "resolved, no upcoming earnings".
+  // Symbols whose own request errored go in `failedSymbols` (or are simply
+  // absent) so they are never cached as a negative result.
+  | { ok: true; entries: Map<string, RawEarnings>; failedSymbols?: string[] }
   | { ok: false; reason: string };
 
 export interface EarningsLookup {
@@ -99,16 +103,26 @@ async function fetchBatch(batch: string[]): Promise<Map<string, CacheEntry | nul
     for (const sym of batch) result.set(sym, null);
     return result;
   }
-  lastFailure = null;
   const now = Date.now();
+  const failedSymbols = new Set(r.failedSymbols ?? []);
+  let anyFailed = false;
   for (const sym of batch) {
-    // A symbol the provider didn't return simply has no coverage — that's a
-    // real answer, cached like any other.
-    const raw = r.entries.get(sym) ?? { date: null, timing: "UNK" as const, isEstimate: false };
+    const raw = r.entries.get(sym);
+    // Absent or explicitly failed means *that symbol's* lookup errored — the
+    // providers fill in an explicit `date: null` for a symbol they resolved but
+    // have no earnings for. Caching an error as "no earnings" would blank the
+    // warning for a full TTL on one ticker while every other ticker worked, so
+    // leave it uncached and let the next call retry.
+    if (raw === undefined || failedSymbols.has(sym)) {
+      anyFailed = true;
+      result.set(sym, null);
+      continue;
+    }
     const entry: CacheEntry = { ...raw, at: now };
     cache.set(sym, entry);
     result.set(sym, entry);
   }
+  if (!anyFailed) lastFailure = null;
   return result;
 }
 
