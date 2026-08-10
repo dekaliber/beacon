@@ -265,7 +265,7 @@ export async function fetchYahooEarningsRaw(symbols: string[]): Promise<Provider
       // can still point at the last reported quarter.
       const ts: number | null = q.earningsTimestampStart ?? q.earningsTimestamp ?? null;
       if (ts == null) {
-        entries.set(sym, { date: null, timing: "AMC", isEstimate: false });
+        entries.set(sym, { date: null, timing: "UNK", isEstimate: false });
         continue;
       }
       const { date, hour } = etDateAndHour(ts * 1000);

@@ -10,8 +10,11 @@
 import { fetchFinnhubEarningsRaw, finnhubConfigured } from "./finnhub.js";
 import { fetchYahooEarningsRaw } from "./yahoo.js";
 
-/** Before market open, after market close, or during market hours. */
-export type EarningsTiming = "BMO" | "AMC" | "DMH";
+/**
+ * Before market open, after market close, during market hours, or unknown —
+ * providers often carry the date without the slot.
+ */
+export type EarningsTiming = "BMO" | "AMC" | "DMH" | "UNK";
 
 export interface EarningsInfo {
   /** Earnings date in ET, as YYYY-MM-DD. */
@@ -101,7 +104,7 @@ async function fetchBatch(batch: string[]): Promise<Map<string, CacheEntry | nul
   for (const sym of batch) {
     // A symbol the provider didn't return simply has no coverage — that's a
     // real answer, cached like any other.
-    const raw = r.entries.get(sym) ?? { date: null, timing: "AMC" as const, isEstimate: false };
+    const raw = r.entries.get(sym) ?? { date: null, timing: "UNK" as const, isEstimate: false };
     const entry: CacheEntry = { ...raw, at: now };
     cache.set(sym, entry);
     result.set(sym, entry);

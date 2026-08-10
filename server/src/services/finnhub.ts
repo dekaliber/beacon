@@ -27,14 +27,17 @@ function addDays(date: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-// Finnhub reports "bmo" / "amc" / "dmh". A missing or unrecognized value falls
-// back to AMC, the most common slot — matching how an unspecified time was
-// treated when Yahoo was primary.
+// Finnhub reports "bmo" / "amc" / "dmh", but leaves `hour` empty for a
+// meaningful share of symbols. Unknown must NOT collapse to AMC: after-close is
+// the one value that suppresses a same-day warning (an after-close call on
+// expiration day lands after settlement), so guessing it silently hides real
+// risk. UNK warns and says only the date.
 function toTiming(hour: unknown): EarningsTiming {
   switch (String(hour ?? "").toLowerCase()) {
     case "bmo": return "BMO";
+    case "amc": return "AMC";
     case "dmh": return "DMH";
-    default: return "AMC";
+    default: return "UNK";
   }
 }
 
