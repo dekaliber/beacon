@@ -4964,13 +4964,15 @@ function CapitalDistributionBar({
  settings,
  capitalChanges,
  tickerColorMap,
+ tickerContractMap,
 }: {
  openPositions: OptionsPosition[];
  settings: OptionsSettings | null;
  capitalChanges: OptionsCapitalChange[];
  tickerColorMap: Map<string, string>;
+ tickerContractMap: Map<string, number>;
 }) {
- const [tooltip, setTooltip] = useState<{ x: number; y: number; ticker: string; capital: number; pct: number } | null>(null);
+ const [tooltip, setTooltip] = useState<{ x: number; y: number; ticker: string; capital: number; pct: number; contracts: number | null } | null>(null);
 
  const tickerCapital = new Map<string, number>();
  for (const p of openPositions) {
@@ -5000,7 +5002,7 @@ function CapitalDistributionBar({
  key={sym}
  style={{ width:`${pct}%`, backgroundColor: color }}
  className="h-full transition-all cursor-default"
- onMouseEnter={(e) => setTooltip({ x: e.clientX, y: e.clientY, ticker: sym, capital, pct })}
+ onMouseEnter={(e) => setTooltip({ x: e.clientX, y: e.clientY, ticker: sym, capital, pct, contracts: tickerContractMap.get(sym) ?? null })}
  onMouseMove={(e) => setTooltip((t) => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
  onMouseLeave={() => setTooltip(null)}
  />
@@ -5010,7 +5012,7 @@ function CapitalDistributionBar({
  <div
  style={{ flex: 1, position:"relative", backgroundColor:"var(--color-muted)" }}
  className="h-full cursor-default"
- onMouseEnter={(e) => setTooltip({ x: e.clientX, y: e.clientY, ticker:"Undeployed", capital: undeployed, pct: (undeployed / total) * 100 })}
+ onMouseEnter={(e) => setTooltip({ x: e.clientX, y: e.clientY, ticker:"Undeployed", capital: undeployed, pct: (undeployed / total) * 100, contracts: null })}
  onMouseMove={(e) => setTooltip((t) => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
  onMouseLeave={() => setTooltip(null)}
  >
@@ -5035,6 +5037,12 @@ function CapitalDistributionBar({
  <span className="text-muted-foreground">Capital</span>
  <StatValue className="font-medium">${tooltip.capital.toLocaleString("en-US", { maximumFractionDigits: 0 })}</StatValue>
  </div>
+ {tooltip.contracts != null && (
+ <div className="flex justify-between gap-4">
+ <span className="text-muted-foreground">Contracts</span>
+ <StatValue className="font-medium">{tooltip.contracts}</StatValue>
+ </div>
+ )}
  <div className="flex justify-between gap-4">
  <span className="text-muted-foreground">Share</span>
  <StatValue className="font-medium">{tooltip.pct.toFixed(1)}%</StatValue>
@@ -6630,13 +6638,13 @@ export function OptionsTrading() {
  <span>{tradingWeekLabel}</span>
  {tickerEntries.length > 0 && (
  <span className="flex items-center gap-x-4">
- {tickerEntries.map(([sym, ct]) => (
+ {tickerEntries.map(([sym]) => (
  <span key={sym} className="flex items-center gap-1.5">
  <span
  className="inline-block w-2 h-2 rounded-sm flex-shrink-0"
  style={{ backgroundColor: tickerColorMap.get(sym) }}
  />
- {sym} x{ct}
+ {sym}
  </span>
  ))}
  </span>
@@ -6647,6 +6655,7 @@ export function OptionsTrading() {
  settings={settings ?? null}
  capitalChanges={capitalChanges ?? []}
  tickerColorMap={tickerColorMap}
+ tickerContractMap={openTickerMap}
  />
  </div>
 
