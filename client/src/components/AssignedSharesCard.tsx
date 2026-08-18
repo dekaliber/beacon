@@ -475,7 +475,7 @@ export function AssignedSharesCard({
                   <th className={thClass}>Ticker</th>
                   <th className={thClass}>Assigned</th>
                   <th className={cn(thClass, "text-right")}>@ Strike</th>
-                  <th className={cn(thClass, "text-right")}>Shares</th>
+                  <th className={cn(thClass, "text-right")}>Sh</th>
                   <th className={cn(thClass, "text-right")}>Open CC</th>
                   <th className={cn(thClass, "text-right")}>Avg Strike</th>
                   <th className={cn(thClass, "text-right")}>@ Assign</th>
