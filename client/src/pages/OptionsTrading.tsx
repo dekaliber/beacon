@@ -23,7 +23,6 @@ import {
  getUnderlyingQuotes,
  getStockPriceAtOpen,
  searchTickers,
- getTickerPrice,
  getAccounts,
  getInvestmentAccounts,
  getOptionAssignedBatches,
@@ -1278,7 +1277,8 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  const [newExpirationDate, setNewExpirationDate] = useState(() => addOneWeek(position.expirationDate));
  const [newStockPriceAtOpen, setNewStockPriceAtOpen] = useState("");
  const [newFeesOpen, setNewFeesOpen] = useState("");
- const [priceFetching, setPriceFetching] = useState(false);
+ const [priceAtOpenStatus, setPriceAtOpenStatus] = useState<"idle" |"fetching" |"success" |"error">("idle");
+ const [priceAtOpenLabel, setPriceAtOpenLabel] = useState("");
  const [assignedPriceFetching, setAssignedPriceFetching] = useState(false);
 
  const [saving, setSaving] = useState(false);
@@ -1349,14 +1349,16 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  // Auto-fetch stock price when closedAt changes and outcome is ROLLED
  useEffect(() => {
  if (!isRolled || !closedAt) return;
- const dateStr = closedAt.split("T")[0];
- if (!dateStr) return;
  let cancelled = false;
- setPriceFetching(true);
- getTickerPrice(position.ticker.symbol, dateStr)
- .then((r) => { if (!cancelled) setNewStockPriceAtOpen(r.price.toFixed(2)); })
- .catch(() => {})
- .finally(() => { if (!cancelled) setPriceFetching(false); });
+ setPriceAtOpenStatus("fetching");
+ getStockPriceAtOpen(position.ticker.symbol, closedAt)
+ .then((r) => {
+ if (cancelled) return;
+ setNewStockPriceAtOpen(r.price.toFixed(2));
+ setPriceAtOpenLabel(r.timeLabel);
+ setPriceAtOpenStatus("success");
+ })
+ .catch(() => { if (!cancelled) setPriceAtOpenStatus("error"); });
  return () => { cancelled = true; };
  }, [isRolled, closedAt, position.ticker.symbol]);
 
@@ -1721,7 +1723,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  <label className="block text-xs font-medium mb-1">
  Stock Price at Open{" "}
  <span className="text-muted-foreground font-normal">
- {priceFetching ?"(fetching…)" :"(from Tradier)"}
+ {priceAtOpenStatus ==="fetching" ?"(fetching…)" :"(from Tradier)"}
  </span>
  </label>
  <div className="relative">
@@ -1729,10 +1731,12 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  <input
  type="text" inputMode="decimal"
  value={newStockPriceAtOpen} onChange={(e) => setNewStockPriceAtOpen(e.target.value)}
- placeholder={priceFetching ?"Fetching…" :""}
+ placeholder={priceAtOpenStatus ==="fetching" ?"Fetching…" :""}
  className={dollarInputClass}
  />
  </div>
+ {priceAtOpenStatus ==="success" && <p className="mt-1 tp-caption">Price as of {priceAtOpenLabel}</p>}
+ {priceAtOpenStatus ==="error" && <p className="mt-1 text-xs text-down">Price fetch failed</p>}
  </div>
 
  {/* Fees at open for the new position */}
