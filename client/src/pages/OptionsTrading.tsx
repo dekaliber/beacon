@@ -3052,7 +3052,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  </td>
  <td className={tdClass}>
  {curAnnRet != null
- ? <span className={cn(curAnnRet >= 0 ?"text-up" :"text-down", c.annReturnAtExpiry != null && curAnnRet > c.annReturnAtExpiry &&"font-bold")}>{fmtPctLive(curAnnRet)}</span>
+ ? <span className={cn(c.annReturnAtExpiry != null ? (curAnnRet > c.annReturnAtExpiry ?"text-up" :"text-warn") : (curAnnRet >= 0 ?"text-up" :"text-down"))}>{fmtPctLive(curAnnRet)}</span>
  : <span className="text-muted-foreground">—</span>}
  </td>
  <td className={tdNum}>
@@ -3174,7 +3174,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <td className={ctd} />
  <td className={ctd}>
  {chainCurAnnRet != null && (
- <span className={cn(chainCurAnnRet >= 0 ?"text-up" :"text-down", chainAnnRetAtExpiry != null && chainCurAnnRet > chainAnnRetAtExpiry &&"font-bold")}>
+ <span className={cn(chainAnnRetAtExpiry != null ? (chainCurAnnRet > chainAnnRetAtExpiry ?"text-up" :"text-warn") : (chainCurAnnRet >= 0 ?"text-up" :"text-down"))}>
  {fmtPctLive(chainCurAnnRet)}
  </span>
  )}
