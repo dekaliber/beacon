@@ -523,7 +523,9 @@ model TickerPrice {
   ticker      String   @unique
   price       Decimal  @db.Decimal(18, 8)
   priceDate   DateTime
-  priceSource String   @default("YAHOO") // "YAHOO" | "TIINGO"
+  // "FIXED" pins a stable-NAV instrument (money market funds) at `price`: it is
+  // never fetched, and its history is synthesized from the exchange calendar.
+  priceSource String   @default("YAHOO") // "YAHOO" | "TIINGO" | "FIXED"
   updatedAt   DateTime @updatedAt
 
   @@map("ticker_prices")

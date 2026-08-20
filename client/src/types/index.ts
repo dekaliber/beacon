@@ -374,6 +374,9 @@ export interface InvestmentAccountSummary {
   totalGainPct: number;
   totalDayGain: number | null;
   totalDayGainPct: number | null;
+  // True when totalDayGain is null because price history is missing the previous
+  // session, as opposed to the account simply having no priced holdings yet.
+  totalDayGainStale: boolean;
   cashBalance: number | null;
   cashBalanceUpdatedAt: string | null;
   isTaxAdvantaged: boolean;

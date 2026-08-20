@@ -11,7 +11,16 @@ export async function fetchYahooPrice(ticker: string): Promise<{ price: number; 
         Accept: "application/json",
       },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Distinguish throttling from a genuinely unknown ticker — a 429 means the
+      // whole batch is likely being shed, which looks identical to "no data" at
+      // the call site otherwise.
+      console.warn(
+        `[yahoo] ${ticker}: HTTP ${res.status}` +
+          (res.status === 429 ? " — rate limited" : ""),
+      );
+      return null;
+    }
     const data = await res.json() as any;
     const result = data?.chart?.result?.[0];
     if (!result) return null;
@@ -21,14 +30,20 @@ export async function fetchYahooPrice(ticker: string): Promise<{ price: number; 
     if (price == null || priceTs == null) return null;
     const priceDate = new Date(priceTs * 1000);
     return { price, priceDate };
-  } catch {
+  } catch (err) {
+    console.warn(`[yahoo] ${ticker}: request failed —`, err);
     return null;
   }
 }
 
-// ── Fetch adjusted-close price history from Yahoo Finance ────────────────────
+// ── Fetch closing price history from Yahoo Finance ───────────────────────────
 // Returns daily (date, closePrice) pairs for the given ticker and date range.
-// Uses adjclose so that stock splits and dividends don't create artificial jumps.
+// Uses `close`, which Yahoo already reports split-adjusted, rather than
+// `adjclose`, which additionally discounts historical prices for every later
+// dividend. These rows land in TickerPriceHistory alongside rows written by the
+// price refresh from live quotes, so they have to be on the same footing: a
+// dividend-adjusted baseline compared against an unadjusted current price turns
+// the entire adjustment (2-4% on a dividend payer) into phantom gain.
 export async function fetchYahooHistory(
   ticker: string,
   fromDate: Date,
@@ -50,11 +65,12 @@ export async function fetchYahooHistory(
     if (!result) return [];
 
     const timestamps: number[] = result.timestamp ?? [];
+    const closes: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
     const adjCloses: (number | null)[] = result.indicators?.adjclose?.[0]?.adjclose ?? [];
 
     const points: Array<{ date: Date; closePrice: number }> = [];
     for (let i = 0; i < timestamps.length; i++) {
-      const price = adjCloses[i];
+      const price = closes[i] ?? adjCloses[i];
       if (price == null || price <= 0) continue;
       // Normalize to UTC midnight for consistent DATE storage
       const raw = new Date(timestamps[i] * 1000);

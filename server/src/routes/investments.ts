@@ -86,15 +86,86 @@ async function fillPriceGaps(
   });
   const latestByTicker = new Map(latestRows.map((r) => [r.ticker, r.date]));
 
+  // A refresh run only ever writes the current day, so a session that passed with
+  // the app closed leaves an *interior* hole — one a latest-date check alone can
+  // never see, because the following day's row makes the ticker look current.
+  // Detect those by comparing each ticker against the sessions its peers recorded.
+  const holeWindowStart = new Date(targetDay.getTime() - 10 * 24 * 60 * 60 * 1000);
+  const recentRows = await prisma.tickerPriceHistory.findMany({
+    where: { ticker: { in: tickers }, date: { gte: holeWindowStart } },
+    select: { ticker: true, date: true },
+  });
+  const daysByTicker = new Map<string, Set<number>>();
+  const sessionDays = new Set<number>();
+  for (const r of recentRows) {
+    const ms = r.date.getTime();
+    let days = daysByTicker.get(r.ticker);
+    if (!days) {
+      days = new Set();
+      daysByTicker.set(r.ticker, days);
+    }
+    days.add(ms);
+    // Crypto trades every calendar day, so it can't define the exchange calendar.
+    if (!coinGeckoIdByTicker.has(r.ticker)) sessionDays.add(ms);
+  }
+
+  // Tickers priced via Tiingo (money market funds). Their history is maintained
+  // by the refresh path's Tiingo branch, so chasing gaps here would only spend a
+  // Yahoo request to learn nothing.
+  const tiingoRows = await prisma.tickerPrice.findMany({
+    where: { ticker: { in: tickers }, priceSource: "TIINGO" },
+    select: { ticker: true },
+  });
+  const tiingoTickers = new Set(tiingoRows.map((r) => r.ticker));
+
+  // Stable-NAV instruments, pinned at a fixed price. Yahoo does carry them, but
+  // returns a null close on some sessions, which leaves permanent holes that no
+  // amount of refetching fills. Their price is a constant by construction, so
+  // synthesize the missing sessions from the exchange calendar instead.
+  const fixedRows = await prisma.tickerPrice.findMany({
+    where: { ticker: { in: tickers }, priceSource: "FIXED" },
+    select: { ticker: true, price: true },
+  });
+  const fixedPrices = new Map(
+    fixedRows.map((r) => [r.ticker, parseFloat(r.price.toString())]),
+  );
+
+  // Earliest session this ticker is missing but its peers have. Only dates after
+  // the ticker's own first row count — anything earlier predates our coverage of it.
+  const earliestHole = (ticker: string): number | null => {
+    if (coinGeckoIdByTicker.has(ticker) || tiingoTickers.has(ticker)) return null;
+    if (fixedPrices.has(ticker)) {
+      // Any missing session counts, including the newest one.
+      const days = daysByTicker.get(ticker);
+      if (!days) return null;
+      const missing = [...sessionDays].filter((ms) => ms <= targetDay.getTime() && !days.has(ms));
+      return missing.length > 0 ? Math.min(...missing) : null;
+    }
+    const days = daysByTicker.get(ticker);
+    if (!days || days.size === 0) return null;
+    const ownStart = Math.min(...days);
+    const holes = [...sessionDays].filter((ms) => ms > ownStart && !days.has(ms));
+    return holes.length > 0 ? Math.min(...holes) : null;
+  };
+
   let totalInserted = 0;
   for (const ticker of tickers) {
     const latest = latestByTicker.get(ticker);
-    if (latest && latest >= targetDay) continue; // already current through the finalized day
+    const hole = earliestHole(ticker);
+    // Already current through the finalized day, with no gaps behind it
+    if (hole == null && latest && latest >= targetDay) continue;
 
     const coinGeckoId = coinGeckoIdByTicker.get(ticker);
     let points: Array<{ date: Date; closePrice: number }> = [];
 
-    if (coinGeckoId) {
+    const pinned = fixedPrices.get(ticker);
+    if (pinned != null) {
+      // Fill every session the ticker is missing at its pinned price — no request.
+      const days = daysByTicker.get(ticker) ?? new Set<number>();
+      points = [...sessionDays]
+        .filter((ms) => ms <= targetDay.getTime() && !days.has(ms))
+        .map((ms) => ({ date: new Date(ms), closePrice: pinned }));
+    } else if (coinGeckoId) {
       // Crypto: use CoinGecko market chart. Request enough days to cover the gap.
       const gapMs = targetDay.getTime() - (latest?.getTime() ?? (Date.now() - 90 * 24 * 60 * 60 * 1000));
       const days = Math.ceil(gapMs / (24 * 60 * 60 * 1000)) + 2;
@@ -104,10 +175,13 @@ async function fillPriceGaps(
       points = allPoints.filter((p) => p.date.getTime() >= fromMs && p.date <= targetDay);
       await new Promise((r) => setTimeout(r, 200)); // be polite to CoinGecko
     } else {
-      // Stocks/ETFs/funds: use Yahoo Finance
-      const fromDate = latest
-        ? new Date(latest.getTime() + 24 * 60 * 60 * 1000)
-        : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+      // Stocks/ETFs/funds: use Yahoo Finance. Start at the hole when there is one
+      // so the refetch covers it as well as anything missing off the end.
+      const fromDate = hole != null
+        ? new Date(hole)
+        : latest
+          ? new Date(latest.getTime() + 24 * 60 * 60 * 1000)
+          : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
       points = await fetchYahooHistory(ticker, fromDate, fetchToDate);
       await new Promise((r) => setTimeout(r, 150));
     }
@@ -498,29 +572,85 @@ investmentRoutes.get("/accounts", async (req, res) => {
     });
     const priceMap = new Map(cachedPrices.map((p) => [p.ticker, p]));
 
-    // Load the two most recent closing prices per ticker from TickerPriceHistory
-    // to compute 1-day change. Using a 7-day window is enough to cover any weekend
-    // or holiday gap while keeping the query small.
+    // Load recent closing prices from TickerPriceHistory to compute 1-day change.
+    // A 7-day window is enough to cover any weekend or holiday gap while keeping
+    // the query small.
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const recentHistory = await prisma.tickerPriceHistory.findMany({
       where: { ticker: { in: allTickers }, date: { gte: sevenDaysAgo } },
       orderBy: { date: "desc" },
       select: { ticker: true, date: true, closePrice: true },
     });
-    // Keep only the two most recent entries per ticker (already desc-sorted)
-    const historyByTicker = new Map<string, { closePrice: number }[]>();
+
+    // Crypto trades every calendar day, equities only on exchange sessions, so
+    // the two need different notions of "the previous day".
+    const cryptoTickers = new Set(
+      accounts
+        .flatMap((a) => a.holdings)
+        .filter((h) => h.coinGeckoId != null)
+        .map((h) => h.ticker),
+    );
+
+    // closesByTicker: ticker → (UTC-midnight ms → that day's close)
+    const closesByTicker = new Map<string, Map<number, number>>();
+    // Observed exchange calendar: every date some equity has a close for. Derived
+    // from the data rather than a hardcoded holiday list, so market holidays need
+    // no special-casing.
+    const sessionDays = new Set<number>();
     for (const row of recentHistory) {
-      const entries = historyByTicker.get(row.ticker) ?? [];
-      if (entries.length < 2) {
-        entries.push({ closePrice: parseFloat(row.closePrice.toString()) });
-        historyByTicker.set(row.ticker, entries);
+      const dayMs = row.date.getTime();
+      let closes = closesByTicker.get(row.ticker);
+      if (!closes) {
+        closes = new Map();
+        closesByTicker.set(row.ticker, closes);
       }
+      closes.set(dayMs, parseFloat(row.closePrice.toString()));
+      if (!cryptoTickers.has(row.ticker)) sessionDays.add(dayMs);
     }
-    // prevCloseMap: ticker → previous trading day's close price
-    const prevCloseMap = new Map<string, number>();
-    for (const [ticker, entries] of historyByTicker) {
-      if (entries.length >= 2) prevCloseMap.set(ticker, entries[1].closePrice);
-    }
+    const sessionDaysDesc = [...sessionDays].sort((a, b) => b - a);
+
+    // The ET calendar date a price belongs to, as UTC midnight — matching how
+    // TickerPriceHistory.date is stored.
+    const etDayMs = (d: Date): number => {
+      const [m, day, y] = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        year: "numeric", month: "2-digit", day: "2-digit",
+      }).format(d).split("/");
+      return Date.UTC(Number(y), Number(m) - 1, Number(day));
+    };
+
+    // The day the portfolio's equity prices are "as of", anchored on the newest
+    // priceDate across all of them rather than each holding's own. Per-ticker
+    // anchoring is unsafe: priceDate means different things per source, and some
+    // money market funds come back from Yahoo with a decade-old regularMarketTime,
+    // which would strand that holding before any known session.
+    // Pinned instruments are excluded: their priceDate records when the row was
+    // last touched, not a market timestamp, so it must not define the as-of day.
+    const equityPriceDays = cachedPrices
+      .filter((p) => !cryptoTickers.has(p.ticker) && p.priceSource !== "FIXED")
+      .map((p) => etDayMs(p.priceDate));
+    const asOfDay = equityPriceDays.length > 0 ? Math.max(...equityPriceDays) : null;
+    // The session before it — the baseline every equity's 1-day change is measured
+    // against. Deliberately the *immediately* preceding session: reaching further
+    // back would report a multi-session move as a 1-day one, which is the bug this
+    // guards against.
+    const equityPrevDay = asOfDay != null
+      ? sessionDaysDesc.find((ms) => ms < asOfDay) ?? null
+      : null;
+
+    // Previous close for a holding, or null when that session is missing from its
+    // history.
+    const prevCloseFor = (ticker: string, priceDate: Date): number | null => {
+      const closes = closesByTicker.get(ticker);
+      if (!closes) return null;
+      // Crypto trades every calendar day, and its priceDate is a live timestamp
+      // rather than a session close, so it anchors on itself.
+      const prevDay = cryptoTickers.has(ticker)
+        ? etDayMs(priceDate) - 24 * 60 * 60 * 1000
+        : equityPrevDay;
+      if (prevDay == null) return null;
+      return closes.get(prevDay) ?? null;
+    };
 
     // Helper: given a market value and an instrument's weights, compute how much
     // of that value is classified as Cash vs. unclassified (no weights at all).
@@ -545,6 +675,9 @@ investmentRoutes.get("/accounts", async (req, res) => {
       // 1-day change accumulators: null until at least one holding has prev-close data
       let totalDayGain: number | null = null;
       let prevDayValue = 0; // sum of prevClose * quantity for holdings with history
+      // Cleared when a priced holding has history but none for the previous
+      // session, so an incomplete sum is reported as unknown rather than as a total.
+      let dayGainComplete = true;
 
       const holdingsSummary = account.holdings.map((holding) => {
         const priceRecord = priceMap.get(holding.ticker);
@@ -563,12 +696,18 @@ investmentRoutes.get("/accounts", async (req, res) => {
         totalCost += fields.totalCost;
         if (fields.totalGain != null) totalGain += fields.totalGain;
 
-        // Accumulate 1-day gain using the previous trading day's close price
-        const prevClose = prevCloseMap.get(holding.ticker);
-        if (prevClose != null && currentPrice != null && fields.totalQuantity > 0) {
-          const dayGain = (currentPrice - prevClose) * fields.totalQuantity;
-          totalDayGain = (totalDayGain ?? 0) + dayGain;
-          prevDayValue += prevClose * fields.totalQuantity;
+        // Accumulate 1-day gain against the previous session's close. A holding
+        // with history but no usable baseline invalidates the account total; one
+        // with no history at all (opened today) simply has no 1-day change yet.
+        if (currentPrice != null && priceRecord != null && fields.totalQuantity > 0) {
+          const prevClose = prevCloseFor(holding.ticker, priceRecord.priceDate);
+          if (prevClose != null) {
+            const dayGain = (currentPrice - prevClose) * fields.totalQuantity;
+            totalDayGain = (totalDayGain ?? 0) + dayGain;
+            prevDayValue += prevClose * fields.totalQuantity;
+          } else if (closesByTicker.has(holding.ticker)) {
+            dayGainComplete = false;
+          }
         }
 
         return {
@@ -626,10 +765,13 @@ investmentRoutes.get("/accounts", async (req, res) => {
         totalCost,
         totalGain,
         totalGainPct: totalCost > 0 ? (totalGain / totalCost) * 100 : 0,
-        totalDayGain,
-        totalDayGainPct: totalDayGain != null && prevDayValue > 0
+        totalDayGain: dayGainComplete ? totalDayGain : null,
+        totalDayGainPct: dayGainComplete && totalDayGain != null && prevDayValue > 0
           ? (totalDayGain / prevDayValue) * 100
           : null,
+        // True when a stale price history — not an absence of holdings — is what
+        // made totalDayGain null, so callers can tell "unknown" from "nothing yet".
+        totalDayGainStale: !dayGainComplete,
         cashBalance,
         cashBalanceUpdatedAt: account.cashBalanceUpdatedAt,
         isTaxAdvantaged: account.isTaxAdvantaged,
@@ -1316,6 +1458,13 @@ investmentRoutes.post("/prices/refresh", async (req, res) => {
     });
     const tiingoTickers = new Set(tiingoRows.map((r) => r.ticker));
 
+    // Pinned stable-NAV tickers never move; fillPriceGaps maintains their history.
+    const fixedRows = await prisma.tickerPrice.findMany({
+      where: { ticker: { in: tickers }, priceSource: "FIXED" },
+      select: { ticker: true },
+    });
+    const fixedTickers = new Set(fixedRows.map((r) => r.ticker));
+
     console.log(
       `[price-refresh] triggered from ${source} — ${tickers.length} ticker(s)` +
       (cryptoTickers.size > 0 ? ` (${cryptoTickers.size} crypto via CoinGecko)` : "") +
@@ -1330,6 +1479,8 @@ investmentRoutes.post("/prices/refresh", async (req, res) => {
     const results: string[] = [];
 
     for (const ticker of tickers) {
+      if (fixedTickers.has(ticker)) continue;
+
       let price: number | null = null;
       let priceDate: Date | null = null;
       let priceSource: string;
@@ -1403,6 +1554,12 @@ investmentRoutes.post("/prices/refresh", async (req, res) => {
       }
     }
 
+    // See the stream route: fill in any sessions that passed with the app closed.
+    const filled = await fillPriceGaps(tickers, coinGeckoIdByTicker);
+    if (filled > 0) {
+      console.log(`[price-refresh] backfilled ${filled} missed history row(s)`);
+    }
+
     console.log(`[price-refresh] done — ${updated}/${tickers.length} updated`);
     res.json({ updated, tickers: results });
   } catch (err) {
@@ -1461,11 +1618,26 @@ investmentRoutes.get("/prices/refresh/stream", async (req, res) => {
     });
     const priceUpdatedAtMap = new Map(priceRows.map((r) => [r.ticker, r.updatedAt]));
 
+    // Pinned stable-NAV tickers never move, so they're never stale — fillPriceGaps
+    // keeps their history complete without spending a request on them.
+    const fixedRows = await prisma.tickerPrice.findMany({
+      where: { ticker: { in: tickers }, priceSource: "FIXED" },
+      select: { ticker: true },
+    });
+    const fixedTickers = new Set(fixedRows.map((r) => r.ticker));
+
     const staleTickers = tickers.filter((t) =>
+      !fixedTickers.has(t) &&
       isTickerStale(priceUpdatedAtMap.get(t) ?? null, cryptoTickers.has(t), now),
     );
 
     if (staleTickers.length === 0) {
+      // No gap-fill here on purpose. Every ticker being fresh means a refresh has
+      // already run since the last cutoff, and that run gap-filled on its way out.
+      // Doing it again would only add a silent stall to the Dashboard and
+      // Investments loads that hit this path on every visit — and because no
+      // "start" event is sent here, that stall renders as a status line with no
+      // ticker count, which reads like a hang.
       send({ type: "done", updated: 0, total: 0 });
       res.end();
       return;
@@ -1538,6 +1710,14 @@ investmentRoutes.get("/prices/refresh/stream", async (req, res) => {
       }
 
       send({ type: "progress", count: ++count, total });
+    }
+
+    // Each run only ever writes the current day, so a session that passed with
+    // the app closed leaves a hole no later refresh would fill on its own — and
+    // a hole makes the 1-day change unreportable. Backfill the missed sessions.
+    const filled = await fillPriceGaps(tickers, coinGeckoIdByTicker);
+    if (filled > 0) {
+      console.log(`[price-refresh/stream] backfilled ${filled} missed history row(s)`);
     }
 
     console.log(`[price-refresh/stream] done — ${count} of ${total} processed`);

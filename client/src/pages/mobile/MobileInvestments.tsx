@@ -747,8 +747,17 @@ export function MobileInvestments() {
   const investmentAccounts = displayAccounts;
 
   const totalPortfolioValue = displayAccounts.reduce((sum, a) => sum + a.totalMarketValue, 0);
-  const totalDayGain = investmentAccounts.reduce((sum, a) => sum + (a.totalDayGain ?? 0), 0);
-  const totalDayGainPct = totalPortfolioValue > 0 ? (totalDayGain / totalPortfolioValue) * 100 : null;
+  // An account reports a stale 1-day change when its price history is missing the
+  // previous session. Counting those as 0 would understate the portfolio move, so
+  // the total goes unknown alongside them.
+  const dayGainStale = investmentAccounts.some((a) => a.totalDayGainStale);
+  const totalDayGain = dayGainStale
+    ? null
+    : investmentAccounts.reduce((sum, a) => sum + (a.totalDayGain ?? 0), 0);
+  const totalDayGainPct =
+    totalDayGain != null && totalPortfolioValue > 0
+      ? (totalDayGain / totalPortfolioValue) * 100
+      : null;
 
   const settlementCash = investmentAccounts.reduce((sum, a) => sum + (a.cashBalance ?? 0), 0);
   const classifiedCashHoldings = investmentAccounts.reduce((sum, a) => sum + a.classifiedCashValue, 0);
@@ -854,7 +863,7 @@ export function MobileInvestments() {
               <div>
                 <SectionLabel>Total Portfolio</SectionLabel>
                 <KpiAmount value={totalPortfolioValue} className="mt-0.5" />
-                {totalDayGain !== 0 && (
+                {totalDayGain != null && totalDayGain !== 0 && (
                   <GainBadge value={totalDayGain} pct={totalDayGainPct} label="1-day" className="mt-1" />
                 )}
                 <p className="tp-caption mt-1">
