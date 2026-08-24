@@ -48,7 +48,7 @@ import type { TickerSearchResult } from"@/types";
 import { useNotifications } from"@/context/NotificationContext";
 import { Card } from"@/components/Card";
 import { Tooltip } from"@/components/Tooltip";
-import { AssignedSharesCard, type SellCoveredCallSeed } from"@/components/AssignedSharesCard";
+import { AssignedSharesCard, cappedUnrealizedPnl, type SellCoveredCallSeed } from"@/components/AssignedSharesCard";
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { DatePicker } from"@/components/DatePicker";
@@ -6530,16 +6530,9 @@ export function OptionsTrading() {
  for (const h of activeHoldings) {
  const price = assignedQuotes[h.ticker]?.price;
  if (price == null) continue;
- const coveredShares = Math.min(h.openCallContracts * 100, h.shares);
- const uncoveredShares = h.shares - coveredShares;
- const ccIsItm = h.openCallAvgStrike != null && price > h.openCallAvgStrike && coveredShares > 0;
- if (ccIsItm && h.openCallAvgStrike != null) {
- // Cap the covered-share gain at the CC strike; uncovered shares use live price.
- total += (h.openCallAvgStrike - h.assignmentStrike) * coveredShares
- + (price - h.assignmentStrike) * uncoveredShares;
- } else {
- total += (price - h.assignmentStrike) * h.shares;
- }
+ // Each covered block caps at its own call's strike (not the average), and
+ // uncovered shares ride the live price — same math as the Assigned Lots table.
+ total += cappedUnrealizedPnl(h, price).capped;
  }
  return total;
  }, [activeHoldings, assignedQuotes]);

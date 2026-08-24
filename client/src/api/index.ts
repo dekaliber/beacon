@@ -1129,6 +1129,9 @@ export interface ActiveAssignedHolding {
   acquiredDate: string | null;
   openCallContracts: number; // outstanding CC contracts against this batch
   openCallAvgStrike: number | null; // contracts-weighted avg strike of those CCs
+  // Per-strike breakdown of those CCs (ascending by strike) — the average strike
+  // can't tell you how much of the lot is capped at which price.
+  openCallLegs: { strike: number; contracts: number }[];
   stockPriceAtAssignment: number | null; // underlying price at close on assignment date
   fromOptionsPositionId: string | null;
   cspPremium: number; // this lot's originating CSP (+ any pre-assignment roll chain) net premium

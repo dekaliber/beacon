@@ -144,6 +144,10 @@ assignedSharesRoutes.get("/active", async (req, res) => {
   // Σ(callStrike × contracts) per batch; divided by contracts below to get the
   // contracts-weighted average strike of the open covered calls on that lot.
   const openCallStrikeWeightedByBatch = new Map<string, number>();
+  // Per-strike contract counts per batch. The average strike is fine for display
+  // but wrong for capping upside: with a $80 and a $81 call on 200 shares, each
+  // 100-share block is capped at its own strike, not at the $80.50 average.
+  const openCallLegsByBatch = new Map<string, Map<number, number>>();
   for (const cc of openCalls) {
     if (cc.assignedFromStrikePrice == null || cc.assignedFromExpirationDate == null) continue;
     if (cc.investmentAccountId == null) continue;
@@ -158,6 +162,10 @@ assignedSharesRoutes.get("/active", async (req, res) => {
       key,
       (openCallStrikeWeightedByBatch.get(key) ?? 0) + Number(cc.strikePrice) * cc.contracts
     );
+    const legs = openCallLegsByBatch.get(key) ?? new Map<number, number>();
+    const strike = Number(cc.strikePrice);
+    legs.set(strike, (legs.get(strike) ?? 0) + cc.contracts);
+    openCallLegsByBatch.set(key, legs);
   }
 
   // A CSP rolled one or more times before assignment shares its groupId across
@@ -207,6 +215,9 @@ assignedSharesRoutes.get("/active", async (req, res) => {
         openCallContracts > 0
           ? (openCallStrikeWeightedByBatch.get(key) ?? 0) / openCallContracts
           : null;
+      const openCallLegs = [...(openCallLegsByBatch.get(key) ?? new Map<number, number>())]
+        .map(([strike, contracts]) => ({ strike, contracts }))
+        .sort((a, b) => a.strike - b.strike);
 
       const cspPremium = l.fromOptionsPosition!.groupId
         ? cspChainPremiumByGroup.get(l.fromOptionsPosition!.groupId) ?? 0
@@ -230,6 +241,7 @@ assignedSharesRoutes.get("/active", async (req, res) => {
         acquiredDate: l.acquiredDate ? l.acquiredDate.toISOString().slice(0, 10) : null,
         openCallContracts,
         openCallAvgStrike,
+        openCallLegs,
         stockPriceAtAssignment: l.fromOptionsPosition!.stockPriceAtClose != null
           ? Number(l.fromOptionsPosition!.stockPriceAtClose)
           : null,

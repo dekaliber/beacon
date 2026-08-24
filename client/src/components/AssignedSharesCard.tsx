@@ -48,7 +48,9 @@ interface CcCapTipData {
   x: number;
   y: number;
   mode: "amount" | "pct";
-  ccStrike: number;
+  // Label rather than a single number: a lot can be covered by calls at several
+  // strikes, each capping its own 100-share block.
+  ccStrikeLabel: string;
   cappedUnreal: number;
   uncappedUnreal: number;
   missedUpside: number;
@@ -56,14 +58,14 @@ interface CcCapTipData {
   uncappedPct: number;
   missedPct: number;
 }
-function CcCapTooltipPortal({ x, y, mode, ccStrike, cappedUnreal, uncappedUnreal, missedUpside, cappedPct, uncappedPct, missedPct }: CcCapTipData) {
+function CcCapTooltipPortal({ x, y, mode, ccStrikeLabel, cappedUnreal, uncappedUnreal, missedUpside, cappedPct, uncappedPct, missedPct }: CcCapTipData) {
   return createPortal(
     <div
       className="fixed z-[70] pointer-events-none w-64 rounded-md border border-border bg-background px-3 py-2.5 text-xs shadow-md"
       style={{ left: x, top: y - 6, transform: "translateX(-50%) translateY(-100%)" }}
     >
       <p className="font-medium text-foreground mb-2">
-        Upside capped by CC at ${fmtUSD(ccStrike)}
+        {ccStrikeLabel}
       </p>
       {mode === "amount" ? (
         <span className="flex flex-col gap-1 font-mono tabular-nums">
@@ -110,6 +112,7 @@ interface ActiveGroup {
   acquiredDate: string | null;
   openCallContracts: number;
   openCallAvgStrike: number | null;
+  openCallLegs: { strike: number; contracts: number }[];
   stockPriceAtAssignment: number | null;
   shares: number;
   cspPremium: number;
@@ -154,6 +157,7 @@ function groupActive(rows: ActiveAssignedHolding[]): ActiveGroup[] {
         // Same across the batch (matched by ticker|strike|expiry|account).
         openCallContracts: r.openCallContracts,
         openCallAvgStrike: r.openCallAvgStrike,
+        openCallLegs: r.openCallLegs ?? [],
         stockPriceAtAssignment: r.stockPriceAtAssignment,
         shares: r.shares,
         cspPremium: r.cspPremium,
@@ -206,6 +210,32 @@ function groupRealized(rows: RealizedDisposition[]): RealizedGroup[] {
     .sort((a, b) => (a.latestSaleDate < b.latestSaleDate ? 1 : -1));
 }
 
+// Caps a lot's unrealized P&L at the strikes of the covered calls written
+// against it. Shares are allocated to the open calls 100 per contract, lowest
+// strike first, and each block's upside stops at that block's own strike — the
+// contracts-weighted average strike would over- or under-state the cap whenever
+// the calls sit at different strikes (e.g. 200 shares under an $80 and an $81
+// call at a $80.10 price: only the $81 block gains).
+export function cappedUnrealizedPnl(
+  lot: { shares: number; assignmentStrike: number; openCallLegs?: { strike: number; contracts: number }[] },
+  price: number
+): { capped: number; cappedStrikes: number[] } {
+  const legs = [...(lot.openCallLegs ?? [])].sort((a, b) => a.strike - b.strike);
+  const cappedStrikes: number[] = [];
+  let remaining = lot.shares;
+  let capped = 0;
+  for (const leg of legs) {
+    if (remaining <= 0) break;
+    const legShares = Math.min(leg.contracts * 100, remaining);
+    remaining -= legShares;
+    if (price > leg.strike) cappedStrikes.push(leg.strike);
+    capped += (Math.min(price, leg.strike) - lot.assignmentStrike) * legShares;
+  }
+  // Whatever isn't covered by a call rides the live price.
+  capped += (price - lot.assignmentStrike) * remaining;
+  return { capped, cappedStrikes };
+}
+
 // Per-row derived metrics for the Assigned Lots (active) tab — pulled out of
 // the row renderer so the summary footer can reduce over the exact same
 // numbers rather than recomputing (and risking drift from) its own copy.
@@ -218,12 +248,16 @@ function computeActiveRowMetrics(g: ActiveGroup, price: number | null, todayLoca
   const uncoveredShares = g.shares - coveredShares;
   const canSellCC = uncoveredShares >= 100;
 
-  // CC cap: when the covered call is ITM (price > CC strike), the covered
-  // shares will be called away at the strike — cap their upside.
+  // CC cap: covered shares under an ITM call will be called away at that call's
+  // own strike — cap each block separately (see cappedUnrealizedPnl).
   const ccStrike = g.openCallAvgStrike;
-  const ccIsItm = price != null && ccStrike != null && price > ccStrike && coveredShares > 0;
-  const cappedUnreal = ccIsItm && price != null && ccStrike != null
-    ? (ccStrike - g.assignmentStrike) * coveredShares + (price - g.assignmentStrike) * uncoveredShares
+  const cap = price != null && coveredShares > 0 ? cappedUnrealizedPnl(g, price) : null;
+  const ccIsItm = cap != null && cap.cappedStrikes.length > 0;
+  const cappedUnreal = ccIsItm && cap != null ? cap.capped : null;
+  const ccStrikeLabel = ccIsItm && cap != null
+    ? `Upside capped by ${cap.cappedStrikes.length > 1 ? "CCs" : "CC"} at ${
+        [...new Set(cap.cappedStrikes)].map((k) => `$${fmtUSD(k)}`).join(" / ")
+      }`
     : null;
   const cappedPct = ccIsItm && cappedUnreal != null
     ? (cappedUnreal / (g.assignmentStrike * g.shares)) * 100
@@ -252,7 +286,7 @@ function computeActiveRowMetrics(g: ActiveGroup, price: number | null, todayLoca
 
   return {
     price, mktValue, unreal, pct, coveredShares, uncoveredShares, canSellCC,
-    ccStrike, ccIsItm, cappedUnreal, cappedPct, missedUpside,
+    ccStrike, ccStrikeLabel, ccIsItm, cappedUnreal, cappedPct, missedUpside,
     costBasis, uncappedPct, missedPct, totPrem, daysElapsed, ror,
   };
 }
@@ -501,12 +535,12 @@ export function AssignedSharesCard({
               <tbody>
                 {activeRows.map(({
                   g, price, mktValue, unreal, pct, coveredShares, uncoveredShares, canSellCC,
-                  ccStrike, ccIsItm, cappedUnreal, cappedPct, missedUpside,
+                  ccIsItm, ccStrikeLabel, cappedUnreal, cappedPct, missedUpside,
                   uncappedPct, missedPct, totPrem, ror,
                 }) => {
                   const baseTipData =
-                    ccIsItm && ccStrike != null && cappedUnreal != null && cappedPct != null && missedUpside != null
-                      ? { ccStrike, cappedUnreal, uncappedUnreal: unreal!, missedUpside, cappedPct, uncappedPct, missedPct }
+                    ccIsItm && ccStrikeLabel != null && cappedUnreal != null && cappedPct != null && missedUpside != null
+                      ? { ccStrikeLabel, cappedUnreal, uncappedUnreal: unreal!, missedUpside, cappedPct, uncappedPct, missedPct }
                       : null;
                   const amountTipData = baseTipData ? { ...baseTipData, mode: "amount" as const } : null;
                   const pctTipData = baseTipData ? { ...baseTipData, mode: "pct" as const } : null;
