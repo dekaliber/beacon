@@ -463,6 +463,9 @@ interface PositionModalProps {
  groups: OptionsPositionGroup[];
  editing: OptionsPosition | null;
  prefill?: PositionPrefill;
+ // Account to preselect for a brand-new position (most recently used); ignored
+ // when editing or when a prefill already carries one.
+ defaultInvestmentAccountId?: string | null;
  onClose: () => void;
  onSaved: () => void;
  onDelete: () => Promise<void>;
@@ -484,7 +487,7 @@ type TickerDropdownItem =
  | { kind:"existing"; id: string; symbol: string }
  | { kind:"new"; result: TickerSearchResult };
 
-function PositionModal({ tickers, editing, prefill, onClose, onSaved, onDelete, onTickerCreated }: PositionModalProps) {
+function PositionModal({ tickers, editing, prefill, defaultInvestmentAccountId, onClose, onSaved, onDelete, onTickerCreated }: PositionModalProps) {
  const [tickerQuery, setTickerQuery] = useState(editing?.ticker?.symbol ?? prefill?.tickerSymbol ??"");
  const [selectedExistingId, setSelectedExistingId] = useState<string | null>(editing?.tickerId ?? prefill?.tickerId ?? null);
  const [dropdownItems, setDropdownItems] = useState<TickerDropdownItem[]>([]);
@@ -520,7 +523,9 @@ function PositionModal({ tickers, editing, prefill, onClose, onSaved, onDelete, 
  const [notes, setNotes] = useState(editing?.notes ??"");
  const [excludeFromLivePnl, setExcludeFromLivePnl] = useState(editing?.excludeFromLivePnl ?? false);
  const [groupId] = useState(editing?.groupId ??"");
- const [investmentAccountId, setInvestmentAccountId] = useState(editing?.investmentAccountId ?? prefill?.investmentAccountId ??"");
+ const [investmentAccountId, setInvestmentAccountId] = useState(
+ editing ? editing.investmentAccountId ??"" : prefill?.investmentAccountId ??""
+ );
  const [selectedBatchKey, setSelectedBatchKey] = useState<string>(() => {
  if (editing?.assignedFromStrikePrice != null && editing?.assignedFromExpirationDate) {
  const expDate = editing.assignedFromExpirationDate.split("T")[0];
@@ -539,6 +544,22 @@ function PositionModal({ tickers, editing, prefill, onClose, onSaved, onDelete, 
 
  // Investment accounts for account selector
  const { data: investmentAccounts, loading: accountsLoading } = useApi(() => getInvestmentAccounts(), []);
+
+ // Preselect the most recently used account on a brand-new position, but only
+ // once the list confirms it's still selectable (an account since closed or
+ // switched to managed would otherwise leave the picker on a phantom value).
+ // Runs at most once, so a later manual change — including back to None — sticks.
+ const defaultAccountSeeded = useRef(false);
+ useEffect(() => {
+ if (defaultAccountSeeded.current) return;
+ if (editing || prefill?.investmentAccountId || !defaultInvestmentAccountId) return;
+ if (!investmentAccounts) return;
+ defaultAccountSeeded.current = true;
+ const eligible = investmentAccounts.some(
+ (a) => a.id === defaultInvestmentAccountId && a.type ==="INVESTMENT" && !a.isManaged
+ );
+ if (eligible) setInvestmentAccountId(defaultInvestmentAccountId);
+ }, [investmentAccounts, editing, prefill, defaultInvestmentAccountId]);
 
  // Assignment batches for CC lot picker: load when ticker + account are both selected
  const selectedTicker = selectedExistingId
@@ -6431,6 +6452,20 @@ export function OptionsTrading() {
  const openPositions = normalizedPositions.filter((p) => p.status ==="OPEN" && !p.isDraft);
  const closedPositions = normalizedPositions.filter((p) => p.status !=="OPEN");
 
+ // Account to preselect when opening a new position: the one on the most
+ // recently entered position (createdAt, not openedAt — backfilling an old
+ // trade is still the account you're working in). Derived from the positions
+ // already loaded, so nothing extra is stored.
+ const lastUsedInvestmentAccountId = useMemo(() => {
+ let latest: { at: number; id: string } | null = null;
+ for (const p of allPositions ?? []) {
+ if (!p.investmentAccountId) continue;
+ const at = new Date(p.createdAt).getTime();
+ if (latest === null || at > latest.at) latest = { at, id: p.investmentAccountId };
+ }
+ return latest?.id ?? null;
+ }, [allPositions]);
+
  // Chain metrics for open rolled positions:
  // - chainPnlMap: sum of closed legs' P&L (open leg's live P&L is added at render time)
  // - chainFirstOpenedMap: earliest openedAt across ALL legs (open + closed) in the chain
@@ -6746,6 +6781,7 @@ export function OptionsTrading() {
  groups={groups ?? []}
  editing={positionModal ==="new" || (typeof positionModal ==="object" &&"kind" in positionModal) ? null : positionModal}
  prefill={typeof positionModal ==="object" && positionModal !== null &&"kind" in positionModal ? positionModal : undefined}
+ defaultInvestmentAccountId={lastUsedInvestmentAccountId}
  onClose={() => setPositionModal(null)}
  onSaved={() => { setPositionModal(null); refetchAll(); }}
  onDelete={async () => { if (typeof positionModal ==="object" && positionModal !== null && !("kind" in positionModal)) { await handleDelete(positionModal); setPositionModal(null); } }}
