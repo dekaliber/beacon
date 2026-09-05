@@ -3604,21 +3604,27 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
  })
  : [];
 
- // Once lots load, pre-fill suggested lot quantities
+ // Once lots load, pre-fill suggested lot quantities — oldest lot first and
+ // capped at the shares actually being sold, since an assigned covered call
+ // only calls away contracts × 100 shares, which can be a fraction of the
+ // suggested lot (e.g. 1 contract assigned against a 200-share lot).
  const [suggestedApplied, setSuggestedApplied] = useState(false);
  useEffect(() => {
  if (suggestedApplied || !hasSuggestedLots || sortedLots.length === 0) return;
  const inputs: Record<string, string> = {};
+ let remaining = defaultShares;
  for (const lot of sortedLots) {
- if (pendingSale.suggestedLotIds.includes(lot.id)) {
- inputs[lot.id] = parseFloat(lot.quantity).toString();
- }
+ if (remaining <= 0) break;
+ if (!pendingSale.suggestedLotIds.includes(lot.id)) continue;
+ const take = Math.min(parseFloat(lot.quantity), remaining);
+ remaining -= take;
+ inputs[lot.id] = take.toString();
  }
  if (Object.keys(inputs).length > 0) {
  setLotInputs(inputs);
  setSuggestedApplied(true);
  }
- }, [sortedLots, hasSuggestedLots, pendingSale.suggestedLotIds, suggestedApplied]);
+ }, [sortedLots, hasSuggestedLots, pendingSale.suggestedLotIds, suggestedApplied, defaultShares]);
 
  const lotAllocations = sortedLots
  .map(lot => ({ lotId: lot.id, shares: parseAmount((lotInputs[lot.id] ||"0")) || 0 }))
