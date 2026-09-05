@@ -60,6 +60,7 @@ import { getWeeklyExpiration, nextWeekExpiration, prevWeekExpiration, calcDTE, i
 import { SectionLabel, ColumnHeader, StatValue } from"@/components/Typography";
 import { optionsPricesAreFresh } from"@/lib/priceUtils";
 import { BeaconLoader } from"@/components/BeaconLoader";
+import { SelectionTotalsBar } from"@/components/SelectionTotalsBar";
 import {
  ResponsiveContainer,
  BarChart,
@@ -2516,6 +2517,30 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
  const [openColGroups, setOpenColGroups] = useState<Set<ColGroupKey>>(new Set(["live"]));
  const [draftsOpen, setDraftsOpen] = useState(true);
+ // Click-to-select rows, summed in the floating totals bar. Cleared whenever the
+ // visible row set changes so the totals always describe what's on screen.
+ const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+ const clearSelection = () => setSelectedIds((prev) => (prev.size === 0 ? prev : new Set()));
+ const onToggleSelect = (id: string) =>
+ setSelectedIds((prev) => {
+ const next = new Set(prev);
+ if (next.has(id)) next.delete(id); else next.add(id);
+ return next;
+ });
+ // Any change to the underlying rows (a position closed, edited, added) drops
+ // the selection rather than leaving stale ids summed into the totals.
+ const positionIdSig = positions.map((p) => p.id).join(",");
+ useEffect(() => { setSelectedIds(new Set()); }, [positionIdSig]);
+ useEffect(() => {
+ const onKey = (e: KeyboardEvent) => {
+ // Let a focused field (inline premium edit, ticker search) handle its own Escape.
+ const t = e.target as HTMLElement | null;
+ if (t && (t.tagName ==="INPUT" || t.tagName ==="TEXTAREA" || t.isContentEditable)) return;
+ if (e.key ==="Escape") clearSelection();
+ };
+ document.addEventListener("keydown", onKey);
+ return () => document.removeEventListener("keydown", onKey);
+ }, []);
  const tableContainerRef = useRef<HTMLDivElement>(null);
  const theadRef = useRef<HTMLTableSectionElement>(null);
  const portalScrollRef = useRef<HTMLDivElement>(null);
@@ -2721,12 +2746,14 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  );
  }
 
- const toggleGroup = (id: string) =>
+ const toggleGroup = (id: string) => {
+ clearSelection(); // expanding/collapsing changes which rows are on screen
  setExpandedGroups((prev) => {
  const next = new Set(prev);
  if (next.has(id)) next.delete(id); else next.add(id);
  return next;
  });
+ };
 
  // Sort drafts: expired first, then expiration asc, ticker asc, strike asc, premium asc
  const sortedDrafts = [...draftPositions].sort((a, b) => {
@@ -2776,6 +2803,10 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
 
  const thClass ="px-2 py-2 text-left font-mono text-10 font-medium tracking-[0.11em] uppercase text-[var(--color-ink-3)] whitespace-nowrap";
  const renderRow = (p: OptionsPosition, isGrouped = false, isDraftRow = false) => {
+ // Drafts aren't real positions — no capital deployed, synthetic openedAt — so
+ // they stay out of the selection.
+ const isSelectable = !isDraftRow;
+ const isSelected = isSelectable && selectedIds.has(p.id);
  // For draft rows, substitute page-load time so duration/ann-return calculations are meaningful
  const calcP = isDraftRow ? { ...p, openedAt: PAGE_LOAD_TIME } : p;
  const c = calcPosition(calcP);
@@ -2881,8 +2912,10 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  // above --color-background (which ≈ --color-muted), so a token fill would erase
  // the hover step. #fbfcfd matches the lightened surface and stays lighter than
  // the bg-muted hover. Near-white, so cross-monitor drift is negligible.
- const stickyBg = isExpired ?"bg-row-warn-solid" : isItm ?"bg-row-down-solid" :"bg-[#fbfcfd]";
- const stickyHover = isExpired ?"group-hover:bg-row-warn-solid-hover" : isItm ?"group-hover:bg-row-down-solid-hover" : isGrouped ?"group-hover:bg-muted-hover" :"group-hover:bg-muted";
+ // Selection outranks the status tints: a selected row reads as selected first,
+ // whatever its expiry/ITM state.
+ const stickyBg = isSelected ?"bg-row-accent-solid" : isExpired ?"bg-row-warn-solid" : isItm ?"bg-row-down-solid" :"bg-[#fbfcfd]";
+ const stickyHover = isSelected ?"group-hover:bg-row-accent-solid-hover" : isExpired ?"group-hover:bg-row-warn-solid-hover" : isItm ?"group-hover:bg-row-down-solid-hover" : isGrouped ?"group-hover:bg-muted-hover" :"group-hover:bg-muted";
  // Frozen cells are z-raised + opaque, so the row's collapsed bottom border
  // gets painted over. Re-draw it on the cell itself (matches the tr's
  // border-b condition: omitted when a roll sub-row follows). Tinted rows use
@@ -2892,8 +2925,17 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const stickyTd = (_leftPx: number, extra?: string, textOnly = false) =>
  cn(textOnly ? tdTextClass : tdClass,"sticky z-[2]", !hasChain && bEdge, stickyHover, stickyBg, extra);
 
+ // Row tint classes shared by the primary row and its roll sub-row, so a
+ // rolled position highlights as a single unit.
+ const rowTint = cn(
+ isSelected ?"hover:bg-row-accent-hover" : isExpired ?"hover:bg-row-warn-hover" : isItm ?"hover:bg-row-down-hover" : isGrouped ?"hover:bg-muted-hover" :"hover:bg-muted",
+ isGrouped &&"bg-muted",
+ isSelected ?"bg-row-accent" : isExpired ?"bg-row-warn" : isItm ?"bg-row-down" :"",
+ isSelectable &&"cursor-pointer"
+ );
+
  const primaryRow = (
- <tr key={p.id} className={cn("group", hasChain ?"" :"border-b border-border", isExpired ?"hover:bg-row-warn-hover" : isItm ?"hover:bg-row-down-hover" : isGrouped ?"hover:bg-muted-hover" :"hover:bg-muted", isGrouped &&"bg-muted", isExpired ?"bg-row-warn" : isItm ?"bg-row-down" :"", isDraftRow &&"italic opacity-60")}>
+ <tr key={p.id} onClick={isSelectable ? () => onToggleSelect(p.id) : undefined} className={cn("group", hasChain ?"" :"border-b border-border", rowTint, isDraftRow &&"italic opacity-60")}>
  {/* ── Group 1: Position (always visible, frozen) ── */}
  <td style={{ left: 0 }} className={stickyTd(0, isGrouped ?"pl-8 pr-2" :"pl-4 pr-2", true)}>
  <div className="flex items-center gap-1.5">
@@ -3008,6 +3050,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  inputMode="decimal"
  autoFocus
  value={editingPremValue}
+ onClick={(e) => e.stopPropagation()}
  onChange={(e) => setEditingPremValue(e.target.value)}
  onBlur={async () => {
  const val = editingPremValue !=="" ? parseAmount(editingPremValue) : null;
@@ -3023,7 +3066,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  />
  ) : (
  <span
- onClick={() => { setEditingPremId(p.id); setEditingPremValue(p.currentPremiumPerShare?.toString() ??""); }}
+ onClick={(e) => { e.stopPropagation(); setEditingPremId(p.id); setEditingPremValue(p.currentPremiumPerShare?.toString() ??""); }}
  className="cursor-pointer border-b border-dotted border-transparent hover:border-muted-foreground/50"
  title={quoteErrors.get(p.id) ?`Error: ${quoteErrors.get(p.id)}` : undefined}
  >
@@ -3102,19 +3145,19 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <div className="flex items-center gap-1">
  {isDraftRow ? (
  <Tooltip content="Confirm & open position">
- <button onClick={() => onConfirm(p)} className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors">
+ <button onClick={(e) => { e.stopPropagation(); onConfirm(p); }} className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors">
  <PlayCircle className="h-3.5 w-3.5" />
  </button>
  </Tooltip>
  ) : (
  <Tooltip content="Close position">
- <button onClick={() => onClose(p)} className={cn("p-1.5 rounded transition-colors", isExpired ?"text-warn hover:text-warn hover:bg-warn-soft/60" :"text-muted-foreground/40 hover:text-primary hover:bg-primary/10")}>
+ <button onClick={(e) => { e.stopPropagation(); onClose(p); }} className={cn("p-1.5 rounded transition-colors", isExpired ?"text-warn hover:text-warn hover:bg-warn-soft/60" :"text-muted-foreground/40 hover:text-primary hover:bg-primary/10")}>
  <CircleCheck className="h-3.5 w-3.5" />
  </button>
  </Tooltip>
  )}
  <Tooltip content="Edit">
- <button onClick={() => onEdit(p)} className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors">
+ <button onClick={(e) => { e.stopPropagation(); onEdit(p); }} className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors">
  <Pencil className="h-3.5 w-3.5" />
  </button>
  </Tooltip>
@@ -3123,8 +3166,10 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  </tr>
  );
 
+ // Not a click target itself — only primary rows select — but it carries the
+ // selection tint so a rolled position highlights as one visual row.
  const chainRow = hasChain ? (
- <tr key={`${p.id}-chain`} className={cn("group","border-b border-border", isExpired ?"hover:bg-row-warn-hover" : isItm ?"hover:bg-row-down-hover" : isGrouped ?"hover:bg-muted-hover" :"hover:bg-muted", isGrouped &&"bg-muted", isExpired ?"bg-row-warn" : isItm ?"bg-row-down" :"")}>
+ <tr key={`${p.id}-chain`} className={cn("group","border-b border-border", rowTint,"cursor-default")}>
  {/* Label — frozen */}
  <td style={{ left: 0 }} className={cn(ctd,"sticky z-[2]", bEdge, stickyHover, stickyBg, isGrouped ?"pl-8 pr-2" :"pl-4 pr-2","font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-10")}>roll</td>
  <td style={{ left: 80 }} className={cn(ctd,"sticky z-[2]", bEdge, stickyHover, stickyBg)} />
@@ -3267,8 +3312,45 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  }
  const hasCARData = positions.some((p) => livePrices.has(p.ticker.symbol));
 
+ // Totals for the floating selection bar. Rolled legs contribute their own
+ // values only — the chain rollups live on the roll sub-row, not here.
+ // Excluded-from-rollup positions DO count: selecting one is an explicit ask.
+ const selection = (() => {
+ const rows = positions.filter((p) => selectedIds.has(p.id));
+ if (rows.length === 0) return null;
+ let capitalAtRisk = 0;
+ let totalPremium = 0;
+ let costToClose: number | null = null;
+ let livePnl: number | null = null;
+ let unpriced = 0;
+ for (const p of rows) {
+ const c = calcPosition(p);
+ capitalAtRisk += c.capitalAtRisk;
+ totalPremium += c.totalPremiumNet;
+ const curPrem = p.currentPremiumPerShare ?? null;
+ if (curPrem == null) { unpriced++; continue; }
+ costToClose = (costToClose ?? 0) + curPrem * 100 * p.contracts;
+ livePnl = (livePnl ?? 0) + ((p.premiumPerShare - curPrem) * 100 * p.contracts - (p.feesOpen ?? 0));
+ }
+ return { count: rows.length, capitalAtRisk, totalPremium, costToClose, livePnl, unpriced };
+ })();
+
  return (
  <>
+ {selection && (
+ <SelectionTotalsBar
+ count={selection.count}
+ topClassName="top-[140px]"
+ totals={[
+ { label:"Capital @ Risk", value: selection.capitalAtRisk },
+ { label:"Total Prem", value: selection.totalPremium },
+ { label:"Cost to Close", value: selection.costToClose },
+ { label:"Live P&L", value: selection.livePnl, tone:"signed" },
+ ]}
+ note={selection.unpriced > 0 ?`${selection.unpriced} unpriced` : undefined}
+ onClear={clearSelection}
+ />
+ )}
  {tabBarRef?.current && createPortal(
  <div className="ml-auto flex items-center gap-2 py-1.5">
  <span className="tp-caption">
@@ -3614,6 +3696,16 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  const [openColGroups, setOpenColGroups] = useState<Set<ClosedColGroupKey>>(new Set(["pnl"]));
  const [tickerSearchQuery, setTickerSearchQuery] = useState(""); // raw input value
  const [appliedTickerSearch, setAppliedTickerSearch] = useState(""); // committed on Enter
+ // Click-to-select rows, summed in the floating totals bar. Cleared whenever the
+ // visible row set changes so the total always describes what's on screen.
+ const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+ const clearSelection = () => setSelectedIds((prev) => (prev.size === 0 ? prev : new Set()));
+ const onToggleSelect = (id: string) =>
+ setSelectedIds((prev) => {
+ const next = new Set(prev);
+ if (next.has(id)) next.delete(id); else next.add(id);
+ return next;
+ });
  const tableContainerRef = useRef<HTMLDivElement>(null);
  const theadRef = useRef<HTMLTableSectionElement>(null);
  const portalScrollRef = useRef<HTMLDivElement>(null);
@@ -3637,12 +3729,29 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  }
  return collapsed;
  });
- const toggleWeek = (key: string) =>
+ const toggleWeek = (key: string) => {
+ clearSelection(); // collapsing/expanding changes which rows are on screen
  setCollapsedWeeks((prev) => {
  const next = new Set(prev);
  if (next.has(key)) next.delete(key); else next.add(key);
  return next;
  });
+ };
+
+ // Applying/clearing the ticker filter, or any change to the underlying rows
+ // (a close edited, a leg deleted), drops the selection.
+ const closedIdSig = positions.map((p) => p.id).join(",");
+ useEffect(() => { setSelectedIds(new Set()); }, [closedIdSig, appliedTickerSearch]);
+ useEffect(() => {
+ const onKey = (e: KeyboardEvent) => {
+ // Let a focused field (inline premium edit, ticker search) handle its own Escape.
+ const t = e.target as HTMLElement | null;
+ if (t && (t.tagName ==="INPUT" || t.tagName ==="TEXTAREA" || t.isContentEditable)) return;
+ if (e.key ==="Escape") clearSelection();
+ };
+ document.addEventListener("keydown", onKey);
+ return () => document.removeEventListener("keydown", onKey);
+ }, []);
 
  const isColOpen = (g: ClosedColGroupKey) => openColGroups.has(g);
  const toggleColGroup = (g: ClosedColGroupKey) =>
@@ -3785,8 +3894,32 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  const tdNumClass ="px-2 py-2 tp-numeric whitespace-nowrap";
  const tdNumChained ="px-2 pt-2 pb-1 tp-numeric whitespace-nowrap";
 
+ // Selection total for the floating bar. A rolled chain's final leg contributes
+ // its own P&L only — the chain rollup belongs to the roll sub-row.
+ const selection = (() => {
+ const rows = positions.filter((p) => selectedIds.has(p.id));
+ if (rows.length === 0) return null;
+ let pnl: number | null = null;
+ let unpriced = 0;
+ for (const p of rows) {
+ const rowPnl = calcPosition(p).pnl;
+ if (rowPnl == null) { unpriced++; continue; }
+ pnl = (pnl ?? 0) + rowPnl;
+ }
+ return { count: rows.length, pnl, unpriced };
+ })();
+
  return (
  <>
+ {selection && (
+ <SelectionTotalsBar
+ count={selection.count}
+ topClassName="top-[140px]"
+ totals={[{ label:"P/L", value: selection.pnl, tone:"signed" }]}
+ note={selection.unpriced > 0 ?`${selection.unpriced} without a P/L` : undefined}
+ onClear={clearSelection}
+ />
+ )}
  {tabBarRef?.current && createPortal(
  <div className="ml-auto flex items-center gap-2 py-1.5">
  <div className="relative">
@@ -3938,17 +4071,25 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  const td = cs ? tdClassChained : tdClass;
  const tdNum = cs ? tdNumChained : tdNumClass;
  const tdText = cs ?"px-2 pt-2 pb-1 text-13 whitespace-nowrap" :"px-2 py-2 text-13 whitespace-nowrap";
+ const isSelected = selectedIds.has(p.id);
+ // Frozen cells can't take the translucent tint (scrolling content would bleed
+ // through), so they use the opaque -solid equivalents — see index.css §07.
+ const stickyFill = isSelected
+ ?"bg-row-accent-solid group-hover:bg-row-accent-solid-hover"
+ :"bg-[#fbfcfd] group-hover:bg-muted";
+ // Shared by the row and its roll sub-row, so a chain highlights as one unit.
+ const rowTint = isSelected ?"bg-row-accent hover:bg-row-accent-hover" :"hover:bg-muted";
 
  const positionRow = (
- <tr key={p.id} className={cn("group hover:bg-muted", cs ?"" :"border-b border-border")}>
+ <tr key={p.id} onClick={() => onToggleSelect(p.id)} className={cn("group cursor-pointer", rowTint, cs ?"" :"border-b border-border")}>
  {/* Position + Contracts — frozen */}
- <td style={{ left: 0 }} className={cn(tdText,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted pl-4 pr-2")}>
+ <td style={{ left: 0 }} className={cn(tdText,"sticky z-[2]", stickyFill,"pl-4 pr-2")}>
  <div className="flex items-center gap-1.5">
  <span className="font-bold font-mono">{p.ticker.symbol}</span>
  {p.groupId && <Link className="h-3 w-3 text-muted-foreground shrink-0" />}
  </div>
  </td>
- <td style={{ left: 80 }} className={cn(tdText,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted")}>
+ <td style={{ left: 80 }} className={cn(tdText,"sticky z-[2]", stickyFill)}>
  <span className={cn(
 "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
  p.optionType ==="CALL" ?"bg-blue-soft text-blue-deep" :"bg-violet-soft text-violet-deep"
@@ -3956,9 +4097,9 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  {p.optionType ==="CALL" ?"CC" :"CSP"}
  </span>
  </td>
- <td style={{ left: 152 }} className={cn(td,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted")}>${fmtUSD(p.strikePrice)}</td>
- <td style={{ left: 232 }} className={cn(tdText,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted")}>{fmtDate(p.expirationDate)}</td>
- <td style={{ left: 312 }} className={cn(td,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted border-r border-border/50")}>{p.contracts}</td>
+ <td style={{ left: 152 }} className={cn(td,"sticky z-[2]", stickyFill)}>${fmtUSD(p.strikePrice)}</td>
+ <td style={{ left: 232 }} className={cn(tdText,"sticky z-[2]", stickyFill)}>{fmtDate(p.expirationDate)}</td>
+ <td style={{ left: 312 }} className={cn(td,"sticky z-[2]", stickyFill,"border-r border-border/50")}>{p.contracts}</td>
  {/* Dates group */}
  {isColOpen("dates") ? (
  <>
@@ -4023,7 +4164,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  <div className="flex items-center gap-1">
  <Tooltip content="Edit close details">
  <button
- onClick={() => onEdit(p)}
+ onClick={(e) => { e.stopPropagation(); onEdit(p); }}
  className="p-1.5 rounded text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted-hover transition-colors"
  >
  <Pencil className="h-3.5 w-3.5" />
@@ -4031,7 +4172,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  </Tooltip>
  <Tooltip content="Delete">
  <button
- onClick={() => setConfirmDelete(p)}
+ onClick={(e) => { e.stopPropagation(); setConfirmDelete(p); }}
  className="p-1.5 rounded text-muted-foreground/40 hover:text-down hover:bg-down-soft transition-colors"
  >
  <Trash2 className="h-3.5 w-3.5" />
@@ -4042,14 +4183,16 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  </tr>
  );
 
+ // Not a click target itself — only primary rows select — but it carries the
+ // selection tint so a rolled position highlights as one visual row.
  const chainRow = cs ? (
- <tr key={`${p.id}-chain`} className="group border-b border-border hover:bg-muted">
+ <tr key={`${p.id}-chain`} className={cn("group border-b border-border", rowTint)}>
  {/* Label — frozen */}
- <td style={{ left: 0 }} className={cn(ctd,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted pl-4 pr-2 font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-10")}>roll</td>
- <td style={{ left: 80 }} className={cn(ctd,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted")} />
- <td style={{ left: 152 }} className={cn(ctd,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted")} />
- <td style={{ left: 232 }} className={cn(ctd,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted")} />
- <td style={{ left: 312 }} className={cn(ctd,"sticky z-[2] bg-[#fbfcfd] group-hover:bg-muted border-r border-border/50")} />
+ <td style={{ left: 0 }} className={cn(ctd,"sticky z-[2]", stickyFill,"pl-4 pr-2 font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-10")}>roll</td>
+ <td style={{ left: 80 }} className={cn(ctd,"sticky z-[2]", stickyFill)} />
+ <td style={{ left: 152 }} className={cn(ctd,"sticky z-[2]", stickyFill)} />
+ <td style={{ left: 232 }} className={cn(ctd,"sticky z-[2]", stickyFill)} />
+ <td style={{ left: 312 }} className={cn(ctd,"sticky z-[2]", stickyFill,"border-r border-border/50")} />
  {/* Dates group */}
  {isColOpen("dates") ? (
  <>
@@ -6338,7 +6481,7 @@ function OptionScreener({ trackedTickers, holdingTickers, recentTickers, onDraft
  onClick={toggleHighlight}
  className={cn(
 "border-b border-border transition-colors whitespace-nowrap cursor-pointer",
- isHighlighted ?"bg-primary/10 hover:bg-primary/15" :"hover:bg-muted"
+ isHighlighted ?"bg-row-accent hover:bg-row-accent-hover" :"hover:bg-muted"
  )}
  >
  <td className="pl-4 pr-2 py-2 font-bold font-mono">{r.ticker}</td>

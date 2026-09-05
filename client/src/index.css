@@ -96,6 +96,8 @@
   --color-row-down-solid-hover:  color-mix(in srgb, var(--color-down) 11%, #fbfcfd);
   --color-row-warn-solid:        color-mix(in srgb, var(--color-warn) 9%,  #fbfcfd);
   --color-row-warn-solid-hover:  color-mix(in srgb, var(--color-warn) 14%, #fbfcfd);
+  --color-row-accent-solid:       color-mix(in srgb, var(--color-primary) 7%,  #fbfcfd);
+  --color-row-accent-solid-hover: color-mix(in srgb, var(--color-primary) 11%, #fbfcfd);
   /* Opaque row separator for tinted frozen cells. Scrolling rows keep the
      translucent --color-border, which border-collapse compounds over the tint
      and reads darker than the same border over a single opaque fill. The
