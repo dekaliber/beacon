@@ -2502,7 +2502,8 @@ interface OpenPositionsTableProps {
  extraTickers?: string[];
  onPricesUpdated?: (prices: Map<string, number>) => void;
  seedLivePrices?: Map<string, number>;
- tabBarRef?: React.RefObject<HTMLDivElement | null>;
+ /** Tab-bar node the table portals its toolbar into; null until it mounts. */
+ tabBarEl?: HTMLDivElement | null;
 }
 
 const COL_GROUPS = [
@@ -2513,7 +2514,7 @@ const COL_GROUPS = [
 ] as const;
 type ColGroupKey = (typeof COL_GROUPS)[number]["key"];
 
-function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, chainMaxCapitalAtRiskMap, onEdit, onClose, onConfirm, onPositionUpdated, extraTickers, onPricesUpdated, seedLivePrices, tabBarRef }: OpenPositionsTableProps) {
+function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, chainMaxCapitalAtRiskMap, onEdit, onClose, onConfirm, onPositionUpdated, extraTickers, onPricesUpdated, seedLivePrices, tabBarEl }: OpenPositionsTableProps) {
  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
  const [openColGroups, setOpenColGroups] = useState<Set<ColGroupKey>>(new Set(["live"]));
  const [draftsOpen, setDraftsOpen] = useState(true);
@@ -2528,9 +2529,15 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  return next;
  });
  // Any change to the underlying rows (a position closed, edited, added) drops
- // the selection rather than leaving stale ids summed into the totals.
- const positionIdSig = positions.map((p) => p.id).join(",");
- useEffect(() => { setSelectedIds(new Set()); }, [positionIdSig]);
+ // the selection rather than leaving stale ids summed into the totals. Adjusted
+ // during render (React's documented derived-state pattern) rather than in an
+ // effect, so no frame ever paints stale totals.
+ const rowSig = positions.map((p) => p.id).join(",");
+ const [lastRowSig, setLastRowSig] = useState(rowSig);
+ if (lastRowSig !== rowSig) {
+ setLastRowSig(rowSig);
+ setSelectedIds(new Set());
+ }
  useEffect(() => {
  const onKey = (e: KeyboardEvent) => {
  // Let a focused field (inline premium edit, ticker search) handle its own Escape.
@@ -3351,7 +3358,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  onClear={clearSelection}
  />
  )}
- {tabBarRef?.current && createPortal(
+ {tabBarEl && createPortal(
  <div className="ml-auto flex items-center gap-2 py-1.5">
  <span className="tp-caption">
  {lastFetchedAt != null ? (
@@ -3375,7 +3382,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  Refresh all premiums
  </button>
  </div>,
- tabBarRef.current
+ tabBarEl
  )}
  <div ref={tableContainerRef} className="overflow-x-auto" onScroll={(e) => { if (portalScrollRef.current) portalScrollRef.current.scrollLeft = e.currentTarget.scrollLeft; }}>
  <table className="w-full text-left border-collapse min-w-[700px]">
@@ -3682,7 +3689,8 @@ interface ClosedPositionsTableProps {
  openSplitGroupIds: Set<string>;
  onEdit: (p: OptionsPosition) => void;
  onDelete: (p: OptionsPosition) => void;
- tabBarRef?: React.RefObject<HTMLDivElement | null>;
+ /** Tab-bar node the table portals its toolbar into; null until it mounts. */
+ tabBarEl?: HTMLDivElement | null;
 }
 
 const CLOSED_COL_GROUPS = [
@@ -3691,7 +3699,7 @@ const CLOSED_COL_GROUPS = [
 ] as const;
 type ClosedColGroupKey = (typeof CLOSED_COL_GROUPS)[number]["key"];
 
-function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds, onEdit, onDelete, tabBarRef }: ClosedPositionsTableProps) {
+function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds, onEdit, onDelete, tabBarEl }: ClosedPositionsTableProps) {
  const [confirmDelete, setConfirmDelete] = useState<OptionsPosition | null>(null);
  const [openColGroups, setOpenColGroups] = useState<Set<ClosedColGroupKey>>(new Set(["pnl"]));
  const [tickerSearchQuery, setTickerSearchQuery] = useState(""); // raw input value
@@ -3739,9 +3747,15 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  };
 
  // Applying/clearing the ticker filter, or any change to the underlying rows
- // (a close edited, a leg deleted), drops the selection.
- const closedIdSig = positions.map((p) => p.id).join(",");
- useEffect(() => { setSelectedIds(new Set()); }, [closedIdSig, appliedTickerSearch]);
+ // (a close edited, a leg deleted), drops the selection. Adjusted during render
+ // (React's documented derived-state pattern) rather than in an effect, so no
+ // frame ever paints stale totals.
+ const rowSig =`${appliedTickerSearch}|${positions.map((p) => p.id).join(",")}`;
+ const [lastRowSig, setLastRowSig] = useState(rowSig);
+ if (lastRowSig !== rowSig) {
+ setLastRowSig(rowSig);
+ setSelectedIds(new Set());
+ }
  useEffect(() => {
  const onKey = (e: KeyboardEvent) => {
  // Let a focused field (inline premium edit, ticker search) handle its own Escape.
@@ -3920,7 +3934,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  onClear={clearSelection}
  />
  )}
- {tabBarRef?.current && createPortal(
+ {tabBarEl && createPortal(
  <div className="ml-auto flex items-center gap-2 py-1.5">
  <div className="relative">
  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -3937,7 +3951,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  />
  </div>
  </div>,
- tabBarRef.current
+ tabBarEl
  )}
  <div ref={tableContainerRef} className="overflow-x-auto" onScroll={(e) => { if (portalScrollRef.current) portalScrollRef.current.scrollLeft = e.currentTarget.scrollLeft; }}>
  <table className="w-full text-left border-collapse min-w-[700px]">
@@ -6575,7 +6589,9 @@ function OptionScreener({ trackedTickers, holdingTickers, recentTickers, onDraft
 
 export function OptionsTrading() {
  const [tab, setTab] = useState<"open" |"closed">("open");
- const tabBarRef = useRef<HTMLDivElement>(null);
+ // Held in state, not a ref: the tables read this node during render to portal
+ // their toolbars into it, which a ref can't provide until after first paint.
+ const [tabBarEl, setTabBarEl] = useState<HTMLDivElement | null>(null);
  const [positionModal, setPositionModal] = useState<"new" | OptionsPosition | PositionPrefill | null>(null);
  const [closeModal, setCloseModal] = useState<OptionsPosition | null>(null);
  const [editCloseModal, setEditCloseModal] = useState<OptionsPosition | null>(null);
@@ -6847,7 +6863,7 @@ export function OptionsTrading() {
 
  {/* Tabs */}
  <Card>
- <div ref={tabBarRef} className="flex border-b border-border px-4">
+ <div ref={setTabBarEl} className="flex border-b border-border px-4">
  <button className={tabClass(tab ==="open")} onClick={() => setTab("open")}>
  Open Positions
  {openPositions.length > 0 && (
@@ -6880,7 +6896,7 @@ export function OptionsTrading() {
  extraTickers={activeLotTickers}
  onPricesUpdated={handlePricesUpdated}
  seedLivePrices={seededLivePrices}
- tabBarRef={tabBarRef}
+ tabBarEl={tabBarEl}
  />
  ) : (
  <ClosedPositionsTable
@@ -6889,7 +6905,7 @@ export function OptionsTrading() {
  openSplitGroupIds={new Set(openPositions.filter((p) => p.splitGroupId).map((p) => p.splitGroupId as string))}
  onEdit={(p) => setEditCloseModal(p)}
  onDelete={handleDelete}
- tabBarRef={tabBarRef}
+ tabBarEl={tabBarEl}
  />
  )}
  </div>
