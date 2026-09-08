@@ -4555,6 +4555,15 @@ function PerformanceCharts({
  setBarOffset(next);
  };
 
+ // Same for the cumulative line/area: panning re-tweens the path between two
+ // different windows, which fights the sideways motion the pan is meant to read
+ // as. Grow-in on first paint, flat repaint from the first pan onward.
+ const [cumAnimate, setCumAnimate] = useState(true);
+ const panCum = (next: number) => {
+ setCumAnimate(false);
+ setCumOffset(next);
+ };
+
  // Shared week-bucketed PnL maps split by option type (CC = CALL, CSP = PUT)
  const weekPnlMap = useMemo(() => {
  const cc = new Map<number, number>();
@@ -5016,7 +5025,7 @@ function PerformanceCharts({
  <ChartPager
  offset={cumViewOffset}
  maxOffset={cumMaxOffset}
- onChange={setCumOffset}
+ onChange={panCum}
  unit="weeks"
  />
  </div>
@@ -5090,6 +5099,7 @@ function PerformanceCharts({
  strokeOpacity={0.7}
  dot={false}
  connectNulls
+ isAnimationActive={cumAnimate}
  />
  {/* Actual: area fill + line with dots at each past week */}
  <Area
@@ -5101,6 +5111,7 @@ function PerformanceCharts({
  dot={{ r: 3, fill:"var(--color-primary)", strokeWidth: 0 }}
  activeDot={{ r: 4, fill:"var(--color-primary)", strokeWidth: 0 }}
  connectNulls={false}
+ isAnimationActive={cumAnimate}
  />
  </ComposedChart>
  </ResponsiveContainer>
