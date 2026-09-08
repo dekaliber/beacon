@@ -4545,6 +4545,16 @@ function PerformanceCharts({
  const [barOffset, setBarOffset] = useState(0);
  const [cumOffset, setCumOffset] = useState(0);
 
+ // Recharts keys bars by their index in the data array, so panning re-animates
+ // each slot from its old height to the new one — which reads as the bars
+ // bouncing in place rather than the window sliding sideways. Keep the grow-in
+ // animation for the first paint, then switch it off for good on the first pan.
+ const [barAnimate, setBarAnimate] = useState(true);
+ const panBar = (next: number) => {
+ setBarAnimate(false);
+ setBarOffset(next);
+ };
+
  // Shared week-bucketed PnL maps split by option type (CC = CALL, CSP = PUT)
  const weekPnlMap = useMemo(() => {
  const cc = new Map<number, number>();
@@ -4780,7 +4790,7 @@ function PerformanceCharts({
  <ChartPager
  offset={barViewOffset}
  maxOffset={barMaxOffset}
- onChange={setBarOffset}
+ onChange={panBar}
  unit={chartPeriod ==="weekly" ?"weeks" :"months"}
  />
  </div>
@@ -4795,7 +4805,7 @@ function PerformanceCharts({
  {(["weekly","monthly"] as const).map((v) => (
  <button
  key={v}
- onClick={() => { setChartPeriod(v); setBarOffset(0); }}
+ onClick={() => { setChartPeriod(v); panBar(0); }}
  className={`rounded-md px-2 py-1 capitalize transition-colors ${
  chartPeriod === v
  ?"bg-background text-foreground shadow-sm"
@@ -4881,6 +4891,7 @@ function PerformanceCharts({
  dataKey="barCSP"
  stackId="a"
  maxBarSize={32}
+ isAnimationActive={barAnimate}
  shape={(props: BarShapeProps) => {
  const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props;
  if (!height || height < MIN_SEG_PX) return <g />;
@@ -4894,6 +4905,7 @@ function PerformanceCharts({
  dataKey="barCC"
  stackId="a"
  maxBarSize={32}
+ isAnimationActive={barAnimate}
  shape={(props: BarShapeProps) => {
  const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props;
  if (!height || height < MIN_SEG_PX) return <g />;
@@ -4908,6 +4920,7 @@ function PerformanceCharts({
  dataKey="barPendCSP"
  stackId="a"
  maxBarSize={32}
+ isAnimationActive={barAnimate}
  shape={(props: BarShapeProps) => {
  const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props;
  if (!height || height < MIN_SEG_PX || !width || width <= 0) return <g />;
@@ -4941,6 +4954,7 @@ function PerformanceCharts({
  dataKey="barPendCC"
  stackId="a"
  maxBarSize={32}
+ isAnimationActive={barAnimate}
  shape={(props: BarShapeProps) => {
  const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props;
  if (!height || height < MIN_SEG_PX || !width || width <= 0) return <g />;
@@ -4973,6 +4987,7 @@ function PerformanceCharts({
  dataKey="barNeg"
  stackId="a"
  maxBarSize={32}
+ isAnimationActive={barAnimate}
  shape={(props: BarShapeProps) => {
  const { x, y, width, height } = props;
  if (!height || height < MIN_SEG_PX) return <g />;
