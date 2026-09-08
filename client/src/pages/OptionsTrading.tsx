@@ -4483,6 +4483,15 @@ function ChartPager({ offset, maxOffset, onChange, unit }: {
  >
  <ChevronRight className="h-3.5 w-3.5" />
  </button>
+ {offset > 0 && (
+ <button
+ type="button"
+ onClick={() => onChange(0)}
+ className="ml-0.5 text-xs text-primary hover:underline"
+ >
+ Latest
+ </button>
+ )}
  </div>
  );
 }
