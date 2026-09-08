@@ -5233,8 +5233,8 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  const SortIcon = ({ field }: { field: PerfSortField }) => {
  if (!sort || sort.field !== field) return null;
  return sort.order ==="asc"
- ? <ArrowUp className="ml-1 inline h-3 w-3" />
- : <ArrowDown className="ml-1 inline h-3 w-3" />;
+ ? <ArrowUp className="ml-0.5 inline h-3 w-3" />
+ : <ArrowDown className="ml-0.5 inline h-3 w-3" />;
  };
 
  // Headers only become interactive once the ticker rows are showing — sorting
@@ -5246,7 +5246,7 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  }) => (
  expanded ? (
  <ColumnHeader className={cn(className,"cursor-pointer select-none")} onClick={() => toggleSort(field)}>
- {children} <SortIcon field={field} />
+ {children}<SortIcon field={field} />
  </ColumnHeader>
  ) : (
  <ColumnHeader className={className}>{children}</ColumnHeader>
