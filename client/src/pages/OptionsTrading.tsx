@@ -5229,11 +5229,15 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  return av === bv ? a.symbol.localeCompare(b.symbol) : (av - bv) * dir;
  });
 
- // Only the sorted column carries an icon; the rest stay bare.
+ // Only the sorted column shows an arrow, but every sortable column reserves
+ // its box — `invisible` keeps the layout and hides the glyph — so sorting
+ // never changes a header's width and reflows the columns around it. The
+ // headers give the box its room by trimming the padding on the side the arrow
+ // sits on, rather than by growing.
  const SortIcon = ({ field, side }: { field: PerfSortField; side:"left" |"right" }) => {
- if (!sort || sort.field !== field) return null;
- const cls = cn("inline h-3 w-3", side ==="left" ?"mr-0.5" :"ml-0.5");
- return sort.order ==="asc" ? <ArrowUp className={cls} /> : <ArrowDown className={cls} />;
+ const active = sort?.field === field ? sort : null;
+ const cls = cn("inline h-3 w-3", side ==="left" ?"mr-0.5" :"ml-0.5", !active &&"invisible");
+ return active?.order ==="asc" ? <ArrowUp className={cls} /> : <ArrowDown className={cls} />;
  };
 
  // Headers only become interactive once the ticker rows are showing — sorting
@@ -5248,12 +5252,19 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  // aligned against instead of shifting when the icon appears. Read off the
  // alignment class itself so the two can't drift apart.
  const iconLeft = className?.includes("text-right") ?? false;
- if (!expanded) return <ColumnHeader className={className}>{children}</ColumnHeader>;
- return (
- <ColumnHeader className={cn(className,"cursor-pointer select-none")} onClick={() => toggleSort(field)}>
+ // Rendered identically whether or not the table is expanded, so opening it
+ // doesn't shift the header row either — only the interactivity is gated.
+ const content = (
+ <>
  {iconLeft && <SortIcon field={field} side="left" />}
  {children}
  {!iconLeft && <SortIcon field={field} side="right" />}
+ </>
+ );
+ if (!expanded) return <ColumnHeader className={className}>{content}</ColumnHeader>;
+ return (
+ <ColumnHeader className={cn(className,"cursor-pointer select-none")} onClick={() => toggleSort(field)}>
+ {content}
  </ColumnHeader>
  );
  };
@@ -5270,16 +5281,16 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  <table className="w-full text-xs">
  <thead>
  <tr className="border-b border-border">
- <SortableHeader field="ticker" className="px-4 py-2 text-left">Ticker</SortableHeader>
- <SortableHeader field="tradeCount" className="px-4 py-2 text-right">Trades</SortableHeader>
- <SortableHeader field="contractCount" className="px-4 py-2 text-right">Contracts</SortableHeader>
- <SortableHeader field="winRate" className="px-4 py-2 text-right">Win Rate</SortableHeader>
- <SortableHeader field="assignmentRate" className="px-4 py-2 text-right">Assign. Rate</SortableHeader>
- <SortableHeader field="avgActualDays" className="px-4 py-2 text-right whitespace-nowrap">Avg Days (actual / exp.)</SortableHeader>
- <SortableHeader field="ccPremium" className="px-4 py-2 text-right whitespace-nowrap">CC Premium</SortableHeader>
- <SortableHeader field="cspPremium" className="px-4 py-2 text-right whitespace-nowrap">CSP Premium</SortableHeader>
- <SortableHeader field="totalPremium" className="px-4 py-2 text-right whitespace-nowrap">Total Premium</SortableHeader>
- <SortableHeader field="weightedArr" className="px-4 py-2 text-right whitespace-nowrap">Wtd. Ann. Return</SortableHeader>
+ <SortableHeader field="ticker" className="pl-4 pr-1 py-2 text-left whitespace-nowrap">Ticker</SortableHeader>
+ <SortableHeader field="tradeCount" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Trades</SortableHeader>
+ <SortableHeader field="contractCount" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Contracts</SortableHeader>
+ <SortableHeader field="winRate" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Win Rate</SortableHeader>
+ <SortableHeader field="assignmentRate" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Assign. Rate</SortableHeader>
+ <SortableHeader field="avgActualDays" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Avg Days (actual / exp.)</SortableHeader>
+ <SortableHeader field="ccPremium" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">CC Premium</SortableHeader>
+ <SortableHeader field="cspPremium" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">CSP Premium</SortableHeader>
+ <SortableHeader field="totalPremium" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Total Premium</SortableHeader>
+ <SortableHeader field="weightedArr" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Wtd. Ann. Return</SortableHeader>
  </tr>
  </thead>
  <tbody>
