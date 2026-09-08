@@ -4489,7 +4489,7 @@ function ChartPager({ offset, maxOffset, onChange, unit }: {
  onClick={() => onChange(0)}
  className="ml-0.5 text-xs text-primary hover:underline"
  >
- Latest
+ Reset
  </button>
  )}
  </div>
