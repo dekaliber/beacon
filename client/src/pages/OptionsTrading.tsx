@@ -4439,15 +4439,62 @@ function netWeekBars(raw: { premiumCSP: number; premiumCC: number; pendingCSP: n
  return { barCSP: v.premiumCSP, barCC: v.premiumCC, barPendCSP: v.pendingCSP, barPendCC: v.pendingCC, barNeg: neg };
 }
 
+const WEEK_MS = 7 * 86_400_000;
+
+// Pads a [min, max] pair outward by 5% so a fixed-domain chart doesn't clip its
+// extremes against the plot edges. The side that doesn't cross zero stays
+// anchored at zero, so bars and the cumulative line keep a real baseline.
+const padDomain = (min: number, max: number): [number, number] => {
+ const lo = Math.min(0, min);
+ const hi = Math.max(0, max);
+ const pad = (hi - lo) * 0.05;
+ if (pad === 0) return [0, 1];
+ return [lo < 0 ? lo - pad : 0, hi > 0 ? hi + pad : 0];
+};
+
+// Prev/next pager for the sliding chart windows. offset counts periods back
+// from the most recent window, so "older" increments and "newer" decrements.
+// Renders nothing when the whole series already fits in one window.
+function ChartPager({ offset, maxOffset, onChange, unit }: {
+ offset: number;
+ maxOffset: number;
+ onChange: (next: number) => void;
+ unit: string;
+}) {
+ if (maxOffset === 0) return null;
+ const btn ="rounded p-1 text-ink-3 transition-colors hover:bg-muted-hover hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink-3";
+ return (
+ <div className="flex items-center gap-0.5">
+ <button
+ type="button"
+ aria-label={`Earlier ${unit}`}
+ disabled={offset >= maxOffset}
+ onClick={() => onChange(Math.min(maxOffset, offset + 1))}
+ className={btn}
+ >
+ <ChevronLeft className="h-3.5 w-3.5" />
+ </button>
+ <button
+ type="button"
+ aria-label={`Later ${unit}`}
+ disabled={offset <= 0}
+ onClick={() => onChange(Math.max(0, offset - 1))}
+ className={btn}
+ >
+ <ChevronRight className="h-3.5 w-3.5" />
+ </button>
+ </div>
+ );
+}
+
+const MAX_CHART_WEEKS = 15;
+const MAX_CHART_MONTHS = 12;
+
 // Segments shorter than this many pixels are dropped, and the segment beneath
 // them takes the rounded top corners instead — otherwise a solid bar gets a
 // squared-off top capped by an invisible sub-pixel sliver. The y-scale is
 // shared across the stack, so any rendered segment's height/value ratio
 // converts a sibling's dollar value into its pixel height.
-const WEEK_MS = 7 * 86_400_000;
-const MAX_CHART_WEEKS = 15;
-const MAX_CHART_MONTHS = 12;
-
 const MIN_SEG_PX = 1;
 function segVisible(value: number | undefined, refPx: number, refValue: number | undefined) {
  return value != null && refValue != null && value > 0 && refValue > 0 && (value / refValue) * refPx >= MIN_SEG_PX;
@@ -4484,6 +4531,10 @@ function PerformanceCharts({
  // Weekly/Monthly toggle for the "Premium Collected" bar chart only — the
  // Cumulative Performance chart below it stays on its own weekly cadence.
  const [chartPeriod, setChartPeriod] = useState<"weekly" | "monthly">("weekly");
+
+ // How many periods back each chart's window is panned; 0 = most recent.
+ const [barOffset, setBarOffset] = useState(0);
+ const [cumOffset, setCumOffset] = useState(0);
 
  // Shared week-bucketed PnL maps split by option type (CC = CALL, CSP = PUT)
  const weekPnlMap = useMemo(() => {
@@ -4526,16 +4577,6 @@ function PerformanceCharts({
 
  const currentWeekMs = getWeekStart(new Date()).getTime();
 
- // Cumulative chart window: entirely backward-looking. The current week is the
- // rightmost point with the 14 preceding weeks before it. When fewer than 15
- // weeks have elapsed, pin to the start and extend forward to fill 15 weeks.
- const { cumStartMs, cumEndMs } = useMemo(() => {
- if (firstTradeWeekMs == null) return { cumStartMs: null, cumEndMs: null };
- const start = Math.max(currentWeekMs - (MAX_CHART_WEEKS - 1) * WEEK_MS, firstTradeWeekMs);
- const end = start + (MAX_CHART_WEEKS - 1) * WEEK_MS;
- return { cumStartMs: start, cumEndMs: end };
- }, [firstTradeWeekMs, currentWeekMs]);
-
  // Furthest-out week carrying pending (open-position) premium, so the bar chart
  // can extend forward to show premium we still expect to realize.
  const lastPendingWeekMs = useMemo(() => {
@@ -4543,24 +4584,20 @@ function PerformanceCharts({
  return ms.length ? Math.max(...ms) : null;
  }, [pendingPnlMap]);
 
- // Bar chart window: both backward- and forward-looking, always spanning 15
- // weeks. The rightmost bar is the furthest-out pending expiration week (or the
- // current week if there is no later pending premium), with 14 weeks before it.
- // When that anchor is fewer than 15 weeks from the first trade week, the window
- // pins to the first trade week and extends forward to fill 15 weeks instead.
- const { barStartMs, barEndMs } = useMemo(() => {
- if (firstTradeWeekMs == null) return { barStartMs: null, barEndMs: null };
- const anchor = Math.max(currentWeekMs, lastPendingWeekMs ?? currentWeekMs);
- const start = Math.max(anchor - (MAX_CHART_WEEKS - 1) * WEEK_MS, firstTradeWeekMs);
- const end = start + (MAX_CHART_WEEKS - 1) * WEEK_MS;
- return { barStartMs: start, barEndMs: end };
- }, [firstTradeWeekMs, currentWeekMs, lastPendingWeekMs]);
-
- // Bar chart: capped 15-week window ending on the furthest pending expiration
- const weeklyData = useMemo(() => {
- if (barStartMs == null || barEndMs == null) return [];
+ // Full weekly series, first trade week through the furthest-out pending
+ // expiration (padded forward to at least MAX_CHART_WEEKS points so a short
+ // history still fills the panel). The chart renders a sliding window over
+ // this; the whole series is kept so the y-axis domain can stay fixed as the
+ // window pans.
+ const allWeeklyData = useMemo(() => {
+ if (firstTradeWeekMs == null) return [];
+ const lastMs = Math.max(
+ currentWeekMs,
+ lastPendingWeekMs ?? currentWeekMs,
+ firstTradeWeekMs + (MAX_CHART_WEEKS - 1) * WEEK_MS,
+ );
  const weeks: { week: string; premiumCSP: number; premiumCC: number; pendingCSP: number; pendingCC: number; barCSP: number; barCC: number; barPendCSP: number; barPendCC: number; barNeg: number; isFuture: boolean }[] = [];
- for (let ms = barStartMs; ms <= barEndMs; ms += WEEK_MS) {
+ for (let ms = firstTradeWeekMs; ms <= lastMs; ms += WEEK_MS) {
  const premiumCSP = weekPnlMap.csp.get(ms) ?? 0;
  const premiumCC = weekPnlMap.cc.get(ms) ?? 0;
  const pendingCSP = pendingPnlMap.csp.get(ms) ?? 0;
@@ -4573,7 +4610,7 @@ function PerformanceCharts({
  });
  }
  return weeks;
- }, [barStartMs, barEndMs, weekPnlMap, pendingPnlMap, currentWeekMs]);
+ }, [firstTradeWeekMs, currentWeekMs, lastPendingWeekMs, weekPnlMap, pendingPnlMap]);
 
  // Monthly analogue of weekPnlMap/pendingPnlMap, for the bar chart's Monthly
  // toggle — same source loops, bucketed by month instead of week.
@@ -4619,29 +4656,24 @@ function PerformanceCharts({
  return ms.length ? Math.max(...ms) : null;
  }, [pendingMonthPnlMap]);
 
- // Bar chart window, monthly cadence: same fixed-width/anchor logic as the
- // weekly barStartMs/barEndMs above, just stepped via addMonths() since months
- // aren't a fixed number of ms.
- const { monthlyBarStartMs, monthlyBarEndMs } = useMemo(() => {
- if (firstTradeMonthMs == null) return { monthlyBarStartMs: null, monthlyBarEndMs: null };
- const anchor = Math.max(currentMonthMs, lastPendingMonthMs ?? currentMonthMs);
- const start = Math.max(addMonths(anchor, -(MAX_CHART_MONTHS - 1)), firstTradeMonthMs);
- const end = addMonths(start, MAX_CHART_MONTHS - 1);
- return { monthlyBarStartMs: start, monthlyBarEndMs: end };
- }, [firstTradeMonthMs, currentMonthMs, lastPendingMonthMs]);
-
- // Bar chart: capped 12-month window ending on the furthest pending expiration
- const monthlyData = useMemo(() => {
- if (monthlyBarStartMs == null || monthlyBarEndMs == null) return [];
- const months: typeof weeklyData = [];
- for (let ms = monthlyBarStartMs; ms <= monthlyBarEndMs; ms = addMonths(ms, 1)) {
+ // Full monthly series: monthly analogue of allWeeklyData above, stepped via
+ // addMonths() since months aren't a fixed number of ms.
+ const allMonthlyData = useMemo(() => {
+ if (firstTradeMonthMs == null) return [];
+ const lastMs = Math.max(
+ currentMonthMs,
+ lastPendingMonthMs ?? currentMonthMs,
+ addMonths(firstTradeMonthMs, MAX_CHART_MONTHS - 1),
+ );
+ const months: typeof allWeeklyData = [];
+ for (let ms = firstTradeMonthMs; ms <= lastMs; ms = addMonths(ms, 1)) {
  const premiumCSP = monthPnlMap.csp.get(ms) ?? 0;
  const premiumCC = monthPnlMap.cc.get(ms) ?? 0;
  const pendingCSP = pendingMonthPnlMap.csp.get(ms) ?? 0;
  const pendingCC = pendingMonthPnlMap.cc.get(ms) ?? 0;
  months.push({
  // Field name kept as "week" (not renamed to "month") so it stays a
- // generic x-axis label field shared with weeklyData below.
+ // generic x-axis label field shared with allWeeklyData above.
  week: monthLabel(ms),
  premiumCSP, premiumCC, pendingCSP, pendingCC,
  ...netWeekBars({ premiumCSP, premiumCC, pendingCSP, pendingCC }),
@@ -4649,26 +4681,24 @@ function PerformanceCharts({
  });
  }
  return months;
- }, [monthlyBarStartMs, monthlyBarEndMs, monthPnlMap, pendingMonthPnlMap, currentMonthMs]);
+ }, [firstTradeMonthMs, currentMonthMs, lastPendingMonthMs, monthPnlMap, pendingMonthPnlMap]);
 
- const barChartData = chartPeriod ==="weekly" ? weeklyData : monthlyData;
  const targetPeriodic = chartPeriod ==="weekly" ? targetWeekly : targetMonthly;
 
- // Cumulative chart: capped 15-week window ending on the current week.
+ // Full cumulative series, first trade week through the current week (padded
+ // forward to at least MAX_CHART_WEEKS points).
  // actual is null for future weeks so the line stops at the current week
  // target uses 1-based week number so W1 target = 1 × targetWeekly (not zero)
- const cumulativeData = useMemo(() => {
- if (firstTradeWeekMs == null || cumStartMs == null || cumEndMs == null) return [];
+ const allCumulativeData = useMemo(() => {
+ if (firstTradeWeekMs == null) return [];
+ const lastMs = Math.max(currentWeekMs, firstTradeWeekMs + (MAX_CHART_WEEKS - 1) * WEEK_MS);
  let cumulative = 0;
  const points: { week: string; actual: number | null; target: number }[] = [];
  let weekNum = 0;
- // Iterate from the true program start so cumulative + weekNum stay accurate,
- // but only emit the points that fall inside the visible window.
- for (let ms = firstTradeWeekMs; ms <= cumEndMs; ms += WEEK_MS) {
+ for (let ms = firstTradeWeekMs; ms <= lastMs; ms += WEEK_MS) {
  weekNum++;
  const isPast = ms <= currentWeekMs;
  if (isPast) cumulative += (weekPnlMap.cc.get(ms) ?? 0) + (weekPnlMap.csp.get(ms) ?? 0);
- if (ms < cumStartMs) continue;
  points.push({
  week: weekFridayLabel(ms),
  actual: isPast ? cumulative : null,
@@ -4676,10 +4706,54 @@ function PerformanceCharts({
  });
  }
  return points;
- }, [firstTradeWeekMs, weekPnlMap, targetAnnual, currentWeekMs, cumStartMs, cumEndMs]);
+ }, [firstTradeWeekMs, weekPnlMap, targetAnnual, currentWeekMs]);
 
- // Delta for the header: actual vs target at the last week with real data
- const lastDataPoint = [...cumulativeData].reverse().find((d) => d.actual != null);
+ // Sliding windows over the full series. offset counts periods back from the
+ // most recent window, so 0 is the default (newest) view and larger values pan
+ // toward older data. Clamped on read so a shrinking series can't strand the
+ // window past the start of the data.
+ const allBarData = chartPeriod ==="weekly" ? allWeeklyData : allMonthlyData;
+ const barWindowSize = chartPeriod ==="weekly" ? MAX_CHART_WEEKS : MAX_CHART_MONTHS;
+ const barMaxOffset = Math.max(0, allBarData.length - barWindowSize);
+ const barViewOffset = Math.min(barOffset, barMaxOffset);
+ const barSliceStart = Math.max(0, allBarData.length - barWindowSize - barViewOffset);
+ const barChartData = allBarData.slice(barSliceStart, barSliceStart + barWindowSize);
+
+ const cumMaxOffset = Math.max(0, allCumulativeData.length - MAX_CHART_WEEKS);
+ const cumViewOffset = Math.min(cumOffset, cumMaxOffset);
+ const cumSliceStart = Math.max(0, allCumulativeData.length - MAX_CHART_WEEKS - cumViewOffset);
+ const cumulativeData = allCumulativeData.slice(cumSliceStart, cumSliceStart + MAX_CHART_WEEKS);
+
+ // Fixed y-axis domains, computed across the whole series rather than the
+ // visible window, so panning shifts the x-axis without rescaling y.
+ const barDomain = useMemo(() => {
+ let lo = 0;
+ let hi = 0;
+ for (const d of allBarData) {
+ hi = Math.max(hi, d.barCSP + d.barCC + d.barPendCSP + d.barPendCC);
+ lo = Math.min(lo, d.barNeg);
+ }
+ return padDomain(lo, hi);
+ }, [allBarData]);
+
+ const cumDomain = useMemo(() => {
+ let lo = 0;
+ let hi = 0;
+ for (const d of allCumulativeData) {
+ if (d.actual != null) {
+ lo = Math.min(lo, d.actual);
+ hi = Math.max(hi, d.actual);
+ }
+ lo = Math.min(lo, d.target);
+ hi = Math.max(hi, d.target);
+ }
+ return padDomain(lo, hi);
+ }, [allCumulativeData]);
+
+ // Delta for the header: actual vs target at the last week with real data.
+ // Reads the full series, not the visible window, so panning back through
+ // history doesn't rewrite the headline stat to an older week.
+ const lastDataPoint = [...allCumulativeData].reverse().find((d) => d.actual != null);
  const delta = lastDataPoint != null ? lastDataPoint.actual! - lastDataPoint.target : null;
 
  if (closedPositions.length === 0) return null;
@@ -4692,7 +4766,15 @@ function PerformanceCharts({
  {/* Premium Bar Chart */}
  <Card className="p-6">
  <div className="flex items-start justify-between gap-2 mb-3">
+ <div className="flex items-center gap-1">
  <SectionLabel>Premium Collected</SectionLabel>
+ <ChartPager
+ offset={barViewOffset}
+ maxOffset={barMaxOffset}
+ onChange={setBarOffset}
+ unit={chartPeriod ==="weekly" ?"weeks" :"months"}
+ />
+ </div>
  <div className="flex items-center gap-3">
  {targetPeriodic != null && (
  <div className="flex items-center gap-1.5">
@@ -4704,7 +4786,7 @@ function PerformanceCharts({
  {(["weekly","monthly"] as const).map((v) => (
  <button
  key={v}
- onClick={() => setChartPeriod(v)}
+ onClick={() => { setChartPeriod(v); setBarOffset(0); }}
  className={`rounded-md px-2 py-1 capitalize transition-colors ${
  chartPeriod === v
  ?"bg-background text-foreground shadow-sm"
@@ -4733,6 +4815,7 @@ function PerformanceCharts({
  tickLine={false}
  tickFormatter={dollarTick}
  width={36}
+ domain={barDomain}
  />
  <RechartsTooltip
  cursor={{ fill:"var(--color-muted)" }}
@@ -4904,7 +4987,15 @@ function PerformanceCharts({
  {/* Cumulative Performance Chart */}
  <Card className="p-6">
  <div className="flex items-center justify-between mb-1">
+ <div className="flex items-center gap-1">
  <SectionLabel>Cumulative Performance vs Target</SectionLabel>
+ <ChartPager
+ offset={cumViewOffset}
+ maxOffset={cumMaxOffset}
+ onChange={setCumOffset}
+ unit="weeks"
+ />
+ </div>
  <div className="flex items-center gap-4">
  <div className="flex items-center gap-1.5">
  <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="var(--color-primary)" strokeWidth="2" /></svg>
@@ -4945,6 +5036,7 @@ function PerformanceCharts({
  tickLine={false}
  tickFormatter={dollarTick}
  width={44}
+ domain={cumDomain}
  />
  <RechartsTooltip
  content={({ active, payload, label }) => {
