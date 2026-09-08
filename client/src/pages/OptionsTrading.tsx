@@ -52,7 +52,7 @@ import { AssignedSharesCard, cappedUnrealizedPnl, type SellCoveredCallSeed } fro
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { DatePicker } from"@/components/DatePicker";
-import { Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, CircleQuestionMark, EyeOff, CornerDownRight, AlertTriangle } from"lucide-react";
+import { Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, CircleQuestionMark, EyeOff, CornerDownRight, AlertTriangle } from"lucide-react";
 import { createPortal } from"react-dom";
 import { cn, parseAmount, localToday } from"@/lib/utils";
 import { earningsBeforeExpiry, earningsWarningText } from"@/lib/earnings";
@@ -278,6 +278,22 @@ interface PerformanceMetrics {
  cspPremium: number;
  weightedArr: number | null;
 }
+
+// Every PerformanceMetrics field the Performance Details table can sort on,
+// plus the ticker symbol itself. Avg Days sorts on the actual figure, not the
+// expected one shown beside it.
+type PerfSortField =
+ |"ticker"
+ |"tradeCount"
+ |"contractCount"
+ |"winRate"
+ |"assignmentRate"
+ |"avgActualDays"
+ |"ccPremium"
+ |"cspPremium"
+ |"totalPremium"
+ |"weightedArr";
+type PerfSortState = { field: PerfSortField; order:"asc" |"desc" } | null;
 
 function computePerformanceMetrics(positions: OptionsPosition[]): PerformanceMetrics {
  // ── Separate into chains vs leg-by-leg accounting ────────────────────────────
@@ -5176,6 +5192,7 @@ function MetricCells({ m }: { m: PerformanceMetrics }) {
 
 function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  const [expanded, setExpanded] = useState(false);
+ const [sort, setSort] = useState<PerfSortState>(null);
 
  if (positions.length === 0) return null;
 
@@ -5185,6 +5202,56 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  symbol: sym,
  metrics: computePerformanceMetrics(positions.filter((p) => p.ticker.symbol === sym)),
  }));
+
+ // Unsorted → descending → ascending → unsorted, the same three-state cycle
+ // Income and Expenses use, but descending-first on every column rather than
+ // only the numeric ones.
+ const toggleSort = (field: PerfSortField) => {
+ setSort((prev) => {
+ if (!prev || prev.field !== field) return { field, order:"desc" };
+ if (prev.order ==="desc") return { field, order:"asc" };
+ return null;
+ });
+ };
+
+ const sortedByTicker = !sort ? byTicker : [...byTicker].sort((a, b) => {
+ const dir = sort.order ==="asc" ? 1 : -1;
+ if (sort.field ==="ticker") return a.symbol.localeCompare(b.symbol) * dir;
+ const av = a.metrics[sort.field];
+ const bv = b.metrics[sort.field];
+ // Tickers with no value for the column sort last in both directions, rather
+ // than piling up at whichever end the direction happens to point.
+ if (av == null || bv == null) {
+ if (av == null && bv == null) return a.symbol.localeCompare(b.symbol);
+ return av == null ? 1 : -1;
+ }
+ // Ties fall back to symbol so the order stays stable across re-renders.
+ return av === bv ? a.symbol.localeCompare(b.symbol) : (av - bv) * dir;
+ });
+
+ // Only the sorted column carries an icon; the rest stay bare.
+ const SortIcon = ({ field }: { field: PerfSortField }) => {
+ if (!sort || sort.field !== field) return null;
+ return sort.order ==="asc"
+ ? <ArrowUp className="ml-1 inline h-3 w-3" />
+ : <ArrowDown className="ml-1 inline h-3 w-3" />;
+ };
+
+ // Headers only become interactive once the ticker rows are showing — sorting
+ // a collapsed table would reorder nothing the user can see.
+ const SortableHeader = ({ field, className, children }: {
+ field: PerfSortField;
+ className?: string;
+ children: React.ReactNode;
+ }) => (
+ expanded ? (
+ <ColumnHeader className={cn(className,"cursor-pointer select-none")} onClick={() => toggleSort(field)}>
+ {children} <SortIcon field={field} />
+ </ColumnHeader>
+ ) : (
+ <ColumnHeader className={className}>{children}</ColumnHeader>
+ )
+ );
 
  return (
  <Card className="p-6">
@@ -5198,16 +5265,16 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  <table className="w-full text-xs">
  <thead>
  <tr className="border-b border-border">
- <ColumnHeader className="px-4 py-2 text-left">Ticker</ColumnHeader>
- <ColumnHeader className="px-4 py-2 text-right">Trades</ColumnHeader>
- <ColumnHeader className="px-4 py-2 text-right">Contracts</ColumnHeader>
- <ColumnHeader className="px-4 py-2 text-right">Win Rate</ColumnHeader>
- <ColumnHeader className="px-4 py-2 text-right">Assign. Rate</ColumnHeader>
- <ColumnHeader className="px-4 py-2 text-right whitespace-nowrap">Avg Days (actual / exp.)</ColumnHeader>
- <ColumnHeader className="px-4 py-2 text-right whitespace-nowrap">CC Premium</ColumnHeader>
- <ColumnHeader className="px-4 py-2 text-right whitespace-nowrap">CSP Premium</ColumnHeader>
- <ColumnHeader className="px-4 py-2 text-right whitespace-nowrap">Total Premium</ColumnHeader>
- <ColumnHeader className="px-4 py-2 text-right whitespace-nowrap">Wtd. Ann. Return</ColumnHeader>
+ <SortableHeader field="ticker" className="px-4 py-2 text-left">Ticker</SortableHeader>
+ <SortableHeader field="tradeCount" className="px-4 py-2 text-right">Trades</SortableHeader>
+ <SortableHeader field="contractCount" className="px-4 py-2 text-right">Contracts</SortableHeader>
+ <SortableHeader field="winRate" className="px-4 py-2 text-right">Win Rate</SortableHeader>
+ <SortableHeader field="assignmentRate" className="px-4 py-2 text-right">Assign. Rate</SortableHeader>
+ <SortableHeader field="avgActualDays" className="px-4 py-2 text-right whitespace-nowrap">Avg Days (actual / exp.)</SortableHeader>
+ <SortableHeader field="ccPremium" className="px-4 py-2 text-right whitespace-nowrap">CC Premium</SortableHeader>
+ <SortableHeader field="cspPremium" className="px-4 py-2 text-right whitespace-nowrap">CSP Premium</SortableHeader>
+ <SortableHeader field="totalPremium" className="px-4 py-2 text-right whitespace-nowrap">Total Premium</SortableHeader>
+ <SortableHeader field="weightedArr" className="px-4 py-2 text-right whitespace-nowrap">Wtd. Ann. Return</SortableHeader>
  </tr>
  </thead>
  <tbody>
@@ -5223,7 +5290,7 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  </td>
  <MetricCells m={aggregate} />
  </tr>
- {expanded && byTicker.map(({ symbol, metrics }) => (
+ {expanded && sortedByTicker.map(({ symbol, metrics }) => (
  <tr key={symbol} className="border-b border-border last:border-0 hover:bg-muted transition-colors">
  <td className="px-4 py-2 font-bold font-mono">{symbol}</td>
  <MetricCells m={metrics} />
