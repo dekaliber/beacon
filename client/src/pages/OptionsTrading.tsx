@@ -5230,11 +5230,10 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  });
 
  // Only the sorted column carries an icon; the rest stay bare.
- const SortIcon = ({ field }: { field: PerfSortField }) => {
+ const SortIcon = ({ field, side }: { field: PerfSortField; side:"left" |"right" }) => {
  if (!sort || sort.field !== field) return null;
- return sort.order ==="asc"
- ? <ArrowUp className="ml-0.5 inline h-3 w-3" />
- : <ArrowDown className="ml-0.5 inline h-3 w-3" />;
+ const cls = cn("inline h-3 w-3", side ==="left" ?"mr-0.5" :"ml-0.5");
+ return sort.order ==="asc" ? <ArrowUp className={cls} /> : <ArrowDown className={cls} />;
  };
 
  // Headers only become interactive once the ticker rows are showing — sorting
@@ -5243,15 +5242,21 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  field: PerfSortField;
  className?: string;
  children: React.ReactNode;
- }) => (
- expanded ? (
+ }) => {
+ // The arrow goes on the label's outer edge — left of a right-aligned column,
+ // right of a left-aligned one — so the text stays pinned to the edge it's
+ // aligned against instead of shifting when the icon appears. Read off the
+ // alignment class itself so the two can't drift apart.
+ const iconLeft = className?.includes("text-right") ?? false;
+ if (!expanded) return <ColumnHeader className={className}>{children}</ColumnHeader>;
+ return (
  <ColumnHeader className={cn(className,"cursor-pointer select-none")} onClick={() => toggleSort(field)}>
- {children}<SortIcon field={field} />
+ {iconLeft && <SortIcon field={field} side="left" />}
+ {children}
+ {!iconLeft && <SortIcon field={field} side="right" />}
  </ColumnHeader>
- ) : (
- <ColumnHeader className={className}>{children}</ColumnHeader>
- )
  );
+ };
 
  return (
  <Card className="p-6">
