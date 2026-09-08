@@ -5229,13 +5229,11 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  return av === bv ? a.symbol.localeCompare(b.symbol) : (av - bv) * dir;
  });
 
- // Only the sorted column shows an arrow, but every sortable column reserves
- // its box — `invisible` keeps the layout and hides the glyph — so sorting
- // never changes a header's width and reflows the columns around it.
+ // Only the sorted column carries an icon; the rest stay bare.
  const SortIcon = ({ field, side }: { field: PerfSortField; side:"left" |"right" }) => {
- const active = sort?.field === field ? sort : null;
- const cls = cn("inline h-3 w-3", side ==="left" ?"mr-0.5" :"ml-0.5", !active &&"invisible");
- return active?.order ==="asc" ? <ArrowUp className={cls} /> : <ArrowDown className={cls} />;
+ if (!sort || sort.field !== field) return null;
+ const cls = cn("inline h-3 w-3", side ==="left" ?"mr-0.5" :"ml-0.5");
+ return sort.order ==="asc" ? <ArrowUp className={cls} /> : <ArrowDown className={cls} />;
  };
 
  // Headers only become interactive once the ticker rows are showing — sorting
@@ -5250,19 +5248,12 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  // aligned against instead of shifting when the icon appears. Read off the
  // alignment class itself so the two can't drift apart.
  const iconLeft = className?.includes("text-right") ?? false;
- // Rendered identically whether or not the table is expanded, so opening it
- // doesn't shift the header row either — only the interactivity is gated.
- const content = (
- <>
+ if (!expanded) return <ColumnHeader className={className}>{children}</ColumnHeader>;
+ return (
+ <ColumnHeader className={cn(className,"cursor-pointer select-none")} onClick={() => toggleSort(field)}>
  {iconLeft && <SortIcon field={field} side="left" />}
  {children}
  {!iconLeft && <SortIcon field={field} side="right" />}
- </>
- );
- if (!expanded) return <ColumnHeader className={className}>{content}</ColumnHeader>;
- return (
- <ColumnHeader className={cn(className,"cursor-pointer select-none")} onClick={() => toggleSort(field)}>
- {content}
  </ColumnHeader>
  );
  };
