@@ -5349,10 +5349,14 @@ function computeCurrentBasis(
  capitalChanges: OptionsCapitalChange[],
 ): number | null {
  if (settings?.startingBasis == null) return null;
- const nowMs = Date.now();
+ // Date-to-date: effectiveDate is a client-local calendar date with no time
+ // component, so an adjustment counts for the whole of its effective day. Pinning
+ // it to a clock time and comparing against Date.now() used to hide a same-day
+ // adjustment until that time had passed. Local date, never UTC — a UTC-derived
+ // "today" flips a day early after 5pm Pacific. See [[feedback_local_date_utc]].
+ const todayStr = new Date().toLocaleDateString("en-CA"); // local YYYY-MM-DD
  return capitalChanges.reduce(
- (basis, c) =>
- basis + (new Date(c.effectiveDate +"T12:00:00").getTime() <= nowMs ? Number(c.delta) : 0),
+ (basis, c) => basis + (c.effectiveDate <= todayStr ? Number(c.delta) : 0),
  Number(settings.startingBasis),
  );
 }
@@ -5473,6 +5477,57 @@ function _etToUTC(year: number, month: number, day: number, hour: number, minute
  return new Date(`${year}-${mo}-${dd}T${hh}:${mm}:00${offsetStr}`).getTime();
 }
 
+// UTC timestamp for the opening bell of a bare calendar date (9:30 ET).
+// effectiveDate / saleDate carry no time component, but return sub-periods have to
+// be compared against real closedAt instants, so they need SOME instant. Anything
+// between the prior session's close (4pm ET) and this open attributes trades
+// identically; 9:30 is chosen because _etToUTC resolves it exactly. ET midnight
+// does not: _etToUTC reads the zone offset at noon, which sits on the far side of
+// the 2am DST switch, so a midnight anchor lands an hour off twice a year.
+function _sessionOpenMs(dateStr: string): number {
+ const [y, mo, d] = dateStr.split("-").map(Number);
+ return _etToUTC(y, mo, d, 9, 30);
+}
+
+// ET calendar date (YYYY-MM-DD) for a day cursor anchored near local midnight.
+// Same +12h convention as isNonTradingDay, so the cursor's DST drift can't shift
+// the key onto the neighbouring day.
+function _etDayKey(dayMs: number): string {
+ const { year, month, day } = etDateParts(dayMs + 12 * 3600_000);
+ return`${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+}
+
+// Basis in effect on a given ET calendar day: a step function over the capital
+// adjustments, keyed by YYYY-MM-DD rather than by timestamp. The utilization loops
+// ask one question per trading day, and a change effective on day D applies to D
+// itself — comparing date strings keeps that true regardless of the noon anchor
+// used elsewhere for"has this date arrived yet?" checks (which pushed every step
+// onto D+1) and of the DST drift in the fixed-24h day cursor.
+function makeBasisLookup(
+ startingBasis: number,
+ windowStartDate: string,
+ capitalChanges: OptionsCapitalChange[],
+): (dayDate: string) => number {
+ const periods: { startDate: string; basis: number }[] = [
+ { startDate: windowStartDate, basis: startingBasis },
+];
+ const changesAfterStart = capitalChanges
+ .filter((c) => c.effectiveDate >= windowStartDate)
+ .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
+ for (const c of changesAfterStart) {
+ const prevBasis = periods[periods.length - 1].basis;
+ periods.push({ startDate: c.effectiveDate, basis: prevBasis + Number(c.delta) });
+ }
+ return (dayDate: string): number => {
+ let basis = periods[0].basis;
+ for (const period of periods) {
+ if (period.startDate <= dayDate) basis = period.basis;
+ else break;
+ }
+ return basis;
+ };
+}
+
 // ── Summary Cards ──────────────────────────────────────────────────────────────
 
 // Benchmark indices paginated (2 per page) inside the Benchmark Performance card.
@@ -5518,28 +5573,13 @@ function SummaryCards({
  const windowEndMs = Date.now();
  if (windowEndMs <= windowStartMs) return null;
 
- // Build basis step-function: same period boundaries as the annualized return calc
- const changesAfterStart = capitalChanges
- .filter((c) => new Date(c.effectiveDate +"T12:00:00").getTime() > windowStartMs)
- .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
-
- const basisPeriods: { startMs: number; basis: number }[] = [
- { startMs: windowStartMs, basis: Number(settings.startingBasis) },
-];
- for (const c of changesAfterStart) {
- const changeMs = new Date(c.effectiveDate +"T12:00:00").getTime();
- const prevBasis = basisPeriods[basisPeriods.length - 1].basis;
- basisPeriods.push({ startMs: changeMs, basis: prevBasis + Number(c.delta) });
- }
-
- const getBasis = (dayStartMs: number): number => {
- let basis = basisPeriods[0].basis;
- for (const period of basisPeriods) {
- if (period.startMs <= dayStartMs) basis = period.basis;
- else break;
- }
- return basis;
- };
+ // Basis step-function, keyed by calendar day so an adjustment lands on its own
+ // effective date rather than the day after.
+ const getBasis = makeBasisLookup(
+ Number(settings.startingBasis),
+ _etDayKey(windowStartMs),
+ capitalChanges,
+ );
 
  const allPositions = [...openPositions, ...closedPositions].filter(
  (p) => !p.isDraft && p.isActive
@@ -5574,7 +5614,7 @@ function SummaryCards({
 
  const dayEndMs = Math.min(dayMs + DAY_MS, windowEndMs);
  const dayDurationMin = (dayEndMs - dayMs) / MINUTE_MS;
- const basis = getBasis(dayMs);
+ const basis = getBasis(_etDayKey(dayMs));
 
  if (basis > 0) {
  let capitalMin = 0;
@@ -5621,27 +5661,13 @@ function SummaryCards({
  const windowEndMs = Date.now();
  if (windowEndMs <= windowStartMs) return null;
 
- const changesAfterStart = capitalChanges
- .filter((c) => new Date(c.effectiveDate +"T12:00:00").getTime() > windowStartMs)
- .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
-
- const basisPeriods: { startMs: number; basis: number }[] = [
- { startMs: windowStartMs, basis: Number(settings.startingBasis) },
-];
- for (const c of changesAfterStart) {
- const changeMs = new Date(c.effectiveDate +"T12:00:00").getTime();
- const prevBasis = basisPeriods[basisPeriods.length - 1].basis;
- basisPeriods.push({ startMs: changeMs, basis: prevBasis + Number(c.delta) });
- }
-
- const getBasis = (dayStartMs: number): number => {
- let basis = basisPeriods[0].basis;
- for (const period of basisPeriods) {
- if (period.startMs <= dayStartMs) basis = period.basis;
- else break;
- }
- return basis;
- };
+ // Basis step-function, keyed by calendar day so an adjustment lands on its own
+ // effective date rather than the day after.
+ const getBasis = makeBasisLookup(
+ Number(settings.startingBasis),
+ _etDayKey(windowStartMs),
+ capitalChanges,
+ );
 
  const allPositions = [...openPositions, ...closedPositions].filter(
  (p) => !p.isDraft && p.isActive
@@ -5681,7 +5707,7 @@ function SummaryCards({
 
  if (tradingOpenMs < windowEndMs && tradingCloseMs > tradingOpenMs) {
  const tradingDurationMin = (tradingCloseMs - tradingOpenMs) / MINUTE_MS;
- const basis = getBasis(dayMs);
+ const basis = getBasis(_etDayKey(dayMs));
 
  if (basis > 0) {
  let capitalMin = 0;
@@ -5841,7 +5867,7 @@ function SummaryCards({
 
  // No capital changes — use original simple formula
  const changesAfterStart = capitalChanges.filter(
- (c) => new Date(c.effectiveDate +"T12:00:00").getTime() > annReturnFirstDate
+ (c) => _sessionOpenMs(c.effectiveDate) > annReturnFirstDate
  );
  if (changesAfterStart.length === 0) {
  return (cumulativePremium / settings.startingBasis) * (365 / totalElapsedDays) * 100;
@@ -5855,7 +5881,7 @@ function SummaryCards({
  { startMs: annReturnFirstDate, basis: Number(settings.startingBasis) },
 ];
  for (const c of sorted) {
- const changeMs = new Date(c.effectiveDate +"T12:00:00").getTime();
+ const changeMs = _sessionOpenMs(c.effectiveDate);
  const prevBasis = periods[periods.length - 1].basis;
  periods.push({ startMs: changeMs, basis: prevBasis + Number(c.delta) });
  }
@@ -5911,7 +5937,7 @@ function SummaryCards({
  currentBasis != null && currentBasis > 0 ? (totalMarkedPnl / currentBasis) * 100 : null;
 
  const boundaries = capitalChanges
- .filter((c) => new Date(c.effectiveDate +"T12:00:00").getTime() > annReturnFirstDate)
+ .filter((c) => _sessionOpenMs(c.effectiveDate) > annReturnFirstDate)
  .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
 
  // No adjustments → plain markedPnl / startingBasis (== fallback on starting basis).
@@ -5933,7 +5959,7 @@ function SummaryCards({
  { startMs: annReturnFirstDate, basis: Number(settings.startingBasis), uStart: 0 },
  ];
  for (const c of boundaries) {
- const changeMs = new Date(c.effectiveDate +"T12:00:00").getTime();
+ const changeMs = _sessionOpenMs(c.effectiveDate);
  const prev = periods[periods.length - 1];
  periods.push({ startMs: changeMs, basis: prev.basis + Number(c.delta), uStart: Number(c.unrealizedSnapshot) });
  }
@@ -5946,7 +5972,7 @@ function SummaryCards({
  return closeMs >= startMs && closeMs < endMs ? sum + (calcPosition(p).pnl ?? 0) : sum;
  }, 0);
  const disp = realizedRows.reduce((sum, r) => {
- const saleMs = new Date(r.saleDate +"T12:00:00").getTime();
+ const saleMs = _sessionOpenMs(r.saleDate);
  return saleMs >= startMs && saleMs < endMs ? sum + r.realizedPnl : sum;
  }, 0);
  return premium + disp;
@@ -6684,8 +6710,14 @@ function OptionScreener({ trackedTickers, holdingTickers, recentTickers, onDraft
  const annReturnDenominator = r.optionType ==="CALL"
  ? r.underlyingPrice
  : r.strike;
- const annReturn = r.last != null && r.last > 0 && r.dte > 0 && annReturnDenominator != null && annReturnDenominator > 0
- ? (r.last / annReturnDenominator) * (365 / r.dte) * 100
+ // Price the return off the bid/ask mark, not the last trade — on thin strikes
+ // `last` can be hours old and far outside the current quote. Fall back to
+ // `last` only when the chain comes back without a two-sided quote.
+ const mark = r.bid != null && r.ask != null && r.ask > 0
+ ? (r.bid + r.ask) / 2
+ : r.last;
+ const annReturn = mark != null && mark > 0 && r.dte > 0 && annReturnDenominator != null && annReturnDenominator > 0
+ ? (mark / annReturnDenominator) * (365 / r.dte) * 100
  : null;
  const isHighlighted = highlightedRows.has(i);
  const toggleHighlight = () =>
