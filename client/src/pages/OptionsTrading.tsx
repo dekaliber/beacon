@@ -167,6 +167,7 @@ function normalizePosition(p: OptionsPosition): OptionsPosition {
  contracts: Number(p.contracts),
  feesOpen: p.feesOpen != null ? Number(p.feesOpen) : null,
  shareCostBasis: p.shareCostBasis != null ? Number(p.shareCostBasis) : null,
+ assignedFromStrikePrice: p.assignedFromStrikePrice != null ? Number(p.assignedFromStrikePrice) : null,
  stockPriceAtOpen: p.stockPriceAtOpen != null ? Number(p.stockPriceAtOpen) : null,
  closePremiumPerShare: p.closePremiumPerShare != null ? Number(p.closePremiumPerShare) : null,
  feesClose: p.feesClose != null ? Number(p.feesClose) : null,
@@ -185,9 +186,14 @@ function calcPosition(p: OptionsPosition) {
  const totalPremiumGross = p.premiumPerShare * 100 * p.contracts;
  const totalPremiumNet = totalPremiumGross - (p.feesOpen ?? 0);
 
+ // Cash actually tied up, not accounting cost basis. An assigned put consumed
+ // the full strike in cash (a $400 assignment drew $400/share out of the sleeve
+ // even though the lot's basis is strike − premium), so a covered call written
+ // on that lot has the assigned strike at risk. Shares acquired outside an
+ // assignment fall back to their entered basis, then to the price at open.
  const capitalAtRisk =
  p.optionType ==="CALL"
- ? (p.shareCostBasis ?? p.stockPriceAtOpen ?? p.strikePrice) * 100 * p.contracts
+ ? (p.assignedFromStrikePrice ?? p.shareCostBasis ?? p.stockPriceAtOpen ?? p.strikePrice) * 100 * p.contracts
  : p.strikePrice * 100 * p.contracts;
 
  const breakeven =
