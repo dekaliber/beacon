@@ -1,25 +1,25 @@
 /**
- * NYSE market calendar: holidays, weekly options expirations, and trading-day
- * checks. Everything is anchored to Eastern Time — the market's timezone — so the
- * results don't drift for users in other timezones (a Friday-night Pacific user is
- * already on Saturday in ET, and the expiration math should reflect that).
- *
- * For the *bank* settlement calendar (T+1 cash settlement, which follows Federal
- * Reserve holidays — Columbus/Veterans Day closed, Good Friday open) see the
- * server-side server/src/lib/businessDays.ts. The two calendars deliberately
- * diverge on those days, so they are kept separate.
+ * NYSE market calendar (server side): holidays and trading-day checks, anchored
+ * to Eastern Time — the market's timezone — so results don't drift with the
+ * server's own locale or deploy region.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * KEEP IN SYNC WITH server/src/lib/marketHolidays.ts
+ * KEEP IN SYNC WITH client/src/lib/marketHolidays.ts
  *
- * The holiday rules here are mirrored on the server, which needs them to decide
- * whether to honour a price refresh (the client only decides whether to ask).
- * There is no shared module between the two builds, so if you add, remove, or
- * adjust a holiday rule here, make the same change there — otherwise the two
- * sides will disagree about whether a given day is a trading session.
+ * The holiday rules below are a deliberate duplicate of the client's calendar.
+ * Both sides need them — the client to decide whether to ask for a price refresh,
+ * the server to decide whether to honour one — and there is no shared module
+ * between the two builds. If you add, remove, or adjust a holiday rule here,
+ * make the same change there (and vice versa), or the two will disagree about
+ * whether a given day is a trading session.
  *
- * The options-expiration helpers below are client-only and are not mirrored.
+ * The client file additionally carries options-expiration helpers, which the
+ * server has no use for; only the holiday/trading-day half is mirrored here.
  * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * NOT to be confused with server/src/lib/businessDays.ts, which is the *bank*
+ * settlement calendar (Federal Reserve holidays — Columbus/Veterans Day closed,
+ * Good Friday open). The two calendars genuinely diverge; don't merge them.
  */
 
 // ── Eastern Time resolution ──────────────────────────────────────────────────
@@ -42,11 +42,7 @@ export interface ETDateParts {
   dow: number; // 0=Sun…6=Sat
 }
 
-/**
- * ET calendar components + weekday for any UTC timestamp. When converting a
- * UTC-midnight day marker, add ~12h first so the ET date lands on the intended
- * calendar day rather than the previous one.
- */
+/** ET calendar components + weekday for any UTC timestamp. */
 export function etDateParts(utcMs: number): ETDateParts {
   const parts = _etDateFmt.formatToParts(new Date(utcMs));
   const g = (t: string) => Number(parts.find((p) => p.type === t)!.value);
@@ -56,12 +52,6 @@ export function etDateParts(utcMs: number): ETDateParts {
     day: g("day"),
     dow: _WDAYS.indexOf(parts.find((p) => p.type === "weekday")!.value),
   };
-}
-
-/** Today's date in ET as YYYY-MM-DD. */
-export function etToday(): string {
-  const { year, month, day } = etDateParts(Date.now());
-  return ymd(year, month, day);
 }
 
 // ── Date formatting helpers ──────────────────────────────────────────────────
@@ -159,98 +149,11 @@ export function isMarketHolidayYMD(year: number, month: number, day: number): bo
   return getMarketHolidays(year).has(ymd(year, month, day));
 }
 
-export function isMarketHoliday(date: Date): boolean {
-  return isMarketHolidayYMD(date.getFullYear(), date.getMonth() + 1, date.getDate());
-}
-
 /**
- * True if the calendar day containing `utcMs` (resolved in ET) is a weekend or
- * NYSE market holiday. Pass a UTC timestamp; ET midday resolution is applied
- * internally so a UTC-midnight day marker still resolves to the right ET date.
+ * True if the calendar day containing `utcMs` (resolved in ET) is an NYSE trading
+ * session — i.e. not a weekend and not a market holiday.
  */
-export function isNonTradingDay(utcMs: number): boolean {
-  const { year, month, day, dow } = etDateParts(utcMs + 12 * 3600_000);
-  return dow === 0 || dow === 6 || isMarketHolidayYMD(year, month, day);
-}
-
-// ── Weekly options expirations ───────────────────────────────────────────────
-
-/**
- * Given a Friday date, returns the NYSE weekly options expiration date for that
- * week: Friday unless it's a market holiday, in which case Thursday.
- */
-function expirationForFriday(friday: Date): string {
-  if (isMarketHoliday(friday)) {
-    const thursday = new Date(friday);
-    thursday.setDate(thursday.getDate() - 1);
-    return toYMD(thursday);
-  }
-  return toYMD(friday);
-}
-
-/**
- * Given any expiration date (which may be Thursday due to a holiday), returns the
- * canonical Friday of that expiration week.
- */
-function canonicalFriday(expirationYMD: string): Date {
-  const [y, m, d] = expirationYMD.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  const dow = dt.getDay();
-  if (dow === 5) return dt;
-  if (dow === 4) { // Thursday (holiday-adjusted week)
-    const fri = new Date(dt);
-    fri.setDate(fri.getDate() + 1);
-    return fri;
-  }
-  // Fallback: advance to next Friday
-  const daysToFri = (5 - dow + 7) % 7 || 7;
-  const fri = new Date(dt);
-  fri.setDate(fri.getDate() + daysToFri);
-  return fri;
-}
-
-/**
- * Returns the default weekly options expiration date for the upcoming Friday of
- * the current (or, on a Saturday, the next) week, adjusted for market holidays.
- * Anchored to ET "today" unless an explicit reference date is supplied.
- */
-export function getWeeklyExpiration(referenceDate?: Date): string {
-  let y: number;
-  let mo: number;
-  let d: number;
-  let dow: number;
-  if (referenceDate) {
-    y = referenceDate.getFullYear();
-    mo = referenceDate.getMonth() + 1;
-    d = referenceDate.getDate();
-    dow = referenceDate.getDay();
-  } else {
-    ({ year: y, month: mo, day: d, dow } = etDateParts(Date.now()));
-  }
-  const daysToFriday = dow <= 5 ? 5 - dow : 6;
-  const fri = new Date(y, mo - 1, d + daysToFriday);
-  return expirationForFriday(fri);
-}
-
-/** Returns the expiration date for the week after the given expiration date. */
-export function nextWeekExpiration(currentExpYMD: string): string {
-  const fri = canonicalFriday(currentExpYMD);
-  fri.setDate(fri.getDate() + 7);
-  return expirationForFriday(fri);
-}
-
-/** Returns the expiration date for the week before the given expiration date. */
-export function prevWeekExpiration(currentExpYMD: string): string {
-  const fri = canonicalFriday(currentExpYMD);
-  fri.setDate(fri.getDate() - 7);
-  return expirationForFriday(fri);
-}
-
-/** Calendar days from ET today to the expiration date (negative if past). */
-export function calcDTE(expirationYMD: string): number {
-  const [ty, tm, td] = etToday().split("-").map(Number);
-  const [ey, em, ed] = expirationYMD.split("-").map(Number);
-  const todayMs = Date.UTC(ty, tm - 1, td);
-  const expMs = Date.UTC(ey, em - 1, ed);
-  return Math.round((expMs - todayMs) / 86400000);
+export function isTradingDay(utcMs: number): boolean {
+  const { year, month, day, dow } = etDateParts(utcMs);
+  return dow !== 0 && dow !== 6 && !isMarketHolidayYMD(year, month, day);
 }

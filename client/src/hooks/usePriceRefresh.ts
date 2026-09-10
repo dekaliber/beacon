@@ -1,6 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { getAuthToken } from "@/lib/authToken";
-import { isPriceRefreshNeeded, getNextUpdateTime, nextStockCutoff } from "@/lib/priceUtils";
+import { isPriceRefreshNeeded, getNextUpdateTime, nextStockCutoff, lastStockCutoff } from "@/lib/priceUtils";
 import type { InvestmentHolding } from "@/types";
 
 // ── Module-level singleton ────────────────────────────────────────────────
@@ -116,11 +116,16 @@ export function usePriceRefresh({ holdings, source }: UsePriceRefreshOptions): U
       // Investments page: proper client-side staleness check.
       shouldRefresh = isPriceRefreshNeeded(holdings);
     } else {
-      // Dashboard: trigger once per session; server handles staleness.
+      // Dashboard: no holdings to inspect, so the server decides what is stale.
+      // Ask once per session, then again only once a new 8 PM cutoff has passed —
+      // the same daily batch the Investments page runs on. This used to re-ask
+      // every 5 minutes, which tracked crypto's old 5-minute refresh clock; with
+      // every instrument on the daily cadence there is nothing new to collect
+      // until the next cutoff.
       shouldRefresh =
         refreshState.phase === "idle" ||
         (refreshState.completedAt != null &&
-          Date.now() - refreshState.completedAt.getTime() > 5 * 60 * 1000);
+          refreshState.completedAt < lastStockCutoff(new Date()));
     }
 
     if (!shouldRefresh) return;

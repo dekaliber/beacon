@@ -1,10 +1,22 @@
 import type { InvestmentHolding } from "@/types";
 import { etDateParts, isMarketHolidayYMD } from "./marketHolidays";
 
-// Next 8 PM ET cutoff for stocks/funds — same logic used client and server side.
+// The most recent 8 PM ET cutoff that has already passed. Used to decide whether
+// a completed refresh is still current: anything captured before the last cutoff
+// is a batch behind, anything after it is up to date.
+export function lastStockCutoff(now: Date): Date {
+  const cutoff = cutoffToday8pmET(now);
+  return now >= cutoff ? cutoff : new Date(cutoff.getTime() - DAY_MS);
+}
+
+// The next 8 PM ET cutoff that a refresh will actually run at — skipping weekends
+// and market holidays, since the server won't fetch quotes on those days. Without
+// the skip the status line advertises a Saturday update that never comes.
 export function nextStockCutoff(now: Date): Date {
   const cutoff = cutoffToday8pmET(now);
-  return now < cutoff ? cutoff : new Date(cutoff.getTime() + 24 * 60 * 60 * 1000);
+  let ms = now < cutoff ? cutoff.getTime() : cutoff.getTime() + DAY_MS;
+  while (!isTradingDay(ms)) ms += DAY_MS;
+  return new Date(ms);
 }
 
 /**
@@ -47,9 +59,6 @@ function etTimeOnDay(refMs: number, hour: number, minute = 0): number {
 function cutoffToday8pmET(now: Date): Date {
   return new Date(etTimeOnDay(now.getTime(), 20));
 }
-
-// Crypto markets trade 24/7. Refresh crypto prices if they are older than this.
-const CRYPTO_PRICE_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
 
 function currentHourET(now: Date): number {
   return parseInt(
@@ -128,65 +137,47 @@ export function isWithinOptionsTradingWindow(): boolean {
 
 // Returns true if any holding has a stale price and a refresh should be triggered.
 //
-// For stock/fund holdings: prices are considered stale once it is past 8PM Eastern
-// today and the last fetch predates that cutoff. Mutual fund NAVs are typically
-// published 1-2 hours after the 4PM ET close, so 8PM gives them plenty of time.
-// No refreshes are triggered after 4:15PM ET — markets are closed and prices won't change.
+// One cadence for every holding, crypto included: prices go stale once it is past
+// 8 PM Eastern and the last fetch predates that cutoff. Mutual fund NAVs are
+// typically published 1-2 hours after the 4 PM ET close, so 8 PM gives them time
+// to settle — fetching earlier risks capturing a stale or partial NAV.
 //
-// For crypto holdings: prices are considered stale if older than 5 minutes, since
-// crypto trades continuously 24/7.
+// Between 4:15 PM and 8 PM nothing is requested: a price fetched earlier the same
+// day is newer than the previous cutoff, so no holding reports stale. Before 4:15
+// PM the same is true, until a whole cutoff has been missed — which is the
+// catch-up path for a portfolio nobody opened last night.
 export function isPriceRefreshNeeded(holdings: InvestmentHolding[]): boolean {
   if (holdings.length === 0) return false;
 
   const now = new Date();
+
+  // On a non-trading day the server fetches no quotes, but it does check for a
+  // session that was never captured — Friday's close, if nobody opened the app
+  // that evening. Ask anyway so it gets that chance; the refresh singleton keeps
+  // it to once per session.
+  if (!isTradingDay(now.getTime())) return true;
+
   const cutoff = cutoffToday8pmET(now);
-  const prevCutoff = new Date(cutoff.getTime() - 24 * 60 * 60 * 1000);
-  const afterMarketClose = now.getTime() >= etCloseBoundary(now.getTime());
+  const prevCutoff = new Date(cutoff.getTime() - DAY_MS);
 
   for (const holding of holdings) {
     if (!holding.priceUpdatedAt) return true;
 
     const lastUpdated = new Date(holding.priceUpdatedAt);
-
-    if (holding.type === "Crypto") {
-      // Crypto: refresh if price is older than 5 minutes
-      if (now.getTime() - lastUpdated.getTime() > CRYPTO_PRICE_MAX_AGE_MS) return true;
-    } else {
-      // Stocks / funds: no refreshes after 4:15PM ET (market closed, prices frozen)
-      if (afterMarketClose) continue;
-      if (lastUpdated < prevCutoff) return true;
-      if (now >= cutoff && lastUpdated < cutoff) return true;
-    }
+    if (lastUpdated < prevCutoff) return true;
+    if (now >= cutoff && lastUpdated < cutoff) return true;
   }
 
   return false;
 }
 
-// Returns when prices will next become stale for the given holdings.
-// For crypto: 5 minutes after the oldest crypto priceUpdatedAt.
-// For stocks: the next 8 PM ET cutoff.
+// Returns when prices will next become stale — the next 8 PM ET cutoff, for every
+// holding alike. Crypto used to pull this as low as 5 minutes out, which made the
+// "Next update" caption advertise a refresh that had nothing to do with the daily
+// batch the rest of the page runs on.
 export function getNextUpdateTime(holdings: InvestmentHolding[]): Date | null {
   if (holdings.length === 0) return null;
-
-  const now = new Date();
-  const candidates: Date[] = [];
-
-  const cryptoUpdates = holdings
-    .filter((h) => h.type === "Crypto" && h.priceUpdatedAt)
-    .map((h) => new Date(h.priceUpdatedAt!).getTime());
-
-  if (cryptoUpdates.length > 0) {
-    const oldest = Math.min(...cryptoUpdates);
-    candidates.push(new Date(oldest + CRYPTO_PRICE_MAX_AGE_MS));
-  }
-
-  const hasStocks = holdings.some((h) => h.type !== "Crypto");
-  if (hasStocks) {
-    candidates.push(nextStockCutoff(now));
-  }
-
-  if (candidates.length === 0) return null;
-  return candidates.reduce((a, b) => (a.getTime() < b.getTime() ? a : b));
+  return nextStockCutoff(new Date());
 }
 
 // Formats a next-update Date as a friendly string like "Today at 8 PM EDT" or "May 10 at 8 PM EDT".

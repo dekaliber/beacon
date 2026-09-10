@@ -6,6 +6,7 @@ import { getMetadata as getTiingoMeta, getDividendScanResult } from "../services
 import { searchCoins, getPrices, getPrice as getCoinGeckoPrice, getMarketChart } from "../services/coingecko.js";
 import { fetchYahooPrice, fetchYahooHistory, fetchYahooClosingPrice, fetchYahooMeta } from "../services/yahoo.js";
 import { deactivateIfOrphaned } from "./instruments.js";
+import { isTradingDay } from "../lib/marketHolidays.js";
 import { getUserId } from "../middleware/auth.js";
 
 export const investmentRoutes = Router();
@@ -28,6 +29,72 @@ function lastWeekday(): Date {
   const dow = d.getUTCDay();
   const skip = dow === 0 ? 2 : dow === 6 ? 1 : 0;
   return new Date(d.getTime() - skip * 86400000);
+}
+
+// ── Stable-NAV instruments ──────────────────────────────────────────────────
+// Money market funds hold a $1.00 share price by construction, so there is no
+// price movement to track. Providers quote them unreliably — Yahoo has returned
+// both a weekend and a 2019 timestamp for VUSXX — and a bad quote date is worse
+// than no quote, since it becomes evidence of a trading session that never
+// happened. These are pinned to their stored price rather than re-fetched.
+//
+// Recognised by ticker as well as by priceSource "FIXED". priceSource lives in
+// the database, and local data is replaced wholesale by prod syncs, so a tag set
+// there survives only until the next sync and never reaches other environments.
+// This list is the half that travels with the code.
+const STABLE_NAV_TICKERS = new Set([
+  "VUSXX", // Vanguard Treasury Money Market
+  "VMFXX", // Vanguard Federal Money Market
+  "VMRXX", // Vanguard Cash Reserves Federal Money Market
+  "SPAXX", // Fidelity Government Money Market
+  "SPRXX", // Fidelity Money Market
+  "FDRXX", // Fidelity Government Cash Reserves
+  "SWVXX", // Schwab Value Advantage Money
+  "SNVXX", // Schwab Government Money
+  "SNSXX", // Schwab Treasury Obligations Money
+]);
+
+// A ticker is pinned once we already hold a price for it. The "already hold"
+// part matters: a stable-NAV holding that has never been priced still needs one
+// real fetch to create its row, or it would never get a price at all.
+function isPinnedPrice(ticker: string, priceSource: string): boolean {
+  return priceSource === "FIXED" || STABLE_NAV_TICKERS.has(ticker);
+}
+
+// ── Observed exchange calendar ───────────────────────────────────────────────
+// Derives which dates were trading sessions from the history rows we hold, so
+// market holidays need no hardcoded list. A date is only believed when it looks
+// like a real session, because one bad row otherwise redefines "the previous
+// session" for every holding — and, on a pinned ticker, gets synthesized back
+// into history on the next run, which makes it self-perpetuating.
+//
+// Providers do hand back junk timestamps: a money market fund has reported both
+// a weekend and a 2019 date for its quote.
+function deriveSessionDays(
+  rows: Array<{ ticker: string; date: Date }>,
+  isCryptoTicker: (ticker: string) => boolean,
+  equityTickerCount: number,
+): Set<number> {
+  const counts = new Map<number, number>();
+  for (const r of rows) {
+    // Crypto trades every calendar day, so it can't define the exchange calendar.
+    if (isCryptoTicker(r.ticker)) continue;
+    const ms = r.date.getTime();
+    counts.set(ms, (counts.get(ms) ?? 0) + 1);
+  }
+
+  const days = new Set<number>();
+  for (const [ms, count] of counts) {
+    // US equity sessions are never on a weekend.
+    const dow = new Date(ms).getUTCDay();
+    if (dow === 0 || dow === 6) continue;
+    // A weekday only one ticker has a close for is a stray row, not a session —
+    // a genuinely missed session leaves a hole in *many* tickers at once, which
+    // must still be caught rather than hidden.
+    if (count < 2 && equityTickerCount > 1) continue;
+    days.add(ms);
+  }
+  return days;
 }
 
 // Returns the most recent trading day whose prices are considered finalized.
@@ -96,18 +163,19 @@ async function fillPriceGaps(
     select: { ticker: true, date: true },
   });
   const daysByTicker = new Map<string, Set<number>>();
-  const sessionDays = new Set<number>();
   for (const r of recentRows) {
-    const ms = r.date.getTime();
     let days = daysByTicker.get(r.ticker);
     if (!days) {
       days = new Set();
       daysByTicker.set(r.ticker, days);
     }
-    days.add(ms);
-    // Crypto trades every calendar day, so it can't define the exchange calendar.
-    if (!coinGeckoIdByTicker.has(r.ticker)) sessionDays.add(ms);
+    days.add(r.date.getTime());
   }
+  const sessionDays = deriveSessionDays(
+    recentRows,
+    (t) => coinGeckoIdByTicker.has(t),
+    tickers.filter((t) => !coinGeckoIdByTicker.has(t)).length,
+  );
 
   // Tickers priced via Tiingo (money market funds). Their history is maintained
   // by the refresh path's Tiingo branch, so chasing gaps here would only spend a
@@ -118,16 +186,18 @@ async function fillPriceGaps(
   });
   const tiingoTickers = new Set(tiingoRows.map((r) => r.ticker));
 
-  // Stable-NAV instruments, pinned at a fixed price. Yahoo does carry them, but
-  // returns a null close on some sessions, which leaves permanent holes that no
-  // amount of refetching fills. Their price is a constant by construction, so
+  // Stable-NAV instruments, pinned at their stored price. Yahoo does carry them,
+  // but returns a null close on some sessions, which leaves permanent holes that
+  // no amount of refetching fills. Their price is a constant by construction, so
   // synthesize the missing sessions from the exchange calendar instead.
-  const fixedRows = await prisma.tickerPrice.findMany({
-    where: { ticker: { in: tickers }, priceSource: "FIXED" },
-    select: { ticker: true, price: true },
+  const pinnedRows = await prisma.tickerPrice.findMany({
+    where: { ticker: { in: tickers } },
+    select: { ticker: true, price: true, priceSource: true },
   });
   const fixedPrices = new Map(
-    fixedRows.map((r) => [r.ticker, parseFloat(r.price.toString())]),
+    pinnedRows
+      .filter((r) => isPinnedPrice(r.ticker, r.priceSource))
+      .map((r) => [r.ticker, parseFloat(r.price.toString())]),
   );
 
   // Earliest session this ticker is missing but its peers have. Only dates after
@@ -593,20 +663,19 @@ investmentRoutes.get("/accounts", async (req, res) => {
 
     // closesByTicker: ticker → (UTC-midnight ms → that day's close)
     const closesByTicker = new Map<string, Map<number, number>>();
-    // Observed exchange calendar: every date some equity has a close for. Derived
-    // from the data rather than a hardcoded holiday list, so market holidays need
-    // no special-casing.
-    const sessionDays = new Set<number>();
     for (const row of recentHistory) {
-      const dayMs = row.date.getTime();
       let closes = closesByTicker.get(row.ticker);
       if (!closes) {
         closes = new Map();
         closesByTicker.set(row.ticker, closes);
       }
-      closes.set(dayMs, parseFloat(row.closePrice.toString()));
-      if (!cryptoTickers.has(row.ticker)) sessionDays.add(dayMs);
+      closes.set(row.date.getTime(), parseFloat(row.closePrice.toString()));
     }
+    const sessionDays = deriveSessionDays(
+      recentHistory,
+      (t) => cryptoTickers.has(t),
+      allTickers.filter((t) => !cryptoTickers.has(t)).length,
+    );
     const sessionDaysDesc = [...sessionDays].sort((a, b) => b - a);
 
     // The ET calendar date a price belongs to, as UTC midnight — matching how
@@ -627,7 +696,7 @@ investmentRoutes.get("/accounts", async (req, res) => {
     // Pinned instruments are excluded: their priceDate records when the row was
     // last touched, not a market timestamp, so it must not define the as-of day.
     const equityPriceDays = cachedPrices
-      .filter((p) => !cryptoTickers.has(p.ticker) && p.priceSource !== "FIXED")
+      .filter((p) => !cryptoTickers.has(p.ticker) && !isPinnedPrice(p.ticker, p.priceSource))
       .map((p) => etDayMs(p.priceDate));
     const asOfDay = equityPriceDays.length > 0 ? Math.max(...equityPriceDays) : null;
     // The session before it — the baseline every equity's 1-day change is measured
@@ -1374,9 +1443,11 @@ function marketCloseBoundaryET(now: Date): Date {
   return new Date(`${get("year")}-${get("month")}-${get("day")}T16:15:00${offsetStr}`);
 }
 
-function isTickerStale(updatedAt: Date | null, isCrypto: boolean, now: Date): boolean {
+// Every instrument is on one daily cadence, crypto included. Crypto trades 24/7,
+// but the portfolio is only ever valued against a daily close, so refreshing it
+// on a separate 5-minute clock bought nothing except a second refresh schedule.
+function isTickerStale(updatedAt: Date | null, now: Date): boolean {
   if (!updatedAt) return true;
-  if (isCrypto) return now.getTime() - updatedAt.getTime() > 5 * 60 * 1000;
   const cutoff = cutoffToday8pmET(now);
   const prevCutoff = new Date(cutoff.getTime() - 24 * 60 * 60 * 1000);
   if (updatedAt < prevCutoff) return true;
@@ -1406,6 +1477,20 @@ async function upsertTickerPrice(
     create: { ticker, price, priceDate, priceSource },
     update: { price, priceDate, priceSource },
   });
+
+  // The history date comes from the provider's own quote timestamp, which is not
+  // always trustworthy — money market funds in particular have reported weekend
+  // and years-old timestamps. A row dated on a non-session day is worse than no
+  // row: it becomes evidence of a session that never happened, which moves the
+  // 1-day baseline for every holding. Keep the live price, skip the history row.
+  const dow = historyDate.getUTCDay();
+  const ageDays = (Date.now() - historyDate.getTime()) / (24 * 60 * 60 * 1000);
+  if (dow === 0 || dow === 6 || ageDays > 7 || ageDays < -1) {
+    console.warn(
+      `[price] ${ticker}: implausible quote date ${historyDate.toISOString().slice(0, 10)} — history row skipped`,
+    );
+    return;
+  }
 
   await prisma.tickerPriceHistory.upsert({
     where: { ticker_date: { ticker, date: historyDate } },
@@ -1459,11 +1544,26 @@ investmentRoutes.post("/prices/refresh", async (req, res) => {
     const tiingoTickers = new Set(tiingoRows.map((r) => r.ticker));
 
     // Pinned stable-NAV tickers never move; fillPriceGaps maintains their history.
-    const fixedRows = await prisma.tickerPrice.findMany({
-      where: { ticker: { in: tickers }, priceSource: "FIXED" },
-      select: { ticker: true },
+    // Only ones we already hold a price for — a first sighting still needs one
+    // real fetch to create the row.
+    const pinnedRows = await prisma.tickerPrice.findMany({
+      where: { ticker: { in: tickers } },
+      select: { ticker: true, priceSource: true },
     });
-    const fixedTickers = new Set(fixedRows.map((r) => r.ticker));
+    const fixedTickers = new Set(
+      pinnedRows.filter((r) => isPinnedPrice(r.ticker, r.priceSource)).map((r) => r.ticker),
+    );
+
+    // Same rule as the stream route: no quotes to collect on a non-session day,
+    // but a session nobody was around to capture still gets repaired from history.
+    if (!isTradingDay(Date.now())) {
+      const filled = await fillPriceGaps(tickers, coinGeckoIdByTicker);
+      console.log(
+        `[price-refresh] triggered from ${source} — non-trading day, ` +
+        `${filled} history row(s) backfilled, no quotes fetched`,
+      );
+      return res.json({ updated: 0, tickers: [] });
+    }
 
     console.log(
       `[price-refresh] triggered from ${source} — ${tickers.length} ticker(s)` +
@@ -1526,28 +1626,7 @@ investmentRoutes.post("/prices/refresh", async (req, res) => {
         const dateStr = priceDate.toISOString().slice(0, 10);
         console.log(`[price-refresh] ${ticker}: $${price} (${dateStr}) [${priceSource}]`);
 
-        // Normalize to the ET calendar date, then store as UTC midnight.
-        // We use ET here because regularMarketTime for a 4 PM ET close is 8 PM
-        // UTC, which can roll over to the next UTC date — so UTC date extraction
-        // would produce an off-by-one (e.g. April 1 instead of March 31).
-        const etDateStr = new Intl.DateTimeFormat("en-US", {
-          timeZone: "America/New_York",
-          year: "numeric", month: "2-digit", day: "2-digit",
-        }).format(priceDate);
-        const [etMonth, etDay, etYear] = etDateStr.split("/");
-        const historyDate = new Date(Date.UTC(Number(etYear), Number(etMonth) - 1, Number(etDay)));
-
-        await prisma.tickerPrice.upsert({
-          where: { ticker },
-          create: { ticker, price, priceDate, priceSource },
-          update: { price, priceDate, priceSource },
-        });
-
-        await prisma.tickerPriceHistory.upsert({
-          where: { ticker_date: { ticker, date: historyDate } },
-          create: { ticker, date: historyDate, closePrice: price },
-          update: { closePrice: price },
-        });
+        await upsertTickerPrice(ticker, price, priceDate, priceSource);
 
         updated++;
         results.push(ticker);
@@ -1614,30 +1693,42 @@ investmentRoutes.get("/prices/refresh/stream", async (req, res) => {
     const now = new Date();
     const priceRows = await prisma.tickerPrice.findMany({
       where: { ticker: { in: tickers } },
-      select: { ticker: true, updatedAt: true },
+      select: { ticker: true, updatedAt: true, priceSource: true },
     });
     const priceUpdatedAtMap = new Map(priceRows.map((r) => [r.ticker, r.updatedAt]));
 
     // Pinned stable-NAV tickers never move, so they're never stale — fillPriceGaps
-    // keeps their history complete without spending a request on them.
-    const fixedRows = await prisma.tickerPrice.findMany({
-      where: { ticker: { in: tickers }, priceSource: "FIXED" },
-      select: { ticker: true },
-    });
-    const fixedTickers = new Set(fixedRows.map((r) => r.ticker));
-
-    const staleTickers = tickers.filter((t) =>
-      !fixedTickers.has(t) &&
-      isTickerStale(priceUpdatedAtMap.get(t) ?? null, cryptoTickers.has(t), now),
+    // keeps their history complete without spending a request on them. Only ones
+    // we already hold a price for: a first sighting still needs one real fetch.
+    const fixedTickers = new Set(
+      priceRows.filter((r) => isPinnedPrice(r.ticker, r.priceSource)).map((r) => r.ticker),
     );
 
+    // Quotes are only worth fetching on a session day. On a weekend or holiday
+    // there is no new close to collect, and asking anyway is what produced a
+    // Saturday-dated history row that moved the 1-day baseline for the whole
+    // portfolio.
+    const tradingDay = isTradingDay(now.getTime());
+
+    const staleTickers = tradingDay
+      ? tickers.filter(
+          (t) => !fixedTickers.has(t) && isTickerStale(priceUpdatedAtMap.get(t) ?? null, now),
+        )
+      : [];
+
     if (staleTickers.length === 0) {
-      // No gap-fill here on purpose. Every ticker being fresh means a refresh has
-      // already run since the last cutoff, and that run gap-filled on its way out.
-      // Doing it again would only add a silent stall to the Dashboard and
-      // Investments loads that hit this path on every visit — and because no
+      // On a non-trading day, still look for sessions that were never captured —
+      // a Friday close nobody was around to collect is exactly what should be
+      // repaired when the page is opened over the weekend. fillPriceGaps sources
+      // those from history rather than a quote, which is the right endpoint for a
+      // past session anyway.
+      //
+      // On a trading day this path means every price is already current, and the
+      // run that made them current gap-filled on its way out. Doing it again would
+      // only add a stall to loads that hit this path on every visit — and since no
       // "start" event is sent here, that stall renders as a status line with no
       // ticker count, which reads like a hang.
+      if (!tradingDay) await fillPriceGaps(tickers, coinGeckoIdByTicker);
       send({ type: "done", updated: 0, total: 0 });
       res.end();
       return;
@@ -1979,6 +2070,15 @@ investmentRoutes.get("/prices/:ticker", async (req, res) => {
 
     // Return cached price if it's still fresh
     const existing = await prisma.tickerPrice.findUnique({ where: { ticker } });
+    // A pinned stable-NAV instrument has no quote to fetch, and fetching one here
+    // would overwrite priceSource back to YAHOO and un-pin it.
+    if (existing && isPinnedPrice(existing.ticker, existing.priceSource)) {
+      return res.json({
+        ticker,
+        price: parseFloat(existing.price.toString()),
+        priceDate: existing.priceDate,
+      });
+    }
     if (existing) {
       const ageMs = Date.now() - existing.updatedAt.getTime();
       // After 4:15 PM ET markets are closed — any cached price is good for the rest of the day.
