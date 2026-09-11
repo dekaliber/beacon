@@ -72,7 +72,6 @@ import {
  YAxis,
  CartesianGrid,
  Tooltip as RechartsTooltip,
- ReferenceLine,
 } from"recharts";
 
 // Captured once at module load; used as the"opened at" time for draft positions.
@@ -4403,7 +4402,8 @@ function weekFridayLabel(mondayMs: number): string {
 
 // First of the month, local midnight — the monthly analogue of getWeekStart.
 // A fixed-ms stride doesn't work for months (28-31 days), so monthly window
-// math below steps via addMonths() instead of a WEEK_MS-style constant.
+// math below steps via addMonths() — and weeks via addWeeks(), for the reason
+// given there.
 function getMonthStart(date: Date): Date {
  const d = new Date(date);
  d.setHours(0, 0, 0, 0);
@@ -4415,6 +4415,25 @@ function addMonths(ms: number, n: number): number {
  const d = new Date(ms);
  d.setMonth(d.getMonth() + n);
  return d.getTime();
+}
+
+// Step by calendar weeks, landing on local midnight every time. A fixed 7×24h
+// stride does not: the week containing a DST switch is 167 or 169 hours long, so
+// after one the stride sits an hour off midnight (Sunday 23:00 after fall-back)
+// and stops matching the getWeekStart() keys the premium maps are bucketed by.
+function addWeeks(ms: number, n: number): number {
+ const d = new Date(ms);
+ d.setDate(d.getDate() + 7 * n);
+ return d.getTime();
+}
+
+// Local YYYY-MM-DD of a week's Friday. The basis in effect that day sets the
+// week's target, so an adjustment dated Mon–Fri lifts the week it falls in, and
+// a weekend one (no session left to deploy it) starts with the following week.
+function weekFridayDateStr(mondayMs: number): string {
+ const fri = new Date(mondayMs);
+ fri.setDate(fri.getDate() + 4);
+ return fri.toLocaleDateString("en-CA");
 }
 
 // Label a month abbreviation + 2-digit year (e.g."Jul '26") — a 12-month
@@ -4460,8 +4479,6 @@ function netWeekBars(raw: { premiumCSP: number; premiumCC: number; pendingCSP: n
  }
  return { barCSP: v.premiumCSP, barCC: v.premiumCC, barPendCSP: v.pendingCSP, barPendCC: v.pendingCC, barNeg: neg };
 }
-
-const WEEK_MS = 7 * 86_400_000;
 
 // Pads a [min, max] pair outward by 5% so a fixed-domain chart doesn't clip its
 // extremes against the plot edges. The side that doesn't cross zero stays
@@ -4551,14 +4568,6 @@ function PerformanceCharts({
  settings: OptionsSettings | null;
  capitalChanges: OptionsCapitalChange[];
 }) {
- // Current basis (starting basis + capital changes to date), not the original
- // starting basis alone — so the weekly/monthly target tracks deposits and
- // withdrawals instead of staying pinned to whatever basis was set initially.
- const currentBasis = computeCurrentBasis(settings, capitalChanges);
- const targetAnnual = settings && currentBasis != null ? currentBasis * settings.targetReturn : null;
- const targetWeekly = targetAnnual != null ? targetAnnual / 52 : null;
- const targetMonthly = targetAnnual != null ? targetAnnual / 12 : null;
-
  // Weekly/Monthly toggle for the "Premium Collected" bar chart only — the
  // Cumulative Performance chart below it stays on its own weekly cadence.
  const [chartPeriod, setChartPeriod] = useState<"weekly" | "monthly">("weekly");
@@ -4627,6 +4636,45 @@ function PerformanceCharts({
 
  const currentWeekMs = getWeekStart(new Date()).getTime();
 
+ // Targets follow the basis in effect during each period rather than today's
+ // basis, so a deposit raises the target from its own week forward instead of
+ // retroactively making earlier periods look under target.
+ const targetReturn = settings?.targetReturn ?? null;
+ const basisOn = useMemo(() => {
+ if (settings?.startingBasis == null || firstTradeWeekMs == null) return null;
+ return makeBasisLookup(
+ Number(settings.startingBasis),
+ new Date(firstTradeWeekMs).toLocaleDateString("en-CA"),
+ capitalChanges,
+ );
+ }, [settings?.startingBasis, firstTradeWeekMs, capitalChanges]);
+
+ // Weekly: the whole week steps to the basis in effect on its Friday.
+ const weekTarget = useCallback((mondayMs: number): number | null => {
+ if (basisOn == null || targetReturn == null) return null;
+ return (basisOn(weekFridayDateStr(mondayMs)) * targetReturn) / 52;
+ }, [basisOn, targetReturn]);
+
+ // Monthly: prorated by the day-weighted basis across the month. A full step
+ // is fine for a week but would let a 9/28 deposit lift all of September.
+ const monthTarget = useCallback((monthStartMs: number): number | null => {
+ if (basisOn == null || targetReturn == null) return null;
+ const d = new Date(monthStartMs);
+ const month = d.getMonth();
+ let basisDays = 0;
+ let days = 0;
+ while (d.getMonth() === month) {
+ basisDays += basisOn(d.toLocaleDateString("en-CA"));
+ days++;
+ d.setDate(d.getDate() + 1);
+ }
+ return ((basisDays / days) * targetReturn) / 12;
+ }, [basisOn, targetReturn]);
+
+ // Header legends quote the forward rate at today's basis — the one to act on.
+ const todayBasis = basisOn?.(new Date().toLocaleDateString("en-CA")) ?? null;
+ const targetAnnual = todayBasis != null && targetReturn != null ? todayBasis * targetReturn : null;
+
  // Furthest-out week carrying pending (open-position) premium, so the bar chart
  // can extend forward to show premium we still expect to realize.
  const lastPendingWeekMs = useMemo(() => {
@@ -4644,10 +4692,10 @@ function PerformanceCharts({
  const lastMs = Math.max(
  currentWeekMs,
  lastPendingWeekMs ?? currentWeekMs,
- firstTradeWeekMs + (MAX_CHART_WEEKS - 1) * WEEK_MS,
+ addWeeks(firstTradeWeekMs, MAX_CHART_WEEKS - 1),
  );
- const weeks: { week: string; premiumCSP: number; premiumCC: number; pendingCSP: number; pendingCC: number; barCSP: number; barCC: number; barPendCSP: number; barPendCC: number; barNeg: number; isFuture: boolean }[] = [];
- for (let ms = firstTradeWeekMs; ms <= lastMs; ms += WEEK_MS) {
+ const weeks: { week: string; premiumCSP: number; premiumCC: number; pendingCSP: number; pendingCC: number; barCSP: number; barCC: number; barPendCSP: number; barPendCC: number; barNeg: number; isFuture: boolean; target: number | null }[] = [];
+ for (let ms = firstTradeWeekMs; ms <= lastMs; ms = addWeeks(ms, 1)) {
  const premiumCSP = weekPnlMap.csp.get(ms) ?? 0;
  const premiumCC = weekPnlMap.cc.get(ms) ?? 0;
  const pendingCSP = pendingPnlMap.csp.get(ms) ?? 0;
@@ -4657,10 +4705,11 @@ function PerformanceCharts({
  premiumCSP, premiumCC, pendingCSP, pendingCC,
  ...netWeekBars({ premiumCSP, premiumCC, pendingCSP, pendingCC }),
  isFuture: ms > currentWeekMs,
+ target: weekTarget(ms),
  });
  }
  return weeks;
- }, [firstTradeWeekMs, currentWeekMs, lastPendingWeekMs, weekPnlMap, pendingPnlMap]);
+ }, [firstTradeWeekMs, currentWeekMs, lastPendingWeekMs, weekPnlMap, pendingPnlMap, weekTarget]);
 
  // Monthly analogue of weekPnlMap/pendingPnlMap, for the bar chart's Monthly
  // toggle — same source loops, bucketed by month instead of week.
@@ -4728,35 +4777,38 @@ function PerformanceCharts({
  premiumCSP, premiumCC, pendingCSP, pendingCC,
  ...netWeekBars({ premiumCSP, premiumCC, pendingCSP, pendingCC }),
  isFuture: ms > currentMonthMs,
+ target: monthTarget(ms),
  });
  }
  return months;
- }, [firstTradeMonthMs, currentMonthMs, lastPendingMonthMs, monthPnlMap, pendingMonthPnlMap]);
+ }, [firstTradeMonthMs, currentMonthMs, lastPendingMonthMs, monthPnlMap, pendingMonthPnlMap, monthTarget]);
 
- const targetPeriodic = chartPeriod ==="weekly" ? targetWeekly : targetMonthly;
+ const targetPeriodic = targetAnnual == null ? null : chartPeriod ==="weekly" ? targetAnnual / 52 : targetAnnual / 12;
 
  // Full cumulative series, first trade week through the current week (padded
  // forward to at least MAX_CHART_WEEKS points).
- // actual is null for future weeks so the line stops at the current week
- // target uses 1-based week number so W1 target = 1 × targetWeekly (not zero)
+ // actual is null for future weeks so the line stops at the current week.
+ // target accrues each week's own target, so W1 = one week's target (not zero)
+ // and the slope changes at the week of a basis adjustment.
  const allCumulativeData = useMemo(() => {
  if (firstTradeWeekMs == null) return [];
- const lastMs = Math.max(currentWeekMs, firstTradeWeekMs + (MAX_CHART_WEEKS - 1) * WEEK_MS);
+ const lastMs = Math.max(currentWeekMs, addWeeks(firstTradeWeekMs, MAX_CHART_WEEKS - 1));
  let cumulative = 0;
- const points: { week: string; actual: number | null; target: number }[] = [];
- let weekNum = 0;
- for (let ms = firstTradeWeekMs; ms <= lastMs; ms += WEEK_MS) {
- weekNum++;
+ let cumTarget = 0;
+ const points: { week: string; actual: number | null; target: number | null }[] = [];
+ for (let ms = firstTradeWeekMs; ms <= lastMs; ms = addWeeks(ms, 1)) {
  const isPast = ms <= currentWeekMs;
  if (isPast) cumulative += (weekPnlMap.cc.get(ms) ?? 0) + (weekPnlMap.csp.get(ms) ?? 0);
+ const wt = weekTarget(ms);
+ if (wt != null) cumTarget += wt;
  points.push({
  week: weekFridayLabel(ms),
  actual: isPast ? cumulative : null,
- target: targetAnnual != null ? (weekNum / 52) * targetAnnual : 0,
+ target: wt != null ? cumTarget : null,
  });
  }
  return points;
- }, [firstTradeWeekMs, weekPnlMap, targetAnnual, currentWeekMs]);
+ }, [firstTradeWeekMs, weekPnlMap, weekTarget, currentWeekMs]);
 
  // Sliding windows over the full series. offset counts periods back from the
  // most recent window, so 0 is the default (newest) view and larger values pan
@@ -4768,6 +4820,14 @@ function PerformanceCharts({
  const barViewOffset = Math.min(barOffset, barMaxOffset);
  const barSliceStart = Math.max(0, allBarData.length - barWindowSize - barViewOffset);
  const barChartData = allBarData.slice(barSliceStart, barSliceStart + barWindowSize);
+ // Target as band-edge steps on a hidden numeric x-axis spanning [0, n]: point i
+ // sits on the left edge of bar i, plus a closing point at n, so "stepAfter"
+ // draws each period's target across its whole band and reaches both plot edges.
+ // (On the category axis every point sits at a bar's centre, so it can't.)
+ const barTargetEdges = barChartData.map((d, i) => ({ x: i, edgeTarget: d.target }));
+ if (barChartData.length > 0) {
+ barTargetEdges.push({ x: barChartData.length, edgeTarget: barChartData[barChartData.length - 1].target });
+ }
 
  const cumMaxOffset = Math.max(0, allCumulativeData.length - MAX_CHART_WEEKS);
  const cumViewOffset = Math.min(cumOffset, cumMaxOffset);
@@ -4780,7 +4840,7 @@ function PerformanceCharts({
  let lo = 0;
  let hi = 0;
  for (const d of allBarData) {
- hi = Math.max(hi, d.barCSP + d.barCC + d.barPendCSP + d.barPendCC);
+ hi = Math.max(hi, d.barCSP + d.barCC + d.barPendCSP + d.barPendCC, d.target ?? 0);
  lo = Math.min(lo, d.barNeg);
  }
  return padDomain(lo, hi);
@@ -4794,8 +4854,10 @@ function PerformanceCharts({
  lo = Math.min(lo, d.actual);
  hi = Math.max(hi, d.actual);
  }
+ if (d.target != null) {
  lo = Math.min(lo, d.target);
  hi = Math.max(hi, d.target);
+ }
  }
  return padDomain(lo, hi);
  }, [allCumulativeData]);
@@ -4804,7 +4866,7 @@ function PerformanceCharts({
  // Reads the full series, not the visible window, so panning back through
  // history doesn't rewrite the headline stat to an older week.
  const lastDataPoint = [...allCumulativeData].reverse().find((d) => d.actual != null);
- const delta = lastDataPoint != null ? lastDataPoint.actual! - lastDataPoint.target : null;
+ const delta = lastDataPoint?.target != null ? lastDataPoint.actual! - lastDataPoint.target : null;
 
  if (closedPositions.length === 0) return null;
 
@@ -4859,6 +4921,7 @@ function PerformanceCharts({
  tickLine={false}
  interval={0}
  />
+ <XAxis xAxisId="edges" type="number" dataKey="x" domain={[0, barChartData.length]} allowDataOverflow hide />
  <YAxis
  tick={{ fontSize: 10, fill:"var(--color-muted-foreground)" }}
  axisLine={false}
@@ -4873,7 +4936,8 @@ function PerformanceCharts({
  if (!active || !payload?.length) return null;
  // Show raw totals (not the netted bar heights) so the breakdown still
  // reflects actual closed/pending premium, including negative closes.
- const row = (payload[0]?.payload ?? {}) as { premiumCSP?: number; premiumCC?: number; pendingCSP?: number; pendingCC?: number };
+ // Skip the target line's entry: it carries its own edge points, not the row.
+ const row = (payload.find((p) => p.dataKey !=="edgeTarget")?.payload ?? {}) as { premiumCSP?: number; premiumCC?: number; pendingCSP?: number; pendingCC?: number; target?: number | null };
  const csp = row.premiumCSP ?? 0;
  const cc = row.premiumCC ?? 0;
  const pendingCSP = row.pendingCSP ?? 0;
@@ -4912,6 +4976,9 @@ function PerformanceCharts({
  </div>
  )}
  </>
+ )}
+ {row.target != null && (
+ <p className="mt-1.5 pt-1.5 border-t border-border text-muted-foreground">Target: ${fmtUSD(row.target)}</p>
  )}
  </div>
  );
@@ -5026,13 +5093,24 @@ function PerformanceCharts({
  return <path d={barPath(x, y, width, height, 0, 0, r, r)} fill="var(--color-down)" />;
  }}
  />
+ {/* Per-period target, stepping at basis adjustments, edge to edge (see
+ barTargetEdges). After the Bars so it draws on top. Recharts 3 renders a
+ Line in a BarChart — keep it a BarChart, since that name is what gives
+ the tooltip its full-column cursor (ComposedChart draws a hairline). */}
  {targetPeriodic != null && (
- <ReferenceLine
- y={targetPeriodic}
+ <Line
+ xAxisId="edges"
+ data={barTargetEdges}
+ type="stepAfter"
+ dataKey="edgeTarget"
+ tooltipType="none"
  stroke="var(--color-muted-foreground)"
  strokeDasharray="4 3"
  strokeWidth={1.5}
  strokeOpacity={0.7}
+ dot={false}
+ activeDot={false}
+ isAnimationActive={false}
  />
  )}
  </BarChart>
