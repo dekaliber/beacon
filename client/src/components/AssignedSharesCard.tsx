@@ -1,8 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
-import { createPortal } from "react-dom";
-import { BanknoteArrowUp, BanknoteX, CircleAlert, CalendarDays } from "lucide-react";
+import { BanknoteArrowUp, BanknoteX, CircleAlert, CalendarDays, CircleQuestionMark } from "lucide-react";
 import { Card } from "@/components/Card";
-import { Tooltip } from "@/components/Tooltip";
+import { Tooltip, InfoTooltip } from "@/components/Tooltip";
 import { cn, localToday } from "@/lib/utils";
 import { earningsWithinDays, earningsWarningText, EARNINGS_IMMINENT_DAYS } from "@/lib/earnings";
 import {
@@ -43,10 +42,8 @@ const tdClass = "px-3 py-2 text-13 font-mono tabular-nums whitespace-nowrap";
 // Body-text cell (non-mono) for account, dates, and the Via badge.
 const tdBody = "px-3 py-2 text-13 whitespace-nowrap";
 
-// ── ITM CC cap tooltip (portal-based to escape overflow-x-auto clipping) ──────
+// ── ITM CC cap tooltip ───────────────────────────────────────────────────────
 interface CcCapTipData {
-  x: number;
-  y: number;
   mode: "amount" | "pct";
   // Label rather than a single number: a lot can be covered by calls at several
   // strikes, each capping its own 100-share block.
@@ -58,48 +55,42 @@ interface CcCapTipData {
   uncappedPct: number;
   missedPct: number;
 }
-function CcCapTooltipPortal({ x, y, mode, ccStrikeLabel, cappedUnreal, uncappedUnreal, missedUpside, cappedPct, uncappedPct, missedPct }: CcCapTipData) {
-  return createPortal(
-    <div
-      className="fixed z-[70] pointer-events-none w-64 rounded-md border border-border bg-background px-3 py-2.5 text-xs shadow-md"
-      style={{ left: x, top: y - 6, transform: "translateX(-50%) translateY(-100%)" }}
-    >
+// Label/value readout rows. leading-4 tightens the 12px text from the inherited
+// 1.5 body leading (18px) down to 16px, so the pair of comparison rows reads as
+// one group rather than three loose lines — the surface itself stays on the
+// shared InfoTooltip recipe.
+const tipRowsClass = "flex flex-col gap-1 font-mono tabular-nums leading-4";
+
+// Body only — InfoTooltip supplies the surface (fixed w-64) and positioning.
+function CcCapTipBody({ mode, ccStrikeLabel, cappedUnreal, uncappedUnreal, missedUpside, cappedPct, uncappedPct, missedPct }: CcCapTipData) {
+  // Same three facts either way — the column this tooltip belongs to decides
+  // whether they're stated in dollars or percent.
+  const isAmount = mode === "amount";
+  const fmtValue = isAmount ? fmtSigned : fmtPct;
+  const capped = isAmount ? cappedUnreal : cappedPct;
+  const uncapped = isAmount ? uncappedUnreal : uncappedPct;
+  // Always a positive magnitude, so it skips the signed formatter.
+  const foregone = isAmount ? `$${fmtUSD(missedUpside)}` : fmtPct(missedPct);
+  return (
+    <>
       <p className="font-medium text-foreground mb-2">
         {ccStrikeLabel}
       </p>
-      {mode === "amount" ? (
-        <span className="flex flex-col gap-1 font-mono tabular-nums">
-          <span className="flex justify-between gap-4">
-            <span className="text-muted-foreground font-sans">Max gain at strike</span>
-            <span className={cappedUnreal >= 0 ? "text-up" : "text-down"}>{fmtSigned(cappedUnreal)}</span>
-          </span>
-          <span className="flex justify-between gap-4">
-            <span className="text-muted-foreground font-sans">Value at current price</span>
-            <span className={uncappedUnreal >= 0 ? "text-up" : "text-down"}>{fmtSigned(uncappedUnreal)}</span>
-          </span>
-          <span className="flex justify-between gap-4 border-t border-border pt-1 mt-0.5">
-            <span className="text-muted-foreground font-sans">Foregone upside</span>
-            <span className="text-warn">${fmtUSD(missedUpside)}</span>
-          </span>
+      <span className={tipRowsClass}>
+        <span className="flex justify-between gap-4">
+          <span className="text-muted-foreground font-sans">Max gain at strike</span>
+          <span className={capped >= 0 ? "text-up" : "text-down"}>{fmtValue(capped)}</span>
         </span>
-      ) : (
-        <span className="flex flex-col gap-1 font-mono tabular-nums">
-          <span className="flex justify-between gap-4">
-            <span className="text-muted-foreground font-sans">Max gain at strike</span>
-            <span className={cappedPct >= 0 ? "text-up" : "text-down"}>{fmtPct(cappedPct)}</span>
-          </span>
-          <span className="flex justify-between gap-4">
-            <span className="text-muted-foreground font-sans">Gain at current price</span>
-            <span className={uncappedPct >= 0 ? "text-up" : "text-down"}>{fmtPct(uncappedPct)}</span>
-          </span>
-          <span className="flex justify-between gap-4 border-t border-border pt-1 mt-0.5">
-            <span className="text-muted-foreground font-sans">Foregone upside</span>
-            <span className="text-warn">{fmtPct(missedPct)}</span>
-          </span>
+        <span className="flex justify-between gap-4">
+          <span className="text-muted-foreground font-sans">{isAmount ? "Value" : "Gain"} at current price</span>
+          <span className={uncapped >= 0 ? "text-up" : "text-down"}>{fmtValue(uncapped)}</span>
         </span>
-      )}
-    </div>,
-    document.body,
+        <span className="flex justify-between gap-4 border-t border-border pt-1 mt-0.5">
+          <span className="text-muted-foreground font-sans">Foregone upside</span>
+          <span className="text-warn">{foregone}</span>
+        </span>
+      </span>
+    </>
   );
 }
 
@@ -291,21 +282,45 @@ function computeActiveRowMetrics(g: ActiveGroup, price: number | null, todayLoca
   };
 }
 
+// ROR column header with a (?) explaining the formula and the Total row's
+// weighting. `elapsed` names the period each tab annualizes over.
+function RorHeaderLabel({ elapsed }: { elapsed: string }) {
+  return (
+    <span className="inline-flex items-center justify-end gap-1.5">
+      ROR
+      <InfoTooltip
+        content={
+          <>
+            <span className="block">
+              Annualized return on the premium collected against this lot.
+            </span>
+            <span className="mt-1.5 block">
+              Tot Prem ÷ cost at the assigned strike (strike × shares) × 365 ÷ {elapsed}.
+            </span>
+            <span className="mt-1.5 block border-t border-border pt-1.5">
+              <span className="font-medium text-foreground">Total</span> weights each lot&apos;s
+              ROR by its cost, so a $20k lot counts twice as much as a $10k one.
+            </span>
+          </>
+        }
+      >
+        <CircleQuestionMark className="h-3.5 w-3.5 cursor-default text-muted-foreground/60" />
+      </InfoTooltip>
+    </span>
+  );
+}
+
 // Renders a right-aligned P&L value with a fixed-width icon slot to its right.
 // The slot is always present (empty spacer when no icon) so numbers stay
 // column-aligned across rows regardless of whether the icon is showing.
 function PnlCell({
   value,
   colorClass,
-  iconTipData,
-  onTipEnter,
-  onTipLeave,
+  tip,
 }: {
   value: string;
   colorClass: string;
-  iconTipData: Omit<CcCapTipData, "x" | "y"> | null;
-  onTipEnter: (e: React.MouseEvent, data: Omit<CcCapTipData, "x" | "y">) => void;
-  onTipLeave: () => void;
+  tip: CcCapTipData | null;
 }) {
   return (
     <td className={cn(tdClass, "text-right", colorClass)}>
@@ -313,14 +328,10 @@ function PnlCell({
         {value}
         {/* Fixed-width slot: always rendered so the number edge never shifts */}
         <span className="ml-1 w-3.5 shrink-0 inline-flex items-center justify-center">
-          {iconTipData && (
-            <span
-              className="cursor-default inline-flex"
-              onMouseEnter={(e) => onTipEnter(e, iconTipData)}
-              onMouseLeave={onTipLeave}
-            >
-              <CircleAlert className="h-3.5 w-3.5 text-warn" />
-            </span>
+          {tip && (
+            <InfoTooltip content={<CcCapTipBody {...tip} />}>
+              <CircleAlert className="h-3.5 w-3.5 cursor-default text-warn" />
+            </InfoTooltip>
           )}
         </span>
       </span>
@@ -354,9 +365,6 @@ export function AssignedSharesCard({
   targetReturn?: number | null;
 }) {
   const [tab, setTab] = useState<"active" | "realized">("active");
-
-  // Portal-based tooltip state — avoids overflow-x-auto clipping.
-  const [ccTip, setCcTip] = useState<CcCapTipData | null>(null);
 
   const [ownQuotes, setOwnQuotes] = useState<Record<string, { price: number }>>({});
   const activeTickers = useMemo(
@@ -471,12 +479,6 @@ export function AssignedSharesCard({
   const activeCount = activeGroups.length;
   const realizedCount = realizedGroups.length;
 
-  const handleTipEnter = (e: React.MouseEvent, data: Omit<CcCapTipData, "x" | "y">) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setCcTip({ x: rect.left + rect.width / 2, y: rect.top, ...data });
-  };
-  const handleTipLeave = () => setCcTip(null);
-
   return (
     <Card>
       <div className="flex border-b border-border px-4">
@@ -528,7 +530,9 @@ export function AssignedSharesCard({
                     </span>
                   </th>
                   <th className={cn(thClass, "text-right border-l border-border/50")}>Tot Prem</th>
-                  <th className={cn(thClass, "text-right")}>ROR</th>
+                  <th className={cn(thClass, "text-right")}>
+                    <RorHeaderLabel elapsed="days since assignment" />
+                  </th>
                   <th className={cn(thClass.replace("px-3", "pr-3"), "text-right")}><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
@@ -560,11 +564,11 @@ export function AssignedSharesCard({
                         <div className="flex items-center gap-1.5">
                           <span>{g.ticker}</span>
                           {earningsSoon && (
-                            <Tooltip content={earningsWarningText(earnings!)}>
+                            <InfoTooltip content={earningsWarningText(earnings!)}>
                               <span className={cn("inline-flex items-center", earningsImminent ? "text-down" : "text-warn")}>
                                 <CalendarDays className="h-3 w-3" />
                               </span>
-                            </Tooltip>
+                            </InfoTooltip>
                           )}
                         </div>
                       </td>
@@ -603,16 +607,12 @@ export function AssignedSharesCard({
                       <PnlCell
                         value={unreal != null ? fmtSigned(cappedUnreal ?? unreal) : "—"}
                         colorClass={(cappedUnreal ?? unreal) != null ? pnlColor(cappedUnreal ?? unreal!) : ""}
-                        iconTipData={unreal != null ? amountTipData : null}
-                        onTipEnter={handleTipEnter}
-                        onTipLeave={handleTipLeave}
+                        tip={unreal != null ? amountTipData : null}
                       />
                       <PnlCell
                         value={pct != null ? fmtPct(cappedPct ?? pct) : "—"}
                         colorClass={(cappedPct ?? pct) != null ? pnlColor(cappedPct ?? pct!) : ""}
-                        iconTipData={pct != null ? pctTipData : null}
-                        onTipEnter={handleTipEnter}
-                        onTipLeave={handleTipLeave}
+                        tip={pct != null ? pctTipData : null}
                       />
                       <td className={cn(tdClass, "text-right border-l border-border/50", pnlColor(totPrem))}>
                         {fmtSigned(totPrem)}
@@ -660,16 +660,12 @@ export function AssignedSharesCard({
                   <PnlCell
                     value={fmtSigned(activeTotals.unreal)}
                     colorClass={pnlColor(activeTotals.unreal)}
-                    iconTipData={null}
-                    onTipEnter={handleTipEnter}
-                    onTipLeave={handleTipLeave}
+                    tip={null}
                   />
                   <PnlCell
                     value={activeTotalPct != null ? fmtPct(activeTotalPct) : "—"}
                     colorClass={activeTotalPct != null ? pnlColor(activeTotalPct) : ""}
-                    iconTipData={null}
-                    onTipEnter={handleTipEnter}
-                    onTipLeave={handleTipLeave}
+                    tip={null}
                   />
                   <td className={cn(tdClass, "text-right border-l border-border/50", pnlColor(activeTotals.totPrem))}>
                     {fmtSigned(activeTotals.totPrem)}
@@ -698,7 +694,9 @@ export function AssignedSharesCard({
                 <th className={cn(thClass, "text-right")}>Last Sale</th>
                 <th className={thClass}>Via</th>
                 <th className={cn(thClass, "text-right border-l border-border/50")}>Tot Prem</th>
-                <th className={cn(thClass, "text-right")}>ROR</th>
+                <th className={cn(thClass, "text-right")}>
+                  <RorHeaderLabel elapsed="days from assignment to the last sale" />
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -760,9 +758,6 @@ export function AssignedSharesCard({
           </table>
         )}
       </div>
-
-      {/* Portal tooltip — rendered into document.body to escape overflow clipping */}
-      {ccTip !== null && <CcCapTooltipPortal {...ccTip} />}
     </Card>
   );
 }

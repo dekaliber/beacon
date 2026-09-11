@@ -47,12 +47,12 @@ import {
 import type { TickerSearchResult } from"@/types";
 import { useNotifications } from"@/context/NotificationContext";
 import { Card } from"@/components/Card";
-import { Tooltip } from"@/components/Tooltip";
+import { Tooltip, InfoTooltip, InfoHint } from"@/components/Tooltip";
 import { AssignedSharesCard, cappedUnrealizedPnl, type SellCoveredCallSeed } from"@/components/AssignedSharesCard";
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { DatePicker } from"@/components/DatePicker";
-import { Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, CircleQuestionMark, EyeOff, CornerDownRight, AlertTriangle } from"lucide-react";
+import { Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, EyeOff, CornerDownRight, AlertTriangle } from"lucide-react";
 import { createPortal } from"react-dom";
 import { cn, parseAmount, localToday } from"@/lib/utils";
 import { earningsBeforeExpiry, earningsWarningText } from"@/lib/earnings";
@@ -998,11 +998,11 @@ function PositionModal({ tickers, editing, prefill, defaultInvestmentAccountId, 
  <label className="flex items-center gap-1 text-xs font-medium mb-1">
  Expiration Date
  {showEarningsWarning && (
- <Tooltip content={earningsWarningText(earnings!)}>
+ <InfoTooltip content={earningsWarningText(earnings!)}>
  <span className="inline-flex items-center text-warn">
  <AlertTriangle className="h-3 w-3" />
  </span>
- </Tooltip>
+ </InfoTooltip>
  )}
  </label>
  <div className="flex items-center w-full">
@@ -1721,11 +1721,11 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  <label className="flex items-center gap-1 text-xs font-medium mb-1">
  Expiration Date
  {showRollEarningsWarning && (
- <Tooltip content={earningsWarningText(rollEarnings!)}>
+ <InfoTooltip content={earningsWarningText(rollEarnings!)}>
  <span className="inline-flex items-center text-warn">
  <AlertTriangle className="h-3 w-3" />
  </span>
- </Tooltip>
+ </InfoTooltip>
  )}
  </label>
  <div className="flex items-center w-full">
@@ -2862,8 +2862,8 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const livePnlCell = livePnl == null
  ? <span className="text-muted-foreground">—</span>
  : p.excludeFromLivePnl
- ? <Tooltip content={
- <div className="tp-caption text-left leading-relaxed">
+ ? <InfoTooltip content={
+ <div className="leading-relaxed">
  <div>Excludes <span className="font-medium text-foreground">{livePnl >= 0 ?"+" :"−"}${fmtUSD(Math.abs(livePnl))}</span> from Total Live P&L</div>
  {chainLivePnl != null && (
  <div>Net Live P&L: <span className="font-medium text-foreground">{chainLivePnl >= 0 ?"+" :"−"}${fmtUSD(Math.abs(chainLivePnl))}</span></div>
@@ -2873,7 +2873,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <span className="inline-flex items-center text-muted-foreground/50 hover:text-muted-foreground/70 transition-colors">
  <EyeOff className="h-3.5 w-3.5 shrink-0" />
  </span>
- </Tooltip>
+ </InfoTooltip>
  : <span className={cn(livePnl >= 0 ?"text-up" :"text-down")}>
  {livePnl >= 0 ?"+" :"−"}${fmtUSD(Math.abs(livePnl))}
  </span>;
@@ -2984,11 +2984,11 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <div className="flex items-center gap-1">
  <span className={cn(hasEarningsRisk &&"text-warn")}>{fmtDate(p.expirationDate)}</span>
  {hasEarningsRisk && (
- <Tooltip content={earningsWarningText(earnings!)}>
+ <InfoTooltip content={earningsWarningText(earnings!)}>
  <span className="inline-flex items-center p-0.5 text-warn">
  <AlertTriangle className="h-3 w-3" />
  </span>
- </Tooltip>
+ </InfoTooltip>
  )}
  </div>
  </td>
@@ -3062,11 +3062,11 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  ?`$${fmtUSD(stockNow)}`
  : <span className="text-muted-foreground">—</span>}
  {stalePriceTickers.has(p.ticker.symbol) && (
- <Tooltip content={stockNow != null
+ <InfoTooltip content={stockNow != null
  ?"Latest price fetch failed — showing a stale cached value"
  :"Latest price fetch failed"}>
  <AlertTriangle className="h-3 w-3 text-warn shrink-0" />
- </Tooltip>
+ </InfoTooltip>
  )}
  </div>
  </td>
@@ -3116,8 +3116,8 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  deltaAsOf =`${stamp} ET (${fmtAgo(asOf.getTime())})`;
  }
  return (
- <Tooltip content={
- <div className="tp-caption text-left leading-relaxed">
+ <InfoTooltip content={
+ <div className="leading-relaxed">
  <div>Extrinsic Value: <span className="font-medium text-foreground">${fmtUSD(extrinsicNow!)}</span></div>
  <div>Extrinsic Ratio: <span className={cn("font-medium", extrinsicRatio != null && extrinsicRatio < 20 ?"text-warn" :"text-foreground")}>{extrinsicRatio != null ?`${extrinsicRatio.toFixed(1)}%` :"—"}</span></div>
  <div>Current Delta: {p.currentDelta != null ? <span className={cn("font-medium", deltaColor)}>{Number(p.currentDelta).toFixed(3)}</span> : <span className="text-muted-foreground">—</span>}</div>
@@ -3132,7 +3132,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <span className="inline-flex items-center p-0.5 text-muted-foreground/40 hover:text-warn transition-colors">
  <Info className="h-3 w-3" />
  </span>
- </Tooltip>
+ </InfoTooltip>
  );
  })()}
  </div>
@@ -5357,9 +5357,9 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  <Card className="p-6">
  <div className="pb-3 border-b border-border flex items-center gap-1.5">
  <SectionLabel as="span">Performance Details (Fully Completed Trades)</SectionLabel>
- <CardInfoTooltip>
+ <InfoHint>
  Rolled positions are only counted here once every leg in the chain has closed — a roll with a still-open leg is excluded entirely until it fully closes
- </CardInfoTooltip>
+ </InfoHint>
  </div>
  <div className="overflow-x-auto">
  <table className="w-full text-xs">
@@ -5613,18 +5613,6 @@ const BENCHMARK_LAYOUT: { symbol: string; label: string }[][] = [
  [{ symbol:"^SP500TR", label:"S&P 500 TR" }, { symbol:"^IXIC", label:"Nasdaq Comp" }],
  [{ symbol:"^PUT", label:"S&P 500 PutWrite" }, { symbol:"^BXM", label:"S&P 500 BuyWrite" }],
 ];
-
-// Hover (?) tooltip for a summary-card heading; mirrors the NIIT tooltip on TaxEstimator.
-function CardInfoTooltip({ children }: { children: React.ReactNode }) {
- return (
- <span className="group relative inline-flex">
- <CircleQuestionMark className="h-3.5 w-3.5 cursor-default text-muted-foreground/60" />
- <span className="pointer-events-none invisible absolute bottom-full left-1/2 z-[60] mb-2 w-64 -translate-x-1/2 rounded-md border border-border bg-background px-3 py-2 tp-caption opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100">
- {children}
- </span>
- </span>
- );
-}
 
 function SummaryCards({
  openPositions,
@@ -6201,9 +6189,9 @@ function SummaryCards({
  <Card className="p-6">
  <div className="flex items-center gap-1.5">
  <SectionLabel as="span">Cumulative Premium</SectionLabel>
- <CardInfoTooltip>
+ <InfoHint>
  Premium collected on positions that have been <span className="font-medium text-foreground">closed</span>
- </CardInfoTooltip>
+ </InfoHint>
  </div>
  <div className="flex items-end mt-1">
  <div className="flex-1 min-w-0">
@@ -6228,9 +6216,9 @@ function SummaryCards({
  <Card className="p-6">
  <div className="flex items-center gap-1.5">
  <SectionLabel as="span">Underlying P&L</SectionLabel>
- <CardInfoTooltip>
+ <InfoHint>
  Current gain or loss of shares that have been assigned from a put
- </CardInfoTooltip>
+ </InfoHint>
  </div>
  <div className="flex items-end mt-1">
  <div className="flex-1 min-w-0">
@@ -6257,12 +6245,12 @@ function SummaryCards({
  <Card className="p-6">
  <div className="flex items-center gap-1.5">
  <SectionLabel as="span">Total Marked P&L</SectionLabel>
- <CardInfoTooltip>
+ <InfoHint>
  Rollup of premium collected, current P&L of open positions, and total P&L of underlying shares. Positions flagged <span className="font-medium text-foreground">Exclude from Total Live P&L</span> in their edit modal are left out of the open-position mark. The % is a <span className="font-medium text-foreground">time-weighted return on basis</span> (chained across any basis adjustments so deposits aren't counted as gains) and is <span className="font-medium text-foreground">not</span> annualized.
  {capitalChanges.some((c) => c.snapshotExcludesOptions) && (
  <span className="block mt-1">Note: a back-dated basis adjustment valued only assigned shares at that date, excluding open-option P&L.</span>
  )}
- </CardInfoTooltip>
+ </InfoHint>
  </div>
  <div className="flex items-end mt-1">
  <div className="flex-1 min-w-0">
@@ -6285,9 +6273,9 @@ function SummaryCards({
  <Card className="p-6">
  <div className="flex items-center gap-1.5">
  <SectionLabel as="span">Benchmark Performance</SectionLabel>
- <CardInfoTooltip>
+ <InfoHint>
  Compare performance since your start date to the S&P 500 (<span className="font-medium text-foreground">^SP500TR</span>), Nasdaq Composite (<span className="font-medium text-foreground">^IXIC</span>), CBOE PutWrite (<span className="font-medium text-foreground">^PUT</span>), and BuyWrite (<span className="font-medium text-foreground">^BXM</span>) indices.
- </CardInfoTooltip>
+ </InfoHint>
  </div>
  {(() => {
  const pct = (symbol: string) => benchmarkData?.benchmarks.find((b) => b.symbol === symbol)?.pctChange ?? null;

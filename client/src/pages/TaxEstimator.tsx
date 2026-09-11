@@ -1,10 +1,10 @@
 import { useState, useMemo, useEffect, useRef } from"react";
 import { useNavigate } from"react-router-dom";
-import { ArrowLeft, CalendarCheck2, Check, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Settings, Layers, Landmark, Briefcase, TrendingUp, Activity, CircleQuestionMark } from"lucide-react";
+import { ArrowLeft, CalendarCheck2, Check, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Settings, Layers, Landmark, Briefcase, TrendingUp, Activity } from"lucide-react";
 import { Card } from"@/components/Card";
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
-import { Tooltip } from"@/components/Tooltip";
+import { InfoHint } from"@/components/Tooltip";
 import { useApi } from"@/hooks/useApi";
 import { getIncome, getAllGainSnapshots, getTaxAssumptions, updateTaxAssumptions, updateTaxQuarterlyPayments, getDataRange } from"@/api";
 import { formatCurrency, formatDate, parseAmount } from"@/lib/utils";
@@ -312,16 +312,12 @@ function RateBadge({ label, className ="" }: { label: string; className?: string
 function AssignedPremiumNote({ folded, taxable }: { folded: number; taxable: number }) {
  const fmt = (n: number) => (n < 0 ?"−" :"") + formatCurrency(Math.abs(n));
  return (
- <Tooltip content={
- <span className="block max-w-[16rem] whitespace-normal text-left leading-snug">
+ <InfoHint>
  <span className="font-medium">{fmt(folded)}</span> of this premium is from the assigned
  contract and is taxed through the share sale (added to proceeds). The{" "}
  <span className="font-medium">{fmt(taxable)}</span> shown here is the net gain/loss from the
  intermediate rolls and closes, taxed on its own.
- </span>
- }>
- <CircleQuestionMark className="h-3.5 w-3.5 text-muted-foreground/40" />
- </Tooltip>
+ </InfoHint>
  );
 }
 
@@ -1489,9 +1485,7 @@ export function TaxEstimatorPage() {
  <div className="flex items-center gap-1.5">
  <Activity className="h-3.5 w-3.5 shrink-0 text-blue" />
  Net Investment Income Tax
- <span className="group relative">
- <CircleQuestionMark className="h-3.5 w-3.5 cursor-default text-muted-foreground/60" />
- <span className="pointer-events-none invisible absolute bottom-full left-1/2 mb-2 w-64 -translate-x-1/2 rounded-md border border-border bg-background px-3 py-2 tp-caption opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100">
+ <InfoHint>
  <span className="block"><span className="font-medium text-foreground">MAGI:</span> {formatCurrency(calc.magi)}</span>
  <span className="mt-1.5 block">
  {calc.magi > NIIT_THRESHOLD[filingStatus]
@@ -1499,8 +1493,7 @@ export function TaxEstimatorPage() {
  : <><span className="font-medium text-foreground">{formatCurrency(NIIT_THRESHOLD[filingStatus] - calc.magi)}</span> below the {formatCurrency(NIIT_THRESHOLD[filingStatus])} threshold</>}
  </span>
  <span className="mt-1.5 block">{formatCurrency(calc.niitBase)} of net investment income subject to 3.8% NIIT</span>
- </span>
- </span>
+ </InfoHint>
  </div>
  <div className="ml-[1.375rem] tp-caption">{formatCurrency(calc.niitBase)} subject to NIIT</div>
  </td>
@@ -1572,11 +1565,7 @@ export function TaxEstimatorPage() {
  <div className="flex items-center gap-1.5">
  <Activity className="h-3.5 w-3.5 shrink-0 text-blue" />
  Net Investment Income Tax
- <span className="group relative">
- <span className="flex h-3.5 w-3.5 cursor-default items-center justify-center rounded-full border border-muted-foreground/40 text-[9px] font-bold leading-none text-muted-foreground">
- ?
- </span>
- <span className="pointer-events-none invisible absolute bottom-full left-1/2 mb-2 w-64 -translate-x-1/2 rounded-md border border-border bg-background px-3 py-2 tp-caption opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100">
+ <InfoHint>
  <span className="block"><span className="font-medium text-foreground">MAGI:</span> {formatCurrency(calc.magi)}</span>
  <span className="mt-1.5 block">
  {calc.magi > NIIT_THRESHOLD[filingStatus]
@@ -1584,8 +1573,7 @@ export function TaxEstimatorPage() {
  : <><span className="font-medium text-foreground">{formatCurrency(NIIT_THRESHOLD[filingStatus] - calc.magi)}</span> below the {formatCurrency(NIIT_THRESHOLD[filingStatus])} threshold</>}
  </span>
  <span className="mt-1.5 block">{formatCurrency(calc.niitBase)} of net investment income subject to 3.8% NIIT</span>
- </span>
- </span>
+ </InfoHint>
  </div>
  <div className="ml-[1.375rem] tp-caption">{formatCurrency(calc.niitBase)} subject to NIIT</div>
  </td>

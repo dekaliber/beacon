@@ -11,10 +11,10 @@ import {
  ChevronLeft,
  ChevronRight,
  Settings2,
- CircleQuestionMark,
  Info,
 } from"lucide-react";
 import { Card } from"@/components/Card";
+import { InfoHint } from"@/components/Tooltip";
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { DatePicker } from"@/components/DatePicker";
@@ -656,19 +656,6 @@ function MonthSection({
  );
 }
 
-// Hover (?) tooltip for a summary-card heading; mirrors CardInfoTooltip on the
-// Options and Tax pages. Documents what the YTD withdrawal total includes.
-function CardInfoTooltip({ children }: { children: React.ReactNode }) {
- return (
- <span className="group relative inline-flex">
- <CircleQuestionMark className="h-3.5 w-3.5 cursor-default text-muted-foreground/60" />
- <span className="pointer-events-none invisible absolute top-full left-1/2 z-[60] mt-2 w-64 -translate-x-1/2 rounded-md border border-border bg-background px-3 py-2 tp-caption text-left normal-case opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100">
- {children}
- </span>
- </span>
- );
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function WithdrawalsPage() {
@@ -837,7 +824,7 @@ export function WithdrawalsPage() {
  <div>
  <SectionLabel className="mb-0.5 flex items-center gap-1">
  YTD Total
- <CardInfoTooltip>
+ <InfoHint>
  <span className="block font-medium mb-1">Counted as a withdrawal:</span>
  <ul className="list-disc pl-4 space-y-0.5">
  <li>Dividends received in cash</li>
@@ -848,7 +835,7 @@ export function WithdrawalsPage() {
  <li>Investment → bank transfers</li>
  </ul>
  <span className="block mt-1">Bank → investment reinvestments are subtracted. Options premium and joint-account activity are excluded.</span>
- </CardInfoTooltip>
+ </InfoHint>
  </SectionLabel>
  <DisplayStat as="p" className="tp-kpi-l">{formatCurrency(ytdTotal)}</DisplayStat>
  </div>

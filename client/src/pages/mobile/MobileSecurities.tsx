@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Link2, Layers, X, Plus, CircleQuestionMark } from "lucide-react";
+import { AlertTriangle, Link2, Layers, X, Plus } from "lucide-react";
 import { Button } from "@/components/Button";
+import { InfoHint } from "@/components/Tooltip";
 import { EmptyState } from "@/components/EmptyState";
 import { useApi } from "@/hooks/useApi";
 import {
@@ -499,12 +500,9 @@ function EditOverlay({ instrument, allInstruments, assetClasses, onClose, onSave
               />
               <span className="flex items-center gap-1.5 text-sm">
                 Taxed as collectible
-                <span className="group relative">
-                  <CircleQuestionMark className="h-3.5 w-3.5 cursor-default text-muted-foreground/60" />
-                  <span className="pointer-events-none invisible absolute bottom-full left-1/2 mb-2 w-64 -translate-x-1/2 rounded-md border border-border bg-background px-3 py-2 tp-caption opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100">
+                <InfoHint>
                     Long-term gains taxed at the lesser of 28% or your ordinary income rate. Applies to grantor-trust gold and silver ETFs (e.g. GLD, IAU, SLV).
-                  </span>
-                </span>
+                  </InfoHint>
               </span>
             </label>
           </div>
