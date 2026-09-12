@@ -2066,6 +2066,11 @@ investmentRoutes.post("/import", async (req, res) => {
 const backfillRangeSchema = z.object({
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  // Comma-separated subset, e.g. ?tickers=BTC,ETH,LTC. Worth reaching for
+  // whenever the repair is narrower than the portfolio: a rewrite re-sources
+  // every row it touches, so scoping keeps a crypto fix from also restating
+  // months of equity history.
+  tickers: z.string().optional(),
 });
 
 investmentRoutes.post("/prices/backfill-history", async (req, res) => {
@@ -2106,15 +2111,29 @@ investmentRoutes.post("/prices/backfill-history", async (req, res) => {
 
     // Yahoo's period2 is exclusive, so ask for the day after the last one wanted.
     const toDate = new Date(lastDay.getTime() + 24 * 60 * 60 * 1000);
-    console.log(
-      `[backfill-history] ${fromDate.toISOString().slice(0, 10)} → ${lastDay.toISOString().slice(0, 10)}`,
-    );
-
     const holdings = await prisma.investmentHolding.findMany({
       select: { ticker: true, coinGeckoId: true },
     });
-    const tickers = [...new Set(holdings.map((h) => h.ticker))];
+    let tickers = [...new Set(holdings.map((h) => h.ticker))];
     if (tickers.length === 0) return res.json({ upserted: 0, tickers: [] });
+
+    const requested = range.data.tickers
+      ?.split(",")
+      .map((t) => t.trim().toUpperCase())
+      .filter(Boolean);
+    if (requested && requested.length > 0) {
+      const held = new Set(tickers);
+      const unknown = requested.filter((t) => !held.has(t));
+      tickers = requested.filter((t) => held.has(t));
+      if (tickers.length === 0) {
+        return res.status(400).json({
+          error: { message: `none of the requested tickers are held: ${requested.join(", ")}` },
+        });
+      }
+      if (unknown.length > 0) {
+        console.warn(`[backfill-history] ignoring tickers with no holding: ${unknown.join(", ")}`);
+      }
+    }
 
     // Crypto has to go to CoinGecko, and not merely because Yahoo is the wrong
     // source for it: Yahoo *serves* these symbols, as entirely different listed
@@ -2129,6 +2148,12 @@ investmentRoutes.post("/prices/backfill-history", async (req, res) => {
         coinGeckoIdByTicker.set(h.ticker, h.coinGeckoId);
       }
     }
+
+    console.log(
+      `[backfill-history] ${fromDate.toISOString().slice(0, 10)} → ` +
+      `${lastDay.toISOString().slice(0, 10)}, ${tickers.length} ticker(s)` +
+      (requested ? ` (scoped: ${tickers.join(", ")})` : ""),
+    );
 
     const summary: Array<{ ticker: string; upserted: number }> = [];
     let totalUpserted = 0;
