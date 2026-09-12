@@ -2098,34 +2098,52 @@ investmentRoutes.post("/prices/backfill-history", async (req, res) => {
     );
 
     const holdings = await prisma.investmentHolding.findMany({
-      select: { ticker: true },
-      distinct: ["ticker"],
+      select: { ticker: true, coinGeckoId: true },
     });
-    const tickers = holdings.map((h) => h.ticker);
+    const tickers = [...new Set(holdings.map((h) => h.ticker))];
     if (tickers.length === 0) return res.json({ upserted: 0, tickers: [] });
+
+    // Crypto has to go to CoinGecko, and not merely because Yahoo is the wrong
+    // source for it: Yahoo *serves* these symbols, as entirely different listed
+    // securities. BTC is Grayscale's Bitcoin Mini Trust, ETH its Ethereum one,
+    // LTC is LTC Properties. Sending them to Yahoo returns real, plausible-looking
+    // prices for the wrong instrument — and since this route overwrites, it
+    // replaced correct CoinGecko history with equity closes two orders of
+    // magnitude off, which then read as a $18k one-day gain.
+    const coinGeckoIdByTicker = new Map<string, string>();
+    for (const h of holdings) {
+      if (h.coinGeckoId && !coinGeckoIdByTicker.has(h.ticker)) {
+        coinGeckoIdByTicker.set(h.ticker, h.coinGeckoId);
+      }
+    }
 
     const summary: Array<{ ticker: string; upserted: number }> = [];
     let totalUpserted = 0;
 
     for (const ticker of tickers) {
-      const points = await fetchYahooHistory(ticker, fromDate, toDate);
-      if (points.length === 0) {
-        summary.push({ ticker, upserted: 0 });
-        continue;
+      const coinGeckoId = coinGeckoIdByTicker.get(ticker);
+      let points: HistoryPoint[];
+
+      if (coinGeckoId) {
+        // CoinGecko's market chart is length-based rather than a date range, so
+        // ask for enough days to reach `fromDate` and discard the rest.
+        const span = Math.ceil((lastDay.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000)) + 2;
+        const all = await getMarketChart(coinGeckoId, Math.min(span, 365));
+        points = all.filter((p) => p.date >= fromDate && p.date <= lastDay);
+      } else {
+        // Yahoo returns bars outside the window it was asked for — notably the
+        // live, partial one for the current day — so bound them to the requested
+        // range. The writer enforces the session rules on top of that.
+        const fetched = await fetchYahooHistory(ticker, fromDate, toDate);
+        points = fetched.filter((p) => p.date <= lastDay);
       }
-      // Yahoo returns bars outside the window it was asked for — notably the
-      // live, partial one for the current day — so bound them to the requested
-      // range here. The writer enforces the session rules on top of that.
-      //
+
       // Overwrite rather than fill: correcting rows that are present but wrong is
       // the whole point of this route, and the reason fillPriceGaps cannot do it.
-      // isCrypto is false because this sources Yahoo exchange history, which does
-      // not serve crypto symbols at all — those tickers come back empty.
-      const count = await writeTickerHistory(
-        ticker,
-        points.filter((p) => p.date <= lastDay),
-        { isCrypto: false, mode: "overwrite" },
-      );
+      const count = await writeTickerHistory(ticker, points, {
+        isCrypto: coinGeckoId != null,
+        mode: "overwrite",
+      });
       totalUpserted += count;
       summary.push({ ticker, upserted: count });
       await new Promise((r) => setTimeout(r, 200));
