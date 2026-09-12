@@ -1964,21 +1964,67 @@ investmentRoutes.post("/import", async (req, res) => {
 });
 
 // ── POST /api/investments/prices/backfill-history ─────────────────────────
-// Re-runnable backfill: fetches YTD adjusted-close price history for every
-// tracked ticker and upserts rows into TickerPriceHistory. Uses upsert (not
-// skipDuplicates) so re-running this corrects any stale or mid-day rows that
-// were accidentally written earlier. Only fills up to effectiveLastTradingDay
-// so we never store a partial/mid-day candle for an in-progress session.
+// Re-runnable backfill: fetches closing price history for every tracked ticker
+// and upserts rows into TickerPriceHistory. Uses upsert (not skipDuplicates) so
+// re-running this corrects stale or mid-day rows that were written earlier —
+// fillPriceGaps cannot, since it only inserts dates that are missing entirely.
+//
+// Optional ?from=YYYY-MM-DD&to=YYYY-MM-DD narrow the range; both default to the
+// old behaviour (Jan 1 of the current year through the last settled session).
+// Prefer narrowing it: the cost is one upsert per ticker per session in range,
+// and a rewrite also re-sources those rows, so a wide range restates more of the
+// history than whatever actually needs repairing.
+//
+// `to` is always clamped to effectiveLastTradingDay, so this can never store a
+// partial candle for an in-progress session.
 // NOTE: must be declared before /prices/:ticker to avoid route conflict
 
-investmentRoutes.post("/prices/backfill-history", async (_req, res) => {
-  try {
-    const year = new Date().getUTCFullYear();
-    const fromDate = new Date(Date.UTC(year, 0, 1)); // Jan 1 of current year (UTC)
+const backfillRangeSchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
 
-    // Cap at the last finalized trading day — same rule as fillPriceGaps
+investmentRoutes.post("/prices/backfill-history", async (req, res) => {
+  try {
+    const range = backfillRangeSchema.safeParse(req.query);
+    if (!range.success) {
+      return res.status(400).json({
+        error: { message: "from/to must be YYYY-MM-DD" },
+      });
+    }
+
+    const parseDay = (s: string): Date | null => {
+      const d = new Date(`${s}T00:00:00Z`);
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+
+    const year = new Date().getUTCFullYear();
+    const fromDate = range.data.from
+      ? parseDay(range.data.from)
+      : new Date(Date.UTC(year, 0, 1)); // Jan 1 of current year (UTC)
+    if (!fromDate) {
+      return res.status(400).json({ error: { message: "from is not a valid date" } });
+    }
+
+    // Never past the last finalized trading day — same rule as fillPriceGaps.
     const targetDay = effectiveLastTradingDay();
-    const toDate = new Date(targetDay.getTime() + 24 * 60 * 60 * 1000);
+    const requestedTo = range.data.to ? parseDay(range.data.to) : null;
+    if (range.data.to && !requestedTo) {
+      return res.status(400).json({ error: { message: "to is not a valid date" } });
+    }
+    const lastDay = requestedTo && requestedTo < targetDay ? requestedTo : targetDay;
+
+    if (fromDate > lastDay) {
+      return res.status(400).json({
+        error: { message: `from (${fromDate.toISOString().slice(0, 10)}) is after to (${lastDay.toISOString().slice(0, 10)})` },
+      });
+    }
+
+    // Yahoo's period2 is exclusive, so ask for the day after the last one wanted.
+    const toDate = new Date(lastDay.getTime() + 24 * 60 * 60 * 1000);
+    console.log(
+      `[backfill-history] ${fromDate.toISOString().slice(0, 10)} → ${lastDay.toISOString().slice(0, 10)}`,
+    );
 
     const holdings = await prisma.investmentHolding.findMany({
       select: { ticker: true },
@@ -1996,8 +2042,8 @@ investmentRoutes.post("/prices/backfill-history", async (_req, res) => {
         summary.push({ ticker, upserted: 0 });
         continue;
       }
-      // Upsert each point individually so existing rows are overwritten with
-      // the correct adjusted-close rather than silently skipped.
+      // Upsert each point individually so existing rows are overwritten with the
+      // provider's close rather than silently skipped.
       let count = 0;
       for (const p of points) {
         await prisma.tickerPriceHistory.upsert({
@@ -2012,7 +2058,14 @@ investmentRoutes.post("/prices/backfill-history", async (_req, res) => {
       await new Promise((r) => setTimeout(r, 200));
     }
 
-    res.json({ upserted: totalUpserted, tickers: summary });
+    res.json({
+      // Echo the resolved range: `to` may have been clamped to the last settled
+      // session, so this is what actually ran rather than what was asked for.
+      from: fromDate.toISOString().slice(0, 10),
+      to: lastDay.toISOString().slice(0, 10),
+      upserted: totalUpserted,
+      tickers: summary,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: { message: "Failed to backfill price history" } });
