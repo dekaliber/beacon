@@ -6,7 +6,7 @@ import { getMetadata as getTiingoMeta, getDividendScanResult } from "../services
 import { searchCoins, getPrices, getPrice as getCoinGeckoPrice, getMarketChart } from "../services/coingecko.js";
 import { fetchYahooPrice, fetchYahooHistory, fetchYahooClosingPrice, fetchYahooMeta } from "../services/yahoo.js";
 import { deactivateIfOrphaned } from "./instruments.js";
-import { isTradingDay } from "../lib/marketHolidays.js";
+import { isTradingDay, etDateParts } from "../lib/marketHolidays.js";
 import { getUserId } from "../middleware/auth.js";
 
 export const investmentRoutes = Router();
@@ -59,6 +59,13 @@ const STABLE_NAV_TICKERS = new Set([
 // real fetch to create its row, or it would never get a price at all.
 function isPinnedPrice(ticker: string, priceSource: string): boolean {
   return priceSource === "FIXED" || STABLE_NAV_TICKERS.has(ticker);
+}
+
+// UTC-midnight marker for the ET calendar day containing `utcMs`, matching how
+// TickerPriceHistory.date is stored.
+function etDayStartMs(utcMs: number): number {
+  const { year, month, day } = etDateParts(utcMs);
+  return Date.UTC(year, month - 1, day);
 }
 
 // ── Observed exchange calendar ───────────────────────────────────────────────
@@ -237,12 +244,17 @@ async function fillPriceGaps(
         .map((ms) => ({ date: new Date(ms), closePrice: pinned }));
     } else if (coinGeckoId) {
       // Crypto: use CoinGecko market chart. Request enough days to cover the gap.
-      const gapMs = targetDay.getTime() - (latest?.getTime() ?? (Date.now() - 90 * 24 * 60 * 60 * 1000));
+      // Crypto's calendar is every day, so it fills through yesterday rather than
+      // through the last exchange session — clipping it to targetDay would leave
+      // permanent weekend holes, and crypto measures its 1-day change against the
+      // previous calendar day.
+      const cryptoTargetDay = new Date(etDayStartMs(Date.now()) - 24 * 60 * 60 * 1000);
+      const gapMs = cryptoTargetDay.getTime() - (latest?.getTime() ?? (Date.now() - 90 * 24 * 60 * 60 * 1000));
       const days = Math.ceil(gapMs / (24 * 60 * 60 * 1000)) + 2;
       const allPoints = await getMarketChart(coinGeckoId, Math.min(days, 365));
       // Filter to only the dates we actually need
       const fromMs = latest ? latest.getTime() + 24 * 60 * 60 * 1000 : 0;
-      points = allPoints.filter((p) => p.date.getTime() >= fromMs && p.date <= targetDay);
+      points = allPoints.filter((p) => p.date.getTime() >= fromMs && p.date <= cryptoTargetDay);
       await new Promise((r) => setTimeout(r, 200)); // be polite to CoinGecko
     } else {
       // Stocks/ETFs/funds: use Yahoo Finance. Start at the hole when there is one
@@ -678,15 +690,8 @@ investmentRoutes.get("/accounts", async (req, res) => {
     );
     const sessionDaysDesc = [...sessionDays].sort((a, b) => b - a);
 
-    // The ET calendar date a price belongs to, as UTC midnight — matching how
-    // TickerPriceHistory.date is stored.
-    const etDayMs = (d: Date): number => {
-      const [m, day, y] = new Intl.DateTimeFormat("en-US", {
-        timeZone: "America/New_York",
-        year: "numeric", month: "2-digit", day: "2-digit",
-      }).format(d).split("/");
-      return Date.UTC(Number(y), Number(m) - 1, Number(day));
-    };
+    // The ET calendar date a price belongs to, as UTC midnight.
+    const etDayMs = (d: Date): number => etDayStartMs(d.getTime());
 
     // The day the portfolio's equity prices are "as of", anchored on the newest
     // priceDate across all of them rather than each holding's own. Per-ticker
@@ -1483,27 +1488,39 @@ async function upsertTickerPrice(
   // and years-old timestamps. A row dated on a non-session day is worse than no
   // row: it becomes evidence of a session that never happened, which moves the
   // 1-day baseline for every holding. Keep the live price, skip the history row.
-  const dow = historyDate.getUTCDay();
   const ageDays = (Date.now() - historyDate.getTime()) / (24 * 60 * 60 * 1000);
-  if (dow === 0 || dow === 6 || ageDays > 7 || ageDays < -1) {
+  if (ageDays > 7 || ageDays < -1) {
     console.warn(
       `[price] ${ticker}: implausible quote date ${historyDate.toISOString().slice(0, 10)} — history row skipped`,
     );
     return;
   }
 
-  // Only settled closes belong in history. A quote pulled mid-session is not a
-  // close: for a mutual fund it is still yesterday's NAV (they price once daily),
-  // and for a stock it is wherever the price happens to be at that moment. Either
-  // way, storing it under today's date and then never revisiting it — which is
-  // what happens when no refresh runs after the cutoff — freezes a mid-day number
-  // in as a closing price, and every later 1-day change is measured against it.
-  //
-  // TickerPrice still takes the live quote; it is what the page displays. Today's
-  // history row is left for a post-cutoff run, or for fillPriceGaps, which reads
-  // true closes from the history endpoint.
-  if (historyDate > effectiveLastTradingDay()) {
-    return;
+  // Crypto trades every calendar day and has no closing auction, so neither of
+  // the checks below applies to it: a weekend date is legitimate, and there is no
+  // settlement cutoff to wait for. Its row simply tracks the latest quote for that
+  // ET day. Excluding crypto here matters — without it, weekends leave holes that
+  // strand Sunday and Monday with no previous day to measure against.
+  if (priceSource !== "COINGECKO") {
+    const dow = historyDate.getUTCDay();
+    if (dow === 0 || dow === 6) {
+      console.warn(
+        `[price] ${ticker}: weekend quote date ${historyDate.toISOString().slice(0, 10)} — history row skipped`,
+      );
+      return;
+    }
+
+    // Only settled closes belong in history. A quote pulled mid-session is not a
+    // close: for a mutual fund it is still yesterday's NAV (they price once
+    // daily), and for a stock it is wherever the price happened to sit at that
+    // moment. Storing it under today's date and never revisiting it — which is
+    // what happens when no run follows the cutoff — freezes a mid-day number in
+    // as a closing price, and every later 1-day change is measured against it.
+    //
+    // TickerPrice still takes the live quote; it is what the page displays.
+    // Today's history row is left for a post-cutoff run, or for fillPriceGaps,
+    // which reads true closes from the history endpoint.
+    if (historyDate > effectiveLastTradingDay()) return;
   }
 
   await prisma.tickerPriceHistory.upsert({
