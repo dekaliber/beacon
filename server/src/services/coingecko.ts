@@ -17,6 +17,8 @@
  *   on the holding record, not in TickerPrice.
  */
 
+import { etDateParts } from "../lib/marketHolidays.js";
+
 const BASE = "https://api.coingecko.com/api/v3";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -139,7 +141,8 @@ export async function getPrice(coinId: string): Promise<CoinPrice | null> {
 /**
  * Fetch daily closing prices for a coin over the given number of past days.
  * Uses the /market_chart endpoint with daily interval.
- * Returns an array of (UTC-midnight date, close price) pairs sorted oldest-first.
+ * Returns an array of (date, close price) pairs sorted oldest-first, each keyed
+ * to the ET calendar day the point falls in — see the note at the mapping below.
  *
  * CoinGecko returns hourly data for ≤90 days and daily data for >90 days.
  * We always request daily by using `interval=daily` (available for any range
@@ -161,9 +164,15 @@ export async function getMarketChart(
     const prices: [number, number][] = data?.prices ?? [];
 
     return prices.map(([ts, price]) => {
-      // Normalize to UTC midnight for consistent DATE storage
-      const raw = new Date(ts);
-      const date = new Date(Date.UTC(raw.getUTCFullYear(), raw.getUTCMonth(), raw.getUTCDate()));
+      // Date by the ET calendar day the point actually falls in, not its UTC day.
+      // CoinGecko's daily points land at 00:00 UTC, which is 8 PM ET the evening
+      // *before* — so keying on the UTC date shifts every row a day late relative
+      // to everything else in TickerPriceHistory, which is ET-dated (the refresh
+      // stamps a crypto quote with the ET day it was taken). Mixing the two makes
+      // the same date label mean two instants ~28 hours apart, and stretches
+      // crypto's 1-day change by a day.
+      const { year, month, day } = etDateParts(ts);
+      const date = new Date(Date.UTC(year, month - 1, day));
       return { date, closePrice: price };
     });
   } catch (err) {
