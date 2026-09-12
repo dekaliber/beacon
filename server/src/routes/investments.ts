@@ -216,11 +216,15 @@ async function fillPriceGaps(
   // so we naturally never write a row for a day whose prices haven't settled.
   const targetDay = effectiveLastTradingDay();
 
-  // Crypto trades every calendar day, so its natural ceiling is yesterday rather
-  // than the last exchange session. Clamping it to the session cutoff would leave
+  // Crypto trades every calendar day, so its ceiling is today rather than the
+  // last exchange session — clamping it to the session cutoff would leave
   // permanent weekend holes, and crypto measures its 1-day change against the
   // previous calendar day.
-  const cryptoLastDay = new Date(etDayStartMs(Date.now()) - 24 * 60 * 60 * 1000);
+  //
+  // Today is safe to include because the crypto series only carries 00:00 UTC
+  // snapshots: an ET day's point does not exist until 8 PM ET that day, so there
+  // is no partial-day value to write early.
+  const cryptoLastDay = new Date(etDayStartMs(Date.now()));
 
   // The last day worth filling for one ticker: whichever cutoff its asset class
   // settles on, pulled back to its own ceiling when it has one.
@@ -1575,11 +1579,20 @@ async function upsertTickerPrice(
     return;
   }
 
+  // Crypto history is not written from a live quote at all. A spot price samples
+  // whenever the refresh happened to run — 8 PM one evening, 11:38 the next — so
+  // a day's stored value drifted with the user's browsing. fillPriceGaps sources
+  // it from the 00:00 UTC daily series instead, which is the same instant every
+  // day and close to the 8 PM ET cutoff the equities already settle on. Writing
+  // here as well would defeat that: the gap-fill inserts rather than overwrites,
+  // so whichever value landed first would stand.
+  if (priceSource === "COINGECKO") return;
+
   // TickerPrice above always takes the live quote — it is what the page displays.
   // Whether this quote also belongs in history is the writer's call: mid-session
   // it does not, because a quote taken while the market is open is not a close.
   await writeTickerHistory(ticker, [{ date: historyDate, closePrice: price }], {
-    isCrypto: priceSource === "COINGECKO",
+    isCrypto: false,
     mode: "overwrite",
   });
 }

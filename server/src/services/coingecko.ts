@@ -163,18 +163,28 @@ export async function getMarketChart(
     const data = await res.json() as any;
     const prices: [number, number][] = data?.prices ?? [];
 
-    return prices.map(([ts, price]) => {
-      // Date by the ET calendar day the point actually falls in, not its UTC day.
-      // CoinGecko's daily points land at 00:00 UTC, which is 8 PM ET the evening
-      // *before* — so keying on the UTC date shifts every row a day late relative
-      // to everything else in TickerPriceHistory, which is ET-dated (the refresh
-      // stamps a crypto quote with the ET day it was taken). Mixing the two makes
-      // the same date label mean two instants ~28 hours apart, and stretches
-      // crypto's 1-day change by a day.
-      const { year, month, day } = etDateParts(ts);
-      const date = new Date(Date.UTC(year, month - 1, day));
-      return { date, closePrice: price };
-    });
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    return prices
+      // Keep only the canonical 00:00 UTC snapshots. CoinGecko appends a trailing
+      // point for the current moment, and taking that would make a day's stored
+      // value depend on when the refresh happened to run — the same drift this
+      // series is meant to replace. Dropping it also makes availability
+      // self-answering: the snapshot for an ET day only exists once 00:00 UTC has
+      // passed, which is that day's 8 PM ET (7 PM under EST).
+      .filter(([ts]) => {
+        const intoDay = ts % DAY_MS;
+        return intoDay <= 60_000 || intoDay >= DAY_MS - 60_000;
+      })
+      .map(([ts, price]) => {
+        // Date by the ET calendar day the point falls in, not its UTC day. A
+        // 00:00 UTC point is 8 PM ET the evening *before*, so keying on the UTC
+        // date would shift every row a day late relative to the rest of
+        // TickerPriceHistory, which is ET-dated throughout.
+        const { year, month, day } = etDateParts(ts);
+        const date = new Date(Date.UTC(year, month - 1, day));
+        return { date, closePrice: price };
+      });
   } catch (err) {
     console.warn(`[coingecko/chart] exception for ${coinId}:`, err);
     return [];
