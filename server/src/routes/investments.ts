@@ -1492,6 +1492,20 @@ async function upsertTickerPrice(
     return;
   }
 
+  // Only settled closes belong in history. A quote pulled mid-session is not a
+  // close: for a mutual fund it is still yesterday's NAV (they price once daily),
+  // and for a stock it is wherever the price happens to be at that moment. Either
+  // way, storing it under today's date and then never revisiting it — which is
+  // what happens when no refresh runs after the cutoff — freezes a mid-day number
+  // in as a closing price, and every later 1-day change is measured against it.
+  //
+  // TickerPrice still takes the live quote; it is what the page displays. Today's
+  // history row is left for a post-cutoff run, or for fillPriceGaps, which reads
+  // true closes from the history endpoint.
+  if (historyDate > effectiveLastTradingDay()) {
+    return;
+  }
+
   await prisma.tickerPriceHistory.upsert({
     where: { ticker_date: { ticker, date: historyDate } },
     create: { ticker, date: historyDate, closePrice: price },
