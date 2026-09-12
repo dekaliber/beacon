@@ -68,6 +68,70 @@ function etDayStartMs(utcMs: number): number {
   return Date.UTC(year, month - 1, day);
 }
 
+// ── The one writer for TickerPriceHistory ───────────────────────────────────
+// Every row in that table goes through here.
+//
+// The table is what the 1-day change measures against, so a row dated on a day
+// that was never a session is worse than a missing row: it becomes evidence of a
+// session that did not happen, and silently moves the baseline for every holding
+// at once. Three callers write to it — the price refresh, the gap-fill, and the
+// range backfill — and each one had this same rule patched into it separately
+// after getting it wrong in its own way. It lives here now, and nowhere else.
+//
+// `mode` is the callers' only genuine difference: "fill" adds what is missing and
+// leaves existing rows alone, "overwrite" replaces them. Returns rows written —
+// for "fill" that is rows actually inserted, duplicates having been skipped.
+type HistoryPoint = { date: Date; closePrice: number };
+
+async function writeTickerHistory(
+  ticker: string,
+  points: HistoryPoint[],
+  opts: { isCrypto: boolean; mode: "fill" | "overwrite" },
+): Promise<number> {
+  if (points.length === 0) return 0;
+
+  // The newest date that can legitimately be written. Equities settle at the
+  // exchange close, so nothing past the last settled session — that is what keeps
+  // a mid-session quote from being stored as a close. Crypto trades straight
+  // through and has no close, so its own ET day is fair game.
+  const ceiling = opts.isCrypto
+    ? new Date(etDayStartMs(Date.now()))
+    : effectiveLastTradingDay();
+
+  const valid = points.filter((p) => {
+    if (p.date > ceiling) return false;
+    // A weekend date can still slip under the ceiling when writing history for a
+    // past range, so it is checked separately. Crypto is exempt: it does trade.
+    if (opts.isCrypto) return true;
+    const dow = p.date.getUTCDay();
+    return dow !== 0 && dow !== 6;
+  });
+
+  if (valid.length !== points.length) {
+    console.warn(
+      `[history] ${ticker}: dropped ${points.length - valid.length} row(s) dated outside a settled session`,
+    );
+  }
+  if (valid.length === 0) return 0;
+
+  if (opts.mode === "fill") {
+    const result = await prisma.tickerPriceHistory.createMany({
+      data: valid.map((p) => ({ ticker, date: p.date, closePrice: p.closePrice })),
+      skipDuplicates: true,
+    });
+    return result.count;
+  }
+
+  for (const p of valid) {
+    await prisma.tickerPriceHistory.upsert({
+      where: { ticker_date: { ticker, date: p.date } },
+      create: { ticker, date: p.date, closePrice: p.closePrice },
+      update: { closePrice: p.closePrice },
+    });
+  }
+  return valid.length;
+}
+
 // ── Observed exchange calendar ───────────────────────────────────────────────
 // Derives which dates were trading sessions from the history rows we hold, so
 // market holidays need no hardcoded list. A date is only believed when it looks
@@ -268,12 +332,10 @@ async function fillPriceGaps(
       await new Promise((r) => setTimeout(r, 150));
     }
 
-    if (points.length === 0) continue;
-    const result = await prisma.tickerPriceHistory.createMany({
-      data: points.map((p) => ({ ticker, date: p.date, closePrice: p.closePrice })),
-      skipDuplicates: true,
+    totalInserted += await writeTickerHistory(ticker, points, {
+      isCrypto: coinGeckoId != null,
+      mode: "fill",
     });
-    totalInserted += result.count;
   }
   return totalInserted;
 }
@@ -1468,14 +1530,7 @@ async function upsertTickerPrice(
   priceDate: Date,
   priceSource: string,
 ): Promise<void> {
-  const etDateStr = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(priceDate);
-  const [etMonth, etDay, etYear] = etDateStr.split("/");
-  const historyDate = new Date(Date.UTC(Number(etYear), Number(etMonth) - 1, Number(etDay)));
+  const historyDate = new Date(etDayStartMs(priceDate.getTime()));
 
   await prisma.tickerPrice.upsert({
     where: { ticker },
@@ -1483,11 +1538,10 @@ async function upsertTickerPrice(
     update: { price, priceDate, priceSource },
   });
 
-  // The history date comes from the provider's own quote timestamp, which is not
-  // always trustworthy — money market funds in particular have reported weekend
-  // and years-old timestamps. A row dated on a non-session day is worse than no
-  // row: it becomes evidence of a session that never happened, which moves the
-  // 1-day baseline for every holding. Keep the live price, skip the history row.
+  // A live quote's own timestamp is not always trustworthy — money market funds
+  // have reported dates years out of date. That is a question about this quote
+  // rather than about sessions, so it is checked here and not in the shared
+  // writer, which legitimately writes old dates when backfilling a range.
   const ageDays = (Date.now() - historyDate.getTime()) / (24 * 60 * 60 * 1000);
   if (ageDays > 7 || ageDays < -1) {
     console.warn(
@@ -1496,37 +1550,12 @@ async function upsertTickerPrice(
     return;
   }
 
-  // Crypto trades every calendar day and has no closing auction, so neither of
-  // the checks below applies to it: a weekend date is legitimate, and there is no
-  // settlement cutoff to wait for. Its row simply tracks the latest quote for that
-  // ET day. Excluding crypto here matters — without it, weekends leave holes that
-  // strand Sunday and Monday with no previous day to measure against.
-  if (priceSource !== "COINGECKO") {
-    const dow = historyDate.getUTCDay();
-    if (dow === 0 || dow === 6) {
-      console.warn(
-        `[price] ${ticker}: weekend quote date ${historyDate.toISOString().slice(0, 10)} — history row skipped`,
-      );
-      return;
-    }
-
-    // Only settled closes belong in history. A quote pulled mid-session is not a
-    // close: for a mutual fund it is still yesterday's NAV (they price once
-    // daily), and for a stock it is wherever the price happened to sit at that
-    // moment. Storing it under today's date and never revisiting it — which is
-    // what happens when no run follows the cutoff — freezes a mid-day number in
-    // as a closing price, and every later 1-day change is measured against it.
-    //
-    // TickerPrice still takes the live quote; it is what the page displays.
-    // Today's history row is left for a post-cutoff run, or for fillPriceGaps,
-    // which reads true closes from the history endpoint.
-    if (historyDate > effectiveLastTradingDay()) return;
-  }
-
-  await prisma.tickerPriceHistory.upsert({
-    where: { ticker_date: { ticker, date: historyDate } },
-    create: { ticker, date: historyDate, closePrice: price },
-    update: { closePrice: price },
+  // TickerPrice above always takes the live quote — it is what the page displays.
+  // Whether this quote also belongs in history is the writer's call: mid-session
+  // it does not, because a quote taken while the market is open is not a close.
+  await writeTickerHistory(ticker, [{ date: historyDate, closePrice: price }], {
+    isCrypto: priceSource === "COINGECKO",
+    mode: "overwrite",
   });
 }
 
@@ -2059,35 +2088,19 @@ investmentRoutes.post("/prices/backfill-history", async (req, res) => {
         summary.push({ ticker, upserted: 0 });
         continue;
       }
-      // Bound what came back rather than trusting the request bounds. Yahoo will
-      // return a bar outside the window it was asked for — notably the live,
-      // partial one for the current day — and this route writes to the table
-      // directly, so it has to enforce the same invariant upsertTickerPrice does:
-      // nothing past the last settled session, and never a weekend, since this
-      // sources exchange history. (Revisit the weekend rule if this is ever made
-      // to backfill crypto, which does trade then.)
-      const settled = points.filter((p) => {
-        if (p.date > lastDay) return false;
-        const dow = p.date.getUTCDay();
-        return dow !== 0 && dow !== 6;
-      });
-      if (settled.length !== points.length) {
-        console.warn(
-          `[backfill-history] ${ticker}: dropped ${points.length - settled.length} out-of-range point(s)`,
-        );
-      }
-
-      // Upsert each point individually so existing rows are overwritten with the
-      // provider's close rather than silently skipped.
-      let count = 0;
-      for (const p of settled) {
-        await prisma.tickerPriceHistory.upsert({
-          where: { ticker_date: { ticker, date: p.date } },
-          create: { ticker, date: p.date, closePrice: p.closePrice },
-          update: { closePrice: p.closePrice },
-        });
-        count++;
-      }
+      // Yahoo returns bars outside the window it was asked for — notably the
+      // live, partial one for the current day — so bound them to the requested
+      // range here. The writer enforces the session rules on top of that.
+      //
+      // Overwrite rather than fill: correcting rows that are present but wrong is
+      // the whole point of this route, and the reason fillPriceGaps cannot do it.
+      // isCrypto is false because this sources Yahoo exchange history, which does
+      // not serve crypto symbols at all — those tickers come back empty.
+      const count = await writeTickerHistory(
+        ticker,
+        points.filter((p) => p.date <= lastDay),
+        { isCrypto: false, mode: "overwrite" },
+      );
       totalUpserted += count;
       summary.push({ ticker, upserted: count });
       await new Promise((r) => setTimeout(r, 200));
