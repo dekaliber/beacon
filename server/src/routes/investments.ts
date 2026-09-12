@@ -2059,10 +2059,28 @@ investmentRoutes.post("/prices/backfill-history", async (req, res) => {
         summary.push({ ticker, upserted: 0 });
         continue;
       }
+      // Bound what came back rather than trusting the request bounds. Yahoo will
+      // return a bar outside the window it was asked for — notably the live,
+      // partial one for the current day — and this route writes to the table
+      // directly, so it has to enforce the same invariant upsertTickerPrice does:
+      // nothing past the last settled session, and never a weekend, since this
+      // sources exchange history. (Revisit the weekend rule if this is ever made
+      // to backfill crypto, which does trade then.)
+      const settled = points.filter((p) => {
+        if (p.date > lastDay) return false;
+        const dow = p.date.getUTCDay();
+        return dow !== 0 && dow !== 6;
+      });
+      if (settled.length !== points.length) {
+        console.warn(
+          `[backfill-history] ${ticker}: dropped ${points.length - settled.length} out-of-range point(s)`,
+        );
+      }
+
       // Upsert each point individually so existing rows are overwritten with the
       // provider's close rather than silently skipped.
       let count = 0;
-      for (const p of points) {
+      for (const p of settled) {
         await prisma.tickerPriceHistory.upsert({
           where: { ticker_date: { ticker, date: p.date } },
           create: { ticker, date: p.date, closePrice: p.closePrice },
