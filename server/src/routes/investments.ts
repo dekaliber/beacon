@@ -198,9 +198,16 @@ function effectiveLastTradingDay(): Date {
 // (after 8 PM ET). This ensures we never accidentally store a mid-day quote
 // as a historical closing price.
 
+// `ceilingByTicker` stops a ticker being filled past the day its prices stop
+// mattering. A position that was sold is still charted for the window it was
+// held, so its history has to reach the sale — but nothing reads a price dated
+// after it, because the reconstructed quantity is zero from then on. Without a
+// bound those tickers get topped up to the present forever, one request each,
+// every time the account's chart is opened.
 async function fillPriceGaps(
   tickers: string[],
   coinGeckoIdByTicker: Map<string, string> = new Map(),
+  ceilingByTicker: Map<string, Date> = new Map(),
 ): Promise<number> {
   if (tickers.length === 0) return 0;
 
@@ -209,9 +216,19 @@ async function fillPriceGaps(
   // so we naturally never write a row for a day whose prices haven't settled.
   const targetDay = effectiveLastTradingDay();
 
-  // Cap the Yahoo history fetch to the day after targetDay so we never receive
-  // a partial/mid-day candle for an in-progress session.
-  const fetchToDate = new Date(targetDay.getTime() + 24 * 60 * 60 * 1000);
+  // Crypto trades every calendar day, so its natural ceiling is yesterday rather
+  // than the last exchange session. Clamping it to the session cutoff would leave
+  // permanent weekend holes, and crypto measures its 1-day change against the
+  // previous calendar day.
+  const cryptoLastDay = new Date(etDayStartMs(Date.now()) - 24 * 60 * 60 * 1000);
+
+  // The last day worth filling for one ticker: whichever cutoff its asset class
+  // settles on, pulled back to its own ceiling when it has one.
+  const ceilingFor = (ticker: string): Date => {
+    const base = coinGeckoIdByTicker.has(ticker) ? cryptoLastDay : targetDay;
+    const own = ceilingByTicker.get(ticker);
+    return own && own < base ? own : base;
+  };
 
   // Check the latest history date per ticker individually — a single cross-ticker
   // max would cause tickers with stale history to be silently skipped if any other
@@ -275,17 +292,20 @@ async function fillPriceGaps(
   // the ticker's own first row count — anything earlier predates our coverage of it.
   const earliestHole = (ticker: string): number | null => {
     if (coinGeckoIdByTicker.has(ticker) || tiingoTickers.has(ticker)) return null;
+    const ceilingMs = ceilingFor(ticker).getTime();
     if (fixedPrices.has(ticker)) {
       // Any missing session counts, including the newest one.
       const days = daysByTicker.get(ticker);
       if (!days) return null;
-      const missing = [...sessionDays].filter((ms) => ms <= targetDay.getTime() && !days.has(ms));
+      const missing = [...sessionDays].filter((ms) => ms <= ceilingMs && !days.has(ms));
       return missing.length > 0 ? Math.min(...missing) : null;
     }
     const days = daysByTicker.get(ticker);
     if (!days || days.size === 0) return null;
     const ownStart = Math.min(...days);
-    const holes = [...sessionDays].filter((ms) => ms > ownStart && !days.has(ms));
+    const holes = [...sessionDays].filter(
+      (ms) => ms > ownStart && ms <= ceilingMs && !days.has(ms),
+    );
     return holes.length > 0 ? Math.min(...holes) : null;
   };
 
@@ -293,8 +313,9 @@ async function fillPriceGaps(
   for (const ticker of tickers) {
     const latest = latestByTicker.get(ticker);
     const hole = earliestHole(ticker);
-    // Already current through the finalized day, with no gaps behind it
-    if (hole == null && latest && latest >= targetDay) continue;
+    const ceiling = ceilingFor(ticker);
+    // Already current through this ticker's last useful day, with no gaps behind it
+    if (hole == null && latest && latest >= ceiling) continue;
 
     const coinGeckoId = coinGeckoIdByTicker.get(ticker);
     let points: Array<{ date: Date; closePrice: number }> = [];
@@ -304,33 +325,37 @@ async function fillPriceGaps(
       // Fill every session the ticker is missing at its pinned price — no request.
       const days = daysByTicker.get(ticker) ?? new Set<number>();
       points = [...sessionDays]
-        .filter((ms) => ms <= targetDay.getTime() && !days.has(ms))
+        .filter((ms) => ms <= ceiling.getTime() && !days.has(ms))
         .map((ms) => ({ date: new Date(ms), closePrice: pinned }));
     } else if (coinGeckoId) {
       // Crypto: use CoinGecko market chart. Request enough days to cover the gap.
-      // Crypto's calendar is every day, so it fills through yesterday rather than
-      // through the last exchange session — clipping it to targetDay would leave
-      // permanent weekend holes, and crypto measures its 1-day change against the
-      // previous calendar day.
-      const cryptoTargetDay = new Date(etDayStartMs(Date.now()) - 24 * 60 * 60 * 1000);
-      const gapMs = cryptoTargetDay.getTime() - (latest?.getTime() ?? (Date.now() - 90 * 24 * 60 * 60 * 1000));
+      // `ceiling` is already crypto's own cutoff — yesterday, not the session day.
+      const gapMs = ceiling.getTime() - (latest?.getTime() ?? (Date.now() - 90 * 24 * 60 * 60 * 1000));
       const days = Math.ceil(gapMs / (24 * 60 * 60 * 1000)) + 2;
       const allPoints = await getMarketChart(coinGeckoId, Math.min(days, 365));
       // Filter to only the dates we actually need
       const fromMs = latest ? latest.getTime() + 24 * 60 * 60 * 1000 : 0;
-      points = allPoints.filter((p) => p.date.getTime() >= fromMs && p.date <= cryptoTargetDay);
+      points = allPoints.filter((p) => p.date.getTime() >= fromMs && p.date <= ceiling);
       await new Promise((r) => setTimeout(r, 200)); // be polite to CoinGecko
     } else {
       // Stocks/ETFs/funds: use Yahoo Finance. Start at the hole when there is one
-      // so the refetch covers it as well as anything missing off the end.
+      // so the refetch covers it as well as anything missing off the end. The
+      // upper bound is the day after the ceiling: Yahoo's period2 is exclusive,
+      // and a partial candle for an in-progress session must stay out.
       const fromDate = hole != null
         ? new Date(hole)
         : latest
           ? new Date(latest.getTime() + 24 * 60 * 60 * 1000)
           : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+      const fetchToDate = new Date(ceiling.getTime() + 24 * 60 * 60 * 1000);
+      if (fromDate >= fetchToDate) continue;
       points = await fetchYahooHistory(ticker, fromDate, fetchToDate);
       await new Promise((r) => setTimeout(r, 150));
     }
+
+    // The ceiling also bounds what gets written, in case a provider returns more
+    // than the window asked for.
+    points = points.filter((p) => p.date <= ceiling);
 
     totalInserted += await writeTickerHistory(ticker, points, {
       isCrypto: coinGeckoId != null,
@@ -2610,8 +2635,21 @@ investmentRoutes.get("/growth/:accountId", async (req, res) => {
       if (h.coinGeckoId) coinGeckoIdByTickerGrowth.set(h.ticker, h.coinGeckoId);
     }
 
+    // A ticker with no lots left is here only for the window it was held, which
+    // ends at its final sale — the reconstructed quantity is zero after that, so
+    // no later price is ever read. Cap the fill there instead of topping these up
+    // to the present every time the chart is opened. Assigned puts leave a trail
+    // of these, and they would otherwise be refreshed forever.
+    const tickersWithLots = new Set(holdingsWithLots.map((h) => h.ticker));
+    const fillCeilings = new Map<string, Date>();
+    for (const [ticker, sales] of salesByTicker) {
+      if (tickersWithLots.has(ticker) || sales.length === 0) continue;
+      const lastSale = sales.reduce((a, b) => (a.date > b.date ? a : b)).date;
+      fillCeilings.set(ticker, new Date(etDayStartMs(lastSale.getTime())));
+    }
+
     // Lazy gap-fill: bring price history current before computing
-    await fillPriceGaps(allTickers, coinGeckoIdByTickerGrowth);
+    await fillPriceGaps(allTickers, coinGeckoIdByTickerGrowth, fillCeilings);
 
     // Earliest date: min of first lot acquisition and first sale date
     const allLots = holdingsWithLots.flatMap((h) => h.lots);
