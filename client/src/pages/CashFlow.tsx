@@ -1248,7 +1248,7 @@ export function CashFlow() {
  <div className="min-w-0 basis-2/3 w-full space-y-4">
  {/* Tab bar */}
  <div className="border-b border-border">
- <div className="flex items-center gap-0 overflow-x-auto">
+ <div className="flex items-center gap-0 overflow-x-auto overflow-y-hidden">
  {personal.length > 0 && joint.length > 0 && (
  <SectionLabel as="span" className="mr-2 text-10 px-1">
  Personal
