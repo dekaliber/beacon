@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { X, Link2, Unlink, Star, Check, Trash2 } from "lucide-react";
+import { X, Link2, Unlink, Star, Check, Trash2, Copy } from "lucide-react";
 import { bulkUpdateExpenses, bulkDeleteExpenses } from "@/api";
 import type { Category, Tag } from "@/types";
 import { formatCurrency } from "@/lib/utils";
@@ -20,6 +20,12 @@ interface BulkEditBarProps {
   onSuccess: () => void;
   onGroupAction?: () => Promise<void>;
   onSetAsPrimary?: () => Promise<void>;
+  /** Duplicates the single selected transaction with today's date (only shown when exactly one is selected) */
+  onDuplicate?: () => Promise<void>;
+  /** When true, the Duplicate button is shown but disabled */
+  duplicateDisabled?: boolean;
+  /** Tooltip shown on the disabled Duplicate button */
+  duplicateDisabledTitle?: string;
   onCreateTag?: (name: string) => Promise<Tag>;
   /** Label for the free-text edit button (default: "Edit Description") */
   textFieldLabel?: string;
@@ -65,6 +71,9 @@ export function BulkEditBar({
   onSuccess,
   onGroupAction,
   onSetAsPrimary,
+  onDuplicate,
+  duplicateDisabled = false,
+  duplicateDisabledTitle,
   onCreateTag,
   textFieldLabel = "Edit Description",
   textFieldKey = "description",
@@ -80,6 +89,7 @@ export function BulkEditBar({
   const [active, setActive] = useState<ActivePopover>(null);
   const [groupLoading, setGroupLoading] = useState(false);
   const [primaryLoading, setPrimaryLoading] = useState(false);
+  const [duplicateLoading, setDuplicateLoading] = useState(false);
 
   // Per-popover field state
   const [description, setDescription] = useState("");
@@ -146,6 +156,17 @@ export function BulkEditBar({
       onClear();
     } finally {
       setGroupLoading(false);
+    }
+  };
+
+  const handleDuplicate = async () => {
+    if (!onDuplicate || duplicateDisabled) return;
+    setDuplicateLoading(true);
+    try {
+      await onDuplicate();
+      onClear();
+    } finally {
+      setDuplicateLoading(false);
     }
   };
 
@@ -549,6 +570,24 @@ export function BulkEditBar({
             ) : (
               <><Unlink className="h-3.5 w-3.5" />{groupLoading ? "Ungrouping…" : "Remove from Group"}</>
             )}
+          </button>
+        </>
+      )}
+
+      {onDuplicate && ids.length === 1 && (
+        <>
+          <span className={sepCls} />
+
+          {/* Duplicate (single selection only — Group takes this slot for multi-select) */}
+          <button
+            type="button"
+            onClick={handleDuplicate}
+            disabled={duplicateLoading || duplicateDisabled}
+            className={`inline-flex items-center gap-[6px] px-[14px] py-[10px] transition-[background] whitespace-nowrap ${duplicateDisabled ? "opacity-40 cursor-not-allowed" : "hover:bg-white/[.12] disabled:opacity-50"}`}
+            title={duplicateDisabled ? duplicateDisabledTitle : "Duplicate with today's date"}
+          >
+            <Copy className="h-3.5 w-3.5" />
+            {duplicateLoading ? "Duplicating…" : "Duplicate"}
           </button>
         </>
       )}

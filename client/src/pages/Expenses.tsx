@@ -1656,6 +1656,29 @@ export function Expenses() {
  clearSelection();
  }, [setAsPrimaryTarget, handleSetGroupPrimary, clearSelection]);
 
+ const handleDuplicate = useCallback(async () => {
+ if (selectedIds.size !== 1) return;
+ const [id] = [...selectedIds];
+ const source = [...expenses, ...upcomingExpenses].find((e) => e.id === id);
+ if (!source) return;
+ await createExpense({
+ amount: parseFloat(source.amount),
+ description: source.description,
+ vendor: source.vendor,
+ date: localToday(),
+ categoryId: source.categoryId,
+ accountId: source.accountId,
+ notes: source.notes ?? undefined,
+ isReimbursementExpected: source.isReimbursementExpected,
+ reimbursementNote: source.reimbursementNote ?? undefined,
+ ignoreInBudget: source.ignoreInBudget,
+ tagIds: source.tags.map((t) => t.tagId),
+ });
+ clearSelection();
+ refetchAll();
+ refetchUncat();
+ }, [selectedIds, expenses, upcomingExpenses, clearSelection, refetchAll, refetchUncat]);
+
  // Keyboard shortcuts (placed after handleGroupAction, setAsPrimaryTarget, handleSetAsPrimary)
  useEffect(() => {
  const handleKeyDown = (e: KeyboardEvent) => {
@@ -2187,6 +2210,7 @@ export function Expenses() {
  }}
  onGroupAction={handleGroupAction}
  onSetAsPrimary={handleSetAsPrimary}
+ onDuplicate={handleDuplicate}
  onCreateTag={async (name) => { const t = await createTag({ name }); refetchTags(); return t; }}
  groupActionDisabled={groupActionDisabled}
  groupActionDisabledTitle="Cannot group upcoming and posted transactions together"

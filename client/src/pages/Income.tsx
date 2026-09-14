@@ -967,6 +967,25 @@ export function IncomePage() {
 
  const allUpcomingIncomeIds = useMemo(() => upcomingIncomes.map((i) => i.id), [upcomingIncomes]);
 
+ const handleDuplicate = useCallback(async () => {
+ if (selectedIds.size !== 1) return;
+ const [id] = [...selectedIds];
+ const source = [...allIncomes, ...upcomingIncomes].find((i) => i.id === id);
+ if (!source) return;
+ await createIncome({
+ amount: parseFloat(source.amount),
+ categoryId: source.categoryId ?? undefined,
+ source: source.source ?? undefined,
+ date: localToday(),
+ notes: source.notes ?? undefined,
+ accountId: source.accountId,
+ tagIds: source.tags.map((t) => t.tagId),
+ taxClassification: source.taxClassification,
+ });
+ setSelectedIds(new Set());
+ refetchAll();
+ }, [selectedIds, allIncomes, upcomingIncomes, refetchAll]);
+
  const handleUpcomingCheckboxChange = useCallback((id: string, idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
  if (e.nativeEvent instanceof MouseEvent && e.nativeEvent.shiftKey && anchorUpcomingIdxRef.current !== null) {
  const anchor = anchorUpcomingIdxRef.current;
@@ -1383,6 +1402,9 @@ export function IncomePage() {
  onBulkDelete={() => bulkDeleteIncome([...selectedIds])}
  onClear={() => setSelectedIds(new Set())}
  onSuccess={() => { setSelectedIds(new Set()); refetchAll(); }}
+ onDuplicate={handleDuplicate}
+ duplicateDisabled={[...allIncomes, ...upcomingIncomes].some((i) => selectedIds.has(i.id) && i.activityId != null)}
+ duplicateDisabledTitle="Investment-linked transactions (Div / Sale) can't be duplicated"
  deleteDisabled={[...allIncomes, ...upcomingIncomes].some((i) => selectedIds.has(i.id) && i.activityId != null)}
  showTaxStatus
  deleteDisabledTitle="Deselect investment-linked transactions (Div / Sale) to enable delete"
