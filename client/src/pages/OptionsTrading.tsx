@@ -4890,7 +4890,7 @@ function PerformanceCharts({
  <div className="flex items-center gap-3">
  {targetPeriodic != null && (
  <div className="flex items-center gap-1.5">
- <svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="var(--color-muted-foreground)" strokeWidth="1.5" strokeDasharray="4 3" strokeOpacity="0.7" /></svg>
+ <svg width="16" height="8"><line x1="1" y1="4" x2="16" y2="4" stroke="var(--color-muted-foreground)" strokeWidth="1.5" strokeDasharray="0 3" strokeLinecap="round" /></svg>
  <span className="tp-caption">Target ${fmtUSD(targetPeriodic)}/{chartPeriod ==="weekly" ?"wk" :"mo"}</span>
  </div>
  )}
@@ -5105,9 +5105,9 @@ function PerformanceCharts({
  dataKey="edgeTarget"
  tooltipType="none"
  stroke="var(--color-muted-foreground)"
- strokeDasharray="4 3"
+ strokeDasharray="0 3"
+ strokeLinecap="round"
  strokeWidth={1.5}
- strokeOpacity={0.7}
  dot={false}
  activeDot={false}
  isAnimationActive={false}
@@ -5136,7 +5136,7 @@ function PerformanceCharts({
  </div>
  {targetAnnual != null && (
  <div className="flex items-center gap-1.5">
- <svg width="20" height="8"><line x1="0" y1="4" x2="20" y2="4" stroke="var(--color-muted-foreground)" strokeWidth="1.5" strokeDasharray="4 3" strokeOpacity="0.7" /></svg>
+ <svg width="20" height="8"><line x1="1" y1="4" x2="20" y2="4" stroke="var(--color-muted-foreground)" strokeWidth="1.5" strokeDasharray="0 3" strokeLinecap="round" /></svg>
  <span className="tp-caption">Target</span>
  </div>
  )}
@@ -5195,8 +5195,8 @@ function PerformanceCharts({
  dataKey="target"
  stroke="var(--color-muted-foreground)"
  strokeWidth={1.5}
- strokeDasharray="4 3"
- strokeOpacity={0.7}
+ strokeDasharray="0 3"
+ strokeLinecap="round"
  dot={false}
  connectNulls
  isAnimationActive={cumAnimate}
