@@ -1205,6 +1205,7 @@ export function IncomePage() {
  <EditableTypeaheadCell
  value={income.accountId}
  label={income.account.name}
+ color={income.account.color}
  items={eligibleAccounts}
  onSave={(v) => handleInlineUpdate(income.id,"accountId", v)}
  />

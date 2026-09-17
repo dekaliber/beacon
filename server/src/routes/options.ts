@@ -332,6 +332,10 @@ async function fetchYahooReturnSince(
     if (!result) return null;
 
     const timestamps: number[] = result.timestamp ?? [];
+    // Some index symbols (e.g. ^BXM) only carry a live quote with no daily
+    // history — a single timestamp collapses start/current to the same point
+    // and would otherwise read as a false 0% return.
+    if (timestamps.length < 2) return null;
     const adjClose: (number | null)[] = result.indicators?.adjclose?.[0]?.adjclose ?? [];
     const close: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
 
