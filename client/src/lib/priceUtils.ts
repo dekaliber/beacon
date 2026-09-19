@@ -175,9 +175,18 @@ export function isPriceRefreshNeeded(holdings: InvestmentHolding[]): boolean {
 // holding alike. Crypto used to pull this as low as 5 minutes out, which made the
 // "Next update" caption advertise a refresh that had nothing to do with the daily
 // batch the rest of the page runs on.
+//
+// Crypto does keep that cutoff on weekends and holidays, though (the server takes
+// its 00:00 UTC snapshot then), so a portfolio holding any is next updated at the
+// very next cutoff rather than the next trading day's.
 export function getNextUpdateTime(holdings: InvestmentHolding[]): Date | null {
   if (holdings.length === 0) return null;
-  return nextStockCutoff(new Date());
+  const now = new Date();
+  if (holdings.some((h) => h.coinGeckoId)) {
+    const cutoff = cutoffToday8pmET(now);
+    return now < cutoff ? cutoff : new Date(cutoff.getTime() + DAY_MS);
+  }
+  return nextStockCutoff(now);
 }
 
 // Formats a next-update Date as a friendly string like "Today at 8 PM EDT" or "May 10 at 8 PM EDT".

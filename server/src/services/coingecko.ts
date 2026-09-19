@@ -190,3 +190,43 @@ export async function getMarketChart(
     return [];
   }
 }
+
+// ── Daily 00:00 UTC snapshot ──────────────────────────────────────────────────
+
+/**
+ * Fetch a coin's USD price as of 00:00 UTC on the UTC calendar day containing
+ * `utcDayMs`, via /coins/{id}/history. This is the same instant the daily
+ * /market_chart series samples, so a price taken here agrees with the history
+ * row for that snapshot.
+ *
+ * A snapshot for a day that hasn't started yet (or hasn't been published) comes
+ * back as an error or without market data; both return null.
+ */
+export async function getDailySnapshot(
+  coinId: string,
+  utcDayMs: number,
+): Promise<CoinPrice | null> {
+  const d = new Date(utcDayMs);
+  const at = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const dd = String(at.getUTCDate()).padStart(2, "0");
+  const mm = String(at.getUTCMonth() + 1).padStart(2, "0");
+  try {
+    const res = await cgFetch(
+      `/coins/${encodeURIComponent(coinId)}/history?date=${dd}-${mm}-${at.getUTCFullYear()}&localization=false`,
+    );
+    if (!res.ok) {
+      console.warn(`[coingecko/history] HTTP ${res.status} for ${coinId} ${dd}-${mm}`);
+      return null;
+    }
+    const data = await res.json() as any;
+    const usd = data?.market_data?.current_price?.usd;
+    if (usd == null) {
+      console.warn(`[coingecko/history] no snapshot for ${coinId} ${dd}-${mm}`);
+      return null;
+    }
+    return { price: usd as number, updatedAt: at };
+  } catch (err) {
+    console.warn(`[coingecko/history] exception for ${coinId}:`, err);
+    return null;
+  }
+}
