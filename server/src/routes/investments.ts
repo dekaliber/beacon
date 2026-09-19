@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { getMetadata as getTiingoMeta, getDividendScanResult } from "../services/tiingo.js";
-import { searchCoins, getPrices, getPrice as getCoinGeckoPrice, getMarketChart, getDailySnapshot } from "../services/coingecko.js";
+import { searchCoins, getMarketChart, getDailySnapshot } from "../services/coingecko.js";
 import { fetchYahooPrice, fetchYahooHistory, fetchYahooClosingPrice, fetchYahooMeta } from "../services/yahoo.js";
 import { deactivateIfOrphaned } from "./instruments.js";
 import { isTradingDay, etDateParts } from "../lib/marketHolidays.js";
@@ -808,8 +808,8 @@ investmentRoutes.get("/accounts", async (req, res) => {
     const prevCloseFor = (ticker: string, priceDate: Date): number | null => {
       const closes = closesByTicker.get(ticker);
       if (!closes) return null;
-      // Crypto trades every calendar day, and its priceDate is a live timestamp
-      // rather than a session close, so it anchors on itself.
+      // Crypto trades every calendar day, so it anchors on its own priceDate: the
+      // 00:00 UTC snapshot it was priced at, which falls on the previous ET day.
       const prevDay = cryptoTickers.has(ticker)
         ? etDayMs(priceDate) - 24 * 60 * 60 * 1000
         : equityPrevDay;
@@ -1649,13 +1649,15 @@ async function syncCurrentPricesFromHistory(
   return synced;
 }
 
-// ── Helper: crypto on non-trading days ────────────────────────────────────────
-// Crypto keeps trading through weekends and holidays, so it keeps its daily
-// refresh when equities pause. On those days it takes the 00:00 UTC snapshot
-// rather than a live quote: that is the instant the crypto history series is
-// sampled at, and it lands on the same 8 PM ET cutoff (7 PM under EST) that
-// every other holding settles on — the refresh after Saturday's cutoff takes
-// Sunday's 00:00 UTC snapshot, which is Saturday's ET-dated row.
+// ── Helper: crypto prices ─────────────────────────────────────────────────────
+// Crypto's current price is always the 00:00 UTC daily snapshot, never a live
+// quote. That is the instant the crypto history series is sampled at, so the
+// header value and the chart's last point agree, and it lands on the same 8 PM ET
+// cutoff (7 PM under EST) every other holding settles on — the refresh after
+// Saturday's cutoff takes Sunday's 00:00 UTC snapshot, which is Saturday's
+// ET-dated row. A live quote instead sampled whenever the page happened to be
+// opened. Crypto trades straight through, so this runs on weekends and holidays
+// too, when equities pause.
 //
 // The newest snapshot that exists is the one at the start of the current UTC day.
 // The history row is written here too, so the gap-fill after it has nothing to
@@ -1746,20 +1748,23 @@ investmentRoutes.post("/prices/refresh", async (req, res) => {
       pinnedRows.filter((r) => isPinnedPrice(r.ticker, r.priceSource)).map((r) => r.ticker),
     );
 
+    // Crypto takes its daily snapshot on every day type. The snapshot only
+    // changes at the cutoff, so a price already taken since then is kept.
+    const now = new Date();
+    const cryptoRows = await prisma.tickerPrice.findMany({
+      where: { ticker: { in: [...cryptoTickers] } },
+      select: { ticker: true, updatedAt: true },
+    });
+    const cryptoUpdatedAt = new Map(cryptoRows.map((r) => [r.ticker, r.updatedAt]));
+    const staleCrypto = [...cryptoTickers].filter((t) =>
+      isTickerStale(cryptoUpdatedAt.get(t) ?? null, now),
+    );
+    const refreshed = await refreshCryptoSnapshots(staleCrypto, coinGeckoIdByTicker);
+
     // Same rule as the stream route: no equity quotes to collect on a non-session
-    // day, but crypto still takes its daily snapshot, and a session nobody was
-    // around to capture still gets repaired from history.
-    if (!isTradingDay(Date.now())) {
-      const now = new Date();
-      const cryptoRows = await prisma.tickerPrice.findMany({
-        where: { ticker: { in: [...cryptoTickers] } },
-        select: { ticker: true, updatedAt: true },
-      });
-      const cryptoUpdatedAt = new Map(cryptoRows.map((r) => [r.ticker, r.updatedAt]));
-      const staleCrypto = [...cryptoTickers].filter((t) =>
-        isTickerStale(cryptoUpdatedAt.get(t) ?? null, now),
-      );
-      const refreshed = await refreshCryptoSnapshots(staleCrypto, coinGeckoIdByTicker);
+    // day, but a session nobody was around to capture still gets repaired from
+    // history.
+    if (!isTradingDay(now.getTime())) {
       const filled = await fillPriceGaps(tickers, coinGeckoIdByTicker);
       const synced = await syncCurrentPricesFromHistory(tickers, coinGeckoIdByTicker);
       console.log(
@@ -1777,32 +1782,18 @@ investmentRoutes.post("/prices/refresh", async (req, res) => {
       (tiingoTickers.size > 0 ? ` (${tiingoTickers.size} via Tiingo)` : ""),
     );
 
-    // Batch-fetch all crypto prices in one CoinGecko call.
-    const cryptoCoinIds = [...cryptoTickers].map((t) => coinGeckoIdByTicker.get(t)!);
-    const cryptoPriceMap = cryptoCoinIds.length > 0 ? await getPrices(cryptoCoinIds) : new Map();
-
-    let updated = 0;
-    const results: string[] = [];
+    let updated = refreshed.length;
+    const results: string[] = [...refreshed];
 
     for (const ticker of tickers) {
-      if (fixedTickers.has(ticker)) continue;
+      // Crypto was handled by its snapshot above.
+      if (fixedTickers.has(ticker) || cryptoTickers.has(ticker)) continue;
 
       let price: number | null = null;
       let priceDate: Date | null = null;
       let priceSource: string;
 
-      if (cryptoTickers.has(ticker)) {
-        // Crypto: price was already fetched in the batch call above.
-        const coinGeckoId = coinGeckoIdByTicker.get(ticker)!;
-        const cryptoPrice = cryptoPriceMap.get(coinGeckoId);
-        if (cryptoPrice) {
-          price = cryptoPrice.price;
-          priceDate = cryptoPrice.updatedAt;
-        } else {
-          console.warn(`[price-refresh] ${ticker}: no data returned from CoinGecko (id: ${coinGeckoId})`);
-        }
-        priceSource = "COINGECKO";
-      } else if (tiingoTickers.has(ticker)) {
+      if (tiingoTickers.has(ticker)) {
         // Tiingo-sourced ticker: use close (unadjusted), correct for MMFs.
         // Scan window: just the last 7 days to get today's NAV efficiently.
         const today = new Date().toISOString().slice(0, 10);
@@ -1914,8 +1905,8 @@ investmentRoutes.get("/prices/refresh/stream", async (req, res) => {
     // holiday there is no new close to collect, and asking anyway is what produced
     // a Saturday-dated history row that moved the 1-day baseline for the whole
     // portfolio. Crypto trades straight through, so it stays on its daily cadence
-    // (as a 00:00 UTC snapshot — see refreshCryptoSnapshots), and on those days
-    // it is all the progress count covers.
+    // (its 00:00 UTC snapshot — see refreshCryptoSnapshots), and on those days it
+    // is all the progress count covers.
     const tradingDay = isTradingDay(now.getTime());
 
     const staleTickers = tickers.filter(
@@ -1971,24 +1962,9 @@ investmentRoutes.get("/prices/refresh/stream", async (req, res) => {
 
     let count = 0;
 
-    if (staleCrypto.length > 0 && !tradingDay) {
-      await refreshCryptoSnapshots(staleCrypto, coinGeckoIdByTicker, () =>
-        send({ type: "progress", count: ++count, total }),
-      );
-    } else if (staleCrypto.length > 0) {
-      // Batch-fetch all crypto in one CoinGecko call.
-      const coinIds = staleCrypto.map((t) => coinGeckoIdByTicker.get(t)!);
-      const cryptoPriceMap = await getPrices(coinIds);
-
-      for (const ticker of staleCrypto) {
-        const entry = cryptoPriceMap.get(coinGeckoIdByTicker.get(ticker)!);
-        if (entry) {
-          await upsertTickerPrice(ticker, entry.price, entry.updatedAt, "COINGECKO");
-          console.log(`[price-refresh/stream] ${ticker}: $${entry.price} [COINGECKO]`);
-        }
-        send({ type: "progress", count: ++count, total });
-      }
-    }
+    await refreshCryptoSnapshots(staleCrypto, coinGeckoIdByTicker, () =>
+      send({ type: "progress", count: ++count, total }),
+    );
 
     // Sequential fetch for stocks/funds.
     for (const ticker of staleOther) {
@@ -2394,7 +2370,7 @@ investmentRoutes.get("/prices/:ticker", async (req, res) => {
       null;
 
     const isCrypto = !!resolvedCoinGeckoId;
-    const cacheMaxAgeMs = isCrypto ? 5 * 60 * 1000 : 60 * 60 * 1000;
+    const cacheMaxAgeMs = 60 * 60 * 1000;
 
     // Return cached price if it's still fresh
     const existing = await prisma.tickerPrice.findUnique({ where: { ticker } });
@@ -2412,7 +2388,10 @@ investmentRoutes.get("/prices/:ticker", async (req, res) => {
       // After 4:15 PM ET markets are closed — any cached price is good for the rest of the day.
       const now = new Date();
       const marketClosed = !isCrypto && now.getTime() >= marketCloseBoundaryET(now).getTime();
-      if (marketClosed || ageMs < cacheMaxAgeMs) {
+      // Crypto's price is the daily snapshot, which only moves at the 8 PM ET
+      // cutoff — same staleness rule as the refresh routes.
+      const fresh = isCrypto ? !isTickerStale(existing.updatedAt, now) : marketClosed || ageMs < cacheMaxAgeMs;
+      if (fresh) {
         return res.json({
           ticker,
           price: parseFloat(existing.price.toString()),
@@ -2426,8 +2405,9 @@ investmentRoutes.get("/prices/:ticker", async (req, res) => {
     let priceSource: string;
 
     if (isCrypto && resolvedCoinGeckoId) {
-      // Fetch live from CoinGecko
-      const coinPrice = await getCoinGeckoPrice(resolvedCoinGeckoId);
+      // The newest 00:00 UTC snapshot, same as the refresh routes — a live quote
+      // here would leave this one holding priced at a different instant.
+      const coinPrice = await getDailySnapshot(resolvedCoinGeckoId, Date.now());
       if (!coinPrice) {
         return res.status(404).json({ error: { message: "Price not available for " + ticker } });
       }
