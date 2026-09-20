@@ -60,7 +60,7 @@ import { getWeeklyExpiration, nextWeekExpiration, prevWeekExpiration, calcDTE, i
 import { SectionLabel, ColumnHeader, StatValue } from"@/components/Typography";
 import { optionsPricesAreFresh } from"@/lib/priceUtils";
 import { BeaconLoader } from"@/components/BeaconLoader";
-import { SelectionTotalsBar } from"@/components/SelectionTotalsBar";
+import { SelectionTotalsBar, type SelectionTotal } from"@/components/SelectionTotalsBar";
 import {
  ResponsiveContainer,
  BarChart,
@@ -2535,29 +2535,74 @@ const COL_GROUPS = [
 ] as const;
 type ColGroupKey = (typeof COL_GROUPS)[number]["key"];
 
+// Which row family a selection holds. Drafts total what a position would earn
+// if opened; open positions total what one is actually carrying.
+type SelectionKind = "open" | "draft";
+
 function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, chainMaxCapitalAtRiskMap, onEdit, onClose, onConfirm, onPositionUpdated, extraTickers, onPricesUpdated, seedLivePrices, tabBarEl }: OpenPositionsTableProps) {
  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
  const [openColGroups, setOpenColGroups] = useState<Set<ColGroupKey>>(new Set(["live"]));
  const [draftsOpen, setDraftsOpen] = useState(true);
  // Click-to-select rows, summed in the floating totals bar. Cleared whenever the
  // visible row set changes so the totals always describe what's on screen.
+ // Drafts and open positions total different columns, so a selection holds one
+ // kind or the other — clicking across the divide starts a fresh selection.
  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
- const clearSelection = () => setSelectedIds((prev) => (prev.size === 0 ? prev : new Set()));
- const onToggleSelect = (id: string) =>
+ const [selectedKind, setSelectedKind] = useState<SelectionKind>("open");
+ // Anchor for shift-click ranges: the last row clicked, and which kind it was.
+ // Stored by id rather than index so a re-sort can't point it at another row.
+ const anchorRef = useRef<{ kind: SelectionKind; id: string } | null>(null);
+ const clearSelection = () => {
+ // Drop the anchor too, so the next shift-click can't extend from a row the
+ // user has already cleared.
+ anchorRef.current = null;
+ setSelectedIds((prev) => (prev.size === 0 ? prev : new Set()));
+ };
+ const onRowClick = (e: React.MouseEvent, id: string, kind: SelectionKind, order: string[]) => {
+ const anchor = anchorRef.current;
+ anchorRef.current = { kind, id };
+ // Crossing the draft/open divide always starts over — the two total
+ // different columns, so they can't share a selection.
+ if (kind !== selectedKind) {
+ setSelectedKind(kind);
+ setSelectedIds(new Set([id]));
+ return;
+ }
+ if (e.shiftKey && anchor?.kind === kind) {
+ const from = order.indexOf(anchor.id);
+ const to = order.indexOf(id);
+ if (from !== -1 && to !== -1) {
+ // Apply the clicked row's toggled state across the whole range, as the
+ // Expenses/Income checkboxes do.
+ const selecting = !selectedIds.has(id);
+ setSelectedIds((prev) => {
+ const next = new Set(prev);
+ for (const rid of order.slice(Math.min(from, to), Math.max(from, to) + 1)) {
+ if (selecting) next.add(rid); else next.delete(rid);
+ }
+ return next;
+ });
+ return;
+ }
+ }
  setSelectedIds((prev) => {
  const next = new Set(prev);
  if (next.has(id)) next.delete(id); else next.add(id);
  return next;
  });
+ };
  // Any change to the underlying rows (a position closed, edited, added) drops
  // the selection rather than leaving stale ids summed into the totals. Adjusted
  // during render (React's documented derived-state pattern) rather than in an
  // effect, so no frame ever paints stale totals.
- const rowSig = positions.map((p) => p.id).join(",");
+ const rowSig = [...positions, ...draftPositions].map((p) => p.id).join(",");
  const [lastRowSig, setLastRowSig] = useState(rowSig);
  if (lastRowSig !== rowSig) {
  setLastRowSig(rowSig);
  setSelectedIds(new Set());
+ // The anchor isn't cleared here — writing a ref during render isn't allowed.
+ // onRowClick validates it against the current order list instead, so a row
+ // that has since vanished just falls back to a plain toggle.
  }
  useEffect(() => {
  const onKey = (e: KeyboardEvent) => {
@@ -2823,6 +2868,16 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  grouped.get(key)!.push(p);
  }
 
+ // Row ids in visual order, per selection kind — the range space for a
+ // shift-click. Rows hidden inside a collapsed group aren't listed, so a range
+ // spanning one leaves it untouched.
+ const visibleOpenIds: string[] = [];
+ for (const [gid, grp] of grouped) {
+ if (grp.length === 1) visibleOpenIds.push(grp[0].id);
+ else if (expandedGroups.has(gid)) for (const p of grp) visibleOpenIds.push(p.id);
+ }
+ const visibleDraftIds = draftsOpen ? sortedDrafts.map((p) => p.id) : [];
+
  // Total columns = 4 (position) + each group (expanded=full, collapsed=1) + 1 (actions)
  const totalCols =
  4 +
@@ -2831,10 +2886,8 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
 
  const thClass ="px-2 py-2 text-left font-mono text-10 font-medium tracking-[0.11em] uppercase text-[var(--color-ink-3)] whitespace-nowrap";
  const renderRow = (p: OptionsPosition, isGrouped = false, isDraftRow = false) => {
- // Drafts aren't real positions — no capital deployed, synthetic openedAt — so
- // they stay out of the selection.
- const isSelectable = !isDraftRow;
- const isSelected = isSelectable && selectedIds.has(p.id);
+ const rowKind: SelectionKind = isDraftRow ?"draft" :"open";
+ const isSelected = selectedKind === rowKind && selectedIds.has(p.id);
  // For draft rows, substitute page-load time so duration/ann-return calculations are meaningful
  const calcP = isDraftRow ? { ...p, openedAt: PAGE_LOAD_TIME } : p;
  const c = calcPosition(calcP);
@@ -2959,11 +3012,19 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  isSelected ?"hover:bg-row-accent-hover" : isExpired ?"hover:bg-row-warn-hover" : isItm ?"hover:bg-row-down-hover" : isGrouped ?"hover:bg-muted-hover" :"hover:bg-muted",
  isGrouped &&"bg-muted",
  isSelected ?"bg-row-accent" : isExpired ?"bg-row-warn" : isItm ?"bg-row-down" :"",
- isSelectable &&"cursor-pointer"
+"cursor-pointer"
  );
 
  const primaryRow = (
- <tr key={p.id} onClick={isSelectable ? () => onToggleSelect(p.id) : undefined} className={cn("group", hasChain ?"" :"border-b border-border", rowTint, isDraftRow &&"italic opacity-60")}>
+ // A draft stays italic when selected but drops the dimming — at 60% opacity
+ // the accent tint is too faint to read as selected.
+ <tr
+ key={p.id}
+ onClick={(e) => onRowClick(e, p.id, rowKind, isDraftRow ? visibleDraftIds : visibleOpenIds)}
+ // Shift-click would otherwise drag a text selection across the range.
+ onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
+ className={cn("group", hasChain ?"" :"border-b border-border", rowTint, isDraftRow &&"italic", isDraftRow && !isSelected &&"opacity-60")}
+ >
  {/* ── Group 1: Position (always visible, frozen) ── */}
  <td style={{ left: 0 }} className={stickyTd(0, isGrouped ?"pl-8 pr-2" :"pl-4 pr-2", true)}>
  <div className="flex items-center gap-1.5">
@@ -3343,12 +3404,15 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  // Totals for the floating selection bar. Rolled legs contribute their own
  // values only — the chain rollups live on the roll sub-row, not here.
  // Excluded-from-rollup positions DO count: selecting one is an explicit ask.
+ // A draft selection answers a different question — what opening these would
+ // tie up and collect — so it totals only capital and the live premium.
  const selection = (() => {
- const rows = positions.filter((p) => selectedIds.has(p.id));
+ const pool = selectedKind ==="draft" ? draftPositions : positions;
+ const rows = pool.filter((p) => selectedIds.has(p.id));
  if (rows.length === 0) return null;
  let capitalAtRisk = 0;
  let totalPremium = 0;
- let costToClose: number | null = null;
+ let curPremTotal: number | null = null;
  let livePnl: number | null = null;
  let unpriced = 0;
  for (const p of rows) {
@@ -3357,10 +3421,21 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  totalPremium += c.totalPremiumNet;
  const curPrem = p.currentPremiumPerShare ?? null;
  if (curPrem == null) { unpriced++; continue; }
- costToClose = (costToClose ?? 0) + curPrem * 100 * p.contracts;
+ curPremTotal = (curPremTotal ?? 0) + curPrem * 100 * p.contracts;
  livePnl = (livePnl ?? 0) + ((p.premiumPerShare - curPrem) * 100 * p.contracts - (p.feesOpen ?? 0));
  }
- return { count: rows.length, capitalAtRisk, totalPremium, costToClose, livePnl, unpriced };
+ const totals: SelectionTotal[] = selectedKind ==="draft"
+ ? [
+ { label:"Capital @ Risk", value: capitalAtRisk },
+ { label:"Total Cur Prem", value: curPremTotal },
+ ]
+ : [
+ { label:"Capital @ Risk", value: capitalAtRisk },
+ { label:"Total Prem", value: totalPremium },
+ { label:"Cost to Close", value: curPremTotal },
+ { label:"Live P&L", value: livePnl, tone:"signed" },
+ ];
+ return { count: rows.length, totals, unpriced };
  })();
 
  return (
@@ -3369,12 +3444,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <SelectionTotalsBar
  count={selection.count}
  topClassName="top-[140px]"
- totals={[
- { label:"Capital @ Risk", value: selection.capitalAtRisk },
- { label:"Total Prem", value: selection.totalPremium },
- { label:"Cost to Close", value: selection.costToClose },
- { label:"Live P&L", value: selection.livePnl, tone:"signed" },
- ]}
+ totals={selection.totals}
  note={selection.unpriced > 0 ?`${selection.unpriced} unpriced` : undefined}
  onClear={clearSelection}
  />
@@ -3496,7 +3566,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <tbody>
  {/* ── Draft section ── */}
  {sortedDrafts.length > 0 && (
- <tr className="group bg-muted border-y border-border cursor-pointer hover:bg-muted select-none" onClick={() => setDraftsOpen((v) => !v)}>
+ <tr className="group bg-muted border-y border-border cursor-pointer hover:bg-muted select-none" onClick={() => { clearSelection(); setDraftsOpen((v) => !v); }}>
  <td colSpan={4} className="py-1.5 pl-4 sticky left-0 z-[2] bg-muted group-hover:bg-muted">
  <div className="flex items-center gap-1.5">
  <SectionLabel as="span" className="text-foreground">Draft Positions</SectionLabel>
@@ -3728,13 +3798,42 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  // Click-to-select rows, summed in the floating totals bar. Cleared whenever the
  // visible row set changes so the total always describes what's on screen.
  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
- const clearSelection = () => setSelectedIds((prev) => (prev.size === 0 ? prev : new Set()));
- const onToggleSelect = (id: string) =>
+ // Anchor for shift-click ranges. Ranges stay inside one week: each week has its
+ // own header and subtotal, so spanning them is rarely the intent — and the
+ // week's own row list is the range space.
+ const anchorRef = useRef<{ week: string; id: string } | null>(null);
+ const clearSelection = () => {
+ // Drop the anchor too, so the next shift-click can't extend from a row the
+ // user has already cleared.
+ anchorRef.current = null;
+ setSelectedIds((prev) => (prev.size === 0 ? prev : new Set()));
+ };
+ const onRowClick = (e: React.MouseEvent, id: string, week: string, order: string[]) => {
+ const anchor = anchorRef.current;
+ anchorRef.current = { week, id };
+ if (e.shiftKey && anchor?.week === week) {
+ const from = order.indexOf(anchor.id);
+ const to = order.indexOf(id);
+ if (from !== -1 && to !== -1) {
+ // Apply the clicked row's toggled state across the whole range, as the
+ // Expenses/Income checkboxes do.
+ const selecting = !selectedIds.has(id);
+ setSelectedIds((prev) => {
+ const next = new Set(prev);
+ for (const rid of order.slice(Math.min(from, to), Math.max(from, to) + 1)) {
+ if (selecting) next.add(rid); else next.delete(rid);
+ }
+ return next;
+ });
+ return;
+ }
+ }
  setSelectedIds((prev) => {
  const next = new Set(prev);
  if (next.has(id)) next.delete(id); else next.add(id);
  return next;
  });
+ };
  const tableContainerRef = useRef<HTMLDivElement>(null);
  const theadRef = useRef<HTMLTableSectionElement>(null);
  const portalScrollRef = useRef<HTMLDivElement>(null);
@@ -3776,6 +3875,9 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  if (lastRowSig !== rowSig) {
  setLastRowSig(rowSig);
  setSelectedIds(new Set());
+ // The anchor isn't cleared here — writing a ref during render isn't allowed.
+ // onRowClick validates it against the current order list instead, so a row
+ // that has since vanished just falls back to a plain toggle.
  }
  useEffect(() => {
  const onKey = (e: KeyboardEvent) => {
@@ -4081,6 +4183,8 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  return weekGroups.flatMap(({ monday, label, positions }) => {
  const isCollapsed = searchActive ? false : collapsedWeeks.has(monday);
  const weekPnl = positions.reduce((sum, p) => sum + (calcPosition(p).pnl ?? 0), 0);
+ // Range space for a shift-click: this week's rows, in the order shown.
+ const weekRowIds = positions.map((p) => p.id);
  return [
  <tr
  key={`week-${label}`}
@@ -4116,7 +4220,13 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  const rowTint = isSelected ?"bg-row-accent hover:bg-row-accent-hover" :"hover:bg-muted";
 
  const positionRow = (
- <tr key={p.id} onClick={() => onToggleSelect(p.id)} className={cn("group cursor-pointer", rowTint, cs ?"" :"border-b border-border")}>
+ <tr
+ key={p.id}
+ onClick={(e) => onRowClick(e, p.id, monday, weekRowIds)}
+ // Shift-click would otherwise drag a text selection across the range.
+ onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
+ className={cn("group cursor-pointer", rowTint, cs ?"" :"border-b border-border")}
+ >
  {/* Position + Contracts — frozen */}
  <td style={{ left: 0 }} className={cn(tdText,"sticky z-[2]", stickyFill,"pl-4 pr-2")}>
  <div className="flex items-center gap-1.5">
