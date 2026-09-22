@@ -584,7 +584,15 @@ export function AssignedSharesCard({
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className={cn(tdClass, "text-right")}>
+                      <td
+                        className={cn(
+                          tdClass,
+                          "text-right",
+                          g.openCallAvgStrike != null && g.openCallAvgStrike < g.assignmentStrike * 0.9 && "text-down",
+                          g.openCallAvgStrike != null && g.openCallAvgStrike >= g.assignmentStrike * 0.9 && g.openCallAvgStrike < g.assignmentStrike && "text-warn",
+                          g.openCallAvgStrike != null && g.openCallAvgStrike > g.assignmentStrike && "text-up"
+                        )}
+                      >
                         {g.openCallAvgStrike != null ? (
                           `$${fmtUSD(g.openCallAvgStrike)}`
                         ) : (
