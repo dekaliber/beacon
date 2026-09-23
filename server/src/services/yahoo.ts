@@ -1,10 +1,28 @@
 // Yahoo Finance price helpers. Shared by the Investments routes (daily price
 // refresh + history backfill) and the options basis-snapshot capture.
 
-// ── Fetch the latest price from Yahoo Finance ───────────────────────────────
-export async function fetchYahooPrice(ticker: string): Promise<{ price: number; priceDate: Date } | null> {
+// ── Fetch the last settled close from Yahoo Finance ─────────────────────────
+// Returns the close of the session ending at `sessionClose` (4 PM ET on the
+// caller's last settled session), never a mid-session quote. A stock's live
+// price and a mutual fund's still-yesterday NAV are priced at different instants,
+// so mixing them makes the 1-day change stop being apples-to-apples.
+//
+// Read from the chart meta rather than the daily bars, because Yahoo leaves the
+// newest settled bar's close null on some days (every ticker at once), which
+// would silently fall back a session:
+//   - A fund's regularMarketPrice is its latest NAV. Its regularMarketTime is
+//     stamped the next morning, so it cannot be used to date the NAV.
+//   - A stock's regularMarketPrice is the settled close only while no newer
+//     session has started. Once one has, the settled close is range=1d's
+//     chartPreviousClose.
+// The returned priceDate is always `sessionClose`, so every holding is dated to
+// the same session regardless of the source's own timestamp.
+export async function fetchYahooSettledClose(
+  ticker: string,
+  sessionClose: Date,
+): Promise<{ price: number; priceDate: Date } | null> {
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=2d`;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
     const res = await fetch(url, {
       headers: {
         "User-Agent": "Mozilla/5.0",
@@ -22,14 +40,22 @@ export async function fetchYahooPrice(ticker: string): Promise<{ price: number; 
       return null;
     }
     const data = await res.json() as any;
-    const result = data?.chart?.result?.[0];
-    if (!result) return null;
-    const meta = result?.meta;
-    const price: number | null = meta?.regularMarketPrice ?? null;
-    const priceTs: number | null = meta?.regularMarketTime ?? null;
-    if (price == null || priceTs == null) return null;
-    const priceDate = new Date(priceTs * 1000);
-    return { price, priceDate };
+    const meta = data?.chart?.result?.[0]?.meta;
+    if (!meta) return null;
+
+    const marketPrice: number | null = meta.regularMarketPrice ?? null;
+    const marketTs: number | null = meta.regularMarketTime ?? null;
+    const prevClose: number | null = meta.chartPreviousClose ?? null;
+
+    const isNav = meta.instrumentType === "MUTUALFUND" || meta.instrumentType === "MONEYMARKET";
+    // ET dates as YYYY-MM-DD compare correctly as strings.
+    const quoteIsNewer =
+      marketTs != null &&
+      etDateAndHour(marketTs * 1000).date > etDateAndHour(sessionClose.getTime()).date;
+
+    const price = isNav || !quoteIsNewer ? marketPrice : prevClose;
+    if (price == null || price <= 0) return null;
+    return { price, priceDate: sessionClose };
   } catch (err) {
     console.warn(`[yahoo] ${ticker}: request failed —`, err);
     return null;
@@ -41,7 +67,7 @@ export async function fetchYahooPrice(ticker: string): Promise<{ price: number; 
 // Uses `close`, which Yahoo already reports split-adjusted, rather than
 // `adjclose`, which additionally discounts historical prices for every later
 // dividend. These rows land in TickerPriceHistory alongside rows written by the
-// price refresh from live quotes, so they have to be on the same footing: a
+// price refresh from daily quotes, so they have to be on the same footing: a
 // dividend-adjusted baseline compared against an unadjusted current price turns
 // the entire adjustment (2-4% on a dividend payer) into phantom gain.
 export async function fetchYahooHistory(

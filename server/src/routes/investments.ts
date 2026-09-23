@@ -4,14 +4,14 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { getMetadata as getTiingoMeta, getDividendScanResult } from "../services/tiingo.js";
 import { searchCoins, getMarketChart, getDailySnapshot } from "../services/coingecko.js";
-import { fetchYahooPrice, fetchYahooHistory, fetchYahooClosingPrice, fetchYahooMeta } from "../services/yahoo.js";
+import { fetchYahooSettledClose, fetchYahooHistory, fetchYahooClosingPrice, fetchYahooMeta } from "../services/yahoo.js";
 import { deactivateIfOrphaned } from "./instruments.js";
 import { isTradingDay, etDateParts } from "../lib/marketHolidays.js";
 import { getUserId } from "../middleware/auth.js";
 
 export const investmentRoutes = Router();
 
-// Yahoo helpers (fetchYahooPrice / fetchYahooHistory / fetchYahooClosingPrice /
+// Yahoo helpers (fetchYahooSettledClose / fetchYahooHistory / fetchYahooClosingPrice /
 // fetchYahooMeta) live in ../services/yahoo.js and are imported above.
 
 // ── Helpers: trading-day calculations (Eastern time) ────────────────────────
@@ -189,6 +189,17 @@ function effectiveLastTradingDay(): Date {
   const dow = d.getUTCDay();
   const skip = dow === 0 ? 2 : dow === 6 ? 1 : 0;
   return new Date(d.getTime() - skip * 86400000);
+}
+
+// 4 PM ET on the last settled session: effectiveLastTradingDay() stepped back
+// over market holidays, since it only knows about weekends. This is the instant
+// every Yahoo-priced holding's current price is dated to.
+function lastSettledSessionClose(): Date {
+  const HALF_DAY_MS = 12 * 60 * 60 * 1000;
+  // UTC noon is morning in ET, so it falls on the same ET calendar day.
+  let noon = effectiveLastTradingDay().getTime() + HALF_DAY_MS;
+  while (!isTradingDay(noon)) noon -= 2 * HALF_DAY_MS;
+  return etWallClock(new Date(noon), "16:00");
 }
 
 // ── Helper: lazy gap-fill for TickerPriceHistory ────────────────────────────
@@ -1526,12 +1537,6 @@ function cutoffToday8pmET(now: Date): Date {
   return etWallClock(now, "20:00");
 }
 
-// Server-side mirror of the client's etCloseBoundary — 4:15 PM ET, i.e. market
-// close (4 PM) plus a short buffer for late-arriving closing prints.
-function marketCloseBoundaryET(now: Date): Date {
-  return etWallClock(now, "16:15");
-}
-
 // Every instrument is on one daily cadence, crypto included. Crypto trades 24/7,
 // but the portfolio is only ever valued against a daily close, so refreshing it
 // on a separate 5-minute clock bought nothing except a second refresh schedule.
@@ -1560,7 +1565,7 @@ async function upsertTickerPrice(
     update: { price, priceDate, priceSource },
   });
 
-  // A live quote's own timestamp is not always trustworthy — money market funds
+  // A quote's own timestamp is not always trustworthy — money market funds
   // have reported dates years out of date. That is a question about this quote
   // rather than about sessions, so it is checked here and not in the shared
   // writer, which legitimately writes old dates when backfilling a range.
@@ -1581,9 +1586,9 @@ async function upsertTickerPrice(
   // so whichever value landed first would stand.
   if (priceSource === "COINGECKO") return;
 
-  // TickerPrice above always takes the live quote — it is what the page displays.
-  // Whether this quote also belongs in history is the writer's call: mid-session
-  // it does not, because a quote taken while the market is open is not a close.
+  // TickerPrice above takes whatever the caller fetched — a settled close, for
+  // every current caller. Whether it also belongs in history is still the
+  // writer's call, which drops anything dated past the last settled session.
   await writeTickerHistory(ticker, [{ date: historyDate, closePrice: price }], {
     isCrypto: false,
     mode: "overwrite",
@@ -1695,11 +1700,11 @@ async function refreshCryptoSnapshots(
 
 // ── POST /api/investments/prices/refresh ──────────────────────────────────
 // Fetch latest prices for all tracked tickers and upsert into both TickerPrice
-// and TickerPriceHistory. TickerPrice is always kept current (live quote during
-// the day, closing price after 8 PM ET). TickerPriceHistory is also written
-// here so that the chart's most-recent data point always matches the header
-// value — both come from the same Yahoo quote fetch rather than two different
-// endpoints that can disagree slightly.
+// and TickerPriceHistory. TickerPrice is always the last settled close — never a
+// mid-session quote — so stocks and funds are priced at the same instant and
+// the 1-day change compares close to close. It only moves at the 8 PM ET
+// cutoff. TickerPriceHistory is also written here so that the chart's
+// most-recent data point always matches the header value.
 
 investmentRoutes.post("/prices/refresh", async (req, res) => {
   try {
@@ -1807,7 +1812,7 @@ investmentRoutes.post("/prices/refresh", async (req, res) => {
       } else {
         // Yahoo path: try first; if it fails and no existing row exists,
         // the dividend scan will handle Tiingo promotion when it runs.
-        const priceData = await fetchYahooPrice(ticker);
+        const priceData = await fetchYahooSettledClose(ticker, lastSettledSessionClose());
         if (priceData) {
           price = priceData.price;
           priceDate = priceData.priceDate;
@@ -1982,7 +1987,7 @@ investmentRoutes.get("/prices/refresh/stream", async (req, res) => {
         }
         priceSource = "TIINGO";
       } else {
-        const priceData = await fetchYahooPrice(ticker);
+        const priceData = await fetchYahooSettledClose(ticker, lastSettledSessionClose());
         if (priceData) {
           price = priceData.price;
           priceDate = priceData.priceDate;
@@ -2333,7 +2338,7 @@ investmentRoutes.get("/prices/status", async (_req, res) => {
 // ── GET /api/investments/prices/:ticker ───────────────────────────────────
 // Returns the current (or historical) price for a single ticker.
 // Optional ?date=YYYY-MM-DD returns the closing price for that date via Tiingo.
-// Without ?date, returns the live/cached price from Yahoo Finance.
+// Without ?date, returns the cached or freshly fetched last settled close.
 
 investmentRoutes.get("/prices/:ticker", async (req, res) => {
   const ticker = req.params.ticker.toUpperCase();
@@ -2353,7 +2358,7 @@ investmentRoutes.get("/prices/:ticker", async (req, res) => {
     return res.json({ ticker, price, priceDate: dateParam });
   }
 
-  // ── Current price (cached or live) ───────────────────────────────────────
+  // ── Current price (cached or fetched) ────────────────────────────────────
   try {
     // Resolve whether this is a crypto ticker.
     // Priority: explicit coinGeckoId query param → DB lookup on existing holding.
@@ -2370,7 +2375,6 @@ investmentRoutes.get("/prices/:ticker", async (req, res) => {
       null;
 
     const isCrypto = !!resolvedCoinGeckoId;
-    const cacheMaxAgeMs = 60 * 60 * 1000;
 
     // Return cached price if it's still fresh
     const existing = await prisma.tickerPrice.findUnique({ where: { ticker } });
@@ -2384,13 +2388,9 @@ investmentRoutes.get("/prices/:ticker", async (req, res) => {
       });
     }
     if (existing) {
-      const ageMs = Date.now() - existing.updatedAt.getTime();
-      // After 4:15 PM ET markets are closed — any cached price is good for the rest of the day.
-      const now = new Date();
-      const marketClosed = !isCrypto && now.getTime() >= marketCloseBoundaryET(now).getTime();
-      // Crypto's price is the daily snapshot, which only moves at the 8 PM ET
-      // cutoff — same staleness rule as the refresh routes.
-      const fresh = isCrypto ? !isTickerStale(existing.updatedAt, now) : marketClosed || ageMs < cacheMaxAgeMs;
+      // Every price here — settled close or crypto's daily snapshot — only moves
+      // at the 8 PM ET cutoff, so this is the refresh routes' staleness rule.
+      const fresh = !isTickerStale(existing.updatedAt, new Date());
       if (fresh) {
         return res.json({
           ticker,
@@ -2415,8 +2415,8 @@ investmentRoutes.get("/prices/:ticker", async (req, res) => {
       priceDate = coinPrice.updatedAt;
       priceSource = "COINGECKO";
     } else {
-      // Fetch live from Yahoo Finance
-      const priceData = await fetchYahooPrice(ticker);
+      // The last settled close, same as the refresh routes.
+      const priceData = await fetchYahooSettledClose(ticker, lastSettledSessionClose());
       if (!priceData) {
         return res.status(404).json({ error: { message: "Price not available for " + ticker } });
       }
