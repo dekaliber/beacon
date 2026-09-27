@@ -6,6 +6,7 @@ import { getUserId } from "../middleware/auth.js";
 import { nextBusinessDay } from "../lib/businessDays.js";
 import { fetchYahooClosingPrice } from "../services/yahoo.js";
 import { fetchUpcomingEarnings } from "../services/earnings.js";
+import { TRADIER_BASE, tradierHeaders, fetchUnderlyingPrices, fetchFilteredChain } from "../services/tradier.js";
 
 export const optionsRoutes = Router();
 
@@ -300,13 +301,7 @@ async function applyCloseSideEffects(
 
 // ── Tradier API helpers ────────────────────────────────────────────────────────
 
-const TRADIER_BASE = "https://api.tradier.com/v1";
-
-function tradierHeaders(): Record<string, string> {
-  const token = process.env.TRADIER_API_TOKEN;
-  if (!token) throw new Error("TRADIER_API_TOKEN is not set in the server environment");
-  return { Authorization: `Bearer ${token}`, Accept: "application/json" };
-}
+// TRADIER_BASE / tradierHeaders live in services/tradier.ts.
 
 // ── Yahoo Finance helper (benchmark indices) ────────────────────────────────────
 // Tradier/Tiingo don't serve raw index symbols (^SP500TR, ^IXIC), but Yahoo does.
@@ -1664,8 +1659,6 @@ optionsRoutes.get("/screener", async (req, res) => {
   const minVolumeN = minVolume != null ? parseInt(minVolume, 10) : null;
   const strikeMinN = strikeMin != null ? parseFloat(strikeMin) : null;
   const strikeMaxN = strikeMax != null ? parseFloat(strikeMax) : null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
 
   const results: Array<{
     ticker: string;
@@ -1685,90 +1678,38 @@ optionsRoutes.get("/screener", async (req, res) => {
   }> = [];
 
   try {
-    const headers = tradierHeaders();
-
-    // Batch-fetch current underlying prices for all tickers upfront
-    const quoteUrl = `${TRADIER_BASE}/markets/quotes?symbols=${symbols.map(encodeURIComponent).join(",")}&greeks=false`;
-    const quoteRes = await fetch(quoteUrl, { headers });
-    const underlyingPriceMap = new Map<string, number | null>();
-    if (quoteRes.ok) {
-      const quoteData = await quoteRes.json() as any;
-      const rawQuotes = quoteData?.quotes?.quote ?? [];
-      const quotesArr = Array.isArray(rawQuotes) ? rawQuotes : [rawQuotes];
-      for (const q of quotesArr) {
-        underlyingPriceMap.set((q.symbol as string).toUpperCase(), q.last ?? q.close ?? null);
-      }
-    }
+    const underlyingPriceMap = await fetchUnderlyingPrices(symbols);
 
     for (const symbol of symbols) {
-      // 1. Fetch available expirations
-      const expUrl = `${TRADIER_BASE}/markets/options/expirations?symbol=${encodeURIComponent(symbol)}&includeAllRoots=false`;
-      const expRes = await fetch(expUrl, { headers });
-      if (!expRes.ok) continue;
-      const expData = await expRes.json() as any;
-      const dates: string[] = expData?.expirations?.date ?? [];
-      if (dates.length === 0) continue;
-
-      // 2. Filter by DTE range
-      const eligibleDates = dates.filter((d) => {
-        const exp = new Date(d + "T00:00:00");
-        const dte = Math.round((exp.getTime() - today.getTime()) / 86400000);
-        if (minDTEn != null && dte < minDTEn) return false;
-        if (maxDTEn != null && dte > maxDTEn) return false;
-        return true;
+      const rows = await fetchFilteredChain({
+        symbol,
+        minDte: minDTEn,
+        maxDte: maxDTEn,
+        side: optionType === "CALL" || optionType === "PUT" ? optionType : "BOTH",
+        minAbsDelta: minDeltaN,
+        maxAbsDelta: maxDeltaN,
+        strikeMin: strikeMinN,
+        strikeMax: strikeMaxN,
+        minOI: minOIn,
+        minVolume: minVolumeN,
       });
-
-      // 3. For each eligible expiration, fetch chains and filter
-      for (const expDate of eligibleDates) {
-        const exp = new Date(expDate + "T00:00:00");
-        const dte = Math.round((exp.getTime() - today.getTime()) / 86400000);
-
-        const chainUrl = `${TRADIER_BASE}/markets/options/chains?symbol=${encodeURIComponent(symbol)}&expiration=${expDate}&greeks=true`;
-        const chainRes = await fetch(chainUrl, { headers });
-        if (!chainRes.ok) continue;
-        const chainData = await chainRes.json() as any;
-        const chain: any[] = chainData?.options?.option ?? [];
-
-        for (const opt of chain) {
-          const side: "CALL" | "PUT" = (opt.option_type ?? "").toLowerCase() === "call" ? "CALL" : "PUT";
-          if (optionType !== "BOTH" && side !== optionType) continue;
-
-          const strike: number = opt.strike;
-          if (strikeMinN != null && strike < strikeMinN) continue;
-          if (strikeMaxN != null && strike > strikeMaxN) continue;
-
-          const delta: number | null = opt.greeks?.delta ?? null;
-          const absDelta = delta != null ? Math.abs(delta) : null;
-          if (minDeltaN != null && absDelta != null && absDelta < minDeltaN) continue;
-          if (maxDeltaN != null && absDelta != null && absDelta > maxDeltaN) continue;
-
-          const oi: number | null = opt.open_interest ?? null;
-          if (minOIn != null && oi != null && oi < minOIn) continue;
-
-          const volume: number | null = opt.volume ?? null;
-          if (minVolumeN != null && volume != null && volume < minVolumeN) continue;
-
-          const bid: number | null = opt.bid ?? null;
-          const ask: number | null = opt.ask ?? null;
-          const last: number | null = opt.last ?? null;
-
-          results.push({
-            ticker: symbol,
-            expiration: expDate,
-            dte,
-            strike,
-            optionType: side,
-            underlyingPrice: underlyingPriceMap.get(symbol) ?? null,
-            delta,
-            iv: opt.greeks?.mid_iv ?? opt.greeks?.smv_vol ?? null,
-            bid,
-            ask,
-            last,
-            openInterest: oi,
-            volume: opt.volume ?? null,
-            inTheMoney: opt.in_the_money ?? null,
-          });
-        }
+      for (const r of rows) {
+        results.push({
+          ticker: symbol,
+          expiration: r.expiration,
+          dte: r.dte,
+          strike: r.strike,
+          optionType: r.optionType,
+          underlyingPrice: underlyingPriceMap.get(symbol) ?? null,
+          delta: r.delta,
+          iv: r.midIv ?? r.smvVol,
+          bid: r.bid,
+          ask: r.ask,
+          last: r.last,
+          openInterest: r.openInterest,
+          volume: r.volume,
+          inTheMoney: r.inTheMoney,
+        });
       }
     }
 

@@ -27,6 +27,7 @@ import { pendingBuyRoutes } from "./routes/pendingBuys.js";
 import { pendingSaleRoutes } from "./routes/pendingSales.js";
 import { assignedSharesRoutes } from "./routes/assignedShares.js";
 import { jobRoutes } from "./routes/jobs.js";
+import { publicOptionsRoutes } from "./routes/publicOptions.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -34,6 +35,9 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(clerkMiddleware());
+
+// Key-in-query read-only feeds for external callers; mounted before the Clerk gate.
+app.use("/api/public", publicOptionsRoutes);
 
 // All /api routes require authentication (except /api/health and /api/jobs)
 app.use("/api", (req, res, next) => {
