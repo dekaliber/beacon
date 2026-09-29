@@ -27,11 +27,13 @@ publicOptionsRoutes.get("/options-chain", async (req, res) => {
   res.set("Cache-Control", "no-store");
 
   const q = req.query as Record<string, string | undefined>;
-  const expectedKey = process.env.OPTIONS_FEED_KEY;
-  if (!expectedKey) return res.status(503).json({ error: "Feed not configured" });
-  if (typeof q.key !== "string" || !keyMatches(q.key, expectedKey)) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
+  // Trim both sides: a pasted env value or a copied URL can carry stray whitespace.
+  const expectedKey = process.env.OPTIONS_FEED_KEY?.trim();
+  if (!expectedKey) return res.status(503).json({ error: "feed_not_configured" });
+  // Bodies differ from the Clerk gate's {"error":"Unauthorized"} so the failure mode is visible.
+  const providedKey = typeof q.key === "string" ? q.key.trim() : "";
+  if (!providedKey) return res.status(401).json({ error: "missing_key" });
+  if (!keyMatches(providedKey, expectedKey)) return res.status(401).json({ error: "invalid_key" });
 
   const symbol = (q.symbol ?? "").trim().toUpperCase();
   if (!/^[A-Z][A-Z0-9.]{0,9}$/.test(symbol)) {
@@ -122,4 +124,9 @@ publicOptionsRoutes.get("/options-chain", async (req, res) => {
     console.error("public options-chain failed:", e);
     res.status(502).json({ error: "Upstream quote fetch failed" });
   }
+});
+
+// Unknown /api/public paths 404 here instead of falling through to the Clerk gate's 401.
+publicOptionsRoutes.use((_req, res) => {
+  res.status(404).json({ error: "not_found" });
 });
