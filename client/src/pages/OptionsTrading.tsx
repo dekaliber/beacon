@@ -5384,6 +5384,57 @@ function MetricCells({ m }: { m: PerformanceMetrics }) {
  );
 }
 
+// Sort state the performance-table headers read. Bundled into one object so the
+// headers can live at module scope — a component defined inside a render is a
+// new component type on every pass, which remounts its subtree — at the cost of
+// one prop per header rather than three.
+interface PerfSortCtx {
+ sort: PerfSortState;
+ expanded: boolean;
+ onSort: (field: PerfSortField) => void;
+}
+
+// Only the sorted column shows an arrow, but every sortable column reserves
+// its box — `invisible` keeps the layout and hides the glyph — so sorting
+// never changes a header's width and reflows the columns around it. The
+// headers give the box its room by trimming the padding on the side the arrow
+// sits on, rather than by growing.
+function SortIcon({ field, side, sort }: { field: PerfSortField; side:"left" |"right"; sort: PerfSortState }) {
+ const active = sort?.field === field ? sort : null;
+ const cls = cn("inline h-3 w-3", side ==="left" ?"mr-0.5" :"ml-0.5", !active &&"invisible");
+ return active?.order ==="asc" ? <ArrowUp className={cls} /> : <ArrowDown className={cls} />;
+}
+
+// Headers only become interactive once the ticker rows are showing — sorting
+// a collapsed table would reorder nothing the user can see.
+function SortableHeader({ field, className, children, ctx }: {
+ field: PerfSortField;
+ className?: string;
+ children: React.ReactNode;
+ ctx: PerfSortCtx;
+}) {
+ // The arrow goes on the label's outer edge — left of a right-aligned column,
+ // right of a left-aligned one — so the text stays pinned to the edge it's
+ // aligned against instead of shifting when the icon appears. Read off the
+ // alignment class itself so the two can't drift apart.
+ const iconLeft = className?.includes("text-right") ?? false;
+ // Rendered identically whether or not the table is expanded, so opening it
+ // doesn't shift the header row either — only the interactivity is gated.
+ const content = (
+ <>
+ {iconLeft && <SortIcon field={field} side="left" sort={ctx.sort} />}
+ {children}
+ {!iconLeft && <SortIcon field={field} side="right" sort={ctx.sort} />}
+ </>
+ );
+ if (!ctx.expanded) return <ColumnHeader className={className}>{content}</ColumnHeader>;
+ return (
+ <ColumnHeader className={cn(className,"cursor-pointer select-none")} onClick={() => ctx.onSort(field)}>
+ {content}
+ </ColumnHeader>
+ );
+}
+
 function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  const [expanded, setExpanded] = useState(false);
  const [sort, setSort] = useState<PerfSortState>(null);
@@ -5423,45 +5474,7 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  return av === bv ? a.symbol.localeCompare(b.symbol) : (av - bv) * dir;
  });
 
- // Only the sorted column shows an arrow, but every sortable column reserves
- // its box — `invisible` keeps the layout and hides the glyph — so sorting
- // never changes a header's width and reflows the columns around it. The
- // headers give the box its room by trimming the padding on the side the arrow
- // sits on, rather than by growing.
- const SortIcon = ({ field, side }: { field: PerfSortField; side:"left" |"right" }) => {
- const active = sort?.field === field ? sort : null;
- const cls = cn("inline h-3 w-3", side ==="left" ?"mr-0.5" :"ml-0.5", !active &&"invisible");
- return active?.order ==="asc" ? <ArrowUp className={cls} /> : <ArrowDown className={cls} />;
- };
-
- // Headers only become interactive once the ticker rows are showing — sorting
- // a collapsed table would reorder nothing the user can see.
- const SortableHeader = ({ field, className, children }: {
- field: PerfSortField;
- className?: string;
- children: React.ReactNode;
- }) => {
- // The arrow goes on the label's outer edge — left of a right-aligned column,
- // right of a left-aligned one — so the text stays pinned to the edge it's
- // aligned against instead of shifting when the icon appears. Read off the
- // alignment class itself so the two can't drift apart.
- const iconLeft = className?.includes("text-right") ?? false;
- // Rendered identically whether or not the table is expanded, so opening it
- // doesn't shift the header row either — only the interactivity is gated.
- const content = (
- <>
- {iconLeft && <SortIcon field={field} side="left" />}
- {children}
- {!iconLeft && <SortIcon field={field} side="right" />}
- </>
- );
- if (!expanded) return <ColumnHeader className={className}>{content}</ColumnHeader>;
- return (
- <ColumnHeader className={cn(className,"cursor-pointer select-none")} onClick={() => toggleSort(field)}>
- {content}
- </ColumnHeader>
- );
- };
+ const sortCtx: PerfSortCtx = { sort, expanded, onSort: toggleSort };
 
  return (
  <Card className="p-6">
@@ -5475,16 +5488,16 @@ function PerformanceTable({ positions }: { positions: OptionsPosition[] }) {
  <table className="w-full text-xs">
  <thead>
  <tr className="border-b border-border">
- <SortableHeader field="ticker" className="pl-4 pr-1 py-2 text-left whitespace-nowrap">Ticker</SortableHeader>
- <SortableHeader field="tradeCount" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Trades</SortableHeader>
- <SortableHeader field="contractCount" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Contracts</SortableHeader>
- <SortableHeader field="winRate" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Win Rate</SortableHeader>
- <SortableHeader field="assignmentRate" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Assign. Rate</SortableHeader>
- <SortableHeader field="avgActualDays" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Avg Days (actual / exp.)</SortableHeader>
- <SortableHeader field="ccPremium" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">CC Premium</SortableHeader>
- <SortableHeader field="cspPremium" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">CSP Premium</SortableHeader>
- <SortableHeader field="totalPremium" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Total Premium</SortableHeader>
- <SortableHeader field="weightedArr" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Wtd. Ann. Return</SortableHeader>
+ <SortableHeader ctx={sortCtx} field="ticker" className="pl-4 pr-1 py-2 text-left whitespace-nowrap">Ticker</SortableHeader>
+ <SortableHeader ctx={sortCtx} field="tradeCount" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Trades</SortableHeader>
+ <SortableHeader ctx={sortCtx} field="contractCount" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Contracts</SortableHeader>
+ <SortableHeader ctx={sortCtx} field="winRate" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Win Rate</SortableHeader>
+ <SortableHeader ctx={sortCtx} field="assignmentRate" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Assign. Rate</SortableHeader>
+ <SortableHeader ctx={sortCtx} field="avgActualDays" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Avg Days (actual / exp.)</SortableHeader>
+ <SortableHeader ctx={sortCtx} field="ccPremium" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">CC Premium</SortableHeader>
+ <SortableHeader ctx={sortCtx} field="cspPremium" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">CSP Premium</SortableHeader>
+ <SortableHeader ctx={sortCtx} field="totalPremium" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Total Premium</SortableHeader>
+ <SortableHeader ctx={sortCtx} field="weightedArr" className="pl-1 pr-4 py-2 text-right whitespace-nowrap">Wtd. Ann. Return</SortableHeader>
  </tr>
  </thead>
  <tbody>
