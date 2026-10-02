@@ -5958,25 +5958,55 @@ function SummaryCards({
  // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [utilizationDataTrading != null]);
 
+ // Weeks scrolled back from the most recent window; clamped against the current
+ // max below so a resize that widens the window never strands the view past the start.
+ const [utilWeekOffset, setUtilWeekOffset] = useState(0);
+
  // Pre-compute display bars (past trading days + future bars to fill available width)
- // with x positions that include a 2px gap at each week boundary.
+ // with x positions that include a 2px gap at each week boundary. History that
+ // overflows the container is windowed by whole weeks and paged with ChartPager.
  const displayBars = useMemo(() => {
  if (!utilizationDataTrading || chartWidth === 0) return null;
  const td = utilizationDataTrading;
  const BAR_W = 5, GAP = 2, DAY_MS = 86_400_000;
  type Bar = { dayMs: number; seriesIdx: number | null; utilization: number; basis: number; isFuture: boolean; x: number };
+
+ // Group series indices into weeks — a new week starts at any bar ≥3 calendar days
+ // after the previous one, which marks week boundaries even when Monday is a holiday.
+ const weeks: number[][] = [];
+ for (let i = 0; i < td.series.length; i++) {
+ if (i === 0 || td.series[i].dayMs - td.series[i - 1].dayMs >= 3 * DAY_MS) weeks.push([]);
+ weeks[weeks.length - 1].push(i);
+ }
+ // Widest run of whole weeks that fits, walking from `from` in direction `dir`.
+ const weeksThatFit = (from: number, dir: 1 | -1) => {
+ let w = 0, n = 0;
+ for (let k = from; k >= 0 && k < weeks.length; k += dir) {
+ const add = weeks[k].length * BAR_W + (n > 0 ? GAP : 0);
+ if (n > 0 && w + add > chartWidth) break;
+ w += add;
+ n++;
+ }
+ return n;
+ };
+ const maxOffset = Math.max(0, weeks.length - weeksThatFit(0, 1));
+ const offset = Math.min(utilWeekOffset, maxOffset);
+ const lastWeek = weeks.length - 1 - offset;
+ const firstWeek = Math.max(0, lastWeek - weeksThatFit(lastWeek, -1) + 1);
+
  const bars: Bar[] = [];
  let x = 0;
-
- for (let i = 0; i < td.series.length; i++) {
+ for (let k = firstWeek; k <= lastWeek; k++) {
+ if (k > firstWeek) x += GAP;
+ for (const i of weeks[k]) {
  const s = td.series[i];
- // Gap before any bar that is ≥3 calendar days after the previous bar — this
- // correctly marks week boundaries even when Monday is a market holiday.
- if (i > 0 && s.dayMs - td.series[i - 1].dayMs >= 3 * DAY_MS) x += GAP;
  bars.push({ dayMs: s.dayMs, seriesIdx: i, utilization: s.utilization, basis: s.basis, isFuture: false, x });
  x += BAR_W;
  }
+ }
 
+ // Future bars only pad the most recent window — paged-back windows are all history.
+ if (offset === 0) {
  let prevDayMs = td.series.length > 0 ? td.series.at(-1)!.dayMs : null;
  let dayMs = td.series.length > 0 ? td.series.at(-1)!.dayMs + DAY_MS : Date.now();
  while (dayMs < Date.now() + 400 * DAY_MS) {
@@ -5990,9 +6020,10 @@ function SummaryCards({
  }
  dayMs += DAY_MS;
  }
+ }
 
- return { bars, vbWidth: x };
- }, [utilizationDataTrading, chartWidth]);
+ return { bars, vbWidth: x, offset, maxOffset };
+ }, [utilizationDataTrading, chartWidth, utilWeekOffset]);
 
  const [hoveredBarIdxTrading, setHoveredBarIdxTrading] = useState<number | null>(null);
  const [showUtilModal, setShowUtilModal] = useState(false);
@@ -6228,6 +6259,14 @@ function SummaryCards({
  >
  <Info className="h-3 w-3" />
  </button>
+ {displayBars && (
+ <ChartPager
+ offset={displayBars.offset}
+ maxOffset={displayBars.maxOffset}
+ onChange={(next) => { setHoveredBarIdxTrading(null); setUtilWeekOffset(next); }}
+ unit="weeks"
+ />
+ )}
  </span>
  <p className="tp-stat mt-1">
  {utilizationDataTrading.overallRate != null ? fmtPct(utilizationDataTrading.overallRate) :"—"}
@@ -6239,7 +6278,7 @@ function SummaryCards({
  })()}
  </div>
  {/* ref always mounts so ResizeObserver can measure before displayBars computes */}
- <div className="flex-1 relative" ref={chartContainerRef}>
+ <div className="flex-1 min-w-0 relative" ref={chartContainerRef}>
  {displayBars && (
  <svg
  viewBox={`0 0 ${displayBars.vbWidth} 66`}
@@ -6284,7 +6323,8 @@ function SummaryCards({
  )}
  {displayBars && hoveredBarIdxTrading !== null && utilizationDataTrading.series[hoveredBarIdxTrading] && (() => {
  const bar = utilizationDataTrading.series[hoveredBarIdxTrading];
- const hovBar = displayBars.bars.find(b => b.seriesIdx === hoveredBarIdxTrading)!;
+ const hovBar = displayBars.bars.find(b => b.seriesIdx === hoveredBarIdxTrading);
+ if (!hovBar) return null;
  const leftPx =`${hovBar.x + 2}px`;
  const label = new Date(bar.dayMs).toLocaleDateString("en-US", { month:"short", day:"numeric" });
  return (
