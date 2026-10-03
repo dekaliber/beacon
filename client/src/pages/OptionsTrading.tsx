@@ -6246,12 +6246,12 @@ function SummaryCards({
  </div>
  </Card>
 
- {/* Capital Utilization Rate — 3-card-wide module beside Capital at Risk */}
+ {/* Capital Utilization — 3-card-wide module beside Capital at Risk */}
  {utilizationDataTrading && utilizationDataTrading.series.length > 0 && (
  <Card className="p-6 col-span-3 flex items-start">
  <div className="shrink-0 w-1/3">
  <span className="flex items-center gap-1">
- <SectionLabel as="span">Capital Utilization Rate</SectionLabel>
+ <SectionLabel as="span">Capital Utilization</SectionLabel>
  <button
  onClick={() => setShowUtilModal(true)}
  className="inline-flex items-center text-muted-foreground hover:text-foreground"
@@ -6503,7 +6503,7 @@ function SummaryCards({
  <X className="h-4 w-4" />
  </button>
 
- <h3 className="mb-1 tp-panel-title">How Capital Utilization Rate is calculated</h3>
+ <h3 className="mb-1 tp-panel-title">How Capital Utilization is calculated</h3>
  <p className="mb-5 tp-caption">
  Measures how actively your available options capital was deployed in positions, counting only NYSE trading hours (9:30 AM – 4:00 PM ET, excluding weekends and market holidays).
  </p>
