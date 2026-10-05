@@ -1,12 +1,25 @@
 import type { InvestmentHolding } from "@/types";
 import { etDateParts, isMarketHolidayYMD } from "./marketHolidays";
 
-// The most recent 8 PM ET cutoff that has already passed. Used to decide whether
-// a completed refresh is still current: anything captured before the last cutoff
-// is a batch behind, anything after it is up to date.
+// The most recent 8 PM ET cutoff that has passed *on a trading day* — the last
+// moment a new close became available. Anything captured after it is current.
+// Mirrors lastTradingCutoff on the server.
+//
+// It walks back over weekends and holidays rather than stepping back a flat 24
+// hours. In the small hours of Monday ET (Sunday evening Pacific) the previous
+// calendar cutoff is Sunday 8 PM, which no price captured on Friday can beat, so
+// a flat step called the whole portfolio stale and kicked off a full refresh on
+// what is, for the user, still the weekend.
 export function lastStockCutoff(now: Date): Date {
-  const cutoff = cutoffToday8pmET(now);
-  return now >= cutoff ? cutoff : new Date(cutoff.getTime() - DAY_MS);
+  let cursor = now;
+  for (let i = 0; i < 14; i++) {
+    const cutoff = cutoffToday8pmET(cursor);
+    if (cutoff <= now && isTradingDay(cutoff.getTime())) return cutoff;
+    // 26 hours before an 8 PM cutoff is the previous ET day's evening whichever
+    // way a DST change falls; a flat 24 from `now` can skip a day near midnight.
+    cursor = new Date(cutoff.getTime() - 26 * 60 * 60 * 1000);
+  }
+  return cutoffToday8pmET(cursor);
 }
 
 // The next 8 PM ET cutoff that a refresh will actually run at — skipping weekends
@@ -157,15 +170,12 @@ export function isPriceRefreshNeeded(holdings: InvestmentHolding[]): boolean {
   // it to once per session.
   if (!isTradingDay(now.getTime())) return true;
 
-  const cutoff = cutoffToday8pmET(now);
-  const prevCutoff = new Date(cutoff.getTime() - DAY_MS);
+  // Stale means captured before the last close became available.
+  const lastCutoff = lastStockCutoff(now);
 
   for (const holding of holdings) {
     if (!holding.priceUpdatedAt) return true;
-
-    const lastUpdated = new Date(holding.priceUpdatedAt);
-    if (lastUpdated < prevCutoff) return true;
-    if (now >= cutoff && lastUpdated < cutoff) return true;
+    if (new Date(holding.priceUpdatedAt) < lastCutoff) return true;
   }
 
   return false;

@@ -1542,11 +1542,27 @@ function cutoffToday8pmET(now: Date): Date {
 // on a separate 5-minute clock bought nothing except a second refresh schedule.
 function isTickerStale(updatedAt: Date | null, now: Date): boolean {
   if (!updatedAt) return true;
-  const cutoff = cutoffToday8pmET(now);
-  const prevCutoff = new Date(cutoff.getTime() - 24 * 60 * 60 * 1000);
-  if (updatedAt < prevCutoff) return true;
-  if (now >= cutoff && updatedAt < cutoff) return true;
-  return false;
+  return updatedAt < lastTradingCutoff(now);
+}
+
+// The most recent 8 PM ET cutoff that has passed *on a trading day* — the last
+// moment a new close became available. A price captured after it is current.
+//
+// This has to walk back over weekends and holidays rather than step back a flat
+// 24 hours. In the small hours of Monday ET (Sunday evening Pacific) the previous
+// calendar cutoff is Sunday 8 PM, which no price captured on Friday can beat, so
+// a flat step declared the whole portfolio stale and refetched Friday's closes on
+// what is, for the user, still the weekend.
+function lastTradingCutoff(now: Date): Date {
+  let cursor = now;
+  for (let i = 0; i < 14; i++) {
+    const cutoff = cutoffToday8pmET(cursor);
+    if (cutoff <= now && isTradingDay(cutoff.getTime())) return cutoff;
+    // 26 hours before an 8 PM cutoff is the previous ET day's evening whichever
+    // way a DST change falls; a flat 24 from `now` can skip a day near midnight.
+    cursor = new Date(cutoff.getTime() - 26 * 60 * 60 * 1000);
+  }
+  return cutoffToday8pmET(cursor);
 }
 
 // Upserts a price into both TickerPrice (current) and TickerPriceHistory (daily).
