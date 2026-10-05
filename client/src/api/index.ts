@@ -1160,3 +1160,82 @@ export const getRealizedDispositions = () =>
   api.get<{ rows: RealizedDisposition[]; netRealizedPnl: number }>(
     "/assigned-shares/realized"
   );
+
+// ── Options Trading: read-only share link ─────────────────────────────────────
+
+export interface OptionsShareLink {
+  token: string;
+  createdAt: string;
+}
+
+export const getOptionsShareLink = () =>
+  api.get<OptionsShareLink | null>("/options/share");
+
+/** Creates the link, or replaces its token (killing the old URL) when one exists. */
+export const createOptionsShareLink = () =>
+  api.post<OptionsShareLink>("/options/share", {});
+
+export const revokeOptionsShareLink = () =>
+  api.delete("/options/share");
+
+/** Stores the just-fetched underlying prices so the shared page can show them. */
+export const saveOptionsPriceSnapshot = (prices: Record<string, number>) =>
+  api.put<void>("/options/price-snapshot", { prices });
+
+export const optionsShareUrl = (token: string) =>
+  `${window.location.origin}/share/options/${token}`;
+
+// Everything the shared page renders from, shaped like the authenticated
+// endpoints' responses so the page can consume either.
+export interface SharedOptionsData {
+  settings: OptionsSettings | null;
+  positions: OptionsPosition[];
+  capitalChanges: OptionsCapitalChange[];
+  activeHoldings: ActiveAssignedHolding[];
+  realized: { rows: RealizedDisposition[]; netRealizedPnl: number };
+  prices: { refreshedAt: string; quotes: Record<string, { price: number; ts: number }> } | null;
+}
+
+// The public feed omits owner-only fields (ids of accounts, notes, audit
+// detail…). Fill them with inert values here so the rest of the client keeps
+// one set of types.
+export const getSharedOptions = async (token: string): Promise<SharedOptionsData> => {
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const raw = await api.get<any>(`/public/options-share/${token}`);
+  return {
+    settings: raw.settings
+      ? { id: "", defaultCashAccountId: null, createdAt: "", updatedAt: "", ...raw.settings }
+      : null,
+    positions: raw.positions.map((p: any) => ({
+      userId: "",
+      notes: null,
+      investmentAccountId: null,
+      bankingAccountId: null,
+      ...p,
+      ticker: { userId: "", isActive: true, createdAt: "", updatedAt: "", ...p.ticker },
+      group: p.group ? { userId: "", isActive: true, createdAt: "", updatedAt: "", ...p.group } : null,
+    })),
+    capitalChanges: raw.capitalChanges.map((c: any) => ({
+      userId: "",
+      note: null,
+      snapshotDetail: null,
+      createdAt: "",
+      updatedAt: "",
+      ...c,
+    })),
+    activeHoldings: raw.activeHoldings,
+    realized: raw.realized,
+    prices: raw.prices,
+  };
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+};
+
+export const getSharedOptionsEarnings = (token: string, today: string) =>
+  api.get<Record<string, EarningsInfo | null>>(
+    `/public/options-share/${token}/earnings?today=${today}`
+  );
+
+export const getSharedOptionsBenchmark = (token: string, start: string) =>
+  api.get<{ benchmarks: OptionsBenchmark[] }>(
+    `/public/options-share/${token}/benchmark?start=${encodeURIComponent(start)}`
+  );

@@ -4,9 +4,11 @@ import { Card } from "@/components/Card";
 import { Tooltip, InfoTooltip } from "@/components/Tooltip";
 import { cn, localToday } from "@/lib/utils";
 import { earningsWithinDays, earningsWarningText, EARNINGS_IMMINENT_DAYS } from "@/lib/earnings";
+import { useSharedOptions } from "@/context/SharedOptionsContext";
 import {
   getUnderlyingQuotes,
   getOptionsEarnings,
+  getSharedOptionsEarnings,
   type ActiveAssignedHolding,
   type RealizedDisposition,
   type EarningsInfo,
@@ -372,8 +374,10 @@ export function AssignedSharesCard({
     [active]
   );
   // Only fetch independently when the parent hasn't supplied prices.
+  // Set only on the public read-only share page — see SharedOptionsContext.
+  const shared = useSharedOptions();
   useEffect(() => {
-    if (externalQuotes !== undefined || activeTickers.length === 0) return;
+    if (shared || externalQuotes !== undefined || activeTickers.length === 0) return;
     let cancelled = false;
     getUnderlyingQuotes(activeTickers)
       .then((q) => { if (!cancelled) setOwnQuotes(q); })
@@ -390,7 +394,7 @@ export function AssignedSharesCard({
   useEffect(() => {
     if (activeTickers.length === 0) return;
     let cancelled = false;
-    getOptionsEarnings(activeTickers, localToday())
+    (shared ? getSharedOptionsEarnings(shared.token, localToday()) : getOptionsEarnings(activeTickers, localToday()))
       .then((e) => { if (!cancelled) setEarningsMap(e); })
       .catch(() => {});
     return () => { cancelled = true; };

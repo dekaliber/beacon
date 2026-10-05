@@ -78,8 +78,11 @@ async function ccPremiumByBatchForUser(userId: string) {
 // client-side via the existing quotes endpoint; P&L is premium-excluded:
 // (currentPrice - assignmentStrike) * shares.
 assignedSharesRoutes.get("/active", async (req, res) => {
-  const userId = getUserId(req);
+  res.json(await getActiveAssignedRows(getUserId(req)));
+});
 
+// Shared with the public read-only share feed (services/optionsShare.ts).
+export async function getActiveAssignedRows(userId: string) {
   const [lots, openCalls, ccPremiumByBatch] = await Promise.all([
     prisma.investmentLot.findMany({
       where: {
@@ -251,15 +254,18 @@ assignedSharesRoutes.get("/active", async (req, res) => {
       };
     });
 
-  res.json(rows);
-});
+  return rows;
+}
 
 // ── GET /api/assigned-shares/realized ──────────────────────────────────────
 // Sales of CSP-originated shares (covered-call assignment OR direct sale).
 // Premium-excluded realized P&L = (salePricePerShare - assignmentStrike) * shares.
 assignedSharesRoutes.get("/realized", async (req, res) => {
-  const userId = getUserId(req);
+  res.json(await getRealizedAssigned(getUserId(req)));
+});
 
+// Shared with the public read-only share feed (services/optionsShare.ts).
+export async function getRealizedAssigned(userId: string) {
   const [dispositions, ccPremiumByBatch] = await Promise.all([
     prisma.assignedShareDisposition.findMany({
       where: { userId },
@@ -366,8 +372,8 @@ assignedSharesRoutes.get("/realized", async (req, res) => {
     };
   });
 
-  res.json({
+  return {
     rows,
     netRealizedPnl: Math.round(netRealizedPnl * 100) / 100,
-  });
-});
+  };
+}

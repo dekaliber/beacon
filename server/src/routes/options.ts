@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { randomBytes } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
@@ -1478,19 +1479,23 @@ const BENCHMARKS: { symbol: string; label: string }[] = [
   { symbol: "^BXM", label: "S&P 500 BuyWrite" },
 ];
 
+// Shared with the public read-only share feed (routes/publicOptionsShare.ts).
+export function fetchBenchmarks(start: string) {
+  return Promise.all(
+    BENCHMARKS.map(async ({ symbol, label }) => {
+      const r = await fetchYahooReturnSince(symbol, start);
+      return { symbol, label, pctChange: r?.pctChange ?? null, asOf: r?.asOf ?? null };
+    })
+  );
+}
+
 optionsRoutes.get("/benchmark", async (req, res) => {
   const { start } = req.query;
   if (!start || typeof start !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(start)) {
     return res.status(400).json({ error: "Missing or invalid start (expected YYYY-MM-DD)" });
   }
   try {
-    const benchmarks = await Promise.all(
-      BENCHMARKS.map(async ({ symbol, label }) => {
-        const r = await fetchYahooReturnSince(symbol, start);
-        return { symbol, label, pctChange: r?.pctChange ?? null, asOf: r?.asOf ?? null };
-      })
-    );
-    res.json({ benchmarks });
+    res.json({ benchmarks: await fetchBenchmarks(start) });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
     res.status(500).json({ error: message });
@@ -1817,4 +1822,65 @@ optionsRoutes.post("/positions/import", async (req, res) => {
   }
 
   res.json({ imported, errors });
+});
+
+// ── Read-only share link ──────────────────────────────────────────────────────
+// One revocable link per user. The token is the only thing a visitor holds; it
+// is resolved to a userId server-side by routes/publicOptionsShare.ts.
+
+const newShareToken = () => randomBytes(32).toString("base64url");
+
+optionsRoutes.get("/share", async (req, res) => {
+  const userId = getUserId(req);
+  const link = await prisma.optionsShareLink.findUnique({ where: { userId } });
+  res.json(link ? { token: link.token, createdAt: link.createdAt } : null);
+});
+
+// Create the link, or replace its token (which kills the old URL) when one exists.
+optionsRoutes.post("/share", async (req, res) => {
+  const userId = getUserId(req);
+  const token = newShareToken();
+  const link = await prisma.optionsShareLink.upsert({
+    where: { userId },
+    create: { userId, token },
+    update: { token, createdAt: new Date() },
+  });
+  res.json({ token: link.token, createdAt: link.createdAt });
+});
+
+optionsRoutes.delete("/share", async (req, res) => {
+  const userId = getUserId(req);
+  await prisma.optionsShareLink.deleteMany({ where: { userId } });
+  res.status(204).end();
+});
+
+// ── Price snapshot (feeds the shared page) ────────────────────────────────────
+// Underlying prices otherwise live only in the owner's browser. The page posts
+// them here at the end of each full refresh so the shared view can show the same
+// numbers without a visitor ever triggering a quote.
+
+const priceSnapshotSchema = z.object({
+  prices: z.record(z.string().min(1).max(12), z.number().positive().finite()),
+});
+
+optionsRoutes.put("/price-snapshot", async (req, res) => {
+  const userId = getUserId(req);
+  const parsed = priceSnapshotSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  if (Object.keys(parsed.data.prices).length > 500) return res.status(400).json({ error: "Too many symbols" });
+
+  const now = new Date();
+  const existing = await prisma.optionsPriceSnapshot.findUnique({ where: { userId } });
+  // Merge rather than replace: a symbol Tradier dropped from this batch keeps
+  // its previous price and (older) timestamp instead of vanishing.
+  const prices = { ...((existing?.prices as Record<string, { price: number; ts: number }> | null) ?? {}) };
+  for (const [symbol, price] of Object.entries(parsed.data.prices)) {
+    prices[symbol] = { price, ts: now.getTime() };
+  }
+  await prisma.optionsPriceSnapshot.upsert({
+    where: { userId },
+    create: { userId, prices, refreshedAt: now },
+    update: { prices, refreshedAt: now },
+  });
+  res.status(204).end();
 });

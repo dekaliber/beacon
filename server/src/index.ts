@@ -28,6 +28,7 @@ import { pendingSaleRoutes } from "./routes/pendingSales.js";
 import { assignedSharesRoutes } from "./routes/assignedShares.js";
 import { jobRoutes } from "./routes/jobs.js";
 import { publicOptionsRoutes } from "./routes/publicOptions.js";
+import { publicOptionsShareRoutes } from "./routes/publicOptionsShare.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -37,6 +38,8 @@ app.use(express.json({ limit: "10mb" }));
 app.use(clerkMiddleware());
 
 // Key-in-query read-only feeds for external callers; mounted before the Clerk gate.
+// The share feed goes first: publicOptionsRoutes ends in a catch-all 404.
+app.use("/api/public/options-share", publicOptionsShareRoutes);
 app.use("/api/public", publicOptionsRoutes);
 
 // All /api routes require authentication (except /api/health and /api/jobs)
@@ -83,7 +86,14 @@ app.get("/api/health", (_req, res) => {
 if (process.env.NODE_ENV === "production") {
   const publicPath = resolve("public");
   app.use(express.static(publicPath));
-  app.get("*", (_req, res) => {
+  app.get("*", (req, res) => {
+    // Share pages carry their token in the URL: keep it out of Referer headers
+    // and search indexes.
+    if (req.path.startsWith("/share/")) {
+      res.set("Referrer-Policy", "no-referrer");
+      res.set("X-Robots-Tag", "noindex, nofollow");
+      res.set("Cache-Control", "no-store");
+    }
     res.sendFile(resolve("public", "index.html"));
   });
 }

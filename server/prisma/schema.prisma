@@ -911,6 +911,29 @@ model OptionsSettings {
   @@map("options_settings")
 }
 
+// Public read-only share link for the Options Trading page. One per user; the
+// row's existence is what makes the link live (revoke = delete, regenerate =
+// replace the token). The token is the only identifier a visitor ever sees.
+model OptionsShareLink {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  token     String   @unique
+  createdAt DateTime @default(now())
+
+  @@map("options_share_links")
+}
+
+// Underlying stock prices captured on the owner's last authenticated price
+// refresh. The shared page reads only this — a visitor never triggers a quote.
+model OptionsPriceSnapshot {
+  userId      String   @id
+  prices      Json     // { [symbol]: { price: number, ts: epoch ms } }
+  refreshedAt DateTime // end of the owner's last full refresh ("Prices as of")
+  updatedAt   DateTime @updatedAt
+
+  @@map("options_price_snapshots")
+}
+
 // Capital deposits/withdrawals that adjust the basis used in annualized return calculations
 model OptionsCapitalChange {
   id            String   @id @default(cuid())

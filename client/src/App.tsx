@@ -24,6 +24,7 @@ import { WithdrawalsPage } from "@/pages/Withdrawals";
 import { MonthlySpending } from "@/pages/MonthlySpending";
 import { TaxEstimatorPage } from "@/pages/TaxEstimator";
 import { OptionsTrading } from "@/pages/OptionsTrading";
+import { SharedOptions } from "@/pages/SharedOptions";
 import { Login } from "@/pages/Login";
 import { setTokenGetter } from "@/lib/authToken";
 import { NotAvailableOnMobile } from "@/pages/mobile/NotAvailableOnMobile";
@@ -86,6 +87,8 @@ function App() {
       <NotificationProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
+        {/* Public read-only share page: no auth, no app layout/navigation. */}
+        <Route path="/share/options/:token" element={<SharedOptions />} />
         <Route element={<RequireAuth />}>
           <Route element={<ResponsiveLayout />}>
             <Route path="/" element={<ResponsivePage desktop={<Dashboard />} mobile={<MobileDashboard />} />} />

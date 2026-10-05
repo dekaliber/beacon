@@ -37,6 +37,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (hasFetched.current) return;
     hasFetched.current = true;
+    // Public share pages have no session — the request would only 401.
+    if (window.location.pathname.startsWith("/share/")) {
+      setLoading(false);
+      return;
+    }
     fetch();
   }, [fetch]);
 

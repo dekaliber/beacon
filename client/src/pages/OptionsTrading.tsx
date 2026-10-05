@@ -31,6 +31,14 @@ import {
  getActiveAssignedHoldings,
  getRealizedDispositions,
  getOptionsBenchmark,
+ getOptionsShareLink,
+ createOptionsShareLink,
+ revokeOptionsShareLink,
+ saveOptionsPriceSnapshot,
+ optionsShareUrl,
+ getSharedOptionsEarnings,
+ getSharedOptionsBenchmark,
+ type OptionsShareLink,
  type OptionsPosition,
  type OptionsTicker,
  type OptionsPositionGroup,
@@ -46,13 +54,14 @@ import {
 } from"@/api";
 import type { TickerSearchResult } from"@/types";
 import { useNotifications } from"@/context/NotificationContext";
+import { useSharedOptions } from"@/context/SharedOptionsContext";
 import { Card } from"@/components/Card";
 import { Tooltip, InfoTooltip, InfoHint } from"@/components/Tooltip";
 import { AssignedSharesCard, cappedUnrealizedPnl, type SellCoveredCallSeed } from"@/components/AssignedSharesCard";
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { DatePicker } from"@/components/DatePicker";
-import { Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, EyeOff, CornerDownRight, AlertTriangle } from"lucide-react";
+import { Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, EyeOff, CornerDownRight, AlertTriangle, Share2, Copy } from"lucide-react";
 import { createPortal } from"react-dom";
 import { cn, parseAmount, localToday } from"@/lib/utils";
 import { earningsBeforeExpiry, earningsWarningText } from"@/lib/earnings";
@@ -2540,6 +2549,10 @@ type ColGroupKey = (typeof COL_GROUPS)[number]["key"];
 type SelectionKind = "open" | "draft";
 
 function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, chainMaxCapitalAtRiskMap, onEdit, onClose, onConfirm, onPositionUpdated, extraTickers, onPricesUpdated, seedLivePrices, tabBarEl }: OpenPositionsTableProps) {
+ // Set only on the public share page: prices come from the owner's last
+ // refresh (never localStorage or a live quote) and nothing here can write.
+ const shared = useSharedOptions();
+ const readOnly = shared != null;
  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
  const [openColGroups, setOpenColGroups] = useState<Set<ColGroupKey>>(new Set(["live"]));
  const [draftsOpen, setDraftsOpen] = useState(true);
@@ -2620,11 +2633,11 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const [stickyRect, setStickyRect] = useState<{ left: number; width: number; colWidths: number[] } | null>(null);
  // Live data: auto-fetched stock prices; editing buffer for the inline prem field
  const [livePrices, setLivePrices] = useState<Map<string, number>>(() => {
- const cache = readLivePriceCache();
+ const cache = shared ? (shared.data.prices?.quotes ?? {}) : readLivePriceCache();
  return new Map(Object.entries(cache).map(([t, e]) => [t, e.price]));
  });
  const [livePriceTs, setLivePriceTs] = useState<Map<string, number>>(() => {
- const cache = readLivePriceCache();
+ const cache = shared ? (shared.data.prices?.quotes ?? {}) : readLivePriceCache();
  return new Map(Object.entries(cache).map(([t, e]) => [t, e.ts]));
  });
  // Tickers whose most recent fetch attempt failed to return a fresh quote —
@@ -2641,6 +2654,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const updateLivePrice = (ticker: string, price: number, ts: number = Date.now()) => {
  setLivePrices((prev) => new Map(prev).set(ticker, price));
  setLivePriceTs((prev) => new Map(prev).set(ticker, ts));
+ if (readOnly) return; // never touch the visitor's (possibly the owner's) price cache
  try {
  const cache = readLivePriceCache();
  cache[ticker] = { price, ts };
@@ -2662,12 +2676,13 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  for (const [ticker, price] of seedLivePrices) updateLivePrice(ticker, price);
  }, [seedLivePrices]);
 
- const fetchAllStockPrices = async () => {
+ // Resolves to the prices just fetched (empty when the batch failed).
+ const fetchAllStockPrices = async (): Promise<Map<string, number>> => {
  const uniqueTickers = [...new Set([
  ...[...positions, ...draftPositions].map((p) => p.ticker.symbol),
  ...(extraTickers ?? []),
 ])];
- if (uniqueTickers.length === 0) return;
+ if (uniqueTickers.length === 0) return new Map();
  try {
  const results = await getUnderlyingQuotes(uniqueTickers);
  const priceMap = new Map<string, number>();
@@ -2682,15 +2697,18 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const missing = uniqueTickers.filter((t) => !results[t]);
  setStalePriceTickers(new Set(missing));
  onPricesUpdated?.(priceMap);
+ return priceMap;
  } catch {
  // Whole batch failed — every requested ticker's cached price (if any) is
  // now of unknown age; flag them all rather than trusting stale values.
  setStalePriceTickers(new Set(uniqueTickers));
+ return new Map();
  }
  };
 
  const tickerKey = [...positions, ...draftPositions].map((p) => p.ticker.symbol).join(",");
  useEffect(() => {
+ if (readOnly) return;
  const tickers = tickerKey ? tickerKey.split(",") : [];
  if (lastFetchedAt != null && optionsPricesAreFresh(lastFetchedAt) && livePrices.size > 0 && tickers.every(isTickerPriceFresh)) return;
  fetchAllStockPrices();
@@ -2702,7 +2720,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  useEffect(() => {
  const symbols = [...new Set([...positions, ...draftPositions].map((p) => p.ticker.symbol))];
  if (symbols.length === 0) return;
- getOptionsEarnings(symbols, localToday())
+ (shared ? getSharedOptionsEarnings(shared.token, localToday()) : getOptionsEarnings(symbols, localToday()))
  .then(setEarningsMap)
  .catch(() => {});
  // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2773,6 +2791,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
 
  const [refreshingAll, setRefreshingAll] = useState(false);
  const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(() => {
+ if (shared) return shared.data.prices ? new Date(shared.data.prices.refreshedAt) : null;
  try {
  const stored = localStorage.getItem(LS_LAST_FETCHED_KEY);
  return stored ? new Date(stored) : null;
@@ -2786,7 +2805,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  };
  const fetchAllQuotes = async () => {
  setRefreshingAll(true);
- await fetchAllStockPrices();
+ const stockPrices = await fetchAllStockPrices();
  const open = [...positions, ...draftPositions].filter((p) => p.status ==="OPEN" && calcPosition(p).daysLeft >= 0);
  for (let i = 0; i < open.length; i++) {
  await fetchQuoteForPosition(open[i]);
@@ -2794,6 +2813,10 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  }
  recordFetch(new Date());
  setRefreshingAll(false);
+ // Publish this refresh for the read-only share page, which shows these
+ // prices instead of fetching its own. Best-effort — the owner's page doesn't
+ // depend on it.
+ saveOptionsPriceSnapshot(Object.fromEntries(stockPrices)).catch(() => {});
  };
 
  // Auto-fetch on load unless we already captured post-close prices today.
@@ -2804,7 +2827,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  // Manual refreshes bypass this guard entirely.
  const positionIdsKey = [...positions, ...draftPositions].filter((p) => p.status ==="OPEN").map((p) => p.id).join(",");
  useEffect(() => {
- if (!positionIdsKey) return;
+ if (readOnly || !positionIdsKey) return;
  const tickers = [...new Set([...positions, ...draftPositions].map((p) => p.ticker.symbol))];
  if (lastFetchedAt != null && optionsPricesAreFresh(lastFetchedAt) && livePrices.size > 0 && tickers.every(isTickerPriceFresh)) return;
  fetchAllQuotes();
@@ -2814,7 +2837,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  if (positions.length === 0 && draftPositions.length === 0) {
  return (
  <div className="text-center py-12 tp-caption">
- No open positions. Click"Open Position" to add one.
+ {readOnly ?"No open positions." :'No open positions. Click "Open Position" to add one.'}
  </div>
  );
  }
@@ -3133,7 +3156,11 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  </td>
  <td className={tdClass}>
  <div className="flex items-center gap-1">
- {isEditingThisPrem ? (
+ {readOnly ? (
+ p.currentPremiumPerShare != null
+ ? <span>${fmtUSD(p.currentPremiumPerShare)}</span>
+ : <span className="text-muted-foreground">—</span>
+ ) : isEditingThisPrem ? (
  <input
  type="text"
  inputMode="decimal"
@@ -3231,6 +3258,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
 
  {/* ── Actions ── */}
  <td className={tdClass}>
+ {!readOnly && (
  <div className="flex items-center gap-1">
  {isDraftRow ? (
  <Tooltip content="Confirm & open position">
@@ -3251,6 +3279,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  </button>
  </Tooltip>
  </div>
+ )}
  </td>
  </tr>
  );
@@ -3464,6 +3493,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  "Prices via Tradier"
  )}
  </span>
+ {!readOnly && (
  <button
  onClick={fetchAllQuotes}
  disabled={refreshingAll}
@@ -3472,6 +3502,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <RefreshCw className={cn("h-3 w-3", refreshingAll && "animate-spin")} />
  Refresh all premiums
  </button>
+ )}
  </div>,
  tabBarEl
  )}
@@ -3791,6 +3822,7 @@ const CLOSED_COL_GROUPS = [
 type ClosedColGroupKey = (typeof CLOSED_COL_GROUPS)[number]["key"];
 
 function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds, onEdit, onDelete, tabBarEl }: ClosedPositionsTableProps) {
+ const readOnly = useSharedOptions() != null;
  const [confirmDelete, setConfirmDelete] = useState<OptionsPosition | null>(null);
  const [openColGroups, setOpenColGroups] = useState<Set<ClosedColGroupKey>>(new Set(["pnl"]));
  const [tickerSearchQuery, setTickerSearchQuery] = useState(""); // raw input value
@@ -4306,6 +4338,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  </span>
  </td>
  <td className={td}>
+ {!readOnly && (
  <div className="flex items-center gap-1">
  <Tooltip content="Edit close details">
  <button
@@ -4324,6 +4357,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  </button>
  </Tooltip>
  </div>
+ )}
  </td>
  </tr>
  );
@@ -6066,8 +6100,11 @@ function SummaryCards({
  const benchmarkStartStr = annReturnFirstDate != null
  ? new Date(annReturnFirstDate).toISOString().slice(0, 10)
  : null;
+ const shared = useSharedOptions();
  const { data: benchmarkData } = useApi(
- () => benchmarkStartStr ? getOptionsBenchmark(benchmarkStartStr) : Promise.resolve({ benchmarks: [] }),
+ () => !benchmarkStartStr ? Promise.resolve({ benchmarks: [] })
+ : shared ? getSharedOptionsBenchmark(shared.token, benchmarkStartStr)
+ : getOptionsBenchmark(benchmarkStartStr),
  [benchmarkStartStr]
  );
  // Benchmark card pagination: measure one page's height so the vertical-slide
@@ -7062,6 +7099,99 @@ function OptionScreener({ trackedTickers, holdingTickers, recentTickers, onDraft
  );
 }
 
+// ── Share Modal ────────────────────────────────────────────────────────────────
+
+// Manages the single read-only share link: create it, copy it, replace it (which
+// kills the old URL), or stop sharing altogether.
+function ShareModal({ onClose }: { onClose: () => void }) {
+ const { data: link, loading, error: loadError, refetch } = useApi<OptionsShareLink | null>(getOptionsShareLink, []);
+ const [busy, setBusy] = useState(false);
+ const [error, setError] = useState<string | null>(null);
+ const [copied, setCopied] = useState(false);
+ const url = link ? optionsShareUrl(link.token) : null;
+
+ const run = async (action: () => Promise<unknown>) => {
+ setBusy(true);
+ setError(null);
+ setCopied(false);
+ try {
+ await action();
+ refetch();
+ } catch (e) {
+ setError(e instanceof Error ? e.message :"Something went wrong");
+ } finally {
+ setBusy(false);
+ }
+ };
+
+ const copy = async () => {
+ if (!url) return;
+ try {
+ await navigator.clipboard.writeText(url);
+ setCopied(true);
+ setTimeout(() => setCopied(false), 2000);
+ } catch {
+ setError("Couldn't copy — select the link and copy it manually.");
+ }
+ };
+
+ return (
+ <Modal open onClose={onClose} title="Share Options Trading">
+ <div className="space-y-4">
+ <div className="flex items-start gap-2 rounded-md bg-blue-soft px-3 py-2.5 text-xs text-blue-deep">
+ <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+ <span>
+ Anyone with the link can view this page — positions, dollar amounts and performance — without signing in.
+ They can't change anything or reach the rest of Beacon. Prices shown are from your most recent refresh.
+ </span>
+ </div>
+
+ {loading && link == null ? (
+ <p className="tp-caption">Loading…</p>
+ ) : loadError ? (
+ <p className="text-xs text-down">Couldn't load the share link: {loadError}</p>
+ ) : url ? (
+ <>
+ <div className="flex items-center gap-2">
+ <input
+ readOnly
+ value={url}
+ onFocus={(e) => e.target.select()}
+ className="flex-1 min-w-0 rounded-md border border-border bg-muted px-3 py-2 text-13 text-foreground focus:outline-none"
+ />
+ <Button onClick={copy} disabled={busy}>
+ {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+ {copied ?"Copied" :"Copy"}
+ </Button>
+ </div>
+ <div className="flex items-center justify-between gap-4">
+ <p className="tp-caption">Regenerating replaces the link — the current one stops working.</p>
+ <div className="flex items-center gap-2 shrink-0">
+ <Button variant="secondary" className="border border-border" disabled={busy} onClick={() => run(createOptionsShareLink)}>
+ Regenerate
+ </Button>
+ <Button variant="destructive" disabled={busy} onClick={() => run(revokeOptionsShareLink)}>
+ Stop sharing
+ </Button>
+ </div>
+ </div>
+ </>
+ ) : (
+ <div className="flex items-center justify-between gap-4">
+ <p className="tp-caption">This page isn't shared. Create a link to share a read-only view.</p>
+ <Button className="shrink-0" disabled={busy} onClick={() => run(createOptionsShareLink)}>
+ <Link className="h-4 w-4" />
+ Create link
+ </Button>
+ </div>
+ )}
+
+ {error && <p className="text-xs text-down">{error}</p>}
+ </div>
+ </Modal>
+ );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export function OptionsTrading() {
@@ -7076,12 +7206,21 @@ export function OptionsTrading() {
  const [settingsModal, setSettingsModal] = useState(false);
  const [importModalOpen, setImportModalOpen] = useState(false);
 
+ const [shareModal, setShareModal] = useState(false);
+
+ // Set only on the public share page (/share/options/:token). Every read below
+ // then resolves from the share feed's payload instead of an authenticated
+ // endpoint, and every control that would change something is left out. This
+ // is presentation only — the server is what actually refuses writes.
+ const shared = useSharedOptions();
+ const readOnly = shared != null;
+
  const { refetch: refetchNotifications } = useNotifications();
- const { data: settings, refetch: refetchSettings } = useApi(getOptionsSettings, []);
- const { data: allPositions, refetch: refetchPositions } = useApi(getOptionsPositions, []);
- const { data: tickers, refetch: refetchTickers } = useApi(getOptionsTickers, []);
- const { data: groups, refetch: refetchGroups } = useApi(getOptionsGroups, []);
- const { data: capitalChanges, refetch: refetchCapitalChanges } = useApi(getOptionsCapitalChanges, []);
+ const { data: settings, refetch: refetchSettings } = useApi(shared ? async () => shared.data.settings : getOptionsSettings, []);
+ const { data: allPositions, refetch: refetchPositions } = useApi(shared ? async () => shared.data.positions : () => getOptionsPositions(), []);
+ const { data: tickers, refetch: refetchTickers } = useApi(shared ? async () => [] : getOptionsTickers, []);
+ const { data: groups, refetch: refetchGroups } = useApi(shared ? async () => [] : getOptionsGroups, []);
+ const { data: capitalChanges, refetch: refetchCapitalChanges } = useApi(shared ? async () => shared.data.capitalChanges : getOptionsCapitalChanges, []);
 
  const normalizedPositions = (allPositions ?? []).map(normalizePosition);
  const draftPositions = normalizedPositions.filter((p) => p.isDraft);
@@ -7138,8 +7277,8 @@ export function OptionsTrading() {
  const tickerEntries = Array.from(openTickerMap.entries());
 
  // ── Assigned lot prices (shared across SummaryCards, OpenPositionsTable, AssignedSharesCard) ──
- const { data: activeHoldings, refetch: refetchActiveHoldings } = useApi(getActiveAssignedHoldings, []);
- const { data: realizedAssignedData, refetch: refetchRealizedAssigned } = useApi(getRealizedDispositions, []);
+ const { data: activeHoldings, refetch: refetchActiveHoldings } = useApi(shared ? async () => shared.data.activeHoldings : getActiveAssignedHoldings, []);
+ const { data: realizedAssignedData, refetch: refetchRealizedAssigned } = useApi(shared ? async () => shared.data.realized : getRealizedDispositions, []);
  const activeLotTickers = useMemo(
  () => [...new Set((activeHoldings ?? []).map((r) => r.ticker))],
  [activeHoldings]
@@ -7183,7 +7322,7 @@ export function OptionsTrading() {
  const [assignedQuotes, setAssignedQuotes] = useState<Record<string, { price: number }>>(() => {
  // Seed from the same localStorage cache that OpenPositionsTable uses for livePrices,
  // so assigned-lot prices are available even when the staleness guard skips the fetch.
- const cache = readLivePriceCache();
+ const cache = shared ? (shared.data.prices?.quotes ?? {}) : readLivePriceCache();
  return Object.fromEntries(Object.entries(cache).map(([t, e]) => [t, { price: e.price }]));
  });
  const handlePricesUpdated = useCallback((prices: Map<string, number>) => {
@@ -7254,7 +7393,8 @@ export function OptionsTrading() {
  // Expenses/Income pages convention.
  useEffect(() => {
  const handleKeyDown = (e: KeyboardEvent) => {
- if (positionModal || closeModal || editCloseModal || confirmDraftModal || settingsModal || importModalOpen) return;
+ if (readOnly) return;
+ if (positionModal || closeModal || editCloseModal || confirmDraftModal || settingsModal || importModalOpen || shareModal) return;
  const target = e.target as HTMLElement;
  if (["INPUT","TEXTAREA","SELECT"].includes(target.tagName) || target.isContentEditable) return;
  if (e.key ==="a" || e.key ==="A") {
@@ -7266,7 +7406,7 @@ export function OptionsTrading() {
  };
  document.addEventListener("keydown", handleKeyDown);
  return () => document.removeEventListener("keydown", handleKeyDown);
- }, [positionModal, closeModal, editCloseModal, confirmDraftModal, settingsModal, importModalOpen]);
+ }, [readOnly, positionModal, closeModal, editCloseModal, confirmDraftModal, settingsModal, importModalOpen, shareModal]);
 
  const tabClass = (active: boolean) =>
  cn(
@@ -7284,7 +7424,16 @@ export function OptionsTrading() {
  <div>
  <div className="flex items-start justify-between">
  <h2 className="tp-page-title">Options Trading</h2>
+ {!readOnly && (
  <div className="flex items-center gap-3">
+ <button
+ type="button"
+ onClick={() => setShareModal(true)}
+ className="tp-nav-link hover:bg-muted hover:text-ink"
+ >
+ <Share2 className="h-4 w-4" />
+ Share
+ </button>
  <button
  type="button"
  onClick={() => setSettingsModal(true)}
@@ -7301,6 +7450,7 @@ export function OptionsTrading() {
  Open Position
  </Button>
  </div>
+ )}
  </div>
  <p className="tp-caption mt-0.5 mb-3 flex items-center flex-wrap gap-x-6">
  <span>{tradingWeekLabel}</span>
@@ -7389,7 +7539,7 @@ export function OptionsTrading() {
  </Card>
 
  {/* Assigned stock (acquired via assigned CSPs) */}
- <AssignedSharesCard externalQuotes={assignedQuotes} active={activeHoldings} realized={realizedAssignedData} onSellCoveredCall={handleSellCoveredCall} targetReturn={settings?.targetReturn ?? null} />
+ <AssignedSharesCard externalQuotes={assignedQuotes} active={activeHoldings} realized={realizedAssignedData} onSellCoveredCall={readOnly ? undefined : handleSellCoveredCall} targetReturn={settings?.targetReturn ?? null} />
 
  {/* Performance Charts */}
  <PerformanceCharts
@@ -7403,15 +7553,17 @@ export function OptionsTrading() {
  <PerformanceTable positions={normalizedPositions.filter((p) => !p.isDraft)} />
 
  {/* Option Screener */}
+ {!readOnly && (
  <OptionScreener
  trackedTickers={tickers ?? []}
  holdingTickers={uncoveredHoldingTickers}
  recentTickers={recentlyTradedTickers}
  onDraftCreated={handleDraftCreated}
  />
+ )}
 
  {/* Modals */}
- {(positionModal !== null) && (
+ {!readOnly && (positionModal !== null) && (
  <PositionModal
  tickers={tickers ?? []}
  groups={groups ?? []}
@@ -7425,7 +7577,7 @@ export function OptionsTrading() {
  />
  )}
 
- {closeModal && (
+ {!readOnly && closeModal && (
  <ClosePositionModal
  position={closeModal}
  onClose={() => setCloseModal(null)}
@@ -7434,7 +7586,7 @@ export function OptionsTrading() {
  />
  )}
 
- {editCloseModal && (
+ {!readOnly && editCloseModal && (
  <EditCloseModal
  position={editCloseModal}
  onClose={() => setEditCloseModal(null)}
@@ -7443,7 +7595,7 @@ export function OptionsTrading() {
  />
  )}
 
- {settingsModal && (
+ {!readOnly && settingsModal && (
  <SettingsModal
  current={settings ?? null}
  capitalChanges={capitalChanges ?? []}
@@ -7453,7 +7605,7 @@ export function OptionsTrading() {
  />
  )}
 
- {confirmDraftModal && (
+ {!readOnly && confirmDraftModal && (
  <ConfirmDraftModal
  position={confirmDraftModal}
  onClose={() => setConfirmDraftModal(null)}
@@ -7461,7 +7613,9 @@ export function OptionsTrading() {
  />
  )}
 
- {importModalOpen && (
+ {shareModal && !readOnly && <ShareModal onClose={() => setShareModal(false)} />}
+
+ {!readOnly && importModalOpen && (
  <ImportOptionsModal
  onClose={() => setImportModalOpen(false)}
  onComplete={() => { setImportModalOpen(false); refetchPositions(); refetchTickers(); }}
