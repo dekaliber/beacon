@@ -390,7 +390,26 @@ pendingDividendRoutes.get("/confirmed/:activityId", async (req, res) => {
     where: { activityId, account: { userId } },
   });
   if (!pending || pending.status !== "CONFIRMED" || !pending.activityId) {
-    return res.status(404).json({ error: "Confirmed dividend not found" });
+    // No confirmed pending row — e.g. a dividend created by the QFX import.
+    // Return what the activity itself knows so the modal can show it read-only.
+    const standalone = await prisma.investmentActivity.findFirst({
+      where: { id: activityId, type: "DIVIDEND", account: { userId } },
+      select: { ticker: true, date: true, amount: true, notes: true },
+    });
+    if (!standalone) return res.status(404).json({ error: "Confirmed dividend not found" });
+    const isImported = standalone.notes?.startsWith("QFX:") ?? false;
+    return res.json({
+      pendingDividendId: null,
+      isImported,
+      isDrip: false,
+      paymentDate: standalone.date.toISOString(),
+      amount: Number(standalone.amount),
+      notes: isImported ? null : standalone.notes,
+      exDate: null,
+      ticker: standalone.ticker,
+      perShareAmount: null,
+      sharesAtExDate: null,
+    });
   }
 
   const activity = await prisma.investmentActivity.findUnique({
@@ -403,6 +422,7 @@ pendingDividendRoutes.get("/confirmed/:activityId", async (req, res) => {
 
   res.json({
     pendingDividendId: pending.id,
+    isImported: false,
     isDrip: drip,
     paymentDate: activity.date.toISOString(),
     amount: Number(activity.amount),

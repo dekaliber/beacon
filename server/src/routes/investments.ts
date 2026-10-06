@@ -3184,6 +3184,38 @@ investmentRoutes.post("/qfx-dividends/:accountId", async (req, res) => {
   }
 });
 
+// ── DELETE /api/investments/qfx-dividends/:activityId ────────────────────
+// Deletes a QFX-imported DIVIDEND activity together with its linked Income
+// record. Limited to imported dividends (notes = "QFX:{fitId}") — used to drop
+// the imported copy when the same dividend was also confirmed manually.
+
+investmentRoutes.delete("/qfx-dividends/:activityId", async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const activity = await prisma.investmentActivity.findFirst({
+      where: {
+        id: req.params.activityId,
+        type: "DIVIDEND",
+        notes: { startsWith: "QFX:" },
+        account: { userId },
+      },
+      select: { id: true },
+    });
+    if (!activity) {
+      return res.status(404).json({ error: { message: "Imported dividend not found" } });
+    }
+
+    await prisma.$transaction([
+      prisma.income.deleteMany({ where: { activityId: activity.id } }),
+      prisma.investmentActivity.delete({ where: { id: activity.id } }),
+    ]);
+    res.status(204).send();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: { message: "Failed to delete imported dividend" } });
+  }
+});
+
 // ── Manual Investments CRUD ────────────────────────────────────────────────
 // Non-public / private securities stored as a single market-value entry
 // (no lots, no ticker lookup).

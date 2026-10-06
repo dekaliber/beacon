@@ -469,6 +469,9 @@ export const dismissPendingDividend = (id: string) =>
 export const getConfirmedDividend = (activityId: string) =>
   api.get<import("../types").ConfirmedDividendInfo>(`/pending-dividends/confirmed/${activityId}`);
 
+export const deleteQfxDividend = (activityId: string) =>
+  api.delete(`/investments/qfx-dividends/${activityId}`);
+
 export const updateConfirmedDividend = (pendingDividendId: string, data: {
   paymentDate?: string;
   amount?: number;

@@ -444,17 +444,30 @@ export interface PendingDividend {
   lastTaxClassification: TaxClassification | null;
 }
 
-export interface ConfirmedDividendInfo {
-  pendingDividendId: string;
+// A dividend with no confirmed pending row behind it (e.g. one created by the
+// QFX import) only knows its ticker, payment date and amount.
+export type ConfirmedDividendInfo = {
   isDrip: boolean;
   paymentDate: string;
   amount: number;
   notes: string | null;
-  exDate: string;
   ticker: string;
-  perShareAmount: number;
-  sharesAtExDate: number;
-}
+} & (
+  | {
+      pendingDividendId: string;
+      isImported: false;
+      exDate: string;
+      perShareAmount: number;
+      sharesAtExDate: number;
+    }
+  | {
+      pendingDividendId: null;
+      isImported: boolean;
+      exDate: null;
+      perShareAmount: null;
+      sharesAtExDate: null;
+    }
+);
 
 export interface ManualInvestment {
   id: string;

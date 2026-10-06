@@ -77,6 +77,7 @@ import {
  confirmReinvestDividend,
  dismissPendingDividend,
  getConfirmedDividend,
+ deleteQfxDividend,
  updateConfirmedDividend,
  getFlatCategories,
  getPendingBuys,
@@ -3301,8 +3302,26 @@ function EditConfirmedDividendModal({
  .finally(() => setLoading(false));
  }, [activityId]);
 
+ const [confirmingDelete, setConfirmingDelete] = useState(false);
+ const [deleting, setDeleting] = useState(false);
+
+ const handleDelete = async () => {
+ // Two-click confirmation, as in the expense/income modals
+ if (!confirmingDelete) { setConfirmingDelete(true); return; }
+ setDeleting(true);
+ setError(null);
+ try {
+ await deleteQfxDividend(activityId);
+ invalidateApiCache("income");
+ onSaved();
+ } catch (e) {
+ setError(e instanceof Error ? e.message :"Failed to delete dividend.");
+ setDeleting(false);
+ }
+ };
+
  const handleSave = async () => {
- if (!dividendInfo) return;
+ if (!dividendInfo || dividendInfo.pendingDividendId === null) return;
  const parsedAmount = parseAmount(amount);
  if (!paymentDate || isNaN(parsedAmount) || parsedAmount <= 0) {
  setError("Please enter a valid payment date and amount.");
@@ -3324,7 +3343,7 @@ function EditConfirmedDividendModal({
  const readonlyCls =`${inputCls} opacity-60 cursor-default`;
 
  return (
- <Modal open onClose={onClose} title="Edit Confirmed Dividend">
+ <Modal open onClose={onClose} title={dividendInfo?.isImported ?"Imported Dividend" : dividendInfo && dividendInfo.pendingDividendId === null ?"Dividend" :"Edit Confirmed Dividend"}>
  {loading ? (
  <div className="py-8 text-center text-muted-foreground">Loading…</div>
  ) : fetchError ? (
@@ -3332,6 +3351,44 @@ function EditConfirmedDividendModal({
  <p className="text-down">{fetchError}</p>
  <div className="flex justify-end">
  <Button variant="secondary" onClick={onClose}>Close</Button>
+ </div>
+ </div>
+ ) : dividendInfo && dividendInfo.pendingDividendId === null ? (
+ /* No confirmed pending row (e.g. QFX import) — read-only; imported ones can be deleted */
+ <div className="space-y-4">
+ <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+ <p className="font-mono font-bold">{dividendInfo.ticker}</p>
+ {dividendInfo.isImported && <p className="text-muted-foreground">Imported from QFX</p>}
+ </div>
+
+ <div className="grid grid-cols-2 gap-3">
+ <div>
+ <label className="block text-xs font-medium mb-1">Payment Date</label>
+ <input readOnly value={formatDate(dividendInfo.paymentDate)} className={readonlyCls} />
+ </div>
+ <div>
+ <label className="block text-xs font-medium mb-1">Total Amount</label>
+ <input readOnly value={formatCurrency(dividendInfo.amount)} className={readonlyCls} />
+ </div>
+ </div>
+
+ {error && <p className="text-down">{error}</p>}
+
+ <div className="flex items-center justify-between pt-2">
+ <div>
+ {dividendInfo.isImported && (
+ <button
+ type="button"
+ onClick={handleDelete}
+ disabled={deleting}
+ className="flex items-center gap-1.5 rounded-md px-3 py-2 text-13 font-normal text-down hover:bg-down/10 transition-colors"
+ >
+ <Trash2 className="h-3.5 w-3.5" />
+ {deleting ?"Deleting..." : confirmingDelete ?"Confirm Delete" :"Delete"}
+ </button>
+ )}
+ </div>
+ <Button variant="secondary" onClick={onClose} disabled={deleting}>Close</Button>
  </div>
  </div>
  ) : dividendInfo ? (
