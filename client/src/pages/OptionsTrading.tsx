@@ -160,7 +160,8 @@ function getTradingWeekLabel(): string {
  const friday = new Date(monday);
  friday.setDate(monday.getDate() + 4);
  const monLabel =`${MONTH_NAMES[monday.getMonth()]} ${monday.getDate()}`;
- const friLabel =`${MONTH_NAMES[friday.getMonth()]} ${friday.getDate()}`;
+ const crossesMonth = monday.getMonth() !== friday.getMonth();
+ const friLabel = crossesMonth ?`${MONTH_NAMES[friday.getMonth()]} ${friday.getDate()}` :`${friday.getDate()}`;
  return`${monLabel} - ${friLabel}, ${friday.getFullYear()}`;
 }
 
