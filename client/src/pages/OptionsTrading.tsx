@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from"react";
 import { useApi } from"@/hooks/useApi";
+import { useCursorTooltip } from"@/hooks/useCursorTooltip";
 import {
  getOptionsSettings,
  getOptionsPositions,
@@ -5611,6 +5612,7 @@ function CapitalDistributionBar({
  tickerContractMap: Map<string, number>;
 }) {
  const [tooltip, setTooltip] = useState<{ x: number; y: number; ticker: string; capital: number; pct: number; contracts: number | null } | null>(null);
+ const tip = useCursorTooltip(tooltip);
 
  const tickerCapital = new Map<string, number>();
  for (const p of openPositions) {
@@ -5666,8 +5668,9 @@ function CapitalDistributionBar({
  )}
  {tooltip && (
  <div
+ ref={tip.ref}
  className="fixed z-[60] pointer-events-none bg-white border border-border rounded-lg shadow-lg px-3 py-2 text-xs min-w-[160px]"
- style={{ left: tooltip.x + 14, top: tooltip.y - 8, transform:"translateY(-100%)" }}
+ style={tip.style}
  >
  <p className="font-semibold mb-1.5">{tooltip.ticker}</p>
  <div className="space-y-1">

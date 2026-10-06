@@ -8,6 +8,7 @@ import { getInvestmentAccounts, getAllocationSummary, getWithdrawalSummary, getI
 import { formatCurrency, parseAmount } from"@/lib/utils";
 import { formatNextUpdateTime } from"@/lib/priceUtils";
 import { usePriceRefresh } from"@/hooks/usePriceRefresh";
+import { useCursorTooltip } from"@/hooks/useCursorTooltip";
 import { useNotifications } from"@/context/NotificationContext";
 import { useDemo } from"@/context/DemoContext";
 import { scaleInvestmentAccounts, scaleAllocationSummary } from"@/lib/demo";
@@ -46,6 +47,7 @@ interface BarTooltipState {
 // Hovering a segment shows a tooltip with both target and actual figures.
 function StackedBar({ segments }: { segments: BarSegment[] }) {
  const [tooltip, setTooltip] = useState<BarTooltipState | null>(null);
+ const tip = useCursorTooltip(tooltip);
 
  return (
  <div className="relative flex h-5 w-full overflow-hidden rounded-md bg-muted">
@@ -61,8 +63,9 @@ function StackedBar({ segments }: { segments: BarSegment[] }) {
  ))}
  {tooltip && (
  <div
+ ref={tip.ref}
  className="fixed z-50 pointer-events-none bg-white border border-border rounded-lg shadow-lg px-3 py-2 text-xs min-w-[160px]"
- style={{ left: tooltip.x + 14, top: tooltip.y - 8, transform:"translateY(-100%)" }}
+ style={tip.style}
  >
  <p className="font-semibold mb-1.5">{tooltip.segment.name}</p>
  <div className="space-y-1">
@@ -107,6 +110,7 @@ function DeviationBar({ actualPct, targetPct, scale, color, name, targetValue, a
  actualValue: number;
 }) {
  const [tooltip, setTooltip] = useState<{ x: number; y: number } | null>(null);
+ const tip = useCursorTooltip(tooltip);
 
  const fillPct = scale > 0 ? Math.min((actualPct / scale) * 100, 100) : 0;
  const tickPct = targetPct != null && scale > 0
@@ -135,8 +139,9 @@ function DeviationBar({ actualPct, targetPct, scale, color, name, targetValue, a
  {/* Tooltip */}
  {tooltip && (
  <div
+ ref={tip.ref}
  className="fixed z-50 pointer-events-none bg-white border border-border rounded-lg shadow-lg px-3 py-2 text-xs min-w-[160px]"
- style={{ left: tooltip.x + 14, top: tooltip.y - 8, transform:"translateY(-100%)" }}
+ style={tip.style}
  >
  <p className="font-semibold mb-1.5">{name}</p>
  <div className="space-y-1">
@@ -917,6 +922,7 @@ function WithdrawalRateCard({
  x: number;
  y: number;
  } | null>(null);
+ const barTip = useCursorTooltip(barTooltip);
 
  const effectiveDenominator = settings?.withdrawalRateDenominator ?? portfolioValue;
  const targetRate = settings?.withdrawalRateTarget ?? null;
@@ -1073,12 +1079,9 @@ function WithdrawalRateCard({
  {/* Hover tooltip (portal-style, fixed position) */}
  {barTooltip && (
  <div
+ ref={barTip.ref}
  className="fixed z-50 pointer-events-none bg-white border border-border rounded-lg shadow-lg px-3 py-2 text-xs min-w-[150px]"
- style={{
- left: barTooltip.x + 14,
- top: barTooltip.y - 8,
- transform:"translateY(-100%)",
- }}
+ style={barTip.style}
  >
  <p className="font-semibold mb-1.5">{barTooltip.month}</p>
  <div className="space-y-1">
