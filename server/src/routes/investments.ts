@@ -5,7 +5,7 @@ import { prisma } from "../db/client.js";
 import { getMetadata as getTiingoMeta, getDividendScanResult } from "../services/tiingo.js";
 import { searchCoins, getMarketChart, getDailySnapshot } from "../services/coingecko.js";
 import { fetchYahooSettledClose, fetchYahooHistory, fetchYahooClosingPrice, fetchYahooMeta } from "../services/yahoo.js";
-import { deactivateIfOrphaned } from "./instruments.js";
+import { deactivateIfOrphaned, openHoldingWhere } from "./instruments.js";
 import { isTradingDay, etDateParts } from "../lib/marketHolidays.js";
 import { getUserId } from "../middleware/auth.js";
 
@@ -535,7 +535,7 @@ investmentRoutes.get("/allocation", async (req, res) => {
     const accountIds = investmentAccounts.map((a) => a.id);
 
     const holdings = await prisma.investmentHolding.findMany({
-      where: { accountId: { in: accountIds } },
+      where: { accountId: { in: accountIds }, ...openHoldingWhere },
       include: {
         lots: { select: { quantity: true } },
         instrument: {
@@ -723,6 +723,7 @@ investmentRoutes.get("/accounts", async (req, res) => {
       },
       include: {
         holdings: {
+          where: openHoldingWhere,
           include: {
             lots: true,
             instrument: {
@@ -979,7 +980,7 @@ investmentRoutes.get("/holdings/:accountId", async (req, res) => {
     if (!account) return res.status(404).json({ error: { message: "Account not found" } });
 
     const holdings = await prisma.investmentHolding.findMany({
-      where: { accountId },
+      where: { accountId, ...openHoldingWhere },
       include: { lots: { orderBy: { acquiredDate: "asc" } } },
       orderBy: { ticker: "asc" },
     });
@@ -1071,6 +1072,16 @@ investmentRoutes.post("/holdings", async (req, res) => {
     if (!account) return res.status(404).json({ error: { message: "Investment account not found" } });
 
     const instrumentId = await resolveInstrumentId(body.ticker, body.name);
+
+    // A managed account keeps (and hides) the holding row of a fully-sold
+    // position; reuse it rather than failing the unique (accountId, ticker) check.
+    if (account.isManaged) {
+      const closed = await prisma.investmentHolding.findFirst({
+        where: { accountId: body.accountId, ticker: body.ticker, lots: { none: {} } },
+        include: { lots: true },
+      });
+      if (closed) return res.status(201).json({ ...closed, group: closed.assetClass ?? null });
+    }
 
     const holding = await prisma.investmentHolding.create({
       data: {
@@ -1734,7 +1745,7 @@ investmentRoutes.post("/prices/refresh", async (req, res) => {
     const userAccountIds = userAccounts.map((a) => a.id);
 
     const holdings = await prisma.investmentHolding.findMany({
-      where: { accountId: { in: userAccountIds } },
+      where: { accountId: { in: userAccountIds }, ...openHoldingWhere },
       select: { ticker: true, coinGeckoId: true },
     });
 
@@ -1893,7 +1904,7 @@ investmentRoutes.get("/prices/refresh/stream", async (req, res) => {
     const userAccountIds = userAccounts.map((a) => a.id);
 
     const holdings = await prisma.investmentHolding.findMany({
-      where: { accountId: { in: userAccountIds } },
+      where: { accountId: { in: userAccountIds }, ...openHoldingWhere },
       select: { ticker: true, coinGeckoId: true },
     });
 
@@ -2241,6 +2252,7 @@ investmentRoutes.post("/prices/backfill-history", async (req, res) => {
     // Yahoo's period2 is exclusive, so ask for the day after the last one wanted.
     const toDate = new Date(lastDay.getTime() + 24 * 60 * 60 * 1000);
     const holdings = await prisma.investmentHolding.findMany({
+      where: openHoldingWhere,
       select: { ticker: true, coinGeckoId: true },
     });
     let tickers = [...new Set(holdings.map((h) => h.ticker))];
@@ -2531,7 +2543,20 @@ investmentRoutes.post("/qfx-import/:accountId", async (req, res) => {
     }
 
     for (const [ticker, netShares] of netSharesMap) {
-      if (netShares < 0.000001) continue;
+      if (netShares < 0.000001) {
+        // Position fully sold — drop the managed lot but keep the holding row so
+        // its dividend history and pending dividends stay linked, and it is
+        // reused if the ticker is bought back (see openHoldingWhere).
+        const closed = await prisma.investmentHolding.findFirst({
+          where: { accountId, ticker },
+          select: { id: true, instrumentId: true },
+        });
+        if (closed) {
+          await prisma.investmentLot.deleteMany({ where: { holdingId: closed.id, acquiredDate: null } });
+          await deactivateIfOrphaned(prisma, closed.instrumentId);
+        }
+        continue;
+      }
 
       const existing = await prisma.investmentHolding.findFirst({
         where: { accountId, ticker },
@@ -2545,6 +2570,10 @@ investmentRoutes.post("/qfx-import/:accountId", async (req, res) => {
         holdingId = existing.id;
         if (existing.lots[0]) {
           costPerShare = parseFloat(existing.lots[0].costPerShare.toString());
+        } else if (existing.instrumentId) {
+          // Reopening a previously closed position — its instrument may have
+          // been deactivated when the last lot was removed.
+          await prisma.instrument.update({ where: { id: existing.instrumentId }, data: { isActive: true } });
         }
       } else {
         const instrumentId = await resolveInstrumentId(ticker, ticker);

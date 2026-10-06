@@ -4,6 +4,18 @@ import { prisma } from "../db/client.js";
 
 export const instrumentRoutes = Router();
 
+// ── Open-holding filter ────────────────────────────────────────────────────
+// A managed (QFX-imported) account keeps a holding row after its position is
+// fully sold — the import only removes the lot — so dividend history and pending
+// dividends stay linked and the row is reused when the ticker is bought back.
+// Those lot-less holdings count as closed: apply this filter wherever holdings
+// are listed or decide whether a ticker is still held. Self-directed accounts
+// are unaffected (their emptied holdings are hard-deleted on sale/transfer).
+
+export const openHoldingWhere = {
+  OR: [{ lots: { some: {} } }, { account: { isManaged: false } }],
+};
+
 // Shared include for full instrument detail
 const instrumentInclude = {
   tickers: { orderBy: { ticker: "asc" as const } },
@@ -12,6 +24,7 @@ const instrumentInclude = {
     orderBy: { weight: "desc" as const },
   },
   holdings: {
+    where: openHoldingWhere,
     select: {
       id: true,
       ticker: true,
@@ -30,7 +43,7 @@ const instrumentInclude = {
 };
 
 // ── Soft-delete helper ─────────────────────────────────────────────────────
-// Deactivates an instrument if it has no remaining holdings or manual investments
+// Deactivates an instrument if it has no remaining open holdings or manual investments
 // across any account. Safe to call inside or outside a transaction.
 
 export async function deactivateIfOrphaned(
@@ -39,7 +52,7 @@ export async function deactivateIfOrphaned(
   instrumentId: string | null | undefined
 ) {
   if (!instrumentId) return;
-  const holdingCount = await db.investmentHolding.count({ where: { instrumentId } });
+  const holdingCount = await db.investmentHolding.count({ where: { instrumentId, ...openHoldingWhere } });
   if (holdingCount > 0) return;
   const manualCount = await db.manualInvestment.count({ where: { instrumentId } });
   if (manualCount > 0) return;
@@ -139,7 +152,7 @@ export async function reactivateMislinkedInstruments() {
   const mislinked = await prisma.instrument.findMany({
     where: {
       isActive: false,
-      OR: [{ holdings: { some: {} } }, { manualInvestments: { some: {} } }],
+      OR: [{ holdings: { some: openHoldingWhere } }, { manualInvestments: { some: {} } }],
     },
     select: { id: true },
   });
