@@ -2044,14 +2044,15 @@ function StickyHoldingRow({
  <div className="px-6">
  <table style={{ tableLayout:"fixed", width:"100%", minWidth:"1080px" }}>
  <colgroup>
+ {/* Keep in sync with the holdings table <th> widths */}
  <col style={{ width:"80px" }} />
- <col style={{ width:"400px" }} />
+ <col />
  <col style={{ width:"100px" }} />
  <col style={{ width:"110px" }} />
  <col style={{ width:"120px" }} />
  <col style={{ width:"120px" }} />
- <col />
- <col style={{ width:"60px" }} />
+ <col style={{ width:"190px" }} />
+ <col style={{ width:"105px" }} />
  </colgroup>
  <tbody>
  <tr
