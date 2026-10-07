@@ -6337,24 +6337,22 @@ function SummaryCards({
  const isOver = bar.utilization > 1;
  const dimmed = hoveredBarIdxTrading !== null && !isHovered;
  const s = bar.seriesIdx !== null ? utilizationDataTrading.series[bar.seriesIdx] : null;
- const cspH = s && !isOver ? Math.min((s.cspDeployed / absMax) * 66, fillH) : 0;
+ const cspH = s ? Math.min((s.cspDeployed / absMax) * 66, fillH) : 0;
  const ccH = fillH - cspH;
+ // Over-100% days render in two ambers (darker = CSP, mirroring violet under
+ // blue); the hovered bar reverts to violet/blue to match the tooltip lines.
+ const amber = isOver && !isHovered;
  return (
  <g key={i}>
  <rect x={bar.x} y={66 - bgH} width={5} height={bgH} fill="var(--color-border)" opacity={bar.isFuture ? 0.5 : 1} />
- {!bar.isFuture && fillH > 0 && isOver && (
- <rect x={bar.x} y={66 - fillH} width={5} height={fillH}
- fill="var(--color-warn)" opacity={dimmed ? 0.4 : 1}
- />
- )}
- {!bar.isFuture && !isOver && cspH > 0 && (
+ {!bar.isFuture && cspH > 0 && (
  <rect x={bar.x} y={66 - cspH} width={5} height={cspH}
- fill="var(--color-violet)" opacity={dimmed ? 0.4 : 1}
+ fill={amber ?"var(--color-warn-mid)" :"var(--color-violet)"} opacity={dimmed ? 0.4 : 1}
  />
  )}
- {!bar.isFuture && !isOver && ccH > 0 && (
+ {!bar.isFuture && ccH > 0 && (
  <rect x={bar.x} y={66 - fillH} width={5} height={ccH}
- fill="var(--color-blue)" opacity={dimmed ? 0.4 : 1}
+ fill={amber ?"var(--color-warn)" :"var(--color-blue)"} opacity={dimmed ? 0.4 : 1}
  />
  )}
  </g>
@@ -6374,7 +6372,7 @@ function SummaryCards({
  style={{ left: leftPx, transform:"translateX(-50%)" }}
  >
  <div className="rounded border border-border bg-background p-2 text-xs shadow-md whitespace-nowrap">
- <p className="font-medium mb-1">{label} — {(bar.utilization * 100).toFixed(1)}%</p>
+ <p className="font-medium mb-1">{label} — <span className={bar.utilization > 1 ?"text-warn" : undefined}>{(bar.utilization * 100).toFixed(1)}%</span></p>
  {bar.ccDeployed > 0 && <p style={{ color:"var(--color-blue)" }}>CC: ${Math.round(bar.ccDeployed).toLocaleString()} ({(bar.ccDeployed / bar.basis * 100).toFixed(1)}%)</p>}
  {bar.cspDeployed > 0 && <p style={{ color:"var(--color-violet)" }}>CSP: ${Math.round(bar.cspDeployed).toLocaleString()} ({(bar.cspDeployed / bar.basis * 100).toFixed(1)}%)</p>}
  </div>
@@ -6567,7 +6565,7 @@ function SummaryCards({
  <section>
  <h4 className="mb-1.5 font-semibold text-foreground">Above 100%</h4>
  <p className="text-muted-foreground leading-relaxed">
- A day exceeds 100% when capital deployed exceeds your available basis — for example, when using margin. The colored fill rises above its gray track and the bar appears in amber.
+ A day exceeds 100% when capital deployed exceeds your available basis — for example, when using margin. The colored fill rises above its gray track and the bar appears in amber — darker amber for cash-secured puts, lighter for covered calls. Hovering the bar shows it in the usual violet and blue.
  </p>
  </section>
  </div>

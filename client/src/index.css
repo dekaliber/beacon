@@ -34,6 +34,7 @@
   --color-down-line: color-mix(in oklab, var(--color-down) 22%, transparent);
   --color-warn:      oklch(0.72 0.13 75);  /* reimbursement, soft alert */
   --color-warn-deep: oklch(0.46 0.10 75);  /* pill / badge text on warn-soft */
+  --color-warn-mid:  oklch(0.61 0.14 60);  /* darker chart segment paired with warn */
   --color-warn-soft: color-mix(in oklab, var(--color-warn) 16%, transparent);
   --color-warn-line: color-mix(in oklab, var(--color-warn) 24%, transparent);
 
