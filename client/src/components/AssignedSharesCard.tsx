@@ -262,10 +262,12 @@ function computeActiveRowMetrics(g: ActiveGroup, price: number | null, todayLoca
   const missedPct = missedUpside != null && costBasis > 0 ? (missedUpside / costBasis) * 100 : 0;
 
   // Realized premium since assignment: the original CSP's (+ any pre-assignment
-  // roll chain) premium plus any CC premium already locked in (closed/expired/
-  // assigned) against this lot — a still-open CC's premium isn't counted until
-  // it closes. ROR annualizes it against the same capital-at-risk / elapsed-time
-  // convention used for a single option's return elsewhere on this page.
+  // roll chain) premium plus any CC premium already locked in (closed/expired)
+  // against this lot — a still-open CC's premium isn't counted until it closes.
+  // Both are the server's per-share attribution, so when part of the batch has
+  // been sold this is only the still-held shares' portion. ROR annualizes it
+  // against the same capital-at-risk / elapsed-time convention used for a
+  // single option's return elsewhere on this page.
   const totPrem = g.cspPremium + g.ccPremiumSinceAssignment;
   // Whole calendar days (today's local midnight vs. the assignment's), not live
   // wall-clock time — otherwise this would drift downward throughout the day
@@ -298,6 +300,10 @@ function RorHeaderLabel({ elapsed }: { elapsed: string }) {
             </span>
             <span className="mt-1.5 block">
               Tot Prem ÷ cost at the assigned strike (strike × shares) × 365 ÷ {elapsed}.
+            </span>
+            <span className="mt-1.5 block">
+              When only part of an assignment has been sold, its premium is split between the
+              sold and still-held shares rather than counted on both.
             </span>
             <span className="mt-1.5 block border-t border-border pt-1.5">
               <span className="font-medium text-foreground">Total</span> weights each lot&apos;s
@@ -441,10 +447,11 @@ export function AssignedSharesCard({
     const avgSale = g.shares > 0 ? g.proceeds / g.shares : 0;
     const costBasis = g.assignmentStrike * g.shares;
     const pct = costBasis > 0 ? (g.realizedPnl / costBasis) * 100 : 0;
-    // Same premium + ROR convention as the Assigned Lots tab: total realized
-    // premium (originating CSP chain + any CC already closed/expired/assigned
-    // against this batch) annualized against cost at the assigned strike,
-    // elapsed from assignment to the final sale in this batch.
+    // Same premium + ROR convention as the Assigned Lots tab: realized premium
+    // attributed to the sold shares (their share of the originating CSP chain
+    // and of earlier CCs, plus the CC that called them away) annualized against
+    // cost at the assigned strike, elapsed from assignment to the final sale in
+    // this batch.
     const totPrem = g.cspPremium + g.ccPremiumSinceAssignment;
     const daysElapsed =
       (new Date(g.latestSaleDate + "T00:00:00").getTime() -

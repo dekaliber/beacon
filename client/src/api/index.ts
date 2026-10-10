@@ -1137,8 +1137,10 @@ export interface ActiveAssignedHolding {
   openCallLegs: { strike: number; contracts: number }[];
   stockPriceAtAssignment: number | null; // underlying price at close on assignment date
   fromOptionsPositionId: string | null;
-  cspPremium: number; // this lot's originating CSP (+ any pre-assignment roll chain) net premium
-  ccPremiumSinceAssignment: number; // batch-level: realized (closed/expired/assigned) CC premium against this lot; still-open CCs excluded
+  // Both premiums are this lot's own share of the batch's — shares from the same
+  // assignment that were already sold carry the rest (see RealizedDisposition).
+  cspPremium: number; // originating CSP (+ any pre-assignment roll chain) net premium, pro rata by shares
+  ccPremiumSinceAssignment: number; // realized (closed/expired) CC premium earned while these shares were held; still-open CCs excluded
 }
 
 export interface RealizedDisposition {
@@ -1152,8 +1154,10 @@ export interface RealizedDisposition {
   realizedPnl: number;
   saleDate: string; // YYYY-MM-DD
   viaCoveredCall: boolean;
-  cspPremium: number; // batch-level: originating CSP (+ roll chain) net premium
-  ccPremiumSinceAssignment: number; // batch-level: realized (closed/expired/assigned) CC premium against this batch; still-open CCs excluded
+  // Both premiums cover only the shares this sale disposed of, never the
+  // batch's still-held remainder.
+  cspPremium: number; // originating CSP (+ roll chain) net premium, pro rata by shares
+  ccPremiumSinceAssignment: number; // the CC that called these shares away, plus their share of CCs that had already concluded by the sale
 }
 
 export const getActiveAssignedHoldings = () =>
