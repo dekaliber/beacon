@@ -824,7 +824,9 @@ optionsRoutes.get("/positions", async (req, res) => {
       ticker: true,
       group: true,
     },
-    orderBy: { openedAt: "desc" },
+    // id breaks openedAt ties: without it Postgres returns tied rows in heap
+    // order, which flips whenever one of them is written.
+    orderBy: [{ openedAt: "desc" }, { id: "asc" }],
   });
   res.json(positions);
 });

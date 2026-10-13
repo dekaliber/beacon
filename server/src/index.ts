@@ -1,4 +1,7 @@
 import express from "express";
+// Express 4 doesn't catch rejections from async handlers; this routes them to
+// the error middleware below instead of crashing the process.
+import "express-async-errors";
 import cors from "cors";
 import { resolve } from "path";
 import { clerkMiddleware, getAuth } from "@clerk/express";
@@ -97,6 +100,19 @@ if (process.env.NODE_ENV === "production") {
     res.sendFile(resolve("public", "index.html"));
   });
 }
+
+// Last-resort handler for anything a route didn't catch itself (e.g. a Prisma
+// pool timeout): fail that one request rather than the whole instance.
+app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error(`Unhandled error on ${req.method} ${req.path}:`, err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: "Internal server error" });
+});
+
+// Rejections outside a request (background work) are logged, not fatal.
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection:", reason);
+});
 
 const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

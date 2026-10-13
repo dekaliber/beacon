@@ -2708,7 +2708,9 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  }
  };
 
- const tickerKey = [...positions, ...draftPositions].map((p) => p.ticker.symbol).join(",");
+ // Sorted + deduped so the key tracks the set of tickers, not the order the
+ // server happened to return the rows in.
+ const tickerKey = [...new Set([...positions, ...draftPositions].map((p) => p.ticker.symbol))].sort().join(",");
  useEffect(() => {
  if (readOnly) return;
  const tickers = tickerKey ? tickerKey.split(",") : [];
@@ -2764,8 +2766,10 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  });
  }, [openColGroups]);
 
- const fetchQuoteForPosition = async (p: OptionsPosition) => {
- if (calcPosition(p).daysLeft < 0) return; // no chain data for expired options
+ // Resolves true when the position's premium was written. `refetch: false`
+ // lets a batch caller reload the list once at the end instead of per row.
+ const fetchQuoteForPosition = async (p: OptionsPosition, { refetch = true }: { refetch?: boolean } = {}): Promise<boolean> => {
+ if (calcPosition(p).daysLeft < 0) return false; // no chain data for expired options
  const expDate = new Date(p.expirationDate).toISOString().slice(0, 10);
  setFetchingQuotes((prev) => new Set(prev).add(p.id));
  setQuoteErrors((prev) => { const m = new Map(prev); m.delete(p.id); return m; });
@@ -2779,13 +2783,15 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const lastPrice = quote.lastPrice;
  if (lastPrice != null) {
  await updateOptionsPosition(p.id, { currentPremiumPerShare: lastPrice, currentDelta: quote.delta ?? null, currentDeltaAsOf: quote.deltaUpdatedAt ?? null });
- onPositionUpdated();
- } else {
- setQuoteErrors((prev) => new Map(prev).set(p.id,"No price available"));
+ if (refetch) onPositionUpdated();
+ return true;
  }
+ setQuoteErrors((prev) => new Map(prev).set(p.id,"No price available"));
+ return false;
  } catch (e) {
  const msg = e instanceof Error ? e.message :"Failed to fetch";
  setQuoteErrors((prev) => new Map(prev).set(p.id, msg));
+ return false;
  } finally {
  setFetchingQuotes((prev) => { const s = new Set(prev); s.delete(p.id); return s; });
  }
@@ -2805,16 +2811,28 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  setLastFetchedAt(date);
  try { localStorage.setItem(LS_LAST_FETCHED_KEY, date.toISOString()); } catch { /* ignore unavailable localStorage */ }
  };
+ // One refresh at a time: the auto-fetch effect and the button share this
+ // loop, and overlapping runs just multiply the quote calls and writes.
+ const refreshInFlight = useRef(false);
  const fetchAllQuotes = async () => {
+ if (refreshInFlight.current) return;
+ refreshInFlight.current = true;
  setRefreshingAll(true);
- const stockPrices = await fetchAllStockPrices();
+ let stockPrices = new Map<string, number>();
+ try {
+ stockPrices = await fetchAllStockPrices();
  const open = [...positions, ...draftPositions].filter((p) => p.status ==="OPEN" && calcPosition(p).daysLeft >= 0);
+ let anyUpdated = false;
  for (let i = 0; i < open.length; i++) {
- await fetchQuoteForPosition(open[i]);
+ if (await fetchQuoteForPosition(open[i], { refetch: false })) anyUpdated = true;
  if (i < open.length - 1) await new Promise((r) => setTimeout(r, 150));
  }
+ if (anyUpdated) onPositionUpdated();
  recordFetch(new Date());
+ } finally {
+ refreshInFlight.current = false;
  setRefreshingAll(false);
+ }
  // Publish this refresh for the read-only share page, which shows these
  // prices instead of fetching its own. Best-effort — the owner's page doesn't
  // depend on it.
@@ -2827,7 +2845,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  // Also refetches if any individual ticker's cached price isn't itself fresh,
  // even when the global lastFetchedAt flag looks fine (see isTickerPriceFresh).
  // Manual refreshes bypass this guard entirely.
- const positionIdsKey = [...positions, ...draftPositions].filter((p) => p.status ==="OPEN").map((p) => p.id).join(",");
+ const positionIdsKey = [...positions, ...draftPositions].filter((p) => p.status ==="OPEN").map((p) => p.id).sort().join(",");
  useEffect(() => {
  if (readOnly || !positionIdsKey) return;
  const tickers = [...new Set([...positions, ...draftPositions].map((p) => p.ticker.symbol))];

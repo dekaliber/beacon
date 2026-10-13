@@ -67,7 +67,7 @@ export async function buildSharedOptionsData(userId: string) {
     prisma.optionsPosition.findMany({
       where: { userId, isActive: true, isDraft: false },
       select: POSITION_SELECT,
-      orderBy: { openedAt: "desc" },
+      orderBy: [{ openedAt: "desc" }, { id: "asc" }],
     }),
     prisma.optionsCapitalChange.findMany({
       where: { userId },
