@@ -192,10 +192,17 @@ function effectiveLastTradingDay(): Date {
   // Before 8 PM ET the current day's prices haven't settled — step back one day.
   // The modulo is belt-and-braces against any runtime that still emits "24".
   const etHour = get("hour") % 24;
-  const d = new Date(Date.UTC(get("year"), get("month") - 1, etHour < 20 ? get("day") - 1 : get("day")));
-  const dow = d.getUTCDay();
-  const skip = dow === 0 ? 2 : dow === 6 ? 1 : 0;
-  return new Date(d.getTime() - skip * 86400000);
+  let d = new Date(Date.UTC(get("year"), get("month") - 1, etHour < 20 ? get("day") - 1 : get("day")));
+  // Walk back to an actual session — weekends *and* NYSE holidays. Skipping only
+  // weekends let a holiday count as settled after 8 PM, which opened the history
+  // writer's ceiling to a row dated on a day the market never traded.
+  //
+  // `d` is a UTC-midnight day marker, which in ET is still the evening before, so
+  // probe at noon UTC to have the calendar look at the intended ET day.
+  for (let i = 0; i < 10 && !isTradingDay(d.getTime() + 12 * 60 * 60 * 1000); i++) {
+    d = new Date(d.getTime() - 24 * 60 * 60 * 1000);
+  }
+  return d;
 }
 
 // 4 PM ET on the last settled session: effectiveLastTradingDay() stepped back
