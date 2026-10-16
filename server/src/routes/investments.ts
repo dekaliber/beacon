@@ -180,11 +180,18 @@ function effectiveLastTradingDay(): Date {
   const now = new Date();
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
-    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hour12: false,
+    // hourCycle, not hour12: false. Under hour12: false, Node 20's ICU — what
+    // production runs — renders midnight as "24", which reads as past the 8 PM
+    // cutoff. For the hour after every midnight ET that declared a session that
+    // had not yet opened to be settled, and a refresh in that window stored the
+    // previous day's close under today's date. Node 24 renders "00", so it never
+    // reproduced locally.
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23",
   }).formatToParts(now);
   const get = (t: string) => parseInt(parts.find((p) => p.type === t)!.value);
-  // Before 8 PM ET the current day's prices haven't settled — step back one day
-  const etHour = get("hour");
+  // Before 8 PM ET the current day's prices haven't settled — step back one day.
+  // The modulo is belt-and-braces against any runtime that still emits "24".
+  const etHour = get("hour") % 24;
   const d = new Date(Date.UTC(get("year"), get("month") - 1, etHour < 20 ? get("day") - 1 : get("day")));
   const dow = d.getUTCDay();
   const skip = dow === 0 ? 2 : dow === 6 ? 1 : 0;

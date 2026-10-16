@@ -74,12 +74,15 @@ function cutoffToday8pmET(now: Date): Date {
 }
 
 function currentHourET(now: Date): number {
+  // hourCycle, not hour12: false — some ICU builds render midnight as "24" under
+  // hour12: false. The server hit exactly that on Node 20 and mis-dated history
+  // rows; the same mistake here would put midnight inside the options window.
   return parseInt(
-    new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false })
+    new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hourCycle: "h23" })
       .formatToParts(now)
       .find((p) => p.type === "hour")!.value,
     10,
-  );
+  ) % 24;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
