@@ -5752,19 +5752,22 @@ export function InvestmentAccount() {
  [manuals, isDemoMode, demoFactor]
  );
 
- // Build ordered list of groups: each unique group across holdings AND manuals (null →"Other")
+ // Build ordered list of groups: each unique group across holdings AND manuals (null →"Other"),
+ // highest total market value first; ungrouped "Other" always sorts last
  const holdingGroups = useMemo(() => {
- const seen = new Set<string>();
- const order: string[] = [];
+ const totals = new Map<string, number>();
  for (const h of displayHoldings) {
  const key = h.group ??"";
- if (!seen.has(key)) { seen.add(key); order.push(key); }
+ totals.set(key, (totals.get(key) ?? 0) + (h.marketValue ?? 0));
  }
  for (const m of displayManuals) {
  const key = m.group ??"";
- if (!seen.has(key)) { seen.add(key); order.push(key); }
+ totals.set(key, (totals.get(key) ?? 0) + m.marketValue);
  }
- return order;
+ return [...totals.keys()].sort((a, b) => {
+ if (a ==="" || b ==="") return a ==="" ? (b ==="" ? 0 : 1) : -1;
+ return totals.get(b)! - totals.get(a)!;
+ });
  }, [displayHoldings, displayManuals]);
 
  const account = accounts?.find((a: Account) => a.id === accountId);
