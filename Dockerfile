@@ -1,5 +1,5 @@
 # Build client
-FROM node:20-alpine AS client-builder
+FROM node:24-alpine AS client-builder
 WORKDIR /app
 COPY client/package*.json ./
 RUN npm ci
@@ -9,7 +9,7 @@ ENV VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY
 RUN npx vite build
 
 # Build server
-FROM node:20-alpine AS server-builder
+FROM node:24-alpine AS server-builder
 WORKDIR /app
 COPY server/package*.json ./
 COPY server/prisma ./prisma
@@ -18,7 +18,7 @@ COPY server/ ./
 RUN npm run build
 
 # Production image
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 
 # Copy prisma schema before npm ci so prisma generate can find it
