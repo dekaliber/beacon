@@ -21,6 +21,9 @@ RUN npm run build
 FROM node:24-alpine
 WORKDIR /app
 
+# Pull the latest system CA store (eMudhra intermediate distrust, Oct 2026)
+RUN apk upgrade --no-cache ca-certificates
+
 # Copy prisma schema before npm ci so prisma generate can find it
 COPY server/package*.json ./
 COPY server/prisma ./prisma
