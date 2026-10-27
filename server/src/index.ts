@@ -115,7 +115,7 @@ process.on("unhandledRejection", (reason) => {
 });
 
 const server = app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT} (Node ${process.version})`);
 });
 
 const shutdown = async () => {
