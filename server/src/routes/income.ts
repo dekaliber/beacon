@@ -272,6 +272,7 @@ incomeRoutes.delete("/:id", async (req, res) => {
 // Bulk edit income (source, category, taxClassification)
 const bulkEditIncomeSchema = z.object({
   ids: z.array(z.string()).min(1),
+  date: z.string().transform((s) => parseLocalDate(s)).optional(),
   source: z.string().min(1).optional(),
   categoryId: z.string().nullable().optional(),
   taxClassification: z
@@ -285,7 +286,7 @@ incomeRoutes.patch("/bulk", async (req, res) => {
   const parsed = bulkEditIncomeSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const { ids, source, categoryId, taxClassification } = parsed.data;
+  const { ids, date, source, categoryId, taxClassification } = parsed.data;
 
   // Resolve only IDs owned by this user
   const owned = await prisma.income.findMany({
@@ -296,6 +297,7 @@ incomeRoutes.patch("/bulk", async (req, res) => {
   if (ownedIds.length === 0) return res.json({ updated: 0 });
 
   const scalarUpdate: Record<string, unknown> = {};
+  if (date !== undefined) scalarUpdate.date = date;
   if (source !== undefined) scalarUpdate.source = source;
   if (categoryId !== undefined) scalarUpdate.categoryId = categoryId;
   if (taxClassification !== undefined) scalarUpdate.taxClassification = taxClassification;
@@ -320,8 +322,9 @@ incomeRoutes.patch("/bulk", async (req, res) => {
         ownedIds
       );
     }
-    // Apply any other scalar updates (source, categoryId) separately
+    // Apply any other scalar updates (date, source, categoryId) separately
     const otherUpdate: Record<string, unknown> = {};
+    if (date !== undefined) otherUpdate.date = date;
     if (source !== undefined) otherUpdate.source = source;
     if (categoryId !== undefined) otherUpdate.categoryId = categoryId;
     if (Object.keys(otherUpdate).length > 0) {

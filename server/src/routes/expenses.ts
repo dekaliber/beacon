@@ -448,9 +448,10 @@ expenseRoutes.post("/import", async (req, res) => {
   res.json({ imported, errors });
 });
 
-// Bulk edit expenses (description, category, tags)
+// Bulk edit expenses (date, description, category, tags)
 const bulkEditSchema = z.object({
   ids: z.array(z.string()).min(1),
+  date: z.string().transform((s) => parseLocalDate(s)).optional(),
   description: z.string().min(1).optional(),
   categoryId: z.string().nullable().optional(),
   tagIds: z.array(z.string()).optional(),
@@ -462,7 +463,7 @@ expenseRoutes.patch("/bulk", async (req, res) => {
   const parsed = bulkEditSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const { ids, description, categoryId, tagIds, tagMode } = parsed.data;
+  const { ids, date, description, categoryId, tagIds, tagMode } = parsed.data;
 
   // Resolve only IDs owned by this user
   const owned = await prisma.expense.findMany({
@@ -473,6 +474,7 @@ expenseRoutes.patch("/bulk", async (req, res) => {
   if (ownedIds.length === 0) return res.json({ updated: 0 });
 
   const scalarUpdate: Record<string, unknown> = {};
+  if (date !== undefined) scalarUpdate.date = date;
   if (description !== undefined) scalarUpdate.description = description;
   if (categoryId !== undefined) scalarUpdate.categoryId = categoryId;
 

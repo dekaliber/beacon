@@ -493,6 +493,9 @@ export function DatePicker({
   const panel = open ? (
     <div
       ref={panelRef}
+      // Lets hosts with their own outside-click handling (e.g. BulkEditBar
+      // popovers) recognise clicks in this body-portalled panel as "inside".
+      data-datepicker-panel=""
       style={{
         position: "fixed",
         top: panelPos.top,

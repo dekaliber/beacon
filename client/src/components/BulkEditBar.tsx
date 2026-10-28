@@ -3,6 +3,7 @@ import { X, Link2, Unlink, Star, Check, Trash2, Copy } from "lucide-react";
 import { bulkUpdateExpenses, bulkDeleteExpenses } from "@/api";
 import type { Category, Tag } from "@/types";
 import { formatCurrency } from "@/lib/utils";
+import { DatePicker } from "@/components/DatePicker";
 
 // The action to show depends on which groups the selected expenses belong to:
 //   "group"   → create a new group OR add ungrouped expenses to an existing group
@@ -49,7 +50,7 @@ interface BulkEditBarProps {
   selectedTransactions?: { amount: string; isJoint: boolean }[];
 }
 
-type ActivePopover = "description" | "category" | "taxStatus" | "tags" | null;
+type ActivePopover = "date" | "description" | "category" | "taxStatus" | "tags" | null;
 
 const TAX_STATUS_OPTIONS: { value: string; label: string; className: string }[] = [
   { value: "", label: "Not specified (clear)", className: "" },
@@ -92,6 +93,7 @@ export function BulkEditBar({
   const [duplicateLoading, setDuplicateLoading] = useState(false);
 
   // Per-popover field state
+  const [dateValue, setDateValue] = useState(""); // YYYY-MM-DD, "" = not yet chosen
   const [description, setDescription] = useState("");
   // undefined = not yet chosen (Apply disabled); null = "No category"; string = category ID
   const [categoryId, setCategoryId] = useState<string | null | undefined>(undefined);
@@ -113,7 +115,10 @@ export function BulkEditBar({
   // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (barRef.current && !barRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      // The Edit Date calendar is portalled to <body>, outside the bar
+      if (target instanceof Element && target.closest("[data-datepicker-panel]")) return;
+      if (barRef.current && !barRef.current.contains(target)) {
         setActive(null);
       }
     };
@@ -124,6 +129,7 @@ export function BulkEditBar({
   const openPopover = (type: ActivePopover) => {
     if (active === type) { setActive(null); return; }
     setActive(type);
+    setDateValue("");
     setDescription("");
     setCategoryId(undefined);
     setCategorySearch("");
@@ -322,6 +328,37 @@ export function BulkEditBar({
           </span>
         </>
       )}
+
+      <span className={sepCls} />
+
+      {/* Edit Date — sets every selected transaction to the chosen date */}
+      <div className="relative">
+        <button type="button" onClick={() => openPopover("date")} className={btnCls("date")}>
+          Edit Date
+        </button>
+        {active === "date" && (
+          <div className={popoverCls}>
+            <div
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && dateValue && !loading) {
+                  handleApply({ date: dateValue });
+                }
+              }}
+            >
+              <DatePicker value={dateValue} onChange={setDateValue} autoFocus autoOpen />
+            </div>
+            {error && <p className="mt-1 text-xs text-down">{error}</p>}
+            <button
+              type="button"
+              disabled={!dateValue || loading}
+              onClick={() => handleApply({ date: dateValue })}
+              className={applyBtnCls}
+            >
+              {applyLabel}
+            </button>
+          </div>
+        )}
+      </div>
 
       <span className={sepCls} />
 
