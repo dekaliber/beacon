@@ -900,9 +900,55 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
     return res.status(400).json({ error: "No valid fields provided" });
   }
 
-  const result = await prisma.optionsPosition.updateMany({
-    where: { id: req.params.id, userId },
-    data,
+  // A roll closes the prior leg and opens this one at the same instant, so an
+  // openedAt correction on a rolled-into leg moves the prior leg's closedAt with
+  // it. Only fires when openedAt actually changes, so an unrelated edit (which
+  // re-sends the unchanged openedAt) never rewrites the predecessor.
+  let rolledFromId: string | null = null;
+  let newOpenedAt: Date | null = null;
+  if (typeof data.openedAt === "string") {
+    newOpenedAt = new Date(data.openedAt);
+    const current = await prisma.optionsPosition.findFirst({
+      where: { id: req.params.id, userId },
+      select: { groupId: true, sequenceInGroup: true, openedAt: true },
+    });
+    if (
+      current?.groupId &&
+      current.sequenceInGroup != null &&
+      current.sequenceInGroup > 1 &&
+      current.openedAt.getTime() !== newOpenedAt.getTime()
+    ) {
+      const prior = await prisma.optionsPosition.findFirst({
+        where: {
+          groupId: current.groupId,
+          userId,
+          isActive: true,
+          sequenceInGroup: current.sequenceInGroup - 1,
+          outcome: "ROLLED",
+        },
+        select: { id: true, openedAt: true },
+      });
+      if (prior) {
+        if (newOpenedAt < prior.openedAt) {
+          return res.status(409).json({ error: "Open time can't be earlier than when the rolled-from leg was opened." });
+        }
+        rolledFromId = prior.id;
+      }
+    }
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const r = await tx.optionsPosition.updateMany({
+      where: { id: req.params.id, userId },
+      data,
+    });
+    if (r.count > 0 && rolledFromId && newOpenedAt) {
+      await tx.optionsPosition.update({
+        where: { id: rolledFromId },
+        data: { closedAt: newOpenedAt },
+      });
+    }
+    return r;
   });
   if (result.count === 0) return res.status(404).json({ error: "Not found" });
 
