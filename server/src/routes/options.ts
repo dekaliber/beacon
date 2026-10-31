@@ -1147,6 +1147,8 @@ const rollSchema = z.object({
   newStrikePrice: z.coerce.number().positive(),
   newExpirationDate: z.string(), // YYYY-MM-DD
   newStockPriceAtOpen: z.coerce.number().positive().nullable().optional(),
+  newDeltaAtOpen: z.coerce.number().nullable().optional(),
+  newDeltaAtOpenCapturedAt: z.string().nullable().optional(), // ISO datetime string
   newFeesOpen: z.coerce.number().nonnegative().nullable().optional(),
   // Partial roll: roll only N of the position's contracts, leaving the rest open.
   // Omitted or equal to the full size = roll the whole position (legacy behavior).
@@ -1166,6 +1168,7 @@ optionsRoutes.post("/positions/:id/roll", async (req, res) => {
   const {
     closedAt, closePremiumPerShare, feesClose,
     newPremiumPerShare, newStrikePrice, newExpirationDate, newStockPriceAtOpen, newFeesOpen,
+    newDeltaAtOpen, newDeltaAtOpenCapturedAt,
     contracts: rollContracts,
   } = parsed.data;
 
@@ -1182,6 +1185,8 @@ optionsRoutes.post("/positions/:id/roll", async (req, res) => {
   const closeAt = closedAt ? new Date(closedAt) : new Date();
   const openAt = closedAt ? new Date(closedAt) : new Date();
   const newExpiry = new Date(newExpirationDate + "T20:00:00.000Z");
+  const newDeltaCapturedAt =
+    newDeltaAtOpen != null && newDeltaAtOpenCapturedAt ? new Date(newDeltaAtOpenCapturedAt) : null;
 
   const result = await prisma.$transaction(async (tx) => {
     if (isPartial) {
@@ -1244,6 +1249,8 @@ optionsRoutes.post("/positions/:id/roll", async (req, res) => {
           premiumPerShare: newPremiumPerShare,
           feesOpen: newFeesOpen ?? null,
           stockPriceAtOpen: newStockPriceAtOpen ?? null,
+          deltaAtOpen: newDeltaAtOpen ?? null,
+          deltaAtOpenCapturedAt: newDeltaCapturedAt,
           shareCostBasis: existing.shareCostBasis,
           assignedFromStrikePrice: existing.assignedFromStrikePrice,
           assignedFromExpirationDate: existing.assignedFromExpirationDate,
@@ -1306,6 +1313,8 @@ optionsRoutes.post("/positions/:id/roll", async (req, res) => {
         premiumPerShare: newPremiumPerShare,
         feesOpen: newFeesOpen ?? null,
         stockPriceAtOpen: newStockPriceAtOpen ?? null,
+        deltaAtOpen: newDeltaAtOpen ?? null,
+        deltaAtOpenCapturedAt: newDeltaCapturedAt,
         shareCostBasis: existing.shareCostBasis,
         assignedFromStrikePrice: existing.assignedFromStrikePrice,
         assignedFromExpirationDate: existing.assignedFromExpirationDate,

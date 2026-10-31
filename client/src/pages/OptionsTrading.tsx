@@ -1333,6 +1333,9 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  const [newFeesOpen, setNewFeesOpen] = useState("");
  const [priceAtOpenStatus, setPriceAtOpenStatus] = useState<"idle" |"fetching" |"success" |"error">("idle");
  const [priceAtOpenLabel, setPriceAtOpenLabel] = useState("");
+ const [newDeltaAtOpenStr, setNewDeltaAtOpenStr] = useState("");
+ const [newDeltaAtOpenCapturedAt, setNewDeltaAtOpenCapturedAt] = useState<string | null>(null);
+ const [deltaAtOpenStatus, setDeltaAtOpenStatus] = useState<"idle" |"fetching" |"success" |"error">("idle");
  const [assignedPriceFetching, setAssignedPriceFetching] = useState(false);
 
  const [saving, setSaving] = useState(false);
@@ -1416,6 +1419,33 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  return () => { cancelled = true; };
  }, [isRolled, closedAt, position.ticker.symbol]);
 
+ // Auto-fetch the new leg's delta (debounced, since strike is typed) when ROLLED.
+ // Same source as the open form: the live option chain — Tradier has no
+ // historical greeks — so a backdated roll should be corrected by hand.
+ useEffect(() => {
+ if (!isRolled) return;
+ const strikeNum = parseAmount(newStrikePrice);
+ if (isNaN(strikeNum) || strikeNum <= 0 || !newExpirationDate) return;
+ let cancelled = false;
+ const t = setTimeout(async () => {
+ setDeltaAtOpenStatus("fetching");
+ try {
+ const quote = await getOptionQuote({ symbol: position.ticker.symbol, type: position.optionType, strike: strikeNum, expiration: newExpirationDate });
+ if (cancelled) return;
+ if (quote.delta != null) {
+ setNewDeltaAtOpenStr(quote.delta.toFixed(6));
+ setNewDeltaAtOpenCapturedAt(quote.capturedAt);
+ setDeltaAtOpenStatus("success");
+ } else {
+ setDeltaAtOpenStatus("error");
+ }
+ } catch {
+ if (!cancelled) setDeltaAtOpenStatus("error");
+ }
+ }, 600);
+ return () => { cancelled = true; clearTimeout(t); };
+ }, [isRolled, closedAt, newStrikePrice, newExpirationDate, position.ticker.symbol, position.optionType]);
+
  const handleSubmit = async (e: React.FormEvent) => {
  e.preventDefault();
 
@@ -1440,6 +1470,8 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  newStrikePrice: parseAmount(newStrikePrice),
  newExpirationDate,
  newStockPriceAtOpen: newStockPriceAtOpen ? parseAmount(newStockPriceAtOpen) : null,
+ newDeltaAtOpen: newDeltaAtOpenStr ? parseFloat(newDeltaAtOpenStr) : null,
+ newDeltaAtOpenCapturedAt: newDeltaAtOpenStr ? newDeltaAtOpenCapturedAt : null,
  newFeesOpen: newFeesOpen ? parseAmount(newFeesOpen) : null,
  ...(isPartial ? { contracts: n } : {}),
  });
@@ -1772,14 +1804,10 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  </div>
  </div>
 
- {/* Stock price (auto-fetched, editable) */}
+ {/* Stock Price at Open + Delta at Open (50/50, auto-fetched, editable) */}
+ <div className="grid grid-cols-2 gap-4">
  <div>
- <label className="block text-xs font-medium mb-1">
- Stock Price at Open{" "}
- <span className="text-muted-foreground font-normal">
- {priceAtOpenStatus ==="fetching" ?"(fetching…)" :"(from Tradier)"}
- </span>
- </label>
+ <label className="block text-xs font-medium mb-1">Stock Price at Open <span className="text-muted-foreground font-normal">(optional)</span></label>
  <div className="relative">
  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
  <input
@@ -1789,8 +1817,24 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  className={dollarInputClass}
  />
  </div>
+ {priceAtOpenStatus ==="fetching" && <p className="mt-1 tp-caption">Getting open price…</p>}
  {priceAtOpenStatus ==="success" && <p className="mt-1 tp-caption">Price as of {priceAtOpenLabel}</p>}
  {priceAtOpenStatus ==="error" && <p className="mt-1 text-xs text-down">Price fetch failed</p>}
+ </div>
+
+ <div>
+ <label className="block text-xs font-medium mb-1">Delta at Open <span className="text-muted-foreground font-normal">(optional)</span></label>
+ <input
+ type="text" inputMode="decimal"
+ value={newDeltaAtOpenStr}
+ onChange={(e) => { setNewDeltaAtOpenStr(e.target.value); setNewDeltaAtOpenCapturedAt(null); setDeltaAtOpenStatus("idle"); }}
+ placeholder={deltaAtOpenStatus ==="fetching" ?"Fetching…" :""}
+ className={inputClass}
+ />
+ {deltaAtOpenStatus ==="fetching" && <p className="mt-1 tp-caption">Fetching delta…</p>}
+ {deltaAtOpenStatus ==="success" && <p className="mt-1 tp-caption">From option chain</p>}
+ {deltaAtOpenStatus ==="error" && <p className="mt-1 text-xs text-down">Delta fetch failed</p>}
+ </div>
  </div>
 
  {/* Fees at open for the new position */}

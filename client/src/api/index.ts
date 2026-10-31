@@ -803,6 +803,8 @@ export type OptionsRollInput = {
   newStrikePrice: number;
   newExpirationDate: string;
   newStockPriceAtOpen?: number | null;
+  newDeltaAtOpen?: number | null;
+  newDeltaAtOpenCapturedAt?: string | null; // ISO UTC datetime
   newFeesOpen?: number | null;
   // Partial roll: roll only N of the position's contracts (omit to roll all).
   contracts?: number;
