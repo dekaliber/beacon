@@ -65,6 +65,7 @@ import { DatePicker } from"@/components/DatePicker";
 import { Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, EyeOff, CornerDownRight, AlertTriangle, Share2, Copy } from"lucide-react";
 import { createPortal } from"react-dom";
 import { cn, parseAmount, localToday } from"@/lib/utils";
+import { impliedDelta } from"@/lib/blackScholes";
 import { earningsBeforeExpiry, earningsWarningText } from"@/lib/earnings";
 import { getWeeklyExpiration, nextWeekExpiration, prevWeekExpiration, calcDTE, isNonTradingDay, etDateParts } from"@/lib/marketHolidays";
 import { SectionLabel, ColumnHeader, StatValue } from"@/components/Typography";
@@ -119,6 +120,53 @@ function etToUtc(localEtString: string): string {
  const etOffsetHours = 4; // EDT; TODO Phase 3: check DST
  const utc = new Date(Date.UTC(y, mo - 1, d, h + etOffsetHours, mi));
  return utc.toISOString();
+}
+
+// Delta at open for a form, implied from its own inputs via Black-Scholes
+// (Tradier's chain greeks can be hours stale). A typed delta overrides the
+// estimate until the field is cleared. When editing, `seed` (the stored delta)
+// is shown until one of the inputs changes, then the estimate takes over.
+function useImpliedDeltaAtOpen(
+ inputs: { optionType:"CALL" |"PUT"; strike: string; expirationDate: string; openedAtEt: string; premium: string; stockPrice: string },
+ seed?: { delta: number | null; capturedAt: string | null },
+) {
+ const { optionType, strike, expirationDate, openedAtEt, premium, stockPrice } = inputs;
+ const key = [optionType, strike, expirationDate, openedAtEt, premium, stockPrice].join("|");
+ const initialKey = useRef(key);
+ const [inputsChanged, setInputsChanged] = useState(false);
+ useEffect(() => { if (key !== initialKey.current) setInputsChanged(true); }, [key]);
+ const [typed, setTyped] = useState<string | null>(null);
+
+ const complete = !!(strike && expirationDate && openedAtEt && premium && stockPrice);
+ const openedAtUtc = openedAtEt ? etToUtc(openedAtEt) :"";
+ const implied = useMemo(
+ () => complete
+ ? impliedDelta({ optionType, strike: parseAmount(strike), expirationDate, openedAtUtc, premium: parseAmount(premium), stockPrice: parseAmount(stockPrice) })
+ : null,
+ [complete, optionType, strike, expirationDate, openedAtUtc, premium, stockPrice]
+ );
+
+ const showSeed = seed?.delta != null && !inputsChanged;
+ const source: "typed" |"seed" |"implied" |"unavailable" |"none" =
+ typed != null ?"typed" : showSeed ?"seed" : implied ?"implied" : complete ?"unavailable" :"none";
+ const value =
+ source ==="typed" ? typed! : source ==="seed" ? String(Number(seed!.delta)) : implied ? implied.delta.toFixed(4) :"";
+ // The estimate is as of the open instant itself; a typed value has no capture time.
+ const capturedAt = source ==="seed" ? seed!.capturedAt : source ==="implied" ? openedAtUtc : null;
+
+ return {
+ value,
+ capturedAt,
+ source,
+ iv: source ==="implied" ? implied!.iv : null,
+ onChange: (v: string) => setTyped(v.trim() ==="" ? null : v),
+ };
+}
+
+function DeltaAtOpenCaption({ source, iv }: { source: ReturnType<typeof useImpliedDeltaAtOpen>["source"]; iv: number | null }) {
+ if (source ==="implied" && iv != null) return <p className="mt-1 tp-caption">Implied from premium · IV {(iv * 100).toFixed(0)}%</p>;
+ if (source ==="unavailable") return <p className="mt-1 tp-caption">Can't infer from these inputs</p>;
+ return null;
 }
 
 function fmtDate(iso: string) {
@@ -550,9 +598,10 @@ function PositionModal({ tickers, editing, prefill, defaultInvestmentAccountId, 
  const [feesOpen, setFeesOpen] = useState(editing?.feesOpen?.toString() ??"");
  const [shareCostBasis, setShareCostBasis] = useState(editing?.shareCostBasis?.toString() ??"");
  const [stockPriceAtOpen, setStockPriceAtOpen] = useState(editing?.stockPriceAtOpen?.toString() ??"");
- const [deltaAtOpenStr, setDeltaAtOpenStr] = useState<string>(editing?.deltaAtOpen != null ? String(Number(editing.deltaAtOpen)) :"");
- const [deltaAtOpenCapturedAt, setDeltaAtOpenCapturedAt] = useState<string | null>(editing?.deltaAtOpenCapturedAt ?? null);
- const [deltaAtOpenStatus, setDeltaAtOpenStatus] = useState<"idle" |"fetching" |"success" |"error">("idle");
+ const deltaAtOpen = useImpliedDeltaAtOpen(
+ { optionType, strike: strikePrice, expirationDate, openedAtEt: openedAt, premium: premiumPerShare, stockPrice: stockPriceAtOpen },
+ editing ? { delta: editing.deltaAtOpen, capturedAt: editing.deltaAtOpenCapturedAt } : undefined,
+ );
  const [notes, setNotes] = useState(editing?.notes ??"");
  const [excludeFromLivePnl, setExcludeFromLivePnl] = useState(editing?.excludeFromLivePnl ?? false);
  const [groupId] = useState(editing?.groupId ??"");
@@ -667,25 +716,7 @@ function PositionModal({ tickers, editing, prefill, defaultInvestmentAccountId, 
  } catch {
  setPriceAtOpenStatus("error");
  }
-
- // Also fetch delta via option quote if we have all required option params
- const strikeNum = parseAmount(strikePrice);
- if (symbol && optionType && !isNaN(strikeNum) && strikeNum > 0 && expirationDate) {
- setDeltaAtOpenStatus("fetching");
- try {
- const quote = await getOptionQuote({ symbol, type: optionType, strike: strikeNum, expiration: expirationDate });
- if (quote.delta != null) {
- setDeltaAtOpenStr(quote.delta.toFixed(6));
- setDeltaAtOpenCapturedAt(quote.capturedAt);
- setDeltaAtOpenStatus("success");
- } else {
- setDeltaAtOpenStatus("error");
- }
- } catch {
- setDeltaAtOpenStatus("error");
- }
- }
- }, [strikePrice, optionType, expirationDate]);
+ }, []);
 
  // Auto-fetch option quote when ticker + type + strike + expiration are all set
  const [quoteFetching, setQuoteFetching] = useState(false);
@@ -707,10 +738,6 @@ function PositionModal({ tickers, editing, prefill, defaultInvestmentAccountId, 
  if (quote.lastPrice != null) {
  setPremiumPerShare(quote.lastPrice.toFixed(4));
  setQuoteAutoFilled(true);
- }
- if (quote.delta != null) {
- setDeltaAtOpenStr(quote.delta.toFixed(6));
- setDeltaAtOpenCapturedAt(quote.capturedAt);
  }
  } catch { /* ignore — user can fill manually */ }
  finally { setQuoteFetching(false); }
@@ -809,8 +836,8 @@ function PositionModal({ tickers, editing, prefill, defaultInvestmentAccountId, 
  feesOpen: feesOpen ? parseAmount(feesOpen) : null,
  shareCostBasis: isCoveredCall && shareCostBasis ? parseAmount(shareCostBasis) : null,
  stockPriceAtOpen: stockPriceAtOpen ? parseAmount(stockPriceAtOpen) : null,
- deltaAtOpen: deltaAtOpenStr ? parseFloat(deltaAtOpenStr) : null,
- deltaAtOpenCapturedAt: deltaAtOpenCapturedAt ?? null,
+ deltaAtOpen: deltaAtOpen.value ? parseFloat(deltaAtOpen.value) : null,
+ deltaAtOpenCapturedAt: deltaAtOpen.value ? deltaAtOpen.capturedAt : null,
  notes: notes || null,
  excludeFromLivePnl,
  investmentAccountId: investmentAccountId || null,
@@ -1153,14 +1180,11 @@ function PositionModal({ tickers, editing, prefill, defaultInvestmentAccountId, 
  <label className="block text-xs font-medium mb-1">Delta at Open <span className="text-muted-foreground font-normal">(optional)</span></label>
  <input
  type="text" inputMode="decimal"
- value={deltaAtOpenStr}
- onChange={(e) => { setDeltaAtOpenStr(e.target.value); setDeltaAtOpenCapturedAt(null); setDeltaAtOpenStatus("idle"); }}
- placeholder={deltaAtOpenStatus ==="fetching" ?"Fetching…" :""}
+ value={deltaAtOpen.value}
+ onChange={(e) => deltaAtOpen.onChange(e.target.value)}
  className="w-full rounded-md border border-border px-3 py-2 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
  />
- {deltaAtOpenStatus ==="fetching" && <p className="mt-1 tp-caption">Fetching delta…</p>}
- {deltaAtOpenStatus ==="success" && <p className="mt-1 tp-caption">From option chain</p>}
- {deltaAtOpenStatus ==="error" && <p className="mt-1 text-xs text-down">Delta fetch failed</p>}
+ <DeltaAtOpenCaption source={deltaAtOpen.source} iv={deltaAtOpen.iv} />
  </div>
  </div>
 
@@ -1333,9 +1357,15 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  const [newFeesOpen, setNewFeesOpen] = useState("");
  const [priceAtOpenStatus, setPriceAtOpenStatus] = useState<"idle" |"fetching" |"success" |"error">("idle");
  const [priceAtOpenLabel, setPriceAtOpenLabel] = useState("");
- const [newDeltaAtOpenStr, setNewDeltaAtOpenStr] = useState("");
- const [newDeltaAtOpenCapturedAt, setNewDeltaAtOpenCapturedAt] = useState<string | null>(null);
- const [deltaAtOpenStatus, setDeltaAtOpenStatus] = useState<"idle" |"fetching" |"success" |"error">("idle");
+ // The new leg opens at the roll's close instant.
+ const newDeltaAtOpen = useImpliedDeltaAtOpen({
+ optionType: position.optionType,
+ strike: newStrikePrice,
+ expirationDate: newExpirationDate,
+ openedAtEt: closedAt,
+ premium: newPremiumPerShare,
+ stockPrice: newStockPriceAtOpen,
+ });
  const [assignedPriceFetching, setAssignedPriceFetching] = useState(false);
 
  const [saving, setSaving] = useState(false);
@@ -1419,33 +1449,6 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  return () => { cancelled = true; };
  }, [isRolled, closedAt, position.ticker.symbol]);
 
- // Auto-fetch the new leg's delta (debounced, since strike is typed) when ROLLED.
- // Same source as the open form: the live option chain — Tradier has no
- // historical greeks — so a backdated roll should be corrected by hand.
- useEffect(() => {
- if (!isRolled) return;
- const strikeNum = parseAmount(newStrikePrice);
- if (isNaN(strikeNum) || strikeNum <= 0 || !newExpirationDate) return;
- let cancelled = false;
- const t = setTimeout(async () => {
- setDeltaAtOpenStatus("fetching");
- try {
- const quote = await getOptionQuote({ symbol: position.ticker.symbol, type: position.optionType, strike: strikeNum, expiration: newExpirationDate });
- if (cancelled) return;
- if (quote.delta != null) {
- setNewDeltaAtOpenStr(quote.delta.toFixed(6));
- setNewDeltaAtOpenCapturedAt(quote.capturedAt);
- setDeltaAtOpenStatus("success");
- } else {
- setDeltaAtOpenStatus("error");
- }
- } catch {
- if (!cancelled) setDeltaAtOpenStatus("error");
- }
- }, 600);
- return () => { cancelled = true; clearTimeout(t); };
- }, [isRolled, closedAt, newStrikePrice, newExpirationDate, position.ticker.symbol, position.optionType]);
-
  const handleSubmit = async (e: React.FormEvent) => {
  e.preventDefault();
 
@@ -1470,8 +1473,8 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  newStrikePrice: parseAmount(newStrikePrice),
  newExpirationDate,
  newStockPriceAtOpen: newStockPriceAtOpen ? parseAmount(newStockPriceAtOpen) : null,
- newDeltaAtOpen: newDeltaAtOpenStr ? parseFloat(newDeltaAtOpenStr) : null,
- newDeltaAtOpenCapturedAt: newDeltaAtOpenStr ? newDeltaAtOpenCapturedAt : null,
+ newDeltaAtOpen: newDeltaAtOpen.value ? parseFloat(newDeltaAtOpen.value) : null,
+ newDeltaAtOpenCapturedAt: newDeltaAtOpen.value ? newDeltaAtOpen.capturedAt : null,
  newFeesOpen: newFeesOpen ? parseAmount(newFeesOpen) : null,
  ...(isPartial ? { contracts: n } : {}),
  });
@@ -1826,14 +1829,11 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  <label className="block text-xs font-medium mb-1">Delta at Open <span className="text-muted-foreground font-normal">(optional)</span></label>
  <input
  type="text" inputMode="decimal"
- value={newDeltaAtOpenStr}
- onChange={(e) => { setNewDeltaAtOpenStr(e.target.value); setNewDeltaAtOpenCapturedAt(null); setDeltaAtOpenStatus("idle"); }}
- placeholder={deltaAtOpenStatus ==="fetching" ?"Fetching…" :""}
+ value={newDeltaAtOpen.value}
+ onChange={(e) => newDeltaAtOpen.onChange(e.target.value)}
  className={inputClass}
  />
- {deltaAtOpenStatus ==="fetching" && <p className="mt-1 tp-caption">Fetching delta…</p>}
- {deltaAtOpenStatus ==="success" && <p className="mt-1 tp-caption">From option chain</p>}
- {deltaAtOpenStatus ==="error" && <p className="mt-1 text-xs text-down">Delta fetch failed</p>}
+ <DeltaAtOpenCaption source={newDeltaAtOpen.source} iv={newDeltaAtOpen.iv} />
  </div>
  </div>
 
@@ -2467,9 +2467,23 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
  setSaving(true);
  setError("");
  try {
+ // Re-derive delta from the confirmed fill; the draft's delta is the
+ // screener's chain greek from whenever the draft was created.
+ const openedAtUtc = etToUtc(confirmedAt);
+ const implied = stockPriceAtOpen
+ ? impliedDelta({
+ optionType: position.optionType,
+ strike: position.strikePrice,
+ expirationDate: position.expirationDate.split("T")[0],
+ openedAtUtc,
+ premium: parseAmount(premiumPerShare),
+ stockPrice: parseAmount(stockPriceAtOpen),
+ })
+ : null;
  await updateOptionsPosition(position.id, {
  isDraft: false,
- openedAt: etToUtc(confirmedAt),
+ openedAt: openedAtUtc,
+ ...(implied ? { deltaAtOpen: Number(implied.delta.toFixed(4)), deltaAtOpenCapturedAt: openedAtUtc } : {}),
  contracts: parseInt(contracts, 10),
  premiumPerShare: parseAmount(premiumPerShare),
  feesOpen: feesOpen ? parseAmount(feesOpen) : null,
