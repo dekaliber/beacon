@@ -15,7 +15,7 @@ const expenseSchema = z.object({
   description: z.string().min(1),
   vendor: z.string(),
   date: z.string().transform((s) => parseLocalDate(s)),
-  notes: z.string().optional(),
+  notes: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
   accountId: z.string(),
   isReimbursementExpected: z.boolean().optional(),
@@ -73,6 +73,7 @@ expenseRoutes.get("/", async (req, res) => {
     where.tags = { some: { tagId: req.query.tagId } };
   }
   if (req.query.vendor) where.vendor = { contains: req.query.vendor as string, mode: "insensitive" };
+  if (req.query.hasNotes === "true") where.AND = [{ notes: { not: null } }, { NOT: { notes: "" } }];
   if (req.query.search) {
     const searchStr = req.query.search as string;
     const asNumber = parseFloat(searchStr);
@@ -162,6 +163,10 @@ expenseRoutes.get("/", async (req, res) => {
     if (req.query.vendor) {
       conds.push(`e.vendor ILIKE $${p++}`);
       params.push(`%${req.query.vendor}%`);
+    }
+
+    if (req.query.hasNotes === "true") {
+      conds.push(`NULLIF(BTRIM(e.notes), '') IS NOT NULL`);
     }
 
     if (req.query.search) {

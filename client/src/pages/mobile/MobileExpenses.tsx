@@ -7,6 +7,7 @@ import { getExpenses, getAccounts, getFlatCategories, createExpense, updateExpen
 import { formatCurrency, formatDate, localToday, cn, parseAmount } from "@/lib/utils";
 import type { Account, Category, Expense, Tag } from "@/types";
 import { SectionLabel } from "@/components/Typography";
+import { NoteIndicator } from "@/components/NoteIndicator";
 
 const EXPENSE_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "CREDIT_CARD", "CASH"];
 
@@ -464,7 +465,9 @@ function MobileExpenseModal({
         date: fd.get("date") as string,
         accountId: fd.get("accountId") as string,
         categoryId: (fd.get("categoryId") as string) || null,
-        notes: (fd.get("notes") as string) || undefined,
+        // Textarea only renders while "more" is open: absent → leave notes
+        // untouched; present but empty → null so clearing actually clears it.
+        notes: fd.has("notes") ? ((fd.get("notes") as string) || null) : undefined,
         tagIds: selectedTagIds,
         isReimbursementExpected,
         reimbursementNote: isReimbursementExpected ? (fd.get("reimbursementNote") as string) || undefined : null,
@@ -902,7 +905,10 @@ function ExpenseRow({
         <CornerDownRight className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${gray}`} />
         <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className={`truncate text-xs ${gray}`}>{expense.description}</p>
+            <div className="flex items-center gap-1">
+              <p className={`truncate text-xs ${gray}`}>{expense.description}</p>
+              <NoteIndicator notes={expense.notes} tooltip={false} className="h-3 w-3" />
+            </div>
             <p className={`text-xs ${grayDim}`}>
               {expense.vendor && <>{expense.vendor} &middot; </>}
               {expense.account.name}
@@ -929,6 +935,7 @@ function ExpenseRow({
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warn" />
           )}
           <p className={`truncate font-medium ${mutedText}`}>{expense.description}</p>
+          <NoteIndicator notes={expense.notes} tooltip={false} className="mt-1" />
         </div>
         <span className={`shrink-0 font-semibold ${fullyOffset ? "text-ink-4" : isNegative ? "text-up" : ""}`}>
           {isNegative
@@ -967,6 +974,7 @@ interface ExpenseFilterState {
   startDate: string;
   endDate: string;
   datePreset: string;
+  hasNotes: boolean;
 }
 
 const EXPENSE_DEFAULT_FILTERS: ExpenseFilterState = {
@@ -976,6 +984,7 @@ const EXPENSE_DEFAULT_FILTERS: ExpenseFilterState = {
   startDate: `${new Date().getFullYear()}-01-01`,
   endDate: "",
   datePreset: "This year",
+  hasNotes: false,
 };
 
 function loadExpenseFilters(): ExpenseFilterState {
@@ -991,6 +1000,7 @@ function loadExpenseFilters(): ExpenseFilterState {
       startDate: get("startDate") ?? EXPENSE_DEFAULT_FILTERS.startDate,
       endDate: get("endDate") ?? EXPENSE_DEFAULT_FILTERS.endDate,
       datePreset: get("datePreset") ?? EXPENSE_DEFAULT_FILTERS.datePreset,
+      hasNotes: get("hasNotes") ?? EXPENSE_DEFAULT_FILTERS.hasNotes,
     };
   } catch {
     return { ...EXPENSE_DEFAULT_FILTERS };
@@ -1004,6 +1014,7 @@ function saveExpenseFilters(filters: ExpenseFilterState) {
   localStorage.setItem("beacon-expenses-startDate", JSON.stringify(filters.startDate));
   localStorage.setItem("beacon-expenses-endDate", JSON.stringify(filters.endDate));
   localStorage.setItem("beacon-expenses-datePreset", JSON.stringify(filters.datePreset));
+  localStorage.setItem("beacon-expenses-hasNotes", JSON.stringify(filters.hasNotes));
 }
 
 // ── Filter sheet ──────────────────────────────────────────────────────────────
@@ -1376,6 +1387,25 @@ function MobileFilterSheet({
             )}
           </div>
 
+          {/* Notes-only toggle */}
+          <div className="flex items-center gap-3 px-4 py-3">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={staged.hasNotes}
+              onClick={() => setStaged((s) => ({ ...s, hasNotes: !s.hasNotes }))}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${staged.hasNotes ? "bg-primary" : "bg-border"}`}
+            >
+              <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${staged.hasNotes ? "translate-x-4" : "translate-x-0"}`} />
+            </button>
+            <span
+              className="select-none cursor-pointer text-sm"
+              onClick={() => setStaged((s) => ({ ...s, hasNotes: !s.hasNotes }))}
+            >
+              Show only transactions with notes
+            </span>
+          </div>
+
         </div>
 
         {/* Bottom action buttons */}
@@ -1459,6 +1489,7 @@ export function MobileExpenses() {
     if (applied.categoryIds.length > 0) params.categoryIds = applied.categoryIds.join(",");
     if (applied.accountIds.length > 0) params.accountIds = applied.accountIds.join(",");
     if (applied.tagIds.length > 0) params.tagIds = applied.tagIds.join(",");
+    if (applied.hasNotes) params.hasNotes = "true";
     if (appliedSearch.trim()) params.search = appliedSearch.trim();
     return params;
   }, [tomorrow, applied, appliedSearch]);
@@ -1485,6 +1516,7 @@ export function MobileExpenses() {
     if (f.categoryIds.length > 0) params.categoryIds = f.categoryIds.join(",");
     if (f.accountIds.length > 0) params.accountIds = f.accountIds.join(",");
     if (f.tagIds.length > 0) params.tagIds = f.tagIds.join(",");
+    if (f.hasNotes) params.hasNotes = "true";
     if (q && isDefaultDateFilter) {
       params.endDate = today;
     } else {
@@ -1614,6 +1646,7 @@ export function MobileExpenses() {
     applied.accountIds.length > 0 ||
     applied.categoryIds.length > 0 ||
     applied.tagIds.length > 0 ||
+    applied.hasNotes ||
     applied.startDate !== EXPENSE_DEFAULT_FILTERS.startDate ||
     (applied.endDate && applied.endDate !== today)
   );

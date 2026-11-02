@@ -6,6 +6,7 @@ import { getIncome, getAccounts, getFlatCategories, createIncome, updateIncome, 
 import { formatCurrency, formatDate, localToday, cn, parseAmount } from "@/lib/utils";
 import type { Account, Category, Income } from "@/types";
 import { SectionLabel } from "@/components/Typography";
+import { NoteIndicator } from "@/components/NoteIndicator";
 
 const INCOME_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "INVESTMENT"];
 
@@ -228,7 +229,9 @@ function MobileIncomeModal({
         accountId: fd.get("accountId") as string,
         categoryId: (fd.get("categoryId") as string) || undefined,
         taxClassification: taxClassification || null,
-        notes: (fd.get("notes") as string) || undefined,
+        // Textarea only renders while "more" is open: absent → leave notes
+        // untouched; present but empty → null so clearing actually clears it.
+        notes: fd.has("notes") ? ((fd.get("notes") as string) || null) : undefined,
       };
       if (isEditing) {
         await updateIncome(income.id, data);
@@ -455,8 +458,9 @@ function IncomeRow({
   onTap?: () => void;
 }) {
   const notReceived = !upcoming && !income.isCashReceived;
-  const primaryText = income.category?.name ?? "—";
-  const secondaryText = income.source ? ` · ${income.source}` : "";
+  // Category is omitted: it mostly repeats the Dividend/Options/Sale badge.
+  // Fall back to it only when there's no source, so the row is never blank.
+  const title = income.source || income.category?.name || "—";
 
   return (
     <div
@@ -466,8 +470,9 @@ function IncomeRow({
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <p className={`truncate font-medium ${notReceived ? "text-muted-foreground" : ""}`}>
-            {primaryText}{secondaryText}
+            {title}
           </p>
+          <NoteIndicator notes={income.notes} tooltip={false} />
           {income.subtype === "DIVIDEND" && (
             <span className="shrink-0 rounded-full px-1.5 py-0.5 text-10 font-medium bg-violet-soft text-violet-deep">Dividend</span>
           )}
@@ -499,6 +504,7 @@ interface IncomeFilterState {
   endDate: string;
   datePreset: string;
   showOnlyReceived: boolean;
+  hasNotes: boolean;
 }
 
 const INCOME_DEFAULT_FILTERS: IncomeFilterState = {
@@ -508,6 +514,7 @@ const INCOME_DEFAULT_FILTERS: IncomeFilterState = {
   endDate: "",
   datePreset: "This year",
   showOnlyReceived: true,
+  hasNotes: false,
 };
 
 function loadIncomeFilters(): IncomeFilterState {
@@ -523,6 +530,7 @@ function loadIncomeFilters(): IncomeFilterState {
       endDate: get("endDate") ?? INCOME_DEFAULT_FILTERS.endDate,
       datePreset: get("datePreset") ?? INCOME_DEFAULT_FILTERS.datePreset,
       showOnlyReceived: get("showOnlyReceived") ?? INCOME_DEFAULT_FILTERS.showOnlyReceived,
+      hasNotes: get("hasNotes") ?? INCOME_DEFAULT_FILTERS.hasNotes,
     };
   } catch {
     return { ...INCOME_DEFAULT_FILTERS };
@@ -536,6 +544,7 @@ function saveIncomeFilters(filters: IncomeFilterState) {
   localStorage.setItem("beacon-income-endDate", JSON.stringify(filters.endDate));
   localStorage.setItem("beacon-income-datePreset", JSON.stringify(filters.datePreset));
   localStorage.setItem("beacon-income-showOnlyReceived", JSON.stringify(filters.showOnlyReceived));
+  localStorage.setItem("beacon-income-hasNotes", JSON.stringify(filters.hasNotes));
 }
 
 // ── Filter sheet ──────────────────────────────────────────────────────────────
@@ -665,25 +674,6 @@ function MobileIncomeFilterSheet({
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto overscroll-contain divide-y divide-border">
-
-          {/* Show only received toggle */}
-          <div className="flex items-center gap-3 px-4 py-3">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={staged.showOnlyReceived}
-              onClick={() => setStaged((s) => ({ ...s, showOnlyReceived: !s.showOnlyReceived }))}
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${staged.showOnlyReceived ? "bg-primary" : "bg-border"}`}
-            >
-              <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${staged.showOnlyReceived ? "translate-x-4" : "translate-x-0"}`} />
-            </button>
-            <span
-              className="select-none cursor-pointer text-sm"
-              onClick={() => setStaged((s) => ({ ...s, showOnlyReceived: !s.showOnlyReceived }))}
-            >
-              Show only received income
-            </span>
-          </div>
 
           {/* Account */}
           <div>
@@ -864,6 +854,44 @@ function MobileIncomeFilterSheet({
             )}
           </div>
 
+          {/* Show only received toggle */}
+          <div className="flex items-center gap-3 px-4 py-3">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={staged.showOnlyReceived}
+              onClick={() => setStaged((s) => ({ ...s, showOnlyReceived: !s.showOnlyReceived }))}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${staged.showOnlyReceived ? "bg-primary" : "bg-border"}`}
+            >
+              <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${staged.showOnlyReceived ? "translate-x-4" : "translate-x-0"}`} />
+            </button>
+            <span
+              className="select-none cursor-pointer text-sm"
+              onClick={() => setStaged((s) => ({ ...s, showOnlyReceived: !s.showOnlyReceived }))}
+            >
+              Show only received income
+            </span>
+          </div>
+
+          {/* Notes-only toggle */}
+          <div className="flex items-center gap-3 px-4 py-3">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={staged.hasNotes}
+              onClick={() => setStaged((s) => ({ ...s, hasNotes: !s.hasNotes }))}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${staged.hasNotes ? "bg-primary" : "bg-border"}`}
+            >
+              <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${staged.hasNotes ? "translate-x-4" : "translate-x-0"}`} />
+            </button>
+            <span
+              className="select-none cursor-pointer text-sm"
+              onClick={() => setStaged((s) => ({ ...s, hasNotes: !s.hasNotes }))}
+            >
+              Show only income with notes
+            </span>
+          </div>
+
         </div>
 
         {/* Bottom action buttons */}
@@ -944,7 +972,8 @@ export function MobileIncome() {
     sortBy: "date",
     sortOrder: "asc",
     limit: "100",
-  }), [tomorrow]);
+    ...(applied.hasNotes ? { hasNotes: "true" } : {}),
+  }), [tomorrow, applied.hasNotes]);
 
   useEffect(() => {
     let cancelled = false;
@@ -971,6 +1000,7 @@ export function MobileIncome() {
       params.endDate = endDate > today ? today : endDate;
     }
     if (!f.showOnlyReceived) params.showOnlyReceived = "false";
+    if (f.hasNotes) params.hasNotes = "true";
     getIncome(params)
       .then((result) => {
         if (cancelled || !result) return;
@@ -1073,7 +1103,8 @@ export function MobileIncome() {
     applied.categoryIds.length > 0 ||
     applied.startDate !== INCOME_DEFAULT_FILTERS.startDate ||
     (applied.endDate && applied.endDate !== today) ||
-    !applied.showOnlyReceived
+    !applied.showOnlyReceived ||
+    applied.hasNotes
   );
 
   const handleSaved = useCallback(() => {

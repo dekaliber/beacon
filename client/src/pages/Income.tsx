@@ -9,6 +9,7 @@ import {
 } from"lucide-react";
 import { BulkEditBar } from"@/components/BulkEditBar";
 import { Tooltip } from"@/components/Tooltip";
+import { NoteIndicator } from"@/components/NoteIndicator";
 import { Card } from"@/components/Card";
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
@@ -592,6 +593,7 @@ interface IncomeFilterState {
  endDate: string;
  datePreset: string;
  showOnlyReceived: boolean;
+ hasNotes: boolean;
 }
 
 const INCOME_DEFAULT_FILTERS: IncomeFilterState = {
@@ -601,6 +603,7 @@ const INCOME_DEFAULT_FILTERS: IncomeFilterState = {
  endDate:"",
  datePreset:"This year",
  showOnlyReceived: true,
+ hasNotes: false,
 };
 
 function loadIncomeFilters(): IncomeFilterState {
@@ -616,6 +619,7 @@ function loadIncomeFilters(): IncomeFilterState {
  endDate: get("endDate") ?? INCOME_DEFAULT_FILTERS.endDate,
  datePreset: get("datePreset") ?? INCOME_DEFAULT_FILTERS.datePreset,
  showOnlyReceived: get("showOnlyReceived") ?? INCOME_DEFAULT_FILTERS.showOnlyReceived,
+ hasNotes: get("hasNotes") ?? INCOME_DEFAULT_FILTERS.hasNotes,
  };
  } catch {
  return { ...INCOME_DEFAULT_FILTERS };
@@ -629,6 +633,7 @@ function saveIncomeFilters(filters: IncomeFilterState) {
  localStorage.setItem("beacon-income-endDate", JSON.stringify(filters.endDate));
  localStorage.setItem("beacon-income-datePreset", JSON.stringify(filters.datePreset));
  localStorage.setItem("beacon-income-showOnlyReceived", JSON.stringify(filters.showOnlyReceived));
+ localStorage.setItem("beacon-income-hasNotes", JSON.stringify(filters.hasNotes));
 }
 
 // Compute the cache key for the first page of income using the same logic as the filterParams
@@ -645,6 +650,7 @@ function getInitialIncomeData(): Income[] {
  const endDate = applied.endDate || todayStr;
  params.endDate = endDate > todayStr ? todayStr : endDate;
  if (!applied.showOnlyReceived) params.showOnlyReceived ="false";
+ if (applied.hasNotes) params.hasNotes ="true";
  params.page ="1";
  return getApiCache<{ data: Income[] }>(`income-${JSON.stringify(params)}`)?.data ?? [];
  } catch {
@@ -723,6 +729,7 @@ export function IncomePage() {
  params.endDate = endDate > todayStr ? todayStr : endDate;
  }
  if (!applied.showOnlyReceived) params.showOnlyReceived ="false";
+ if (applied.hasNotes) params.hasNotes ="true";
  return params;
  }, [sort, applied, todayStr, appliedSearch]);
 
@@ -736,7 +743,8 @@ export function IncomePage() {
  sortBy:"date",
  sortOrder:"asc",
  limit:"100",
- }), [tomorrowStr]);
+ ...(applied.hasNotes ? { hasNotes:"true" } : {}),
+ }), [tomorrowStr, applied.hasNotes]);
 
  const { data: incomeData, loading } = useApi(() => getIncome(queryParams), [queryParams],`income-${JSON.stringify(queryParams)}`);
  const { data: upcomingData, refetch: refetchUpcoming } = useApi(() => getIncome(upcomingParams), [upcomingParams],`income-upcoming-${JSON.stringify(upcomingParams)}`);
@@ -832,6 +840,7 @@ export function IncomePage() {
  const hasActiveFilters = !!(
  applied.accountIds.length > 0 ||
  applied.categoryIds.length > 0 ||
+ applied.hasNotes ||
  applied.startDate !== INCOME_DEFAULT_FILTERS.startDate ||
  (applied.endDate && applied.endDate !== todayStr)
  );
@@ -1137,6 +1146,17 @@ export function IncomePage() {
  <span className="select-none cursor-pointer" onClick={() => setStaged((s) => ({ ...s, showOnlyReceived: !s.showOnlyReceived }))}>
  Show only received income
  </span>
+ <button
+ role="switch"
+ aria-checked={staged.hasNotes}
+ onClick={() => setStaged((s) => ({ ...s, hasNotes: !s.hasNotes }))}
+ className={`ml-4 relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${staged.hasNotes ?"bg-primary" :"bg-border"}`}
+ >
+ <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${staged.hasNotes ?"translate-x-4" :"translate-x-0"}`} />
+ </button>
+ <span className="select-none cursor-pointer" onClick={() => setStaged((s) => ({ ...s, hasNotes: !s.hasNotes }))}>
+ Show only income with notes
+ </span>
  </div>
  </Card>
  )}
@@ -1188,7 +1208,10 @@ export function IncomePage() {
  <EditableCell value={income.date} type="date" onSave={(v) => handleInlineUpdate(income.id,"date", v)} />
  </td>
  <td className="py-2 pr-3">
+ <div className="flex items-center gap-1.5">
  <EditableCell value={income.source ??""} onSave={(v) => handleInlineUpdate(income.id,"source", v)} className="tp-row-label" />
+ <NoteIndicator notes={income.notes} />
+ </div>
  </td>
  <td className="w-[130px] py-2 pr-3">
  <EditableCategoryCell
@@ -1286,6 +1309,7 @@ export function IncomePage() {
  <td className={`py-2 pr-3 ${!income.isCashReceived ?"text-muted-foreground" :""}`}>
  <div className="flex items-center gap-1.5">
  <EditableCell value={income.source ??""} onSave={(v) => handleInlineUpdate(income.id,"source", v)} className="tp-row-label" />
+ <NoteIndicator notes={income.notes} />
  {income.subtype ==="DIVIDEND" && (
  <span className="shrink-0 rounded-full px-1.5 py-0.5 text-10 font-medium bg-violet-soft text-violet-deep">Dividend</span>
  )}
@@ -1476,7 +1500,9 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
  date: form.get("date") as string,
  accountId,
  taxClassification: taxClassification || null,
- notes: (form.get("notes") as string) || undefined,
+ // Textarea only renders while the optional section is open: absent → leave
+ // notes untouched; present but empty → null so clearing actually clears it.
+ notes: form.has("notes") ? ((form.get("notes") as string) || null) : undefined,
  });
  setSaving(false);
  };

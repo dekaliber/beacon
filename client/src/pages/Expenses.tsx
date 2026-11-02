@@ -21,6 +21,7 @@ import { MultiSelectDropdown } from"@/components/MultiSelectDropdown";
 import type { MultiSelectOption, MultiSelectGroup } from"@/components/MultiSelectDropdown";
 import { BulkEditBar } from"@/components/BulkEditBar";
 import { Tooltip } from"@/components/Tooltip";
+import { NoteIndicator } from"@/components/NoteIndicator";
 import type { GroupAction } from"@/components/BulkEditBar";
 import { useApi, getApiCache } from"@/hooks/useApi";
 import {
@@ -1044,6 +1045,7 @@ interface ExpenseFilterState {
  startDate: string;
  endDate: string;
  datePreset: string;
+ hasNotes: boolean;
 }
 
 const EXPENSE_DEFAULT_FILTERS: ExpenseFilterState = {
@@ -1053,6 +1055,7 @@ const EXPENSE_DEFAULT_FILTERS: ExpenseFilterState = {
  startDate:`${new Date().getFullYear()}-01-01`,
  endDate:"",
  datePreset:"This year",
+ hasNotes: false,
 };
 
 function loadExpenseFilters(): ExpenseFilterState {
@@ -1068,6 +1071,7 @@ function loadExpenseFilters(): ExpenseFilterState {
  startDate: get("startDate") ?? EXPENSE_DEFAULT_FILTERS.startDate,
  endDate: get("endDate") ?? EXPENSE_DEFAULT_FILTERS.endDate,
  datePreset: get("datePreset") ?? EXPENSE_DEFAULT_FILTERS.datePreset,
+ hasNotes: get("hasNotes") ?? EXPENSE_DEFAULT_FILTERS.hasNotes,
  };
  } catch {
  return { ...EXPENSE_DEFAULT_FILTERS };
@@ -1081,6 +1085,7 @@ function saveExpenseFilters(filters: ExpenseFilterState) {
  localStorage.setItem("beacon-expenses-startDate", JSON.stringify(filters.startDate));
  localStorage.setItem("beacon-expenses-endDate", JSON.stringify(filters.endDate));
  localStorage.setItem("beacon-expenses-datePreset", JSON.stringify(filters.datePreset));
+ localStorage.setItem("beacon-expenses-hasNotes", JSON.stringify(filters.hasNotes));
 }
 
 // Compute the cache key for the first page of expenses using the same logic as the filterParams
@@ -1094,6 +1099,7 @@ function getInitialExpenseData(): Expense[] {
  if (applied.categoryIds.length > 0) params.categoryIds = applied.categoryIds.join(",");
  if (applied.accountIds.length > 0) params.accountIds = applied.accountIds.join(",");
  if (applied.tagIds.length > 0) params.tagIds = applied.tagIds.join(",");
+ if (applied.hasNotes) params.hasNotes ="true";
  params.startDate = applied.startDate || EXPENSE_DEFAULT_FILTERS.startDate;
  const endDate = applied.endDate || todayStr;
  params.endDate = endDate > todayStr ? todayStr : endDate;
@@ -1187,6 +1193,7 @@ export function Expenses() {
  }
  if (applied.accountIds.length > 0) params.accountIds = applied.accountIds.join(",");
  if (applied.tagIds.length > 0) params.tagIds = applied.tagIds.join(",");
+ if (applied.hasNotes) params.hasNotes ="true";
  if (appliedSearch.trim()) params.search = appliedSearch.trim();
  const isDefaultDateFilter = (
  applied.startDate === EXPENSE_DEFAULT_FILTERS.startDate &&
@@ -1225,6 +1232,7 @@ export function Expenses() {
  }
  if (applied.accountIds.length > 0) params.accountIds = applied.accountIds.join(",");
  if (applied.tagIds.length > 0) params.tagIds = applied.tagIds.join(",");
+ if (applied.hasNotes) params.hasNotes ="true";
  return params;
  }, [tomorrowStr, applied, showUncategorized]);
 
@@ -1290,6 +1298,7 @@ export function Expenses() {
  applied.accountIds.length > 0 ||
  applied.categoryIds.length > 0 ||
  applied.tagIds.length > 0 ||
+ applied.hasNotes ||
  applied.startDate !== EXPENSE_DEFAULT_FILTERS.startDate ||
  (applied.endDate && applied.endDate !== todayStr) ||
  showUncategorized
@@ -2009,6 +2018,19 @@ export function Expenses() {
  </div>
  </div>
  </div>
+ <div className="mt-3 border-t border-border pt-3 flex items-center gap-3">
+ <button
+ role="switch"
+ aria-checked={staged.hasNotes}
+ onClick={() => setStaged((s) => ({ ...s, hasNotes: !s.hasNotes }))}
+ className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${staged.hasNotes ?"bg-primary" :"bg-border"}`}
+ >
+ <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${staged.hasNotes ?"translate-x-4" :"translate-x-0"}`} />
+ </button>
+ <span className="select-none cursor-pointer" onClick={() => setStaged((s) => ({ ...s, hasNotes: !s.hasNotes }))}>
+ Show only transactions with notes
+ </span>
+ </div>
  </Card>
  )}
 
@@ -2337,6 +2359,7 @@ function OffsetRow({
  onSave={(v) => onInlineUpdate(offset.id,"description", v)}
  className={textClass}
  />
+ <NoteIndicator notes={offset.notes} />
  </div>
  </td>
  <td className="w-[60px] py-2"></td>
@@ -2469,7 +2492,10 @@ function ExpenseRowWithOffsets({
  <EditableCell value={expense.date} type="date" onSave={(v) => onInlineUpdate(expense.id,"date", v)} />
  </td>
  <td className="py-2 pr-3">
+ <div className="flex items-center gap-1.5">
  <EditableCell value={expense.description} onSave={(v) => onInlineUpdate(expense.id,"description", v)} className={isFullyOffset ?"font-medium text-ink-4" :"tp-row-label"} />
+ <NoteIndicator notes={expense.notes} />
+ </div>
  {expense.tags.length > 0 && (
  <div className="mt-0.5 flex flex-wrap gap-1">
  {expense.tags.map(({ tag }) => (
@@ -3048,7 +3074,9 @@ function ExpenseModal({ open, onClose, onSave, onDelete, onRecurringDelete, expe
  date: form.get("date") as string,
  categoryId: form.get("categoryId") as string || null,
  accountId: form.get("accountId") as string,
- notes: (form.get("notes") as string) || undefined,
+ // Textarea only renders while the optional section is open: absent → leave
+ // notes untouched; present but empty → null so clearing actually clears it.
+ notes: form.has("notes") ? ((form.get("notes") as string) || null) : undefined,
  isReimbursementExpected: isOffsetMode ? false : isReimbursementExpected,
  reimbursementNote: isOffsetMode ? null : isReimbursementExpected
  ? (form.get("reimbursementNote") as string) || undefined

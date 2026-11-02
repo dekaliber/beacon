@@ -57,7 +57,7 @@ const incomeSchema = z.object({
   categoryId: z.string().optional(),
   source: z.string().optional(),
   date: z.string().transform((s) => parseLocalDate(s)),
-  notes: z.string().optional(),
+  notes: z.string().nullable().optional(),
   accountId: z.string(),
   tagIds: z.array(z.string()).optional(),
   transactionGroupId: z.string().nullable().optional(),
@@ -94,6 +94,7 @@ incomeRoutes.get("/", async (req, res) => {
   } else if (req.query.tagId) {
     where.tags = { some: { tagId: req.query.tagId } };
   }
+  if (req.query.hasNotes === "true") where.AND = [{ notes: { not: null } }, { NOT: { notes: "" } }];
   if (req.query.search) {
     const searchStr = req.query.search as string;
     const asNumber = parseFloat(searchStr);
