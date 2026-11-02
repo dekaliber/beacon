@@ -111,15 +111,23 @@ const fmtPctLive = (n: number | null | undefined) => {
 /** Convert a local ET datetime string (YYYY-MM-DDTHH:mm) to UTC ISO string */
 function etToUtc(localEtString: string): string {
  // The user's machine may not be in ET. We treat the input as an ET wall-clock
- // time and compute UTC by using the ET offset. For now we use a fixed -4 (EDT)
- // offset; Phase 3 can do a proper IANA lookup. The displayed value converts back
- // to local time for the user.
+ // time; _etToUTC resolves EDT vs EST for that date.
  const [datePart, timePart] = localEtString.split("T");
  const [y, mo, d] = datePart.split("-").map(Number);
  const [h, mi] = timePart.split(":").map(Number);
- const etOffsetHours = 4; // EDT; TODO Phase 3: check DST
- const utc = new Date(Date.UTC(y, mo - 1, d, h + etOffsetHours, mi));
- return utc.toISOString();
+ return new Date(_etToUTC(y, mo, d, h, mi)).toISOString();
+}
+
+const _etInputFmt = new Intl.DateTimeFormat("en-US", {
+ timeZone:"America/New_York", year:"numeric", month:"2-digit", day:"2-digit",
+ hour:"2-digit", minute:"2-digit", hourCycle:"h23",
+});
+
+/** Inverse of etToUtc: a UTC instant as an ET datetime-local string (YYYY-MM-DDTHH:mm) */
+function utcToEtInput(utc: string | number | Date): string {
+ const parts = _etInputFmt.formatToParts(new Date(utc));
+ const g = (t: string) => parts.find((p) => p.type === t)!.value;
+ return`${g("year")}-${g("month")}-${g("day")}T${String(Number(g("hour")) % 24).padStart(2,"0")}:${g("minute")}`;
 }
 
 // Delta at open for a form, implied from its own inputs via Black-Scholes
@@ -267,9 +275,9 @@ function calcPosition(p: OptionsPosition) {
  : ((p.strikePrice - p.stockPriceAtOpen) / p.stockPriceAtOpen) * 100
  : null;
 
- // Expiry = expiration date at 4 pm ET = 20:00 UTC (approximation, EDT)
+ // Expiry = expiration date at 4 pm ET
  const [ey, em, ed] = p.expirationDate.split("T")[0].split("-").map(Number);
- const expiryUtc = new Date(Date.UTC(ey, em - 1, ed, 20, 0, 0));
+ const expiryUtc = new Date(_etToUTC(ey, em, ed, 16));
 
  const openedMs = new Date(p.openedAt).getTime();
  const durationDays = (expiryUtc.getTime() - openedMs) / 86_400_000;
@@ -277,9 +285,9 @@ function calcPosition(p: OptionsPosition) {
 
  // Calendar days until expiry counted in ET so the display flips at midnight ET,
  // not at 4 pm ET (which is when daysLeft crosses integers).
- const ET_OFFSET_MS = 4 * 3600 * 1000; // EDT approximation
- const expiryEtDay = Math.floor((Date.UTC(ey, em - 1, ed) + ET_OFFSET_MS) / 86_400_000);
- const todayEtDay = Math.floor((Date.now() - ET_OFFSET_MS) / 86_400_000);
+ const expiryEtDay = Date.UTC(ey, em - 1, ed) / 86_400_000;
+ const today = etDateParts(Date.now());
+ const todayEtDay = Date.UTC(today.year, today.month - 1, today.day) / 86_400_000;
  const calDaysLeft = expiryEtDay - todayEtDay;
 
  const annReturnAtExpiry =
@@ -472,7 +480,7 @@ function computePerformanceMetrics(positions: OptionsPosition[]): PerformanceMet
  const getCloseMs = (p: OptionsPosition): number => {
  if (p.closedAt) return new Date(p.closedAt).getTime();
  const [ey, em, ed] = p.expirationDate.split("T")[0].split("-").map(Number);
- return Date.UTC(ey, em - 1, ed, 20, 0, 0);
+ return _etToUTC(ey, em, ed, 16);
  };
 
  // Fully-closed chains
@@ -495,7 +503,7 @@ function computePerformanceMetrics(positions: OptionsPosition[]): PerformanceMet
 
  // Expected duration: first open → final leg's expiry
  const [ey, em, ed] = finalLeg.expirationDate.split("T")[0].split("-").map(Number);
- const finalExpiryMs = Date.UTC(ey, em - 1, ed, 20, 0, 0);
+ const finalExpiryMs = _etToUTC(ey, em, ed, 16);
  const chainExpectedDays = (finalExpiryMs - firstOpenMs) / 86_400_000;
 
  const w = firstLeg.contracts;
@@ -559,9 +567,7 @@ function getDefaultExpirationDate() {
 
 function getDefaultOpenedAt() {
  // Return current wall-clock time expressed as an ET datetime-local string
- // (EDT = UTC-4; etToUtc will add 4h back when converting to UTC for storage)
- const etNow = new Date(Date.now() - 4 * 60 * 60 * 1000);
- return etNow.toISOString().slice(0, 16);
+ return utcToEtInput(Date.now());
 }
 
 type TickerDropdownItem =
@@ -583,13 +589,9 @@ function PositionModal({ tickers, editing, prefill, defaultInvestmentAccountId, 
  const [expirationDate, setExpirationDate] = useState(
  editing?.expirationDate ? editing.expirationDate.split("T")[0] : getDefaultExpirationDate()
  );
- // openedAt is stored as UTC; show in ET (subtract 4h for EDT)
+ // openedAt is stored as UTC; show in ET
  const [openedAt, setOpenedAt] = useState(() => {
- if (editing?.openedAt) {
- const d = new Date(editing.openedAt);
- d.setHours(d.getHours() - 4); // UTC → EDT approximation
- return d.toISOString().slice(0, 16);
- }
+ if (editing?.openedAt) return utcToEtInput(editing.openedAt);
  return getDefaultOpenedAt();
  });
  const [isDraft, setIsDraft] = useState(editing?.isDraft ?? false);
@@ -1887,9 +1889,7 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
  const [outcome, setOutcome] = useState<OptionOutcome>(position.outcome ??"EXPIRED_WORTHLESS");
  const [closedAt, setClosedAt] = useState(() => {
  if (!position.closedAt) return"";
- const d = new Date(position.closedAt);
- d.setHours(d.getHours() - 4); // UTC → EDT approximation
- return d.toISOString().slice(0, 16);
+ return utcToEtInput(position.closedAt);
  });
  const [closePremiumPerShare, setClosePremiumPerShare] = useState(
  position.closePremiumPerShare?.toString() ??""
@@ -4044,11 +4044,11 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  );
  }
 
- // Effective close timestamp: real closedAt, else expiration at 20:00 UTC (market close).
+ // Effective close timestamp: real closedAt, else expiration at 4 pm ET (market close).
  const getCloseMs = (p: OptionsPosition): number => {
  if (p.closedAt) return new Date(p.closedAt).getTime();
  const [ey, em, ed] = p.expirationDate.split("T")[0].split("-").map(Number);
- return Date.UTC(ey, em - 1, ed, 20, 0, 0);
+ return _etToUTC(ey, em, ed, 16);
  };
 
  const sorted = [...positions].sort((a, b) => {
@@ -4362,7 +4362,7 @@ function ClosedPositionsTable({ positions, openChainGroupIds, openSplitGroupIds,
  <td className={td} title={(() => {
  if (p.closedAt) return fmtDateTimeFull(p.closedAt);
  const [ey, em, ed] = p.expirationDate.split("T")[0].split("-").map(Number);
- return fmtDateTimeFull(new Date(Date.UTC(ey, em - 1, ed, 20, 0, 0)).toISOString());
+ return fmtDateTimeFull(new Date(_etToUTC(ey, em, ed, 16)).toISOString());
  })()}>{p.closedAt ? fmtDateTimeShort(p.closedAt) : fmtDate(p.expirationDate)}</td>
  <td className={td}>{c.daysInTrade != null ?`${Math.round(c.daysInTrade)}d` :"—"}</td>
  </>
@@ -5897,7 +5897,7 @@ function SummaryCards({
  if (pos.closedAt) return new Date(pos.closedAt).getTime();
  if (pos.status ==="OPEN") return windowEndMs;
  const [ey, em, ed] = pos.expirationDate.split("T")[0].split("-").map(Number);
- return new Date(Date.UTC(ey, em - 1, ed, 20, 0, 0)).getTime();
+ return new Date(_etToUTC(ey, em, ed, 16)).getTime();
  };
 
  type SeriesEntry = {
@@ -5983,7 +5983,7 @@ function SummaryCards({
  if (pos.closedAt) return new Date(pos.closedAt).getTime();
  if (pos.status ==="OPEN") return windowEndMs;
  const [ey, em, ed] = pos.expirationDate.split("T")[0].split("-").map(Number);
- return new Date(Date.UTC(ey, em - 1, ed, 20, 0, 0)).getTime();
+ return new Date(_etToUTC(ey, em, ed, 16)).getTime();
  };
 
  type TradingSeriesEntry = {
