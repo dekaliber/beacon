@@ -10,31 +10,6 @@ import { NoteIndicator } from "@/components/NoteIndicator";
 
 const INCOME_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "INVESTMENT"];
 
-const DIVIDEND_TYPE_LABELS: Record<string, string> = {
-  QUALIFIED: "Qualified",
-  ORDINARY: "Ordinary",
-  TAX_EXEMPT: "Tax-Exempt",
-  RETURN_OF_CAPITAL: "Return of Capital",
-  CAPITAL_GAIN: "Capital Gain",
-};
-
-const DIVIDEND_TYPE_CLASSES: Record<string, string> = {
-  QUALIFIED: "bg-up-soft text-up-deep",
-  ORDINARY: "bg-slate-soft text-slate-deep",
-  TAX_EXEMPT: "bg-teal-soft text-teal-deep",
-  RETURN_OF_CAPITAL: "bg-warn-soft text-warn-deep",
-  CAPITAL_GAIN: "bg-blue-soft text-blue-deep",
-};
-
-function TaxStatusBadge({ taxClassification }: { taxClassification: string | null }) {
-  if (!taxClassification) return null;
-  return (
-    <span className={`inline-block rounded-full px-1.5 py-0.5 text-10 font-medium ${DIVIDEND_TYPE_CLASSES[taxClassification] ?? "bg-slate-soft text-slate-deep"}`}>
-      {DIVIDEND_TYPE_LABELS[taxClassification] ?? taxClassification}
-    </span>
-  );
-}
-
 // ── Category picker with search ───────────────────────────────────────────────
 
 function CategoryPicker({ categories, initialId = "" }: { categories: Category[]; initialId?: string }) {
@@ -489,7 +464,6 @@ function IncomeRow({
       </div>
       <div className={`mt-0.5 flex items-center gap-1.5 text-sm ${notReceived ? "text-muted-foreground/70" : "text-muted-foreground"}`}>
         <span>{formatDate(income.date)} · {income.account.name}</span>
-        {income.taxClassification && <TaxStatusBadge taxClassification={income.taxClassification} />}
       </div>
     </div>
   );
