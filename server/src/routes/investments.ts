@@ -320,8 +320,23 @@ async function fillPriceGaps(
   // Earliest session this ticker is missing but its peers have. Only dates after
   // the ticker's own first row count — anything earlier predates our coverage of it.
   const earliestHole = (ticker: string): number | null => {
-    if (coinGeckoIdByTicker.has(ticker) || tiingoTickers.has(ticker)) return null;
+    if (tiingoTickers.has(ticker)) return null;
     const ceilingMs = ceilingFor(ticker).getTime();
+    if (coinGeckoIdByTicker.has(ticker)) {
+      // Crypto trades every calendar day, so its holes are measured day by day
+      // rather than against the exchange calendar. This matters because
+      // refreshCryptoSnapshots writes the current snapshot day directly: a day
+      // nobody refreshed on (say, Sunday) then sits *behind* the newest row, and
+      // filling only forward from that row never reaches it. That left Sunday
+      // empty, gave Monday's crypto no previous day, and blanked the 1-day change.
+      const days = daysByTicker.get(ticker);
+      if (!days || days.size === 0) return null;
+      const DAY = 24 * 60 * 60 * 1000;
+      for (let ms = Math.min(...days) + DAY; ms <= ceilingMs; ms += DAY) {
+        if (!days.has(ms)) return ms;
+      }
+      return null;
+    }
     if (fixedPrices.has(ticker)) {
       // Any missing session counts, including the newest one.
       const days = daysByTicker.get(ticker);
@@ -357,13 +372,19 @@ async function fillPriceGaps(
         .filter((ms) => ms <= ceiling.getTime() && !days.has(ms))
         .map((ms) => ({ date: new Date(ms), closePrice: pinned }));
     } else if (coinGeckoId) {
-      // Crypto: use CoinGecko market chart. Request enough days to cover the gap.
-      // `ceiling` is already crypto's own cutoff — yesterday, not the session day.
-      const gapMs = ceiling.getTime() - (latest?.getTime() ?? (Date.now() - 90 * 24 * 60 * 60 * 1000));
-      const days = Math.ceil(gapMs / (24 * 60 * 60 * 1000)) + 2;
+      // Crypto: use CoinGecko market chart. Start at the earliest hole when there
+      // is one, so a day stranded behind the newest row is filled too; otherwise
+      // pick up after the newest row. `ceiling` is crypto's own cutoff (today's ET
+      // day), not the exchange session.
+      const DAY = 24 * 60 * 60 * 1000;
+      const fromMs = hole != null
+        ? hole
+        : latest
+          ? latest.getTime() + DAY
+          : Date.now() - 90 * DAY;
+      // The market chart counts back from now, so ask for enough days to reach fromMs.
+      const days = Math.ceil((Date.now() - fromMs) / DAY) + 2;
       const allPoints = await getMarketChart(coinGeckoId, Math.min(days, 365));
-      // Filter to only the dates we actually need
-      const fromMs = latest ? latest.getTime() + 24 * 60 * 60 * 1000 : 0;
       points = allPoints.filter((p) => p.date.getTime() >= fromMs && p.date <= ceiling);
       await new Promise((r) => setTimeout(r, 200)); // be polite to CoinGecko
     } else {
