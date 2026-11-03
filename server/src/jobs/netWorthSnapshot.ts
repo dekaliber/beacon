@@ -69,7 +69,16 @@ async function snapshotForUser(
 
   let investments = 0;
   let investmentCash = 0;
-  const accountValues: { accountId: string; accountType: string; value: number }[] = [];
+  type AccountValue = {
+    accountId: string;
+    accountType: string;
+    value: number;
+    // Investment accounts only: the parts `value` is made of.
+    holdingsValue?: number;
+    manualValue?: number;
+    cashValue?: number;
+  };
+  const accountValues: AccountValue[] = [];
 
   for (const acct of investmentAccounts) {
     let holdingsValue = 0;
@@ -79,13 +88,21 @@ async function snapshotForUser(
       const qty = holding.lots.reduce((s, l) => s + parseFloat(l.quantity.toString()), 0);
       holdingsValue += qty * price;
     }
+    let manualValue = 0;
     for (const m of acct.manualInvestments) {
-      holdingsValue += parseFloat(m.marketValue.toString());
+      manualValue += parseFloat(m.marketValue.toString());
     }
     const cashVal = acct.cashBalance != null ? parseFloat(acct.cashBalance.toString()) : 0;
-    investments += holdingsValue;
+    investments += holdingsValue + manualValue;
     investmentCash += cashVal;
-    accountValues.push({ accountId: acct.id, accountType: "INVESTMENT", value: holdingsValue + cashVal });
+    accountValues.push({
+      accountId: acct.id,
+      accountType: "INVESTMENT",
+      value: holdingsValue + manualValue + cashVal,
+      holdingsValue,
+      manualValue,
+      cashValue: cashVal,
+    });
   }
 
   for (const acct of bankingAccounts) {
@@ -133,6 +150,9 @@ async function snapshotForUser(
         accountId: av.accountId,
         accountType: av.accountType,
         value: av.value,
+        holdingsValue: av.holdingsValue ?? null,
+        manualValue: av.manualValue ?? null,
+        cashValue: av.cashValue ?? null,
       })),
     });
   });

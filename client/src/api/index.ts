@@ -1,4 +1,5 @@
 import { api } from "./client";
+import { localToday } from "@/lib/utils";
 import type {
   Account,
   AllocationSummary,
@@ -49,8 +50,14 @@ export const getAccounts = (params?: { includeHidden?: boolean }) => {
   const query = params?.includeHidden ? "?includeHidden=true" : "";
   return api.get<Account[]>(`/accounts${query}`);
 };
-export const createAccount = (data: Partial<Account>) => api.post<Account>("/accounts", data);
-export const updateAccount = (id: string, data: Partial<Account>) => api.put<Account>(`/accounts/${id}`, data);
+export const createAccount = (data: Partial<Account>) =>
+  api.post<Account>("/accounts", data.cashBalance != null ? { ...data, cashBalanceAsOf: localToday() } : data);
+// A cash balance edit carries the local date it is as of, which dates its history row.
+export const updateAccount = (id: string, data: Partial<Account>) =>
+  api.put<Account>(
+    `/accounts/${id}`,
+    data.cashBalance !== undefined ? { ...data, cashBalanceAsOf: localToday() } : data,
+  );
 export const deleteAccount = (id: string) => api.delete(`/accounts/${id}`);
 
 // Categories
@@ -316,11 +323,12 @@ export const getManualInvestments = (accountId: string) =>
   api.get<ManualInvestment[]>(`/investments/manual/${accountId}`);
 export const createManualInvestment = (data: {
   accountId: string; name: string; group?: string | null; totalCost?: number | null; marketValue: number;
-}) => api.post<ManualInvestment>("/investments/manual", data);
+}) => api.post<ManualInvestment>("/investments/manual", { ...data, asOfDate: localToday() });
 export const updateManualInvestment = (id: string, data: {
   name?: string; group?: string | null; totalCost?: number | null; marketValue?: number;
-}) => api.put<ManualInvestment>(`/investments/manual/${id}`, data);
-export const deleteManualInvestment = (id: string) => api.delete(`/investments/manual/${id}`);
+}) => api.put<ManualInvestment>(`/investments/manual/${id}`, { ...data, asOfDate: localToday() });
+export const deleteManualInvestment = (id: string) =>
+  api.delete(`/investments/manual/${id}?asOf=${localToday()}`);
 
 export const getInvestmentActivity = (accountId: string) =>
   api.get<InvestmentActivity[]>(`/investments/activity/${accountId}`);
@@ -410,9 +418,10 @@ export const importQfx = (
   accountId: string,
   transactions: QfxTransactionInput[],
   cashBalance?: number | null,
+  cashBalanceAsOf?: string | null,
 ) => api.post<{ imported: number; total: number }>(
   `/investments/qfx-import/${accountId}`,
-  { transactions, cashBalance },
+  { transactions, cashBalance, cashBalanceAsOf: cashBalanceAsOf ?? undefined },
 );
 
 export const importQfxDividends = (

@@ -8,6 +8,7 @@ import { fetchYahooSettledClose, fetchYahooHistory, fetchYahooClosingPrice, fetc
 import { deactivateIfOrphaned, openHoldingWhere } from "./instruments.js";
 import { isTradingDay, etDateParts } from "../lib/marketHolidays.js";
 import { getUserId } from "../middleware/auth.js";
+import { clientDayOr, recordCashBalance, recordManualValuation } from "../lib/cashHistory.js";
 
 export const investmentRoutes = Router();
 
@@ -2365,6 +2366,8 @@ const qfxTransactionSchema = z.object({
 const qfxImportSchema = z.object({
   transactions: z.array(qfxTransactionSchema),
   cashBalance: z.number().nullable().optional(),
+  // The file's statement date (DTASOF), "YYYY-MM-DD": the day cashBalance is as of.
+  cashBalanceAsOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 investmentRoutes.post("/qfx-import/:accountId", async (req, res) => {
@@ -2379,7 +2382,7 @@ investmentRoutes.post("/qfx-import/:accountId", async (req, res) => {
     }
 
     const body = qfxImportSchema.parse(req.body);
-    const { transactions, cashBalance } = body;
+    const { transactions, cashBalance, cashBalanceAsOf } = body;
 
     // Upsert all transactions — skip duplicates by (accountId, fitId)
     const rows = transactions.map((t) => ({
@@ -2400,9 +2403,12 @@ investmentRoutes.post("/qfx-import/:accountId", async (req, res) => {
 
     // Optionally update the account's settlement cash balance
     if (cashBalance != null) {
-      await prisma.account.update({
-        where: { id: accountId },
-        data: { cashBalance, cashBalanceUpdatedAt: new Date() },
+      await prisma.$transaction(async (tx) => {
+        await tx.account.update({
+          where: { id: accountId },
+          data: { cashBalance, cashBalanceUpdatedAt: new Date() },
+        });
+        await recordCashBalance(tx, accountId, clientDayOr(cashBalanceAsOf), "QFX_IMPORT");
       });
     }
 
@@ -3118,6 +3124,8 @@ const createManualSchema = z.object({
   group: z.string().max(100).nullable().optional(),
   totalCost: z.number().nonnegative().nullable().optional(),
   marketValue: z.number().nonnegative(),
+  // Client's local "YYYY-MM-DD" the value is as of; dates its history row.
+  asOfDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 const updateManualSchema = z.object({
@@ -3125,6 +3133,7 @@ const updateManualSchema = z.object({
   group: z.string().max(100).nullable().optional(),
   totalCost: z.number().nonnegative().nullable().optional(),
   marketValue: z.number().nonnegative().optional(),
+  asOfDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 // GET /api/investments/manual/:accountId
@@ -3157,14 +3166,18 @@ investmentRoutes.post("/manual", async (req, res) => {
     });
     if (!account)
       return res.status(404).json({ error: { message: "Investment account not found" } });
-    const entry = await prisma.manualInvestment.create({
-      data: {
-        accountId: body.accountId,
-        name: body.name,
-        assetClass: body.group ?? null,
-        totalCost: body.totalCost ?? null,
-        marketValue: body.marketValue,
-      },
+    const entry = await prisma.$transaction(async (tx) => {
+      const created = await tx.manualInvestment.create({
+        data: {
+          accountId: body.accountId,
+          name: body.name,
+          assetClass: body.group ?? null,
+          totalCost: body.totalCost ?? null,
+          marketValue: body.marketValue,
+        },
+      });
+      await recordManualValuation(tx, created, clientDayOr(body.asOfDate), "MANUAL");
+      return created;
     });
     res.status(201).json(serializeManual(entry));
   } catch (err) {
@@ -3186,14 +3199,25 @@ investmentRoutes.put("/manual/:id", async (req, res) => {
     });
     if (!existing) return res.status(404).json({ error: { message: "Manual investment not found" } });
 
-    const entry = await prisma.manualInvestment.update({
-      where: { id: req.params.id },
-      data: {
-        name: body.name,
-        assetClass: body.group,
-        totalCost: body.totalCost,
-        marketValue: body.marketValue,
-      },
+    const entry = await prisma.$transaction(async (tx) => {
+      const updated = await tx.manualInvestment.update({
+        where: { id: req.params.id },
+        data: {
+          name: body.name,
+          assetClass: body.group,
+          totalCost: body.totalCost,
+          marketValue: body.marketValue,
+        },
+      });
+      // Only a value or cost change is history; a rename or regroup is not.
+      const num = (d: Prisma.Decimal | null) => (d != null ? Number(d) : null);
+      if (
+        num(updated.marketValue) !== num(existing.marketValue) ||
+        num(updated.totalCost) !== num(existing.totalCost)
+      ) {
+        await recordManualValuation(tx, updated, clientDayOr(body.asOfDate), "MANUAL");
+      }
+      return updated;
     });
     res.json(serializeManual(entry));
   } catch (err) {
@@ -3213,11 +3237,18 @@ investmentRoutes.delete("/manual/:id", async (req, res) => {
     const userId = getUserId(req);
     const manual = await prisma.manualInvestment.findFirst({
       where: { id: req.params.id, account: { userId } },
-      select: { instrumentId: true },
     });
     if (!manual) return res.status(404).json({ error: { message: "Manual investment not found" } });
 
     await prisma.$transaction(async (tx) => {
+      // Close out its history with a REMOVED row (an exit at the previous row's
+      // value); the delete then detaches the rows rather than dropping them.
+      await recordManualValuation(
+        tx,
+        { ...manual, marketValue: 0, totalCost: 0 },
+        clientDayOr(req.query.asOf),
+        "REMOVED",
+      );
       await tx.manualInvestment.delete({ where: { id: req.params.id } });
       await deactivateIfOrphaned(tx, manual?.instrumentId);
     });

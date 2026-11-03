@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { getUserId } from "../middleware/auth.js";
+import { recordCashBalance } from "../lib/cashHistory.js";
 import { deactivateIfOrphaned } from "./instruments.js";
 import { computeSell, serializeActivity, recordAssignedShareDispositions } from "./investments.js";
 
@@ -295,6 +296,7 @@ pendingSaleRoutes.post("/:id/confirm", async (req, res) => {
         where: { id: pendingSale.accountId },
         data: { cashBalance: { increment: proceeds } },
       });
+      await recordCashBalance(tx, pendingSale.accountId, saleDateStr, "OPTION_CALL_AWAY");
     }
 
     return { pendingSale: confirmed, activity: serializeActivity(activity), income, holdingDeleted };

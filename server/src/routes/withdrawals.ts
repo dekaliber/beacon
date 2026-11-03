@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/client.js";
 import { getUserId } from "../middleware/auth.js";
+import { dayOf, recordCashBalance } from "../lib/cashHistory.js";
 
 export const withdrawalRoutes = Router();
 
@@ -146,6 +147,7 @@ async function processPendingWithdrawalTransfers(userId: string): Promise<void> 
           where: { id: t.fromAccount.id },
           data: { cashBalance: { decrement: amount }, cashBalanceUpdatedAt: now },
         });
+        await recordCashBalance(tx, t.fromAccount.id, dayOf(t.date), "TRANSFER");
       }
     });
   }
@@ -177,6 +179,7 @@ async function processPendingWithdrawalTransfers(userId: string): Promise<void> 
           where: { id: t.toAccount.id },
           data: { cashBalance: { increment: amount }, cashBalanceUpdatedAt: now },
         });
+        await recordCashBalance(tx, t.toAccount.id, dayOf(t.date), "TRANSFER");
       }
     });
   }

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { getUserId } from "../middleware/auth.js";
+import { clientDayOr, recordCashBalance } from "../lib/cashHistory.js";
 
 export const accountRoutes = Router();
 
@@ -27,6 +28,9 @@ const accountSchema = z.object({
   defaultCashAccountId: z.string().optional().nullable(),
   // Settlement cash (investment accounts only)
   cashBalance: z.coerce.number().nonnegative().optional().nullable(),
+  // Client's local "YYYY-MM-DD" the cashBalance is as of; dates its history row.
+  // Not an Account column.
+  cashBalanceAsOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 // ── Account routes ──
@@ -58,7 +62,14 @@ accountRoutes.post("/", async (req, res) => {
   const parsed = accountSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const account = await prisma.account.create({ data: { ...parsed.data, userId } });
+  const { cashBalanceAsOf, ...fields } = parsed.data;
+  const account = await prisma.$transaction(async (tx) => {
+    const created = await tx.account.create({ data: { ...fields, userId } });
+    if (fields.cashBalance != null) {
+      await recordCashBalance(tx, created.id, clientDayOr(cashBalanceAsOf), "MANUAL");
+    }
+    return created;
+  });
   res.status(201).json(account);
 });
 
@@ -68,7 +79,8 @@ accountRoutes.put("/:id", async (req, res) => {
   const parsed = accountSchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const data: Record<string, unknown> = { ...parsed.data };
+  const { cashBalanceAsOf, ...fields } = parsed.data;
+  const data: Record<string, unknown> = { ...fields };
 
   // Auto-stamp balanceUpdatedAt whenever the balance field is explicitly updated,
   // but only if the client did not supply its own value. Clients should send the
@@ -85,12 +97,27 @@ accountRoutes.put("/:id", async (req, res) => {
     data.cashBalanceUpdatedAt = new Date();
   }
 
-  const account = await prisma.account.updateMany({
-    where: { id: req.params.id, userId },
-    data,
+  // The prior cash balance, so an edit that leaves it unchanged adds no history row.
+  const before = fields.cashBalance !== undefined
+    ? await prisma.account.findFirst({
+        where: { id: req.params.id, userId },
+        select: { cashBalance: true },
+      })
+    : null;
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const account = await tx.account.updateMany({
+      where: { id: req.params.id, userId },
+      data,
+    });
+    if (account.count === 0) return null;
+    const prevCash = before?.cashBalance != null ? Number(before.cashBalance) : null;
+    if (before && prevCash !== (fields.cashBalance ?? null)) {
+      await recordCashBalance(tx, req.params.id, clientDayOr(cashBalanceAsOf), "MANUAL");
+    }
+    return tx.account.findUnique({ where: { id: req.params.id } });
   });
-  if (account.count === 0) return res.status(404).json({ error: "Account not found" });
-  const updated = await prisma.account.findUnique({ where: { id: req.params.id } });
+  if (!updated) return res.status(404).json({ error: "Account not found" });
   res.json(updated);
 });
 

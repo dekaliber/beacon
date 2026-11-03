@@ -4811,6 +4811,8 @@ interface QfxParsedSummary {
  transactions: import("@/types").QfxTransactionInput[];
  dividends: import("@/types").QfxDividendInput[];
  cashBalance: number | null;
+ // Statement date (DTASOF) the cash balance is as of
+ cashBalanceAsOf: string | null;
  tickers: string[];
  netShares: Record<string, number>;
  buyCount: number;
@@ -4978,6 +4980,8 @@ function parseQfxFile(content: string): QfxParsedSummary {
  cashBalance = Math.round(units * unitPrice * 100) / 100;
  }
  }
+ const dtAsOf = doc.querySelector("INVSTMTRS > DTASOF")?.textContent?.trim();
+ const cashBalanceAsOf = dtAsOf ? parseQfxDate(dtAsOf) : null;
 
  // Extract INCOME records (dividend payments)
  const dividends: import("@/types").QfxDividendInput[] = [];
@@ -5009,6 +5013,7 @@ function parseQfxFile(content: string): QfxParsedSummary {
  transactions,
  dividends,
  cashBalance,
+ cashBalanceAsOf,
  tickers,
  netShares,
  buyCount: transactions.filter((t) => t.type ==="BUY").length - transferCount,
@@ -5058,7 +5063,7 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
  setImporting(true);
  try {
  const [txnRes, divRes] = await Promise.all([
- importQfx(accountId, parsed.transactions, parsed.cashBalance),
+ importQfx(accountId, parsed.transactions, parsed.cashBalance, parsed.cashBalanceAsOf),
  filteredDividends.length > 0
  ? importQfxDividends(accountId, filteredDividends)
  : Promise.resolve({ imported: 0, skipped: 0 }),

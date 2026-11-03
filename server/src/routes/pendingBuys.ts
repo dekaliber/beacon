@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { getUserId } from "../middleware/auth.js";
+import { recordCashBalance } from "../lib/cashHistory.js";
 import { fetchYahooMeta } from "../services/yahoo.js";
 
 export const pendingBuyRoutes = Router();
@@ -135,6 +136,7 @@ pendingBuyRoutes.post("/:id/confirm", async (req, res) => {
         where: { id: pendingBuy.accountId },
         data: { cashBalance: { decrement: deduction } },
       });
+      await recordCashBalance(tx, pendingBuy.accountId, acquiredDate, "OPTION_ASSIGNMENT");
     }
 
     return { pendingBuy: confirmed, lot, activity };

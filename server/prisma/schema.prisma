@@ -146,6 +146,8 @@ model Account {
   investmentAccounts   Account[]  @relation("InvestmentCashLink")
 
   netWorthSnapshots    NetWorthAccountSnapshot[]
+  cashBalanceHistory   InvestmentCashBalance[]
+  manualValuations     ManualInvestmentValuation[]
 
   @@map("accounts")
 }
@@ -470,8 +472,43 @@ model ManualInvestment {
 
   account    Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
   instrument Instrument? @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
+  valuations ManualInvestmentValuation[]
 
   @@map("manual_investments")
+}
+
+enum ManualValuationSource {
+  MANUAL    // user edit on the account page
+  SEED      // one-time backfill from the value stored when history began
+  STATEMENT // imported from an account statement
+  REMOVED   // the investment was deleted: an exit at the previous row's value
+}
+
+// Dated value history for a ManualInvestment, which itself only holds the latest
+// value. One row per investment per calendar day (a later edit that day replaces
+// it). Between rows the value is carried flat. totalCost is recorded alongside so
+// a contribution (totalCost rises) can be told apart from a market change.
+// Rows outlive the investment: deleting it writes a REMOVED row and detaches the
+// rest, so accountId / instrumentId / name are copied here for bucketing.
+model ManualInvestmentValuation {
+  id                 String                @id @default(cuid())
+  manualInvestmentId String?
+  accountId          String
+  instrumentId       String?
+  name               String
+  date               DateTime              @db.Date
+  marketValue        Decimal               @db.Decimal(12, 2)
+  totalCost          Decimal?              @db.Decimal(12, 2)
+  source             ManualValuationSource
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  manualInvestment ManualInvestment? @relation(fields: [manualInvestmentId], references: [id], onDelete: SetNull)
+  account          Account           @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([manualInvestmentId, date])
+  @@index([accountId, date])
+  @@map("manual_investment_valuations")
 }
 
 model InvestmentLot {
@@ -870,6 +907,36 @@ model StatementOverride {
   @@map("statement_overrides")
 }
 
+enum CashBalanceSource {
+  MANUAL            // user edit on the account page
+  QFX_IMPORT        // money-market position from a QFX file
+  OPTION_ASSIGNMENT // put assigned: strike × shares debited
+  OPTION_CALL_AWAY  // call assigned: strike × shares credited
+  TRANSFER          // portfolio ↔ banking transfer processed
+  SEED              // one-time backfill from the value stored when history began
+  STATEMENT         // imported from an account statement
+}
+
+// Dated history of an investment account's settlement cash, which Account only
+// holds as the latest value. A row is the end-of-day balance on `date`; between
+// rows the balance is carried forward (plus whatever flows are recorded). One row
+// per account per day — a later change that day replaces it.
+// Invariant: the latest row matches Account.cashBalance. See lib/cashHistory.ts.
+model InvestmentCashBalance {
+  id        String            @id @default(cuid())
+  accountId String
+  date      DateTime          @db.Date
+  balance   Decimal           @db.Decimal(12, 2)
+  source    CashBalanceSource
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, date])
+  @@map("investment_cash_balances")
+}
+
 // ── Options Trading ────────────────────────────────────────────────────────────
 
 enum OptionType {
@@ -1017,6 +1084,11 @@ model NetWorthAccountSnapshot {
   account     Account          @relation(fields: [accountId], references: [id])
   accountType String           // denormalized from Account.type for query convenience
   value       Decimal          @db.Decimal(14, 2) // positive = asset, negative = liability
+  // Investment accounts only: `value` split into its parts. Null on banking/CC
+  // rows and on rows written before the split existed.
+  holdingsValue Decimal?       @db.Decimal(14, 2) // priced holdings (lots × price)
+  manualValue   Decimal?       @db.Decimal(14, 2) // ManualInvestment market values
+  cashValue     Decimal?       @db.Decimal(14, 2) // settlement cash (cashBalance)
 
   @@unique([snapshotId, accountId])
   @@map("net_worth_account_snapshots")
