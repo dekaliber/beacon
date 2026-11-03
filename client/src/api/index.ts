@@ -295,7 +295,6 @@ export const searchCryptoTickers = (q: string) =>
   api.get<TickerSearchResult[]>(`/investments/search/crypto?q=${encodeURIComponent(q)}`);
 export const resolveTicker = (q: string) =>
   api.get<TickerSearchResult>(`/investments/search/resolve?q=${encodeURIComponent(q)}`);
-export const refreshPrices = (source: string) => api.post<{ updated: number; tickers: string[] }>("/investments/prices/refresh", { source });
 export const getTickerPrice = (ticker: string, date?: string, coinGeckoId?: string | null) => {
   const params = new URLSearchParams();
   if (date) params.set("date", date);

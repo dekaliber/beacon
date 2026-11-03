@@ -14,8 +14,7 @@ import { OutlierTransactionsList } from"@/components/OutlierTransactionsList";
 import { useApi } from"@/hooks/useApi";
 import { getDashboard, getCategoryOutliers, getCategoryAverages, getMtdChart, getOutlierTransactions, getDataRange, getNetWorth } from"@/api";
 import { formatCurrency } from"@/lib/utils";
-import { formatNextUpdateTime } from"@/lib/priceUtils";
-import { usePriceRefresh } from"@/hooks/usePriceRefresh";
+import { formatNextUpdateTime, nextStockCutoff } from"@/lib/priceUtils";
 import { PERSONAL_COLOR, JOINT_COLOR } from"@/lib/accountColors";
 import { useDemo } from"@/context/DemoContext";
 import { BeaconLoader } from"@/components/BeaconLoader";
@@ -52,19 +51,11 @@ export function Dashboard() {
  const { data: mtdChart } = useApi(() => getMtdChart(year, month), [year, month]);
  const { data: outlierTransactions } = useApi(() => getOutlierTransactions(year, month), [year, month]);
  const { data: dataRange } = useApi(() => getDataRange(), []);
- const { data: netWorth, refetch: refetchNetWorth } = useApi(() => getNetWorth(), []);
+ const { data: netWorth } = useApi(() => getNetWorth(), []);
  const { isDemoMode, demoFactor } = useDemo();
 
- const { phase: refreshPhase, count: refreshCount, total: refreshTotal, nextUpdateAt } =
- usePriceRefresh({ source:"Dashboard" });
-
- const prevRefreshPhaseRef = useRef(refreshPhase);
- useEffect(() => {
- if (prevRefreshPhaseRef.current !=="done" && refreshPhase ==="done") {
- refetchNetWorth();
- }
- prevRefreshPhaseRef.current = refreshPhase;
- }, [refreshPhase, refetchNetWorth]);
+ // Prices are refreshed by the server's evening job (server/src/jobs/dailyUpdate.ts).
+ const nextUpdateAt = nextStockCutoff(new Date());
 
  const scaledNetWorth = useMemo(() => {
  if (!netWorth) return null;
@@ -205,13 +196,7 @@ export function Dashboard() {
  <SectionLabel>Net Worth</SectionLabel>
  <KpiAmount value={scaledNetWorth.total} className="tp-kpi" />
  <Caption className="mt-1">
- {refreshPhase ==="running"
- ? refreshTotal > 0
- ?`Fetching latest prices… ${refreshCount} of ${refreshTotal} securities`
- :"Fetching latest prices…"
- : nextUpdateAt
- ?`Next update: ${formatNextUpdateTime(nextUpdateAt)}`
- : null}
+ {`Next update: ${formatNextUpdateTime(nextUpdateAt)}`}
  </Caption>
  </div>
 

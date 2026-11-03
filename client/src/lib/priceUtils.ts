@@ -1,32 +1,11 @@
 import type { InvestmentHolding } from "@/types";
 import { etDateParts, isMarketHolidayYMD } from "./marketHolidays";
 
-// The most recent 8 PM ET cutoff that has passed *on a trading day* — the last
-// moment a new close became available. Anything captured after it is current.
-// Mirrors lastTradingCutoff on the server.
-//
-// It walks back over weekends and holidays rather than stepping back a flat 24
-// hours. In the small hours of Monday ET (Sunday evening Pacific) the previous
-// calendar cutoff is Sunday 8 PM, which no price captured on Friday can beat, so
-// a flat step called the whole portfolio stale and kicked off a full refresh on
-// what is, for the user, still the weekend.
-export function lastStockCutoff(now: Date): Date {
-  let cursor = now;
-  for (let i = 0; i < 14; i++) {
-    const cutoff = cutoffToday8pmET(cursor);
-    if (cutoff <= now && isTradingDay(cutoff.getTime())) return cutoff;
-    // 26 hours before an 8 PM cutoff is the previous ET day's evening whichever
-    // way a DST change falls; a flat 24 from `now` can skip a day near midnight.
-    cursor = new Date(cutoff.getTime() - 26 * 60 * 60 * 1000);
-  }
-  return cutoffToday8pmET(cursor);
-}
-
-// The next 8 PM ET cutoff that a refresh will actually run at — skipping weekends
+// The next evening run that will actually fetch stock quotes — skipping weekends
 // and market holidays, since the server won't fetch quotes on those days. Without
 // the skip the status line advertises a Saturday update that never comes.
 export function nextStockCutoff(now: Date): Date {
-  const cutoff = cutoffToday8pmET(now);
+  const cutoff = dailyUpdateTimeET(now);
   let ms = now < cutoff ? cutoff.getTime() : cutoff.getTime() + DAY_MS;
   while (!isTradingDay(ms)) ms += DAY_MS;
   return new Date(ms);
@@ -68,9 +47,11 @@ function etTimeOnDay(refMs: number, hour: number, minute = 0): number {
   return new Date(`${get("year")}-${get("month")}-${get("day")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00${offsetStr}`).getTime();
 }
 
-// Returns a Date representing 8:00 PM Eastern today.
-function cutoffToday8pmET(now: Date): Date {
-  return new Date(etTimeOnDay(now.getTime(), 20));
+// When the server's daily update runs on the ET day containing `now`: 8:30 PM,
+// half an hour past the 8 PM cutoff prices settle by. Mirrors
+// RUN_AFTER_ET_MINUTES in server/src/jobs/dailyUpdate.ts.
+function dailyUpdateTimeET(now: Date): Date {
+  return new Date(etTimeOnDay(now.getTime(), 20, 30));
 }
 
 function currentHourET(now: Date): number {
@@ -151,52 +132,17 @@ export function isWithinOptionsTradingWindow(): boolean {
   return currentHourET(now) >= 8 && now.getTime() < etCloseBoundary(now.getTime());
 }
 
-// Returns true if any holding has a stale price and a refresh should be triggered.
+// Returns when prices next change — the server's next evening run, for every
+// holding alike.
 //
-// One cadence for every holding, crypto included: prices go stale once it is past
-// 8 PM Eastern and the last fetch predates that cutoff. Mutual fund NAVs are
-// typically published 1-2 hours after the 4 PM ET close, so 8 PM gives them time
-// to settle — fetching earlier risks capturing a stale or partial NAV.
-//
-// Between 4:15 PM and 8 PM nothing is requested: a price fetched earlier the same
-// day is newer than the previous cutoff, so no holding reports stale. Before 4:15
-// PM the same is true, until a whole cutoff has been missed — which is the
-// catch-up path for a portfolio nobody opened last night.
-export function isPriceRefreshNeeded(holdings: InvestmentHolding[]): boolean {
-  if (holdings.length === 0) return false;
-
-  const now = new Date();
-
-  // On a non-trading day the server fetches no quotes, but it does check for a
-  // session that was never captured — Friday's close, if nobody opened the app
-  // that evening. Ask anyway so it gets that chance; the refresh singleton keeps
-  // it to once per session.
-  if (!isTradingDay(now.getTime())) return true;
-
-  // Stale means captured before the last close became available.
-  const lastCutoff = lastStockCutoff(now);
-
-  for (const holding of holdings) {
-    if (!holding.priceUpdatedAt) return true;
-    if (new Date(holding.priceUpdatedAt) < lastCutoff) return true;
-  }
-
-  return false;
-}
-
-// Returns when prices will next become stale — the next 8 PM ET cutoff, for every
-// holding alike. Crypto used to pull this as low as 5 minutes out, which made the
-// "Next update" caption advertise a refresh that had nothing to do with the daily
-// batch the rest of the page runs on.
-//
-// Crypto does keep that cutoff on weekends and holidays, though (the server takes
-// its 00:00 UTC snapshot then), so a portfolio holding any is next updated at the
-// very next cutoff rather than the next trading day's.
+// Crypto keeps that run on weekends and holidays, though (the server takes its
+// 00:00 UTC snapshot then), so a portfolio holding any is next updated at the
+// very next run rather than the next trading day's.
 export function getNextUpdateTime(holdings: InvestmentHolding[]): Date | null {
   if (holdings.length === 0) return null;
   const now = new Date();
   if (holdings.some((h) => h.coinGeckoId)) {
-    const cutoff = cutoffToday8pmET(now);
+    const cutoff = dailyUpdateTimeET(now);
     return now < cutoff ? cutoff : new Date(cutoff.getTime() + DAY_MS);
   }
   return nextStockCutoff(now);

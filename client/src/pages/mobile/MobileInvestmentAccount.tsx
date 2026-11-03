@@ -11,11 +11,10 @@ import {
   createHolding, deleteHolding, createLot, updateLot, deleteLot,
   searchTickers, resolveTicker, getTickerPrice,
   getManualInvestments, createManualInvestment, updateManualInvestment,
-  getInvestmentGrowth, getPendingDividends, dismissPendingDividend, refreshPrices,
+  getInvestmentGrowth, getPendingDividends, dismissPendingDividend,
 } from "@/api";
 import { ApiError } from "@/api/client";
 import { formatCurrency, formatDate, toDateInputValue, localToday, cn, parseAmount } from "@/lib/utils";
-import { isPriceRefreshNeeded } from "@/lib/priceUtils";
 import { useNotifications } from "@/context/NotificationContext";
 import { useDemo } from "@/context/DemoContext";
 import { scaleGrowthPoints, scaleHolding, scaleManuals } from "@/lib/demo";
@@ -1541,17 +1540,6 @@ export function MobileInvestmentAccount() {
     if (fetchedMissingRef.current === key) return;
     fetchedMissingRef.current = key;
     Promise.allSettled(missing.map((t) => getTickerPrice(t))).then(() => refetchHoldings());
-  }, [holdings, refetchHoldings]);
-
-  const priceRefreshedRef = useRef(false);
-  useEffect(() => {
-    if (!holdings || priceRefreshedRef.current) return;
-    if (isPriceRefreshNeeded(holdings)) {
-      priceRefreshedRef.current = true;
-      refreshPrices("MobileInvestmentAccount")
-        .then(() => refetchHoldings())
-        .catch(() => {});
-    }
   }, [holdings, refetchHoldings]);
 
   const { isDemoMode, demoFactor } = useDemo();

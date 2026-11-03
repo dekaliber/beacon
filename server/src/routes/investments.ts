@@ -1768,8 +1768,9 @@ async function refreshCryptoSnapshots(
 // cutoff. TickerPriceHistory is also written here so that the chart's
 // most-recent data point always matches the header value.
 //
-// Shared by POST /prices/refresh (one user's holdings) and the scheduled daily
-// job (every user's — there is no request, and so no user, behind it).
+// Called only by the scheduled daily job (src/jobs/dailyUpdate.ts) — pages read
+// prices and never trigger a refresh. It covers every user's holdings, since
+// there is no request, and so no user, behind the job.
 
 export interface PriceRefreshResult {
   // Tickers whose current price was written, crypto snapshots and history
@@ -1783,12 +1784,12 @@ export interface PriceRefreshResult {
 }
 
 export async function refreshAllPrices(
-  opts: { userId?: string; source: string },
+  opts: { source: string },
 ): Promise<PriceRefreshResult> {
-  const { userId, source } = opts;
+  const { source } = opts;
 
   const accounts = await prisma.account.findMany({
-    where: { type: "INVESTMENT", ...(userId ? { userId } : {}) },
+    where: { type: "INVESTMENT" },
     select: { id: true },
   });
   const accountIds = accounts.map((a) => a.id);
@@ -1846,9 +1847,8 @@ export async function refreshAllPrices(
   const refreshed = await refreshCryptoSnapshots(staleCrypto, coinGeckoIdByTicker);
   const failed = staleCrypto.filter((t) => !refreshed.includes(t));
 
-  // Same rule as the stream route: no equity quotes to collect on a non-session
-  // day, but a session nobody was around to capture still gets repaired from
-  // history.
+  // No equity quotes to collect on a non-session day, but a session nobody was
+  // around to capture still gets repaired from history.
   if (!tradingDay) {
     const filled = await fillPriceGaps(tickers, coinGeckoIdByTicker);
     const synced = await syncCurrentPricesFromHistory(tickers, coinGeckoIdByTicker);
@@ -1919,7 +1919,9 @@ export async function refreshAllPrices(
     }
   }
 
-  // See the stream route: fill in any sessions that passed with the app closed.
+  // Each run only writes the current day, so a session that passed with no run
+  // leaves a hole no later run would fill on its own — and a hole makes the 1-day
+  // change unreportable. Backfill the missed sessions.
   const filled = await fillPriceGaps(tickers, coinGeckoIdByTicker);
   if (filled > 0) {
     console.log(`[price-refresh] backfilled ${filled} missed history row(s)`);
@@ -1934,207 +1936,6 @@ export async function refreshAllPrices(
     tradingDay,
   };
 }
-
-// ── POST /api/investments/prices/refresh ──────────────────────────────────
-// Full refresh of the signed-in user's holdings, with no staleness check.
-
-investmentRoutes.post("/prices/refresh", async (req, res) => {
-  try {
-    const result = await refreshAllPrices({
-      userId: getUserId(req),
-      source: req.body?.source ?? "unknown",
-    });
-    res.json({ updated: result.updated.length, tickers: result.updated });
-  } catch (err) {
-    console.error("[price-refresh] ERROR:", err);
-    res.status(500).json({ error: { message: "Failed to refresh prices" } });
-  }
-});
-
-// ── GET /api/investments/prices/refresh/stream ────────────────────────────
-// SSE endpoint that streams per-ticker price refresh progress.
-// Performs a server-side staleness check and skips up-to-date tickers so that
-// both the Dashboard and Investments pages can call this safely on every load.
-//
-// Events: { type:"start", total } | { type:"progress", count, total } | { type:"done", updated, total }
-
-investmentRoutes.get("/prices/refresh/stream", async (req, res) => {
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.flushHeaders();
-
-  const send = (data: object) => {
-    if (!res.writableEnded) res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
-
-  try {
-    const userId = getUserId(req);
-    const source: string = (req.query.source as string) ?? "unknown";
-
-    const userAccounts = await prisma.account.findMany({
-      where: { type: "INVESTMENT", userId },
-      select: { id: true },
-    });
-    const userAccountIds = userAccounts.map((a) => a.id);
-
-    const holdings = await prisma.investmentHolding.findMany({
-      where: { accountId: { in: userAccountIds }, ...openHoldingWhere },
-      select: { ticker: true, coinGeckoId: true },
-    });
-
-    const tickers = [...new Set(holdings.map((h) => h.ticker))];
-
-    const coinGeckoIdByTicker = new Map<string, string>();
-    for (const h of holdings) {
-      if (h.coinGeckoId && !coinGeckoIdByTicker.has(h.ticker)) {
-        coinGeckoIdByTicker.set(h.ticker, h.coinGeckoId);
-      }
-    }
-    const cryptoTickers = new Set(coinGeckoIdByTicker.keys());
-
-    // Server-side staleness check — skip tickers whose prices are still fresh.
-    const now = new Date();
-    const priceRows = await prisma.tickerPrice.findMany({
-      where: { ticker: { in: tickers } },
-      select: { ticker: true, updatedAt: true, priceSource: true },
-    });
-    const priceUpdatedAtMap = new Map(priceRows.map((r) => [r.ticker, r.updatedAt]));
-
-    // Pinned stable-NAV tickers never move, so they're never stale — fillPriceGaps
-    // keeps their history complete without spending a request on them. Only ones
-    // we already hold a price for: a first sighting still needs one real fetch.
-    const fixedTickers = new Set(
-      priceRows.filter((r) => isPinnedPrice(r.ticker, r.priceSource)).map((r) => r.ticker),
-    );
-
-    // Equity quotes are only worth fetching on a session day. On a weekend or
-    // holiday there is no new close to collect, and asking anyway is what produced
-    // a Saturday-dated history row that moved the 1-day baseline for the whole
-    // portfolio. Crypto trades straight through, so it stays on its daily cadence
-    // (its 00:00 UTC snapshot — see refreshCryptoSnapshots), and on those days it
-    // is all the progress count covers.
-    const tradingDay = isTradingDay(now.getTime());
-
-    const staleTickers = tickers.filter(
-      (t) =>
-        (tradingDay || cryptoTickers.has(t)) &&
-        !fixedTickers.has(t) &&
-        isTickerStale(priceUpdatedAtMap.get(t) ?? null, now),
-    );
-
-    if (staleTickers.length === 0) {
-      // On a non-trading day, still look for sessions that were never captured —
-      // a Friday close nobody was around to collect is exactly what should be
-      // repaired when the page is opened over the weekend. fillPriceGaps sources
-      // those from history rather than a quote, which is the right endpoint for a
-      // past session anyway. The same close then carries over to TickerPrice, which
-      // would otherwise still hold the session before it.
-      //
-      // On a trading day this path means every price is already current, and the
-      // run that made them current gap-filled on its way out. Doing it again would
-      // only add a stall to loads that hit this path on every visit — and since no
-      // "start" event is sent here, that stall renders as a status line with no
-      // ticker count, which reads like a hang.
-      let synced = 0;
-      if (!tradingDay) {
-        const filled = await fillPriceGaps(tickers, coinGeckoIdByTicker);
-        synced = (await syncCurrentPricesFromHistory(tickers, coinGeckoIdByTicker)).length;
-        console.log(
-          `[price-refresh/stream] triggered from ${source} — non-trading day, ` +
-          `${filled} history row(s) backfilled, ${synced} current price(s) caught up from history`,
-        );
-      }
-      send({ type: "done", updated: synced, total: synced });
-      res.end();
-      return;
-    }
-
-    const tiingoRows = await prisma.tickerPrice.findMany({
-      where: { ticker: { in: staleTickers }, priceSource: "TIINGO" },
-      select: { ticker: true },
-    });
-    const tiingoTickers = new Set(tiingoRows.map((r) => r.ticker));
-
-    const staleCrypto = staleTickers.filter((t) => cryptoTickers.has(t));
-    const staleOther = staleTickers.filter((t) => !cryptoTickers.has(t));
-    const total = staleTickers.length;
-
-    console.log(
-      `[price-refresh/stream] triggered from ${source} — ${total} stale ticker(s)` +
-        (staleCrypto.length > 0 ? ` (${staleCrypto.length} crypto)` : ""),
-    );
-
-    send({ type: "start", total });
-
-    let count = 0;
-
-    await refreshCryptoSnapshots(staleCrypto, coinGeckoIdByTicker, () =>
-      send({ type: "progress", count: ++count, total }),
-    );
-
-    // Sequential fetch for stocks/funds.
-    for (const ticker of staleOther) {
-      let price: number | null = null;
-      let priceDate: Date | null = null;
-      let priceSource: string;
-
-      if (tiingoTickers.has(ticker)) {
-        const today = new Date().toISOString().slice(0, 10);
-        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        const result = await getDividendScanResult(ticker, weekAgo, today);
-        if (result.latestClose != null && result.latestCloseDate != null) {
-          price = result.latestClose;
-          priceDate = new Date(result.latestCloseDate + "T00:00:00Z");
-        }
-        priceSource = "TIINGO";
-      } else {
-        const priceData = await fetchYahooSettledClose(ticker, lastSettledSessionClose());
-        if (priceData) {
-          price = priceData.price;
-          priceDate = priceData.priceDate;
-        } else {
-          console.warn(`[price-refresh/stream] ${ticker}: no data from Yahoo Finance`);
-        }
-        priceSource = "YAHOO";
-        await new Promise((resolve) => setTimeout(resolve, 200));
-      }
-
-      if (price != null && priceDate != null) {
-        await upsertTickerPrice(ticker, price, priceDate, priceSource);
-        console.log(`[price-refresh/stream] ${ticker}: $${price} [${priceSource}]`);
-      }
-
-      send({ type: "progress", count: ++count, total });
-    }
-
-    // Each run only ever writes the current day, so a session that passed with
-    // the app closed leaves a hole no later refresh would fill on its own — and
-    // a hole makes the 1-day change unreportable. Backfill the missed sessions.
-    const filled = await fillPriceGaps(tickers, coinGeckoIdByTicker);
-    if (filled > 0) {
-      console.log(`[price-refresh/stream] backfilled ${filled} missed history row(s)`);
-    }
-    // No equity quotes were taken on a non-trading day; carry any session the
-    // gap-fill just recovered over to the current prices.
-    if (!tradingDay) {
-      const synced = await syncCurrentPricesFromHistory(tickers, coinGeckoIdByTicker);
-      if (synced.length > 0) {
-        console.log(`[price-refresh/stream] ${synced.length} current price(s) caught up from history`);
-      }
-    }
-
-    console.log(`[price-refresh/stream] done — ${count} of ${total} processed`);
-    send({ type: "done", updated: count, total });
-    res.end();
-  } catch (err) {
-    console.error("[price-refresh/stream] ERROR:", err);
-    if (!res.writableEnded) {
-      send({ type: "error", message: "Failed to refresh prices" });
-      res.end();
-    }
-  }
-});
 
 // ── POST /api/investments/import ──────────────────────────────────────────
 // Bulk-import lots from CSV. Groups by symbol, creates holdings as needed.

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
   TrendingUp, TrendingDown, LineChart, ChevronRight,
@@ -11,8 +11,7 @@ import {
   getWithdrawalSummary, getInvestmentSettings,
 } from "@/api";
 import { formatCurrency, cn } from "@/lib/utils";
-import { formatNextUpdateTime } from "@/lib/priceUtils";
-import { usePriceRefresh } from "@/hooks/usePriceRefresh";
+import { formatNextUpdateTime, getNextUpdateTime } from "@/lib/priceUtils";
 import { useNotifications } from "@/context/NotificationContext";
 import { useDemo } from "@/context/DemoContext";
 import { scaleInvestmentAccounts, scaleAllocationSummary } from "@/lib/demo";
@@ -697,12 +696,12 @@ function KpiAmount({ value, className }: { value: number; className?: string }) 
 
 export function MobileInvestments() {
   const navigate = useNavigate();
-  const { data: accounts, refetch } = useApi(() => getInvestmentAccounts(), []);
+  const { data: accounts } = useApi(() => getInvestmentAccounts(), []);
   const [allocationFilter, setAllocationFilter] = useState<AllocationFilter>("all");
   const [showTaxSheet, setShowTaxSheet] = useState(false);
   const [showWithdrawalSheet, setShowWithdrawalSheet] = useState(false);
   const [showRebalance, setShowRebalance] = useState(false);
-  const { data: allocation, refetch: refetchAllocation } = useApi(
+  const { data: allocation } = useApi(
     () => getAllocationSummary(allocationFilter),
     [allocationFilter],
   );
@@ -730,17 +729,9 @@ export function MobileInvestments() {
     [accounts],
   );
 
-  const { phase: refreshPhase, count: refreshCount, total: refreshTotal, nextUpdateAt } =
-    usePriceRefresh({ holdings: investmentHoldings, source: "Investments" });
-
-  const prevRefreshPhaseRef = useRef(refreshPhase);
-  useEffect(() => {
-    if (prevRefreshPhaseRef.current !== "done" && refreshPhase === "done") {
-      refetch();
-      refetchAllocation();
-    }
-    prevRefreshPhaseRef.current = refreshPhase;
-  }, [refreshPhase, refetch, refetchAllocation]);
+  // Prices are refreshed by the server's evening job (server/src/jobs/dailyUpdate.ts);
+  // the page only reads them.
+  const nextUpdateAt = investmentHoldings ? getNextUpdateTime(investmentHoldings) : null;
 
   if (!displayAccounts) return <BeaconLoader />;
 
@@ -867,13 +858,7 @@ export function MobileInvestments() {
                   <GainBadge value={totalDayGain} pct={totalDayGainPct} label="1-day" className="mt-1" />
                 )}
                 <p className="tp-caption mt-1">
-                  {refreshPhase === "running"
-                    ? refreshTotal > 0
-                      ? `Fetching latest prices… ${refreshCount} of ${refreshTotal} securities`
-                      : "Fetching latest prices…"
-                    : nextUpdateAt
-                      ? `Next update: ${formatNextUpdateTime(nextUpdateAt)}`
-                      : null}
+                  {nextUpdateAt ? `Next update: ${formatNextUpdateTime(nextUpdateAt)}` : null}
                 </p>
               </div>
 

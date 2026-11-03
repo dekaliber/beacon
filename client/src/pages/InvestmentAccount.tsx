@@ -71,7 +71,6 @@ import {
  importQfxDividends,
  getQfxLastDate,
  updateSaleActivity,
- refreshPrices,
  getPendingDividends,
  confirmPendingDividend,
  confirmReinvestDividend,
@@ -91,7 +90,6 @@ import type { SellPreviewResult } from"@/api";
 import { ApiError } from"@/api/client";
 import { formatCurrency, formatDate, toDateInputValue, localToday, parseAmount } from"@/lib/utils";
 import { useNotifications } from"@/context/NotificationContext";
-import { isPriceRefreshNeeded } from"@/lib/priceUtils";
 import { useDemo } from"@/context/DemoContext";
 import { scaleGrowthPoints, scaleManuals, scaleHolding } from"@/lib/demo";
 import type { InvestmentHolding, InvestmentLot, RealizedGainSnapshot, TickerSearchResult, Account, ManualInvestment, InvestmentActivity, GrowthPoint, GrowthEvent, PendingDividend, TaxClassification, Category, ConfirmedDividendInfo, PendingBuy, PendingSale } from"@/types";
@@ -5688,17 +5686,6 @@ export function InvestmentAccount() {
  Promise.allSettled(missing.map((t) => getTickerPrice(t))).then(() => {
  refetch();
  });
- }, [holdings, refetch]);
-
- const priceRefreshedRef = useRef(false);
- useEffect(() => {
- if (!holdings || priceRefreshedRef.current) return;
- if (isPriceRefreshNeeded(holdings)) {
- priceRefreshedRef.current = true;
- refreshPrices("InvestmentAccount")
- .then(() => refetch())
- .catch(() => { /* server logs the error */ });
- }
  }, [holdings, refetch]);
 
  // Sticky parent row: track which holding row has scrolled above the nav bar

@@ -34,8 +34,7 @@ import {
   getNetWorth,
 } from "@/api";
 import { formatCurrency } from "@/lib/utils";
-import { formatNextUpdateTime } from "@/lib/priceUtils";
-import { usePriceRefresh } from "@/hooks/usePriceRefresh";
+import { formatNextUpdateTime, nextStockCutoff } from "@/lib/priceUtils";
 import { PERSONAL_COLOR, JOINT_COLOR } from "@/lib/accountColors";
 import { useDemo } from "@/context/DemoContext";
 import { SectionLabel, StatValue, DisplayStat } from "@/components/Typography";
@@ -69,19 +68,11 @@ export function MobileDashboard() {
   const { data: mtdChart } = useApi(() => getMtdChart(year, month), [year, month]);
   const { data: outlierTransactions } = useApi(() => getOutlierTransactions(year, month), [year, month]);
   const { data: dataRange } = useApi(() => getDataRange(), []);
-  const { data: netWorth, refetch: refetchNetWorth } = useApi(() => getNetWorth(), []);
+  const { data: netWorth } = useApi(() => getNetWorth(), []);
   const { isDemoMode, demoFactor } = useDemo();
 
-  const { phase: refreshPhase, count: refreshCount, total: refreshTotal, nextUpdateAt } =
-    usePriceRefresh({ source: "Dashboard" });
-
-  const prevRefreshPhaseRef = useRef(refreshPhase);
-  useEffect(() => {
-    if (prevRefreshPhaseRef.current !== "done" && refreshPhase === "done") {
-      refetchNetWorth();
-    }
-    prevRefreshPhaseRef.current = refreshPhase;
-  }, [refreshPhase, refetchNetWorth]);
+  // Prices are refreshed by the server's evening job (server/src/jobs/dailyUpdate.ts).
+  const nextUpdateAt = nextStockCutoff(new Date());
 
   const scaledNetWorth = useMemo(() => {
     if (!netWorth) return null;
@@ -272,13 +263,7 @@ export function MobileDashboard() {
             <SectionLabel>Net Worth</SectionLabel>
             <KpiAmount value={scaledNetWorth.total} className="mt-0.5 tp-kpi-l" />
             <p className="tp-fineprint mt-1">
-              {refreshPhase === "running"
-                ? refreshTotal > 0
-                  ? `Fetching latest prices… ${refreshCount} of ${refreshTotal} securities`
-                  : "Fetching latest prices…"
-                : nextUpdateAt
-                  ? `Next update: ${formatNextUpdateTime(nextUpdateAt)}`
-                  : null}
+              {`Next update: ${formatNextUpdateTime(nextUpdateAt)}`}
             </p>
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border pt-3">
               <div>
