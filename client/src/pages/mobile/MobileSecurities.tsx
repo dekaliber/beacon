@@ -35,22 +35,20 @@ const SLUG_ABBREV: Record<string, string> = {
   "intl-bonds":      "IBND",
   "intl-bonds-govt": "IBND-G",
   "intl-bonds-corp": "IBND-C",
-  "alternatives":    "ALT",
-  "alt-real-estate": "RE",
-  "alt-commodities": "COM",
-  "alt-gold":        "GLD",
-  "alt-energy":      "NRG",
-  "alt-other":       "Other",
+  "real-estate":     "RE",
+  "gold":            "GLD",
+  "venture":         "VC",
+  "crypto":          "Crypto",
   "cash":            "Cash",
 };
 
 const WEIGHT_COLUMNS = [
   ["us-stocks", "intl-stocks"],
   ["us-bonds", "intl-bonds"],
-  ["alternatives", "cash"],
+  ["real-estate", "gold", "venture", "crypto", "cash"],
 ] as const;
 
-const GROUP_ORDER = ["us-stocks", "intl-stocks", "us-bonds", "intl-bonds", "alternatives", "cash"];
+const GROUP_ORDER = ["us-stocks", "intl-stocks", "us-bonds", "intl-bonds", "real-estate", "gold", "venture", "crypto", "cash"];
 
 // ── Scroll lock ────────────────────────────────────────────────────────────────
 

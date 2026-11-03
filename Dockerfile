@@ -27,6 +27,8 @@ RUN apk upgrade --no-cache ca-certificates
 # Copy prisma schema before npm ci so prisma generate can find it
 COPY server/package*.json ./
 COPY server/prisma ./prisma
+# Needed at runtime: it holds the `prisma db seed` command run by CMD below.
+COPY server/prisma.config.ts ./
 RUN npm ci
 
 # Copy compiled server and built client
