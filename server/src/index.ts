@@ -32,6 +32,7 @@ import { assignedSharesRoutes } from "./routes/assignedShares.js";
 import { jobRoutes } from "./routes/jobs.js";
 import { publicOptionsRoutes } from "./routes/publicOptions.js";
 import { publicOptionsShareRoutes } from "./routes/publicOptionsShare.js";
+import { startDailyUpdateScheduler } from "./jobs/dailyUpdate.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -116,6 +117,7 @@ process.on("unhandledRejection", (reason) => {
 
 const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT} (Node ${process.version})`);
+  startDailyUpdateScheduler();
 });
 
 const shutdown = async () => {

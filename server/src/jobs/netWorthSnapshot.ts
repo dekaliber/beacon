@@ -6,8 +6,13 @@ function getEtDate(): { year: number; month: number; day: number } {
   return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
 }
 
-export async function takeNetWorthSnapshot(): Promise<void> {
-  const { year, month, day } = getEtDate();
+// `etDay` dates the snapshot to a specific ET calendar day instead of today —
+// the daily job passes the day it is running for, which differs from today when
+// it catches up on an evening it missed.
+export async function takeNetWorthSnapshot(
+  etDay?: { year: number; month: number; day: number },
+): Promise<void> {
+  const { year, month, day } = etDay ?? getEtDate();
   // Store as UTC midnight of the ET calendar date
   const snapshotDate = new Date(Date.UTC(year, month - 1, day));
   // Noon value used for CC cutoff date comparisons (mirrors dashboard.ts)

@@ -1127,3 +1127,20 @@ model AssignedShareDisposition {
   @@index([saleActivityId])
   @@map("assigned_share_dispositions")
 }
+
+// One row per attempt of a scheduled background job (see src/jobs/scheduler.ts).
+// `runDay` is the ET calendar day the attempt is for — the day whose 8 PM ET
+// cutoff it follows — so a catch-up the next morning still counts toward the
+// evening it missed. Not user-scoped: jobs act on every holding.
+model JobRun {
+  id         String    @id @default(cuid())
+  job        String
+  runDay     DateTime  @db.Date
+  status     String    // RUNNING | SUCCESS | PARTIAL | FAILED
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  detail     Json?
+
+  @@index([job, runDay])
+  @@map("job_runs")
+}
