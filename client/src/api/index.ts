@@ -14,6 +14,8 @@ import type {
   DashboardData,
   Expense,
   GrowthPoint,
+  PerformanceCadence,
+  PerformanceData,
   Income,
   Instrument,
   InvestmentAccountSummary,
@@ -410,6 +412,9 @@ export interface TransferResponse {
 
 export const executeTransfer = (data: TransferRequest) =>
   api.post<TransferResponse>("/investments/transfer", data);
+
+export const getInvestmentPerformance = (cadence: PerformanceCadence) =>
+  api.get<PerformanceData>(`/investments/performance?cadence=${cadence}&today=${localToday()}`);
 
 export const getInvestmentGrowth = (accountId: string) =>
   api.get<{ points: GrowthPoint[] }>(`/investments/growth/${accountId}`);

@@ -6,3 +6,6 @@ dist/
 .DS_Store
 *.tsbuildinfo
 .claude/launch.json
+
+# Dated investment history files (statement backfill) — personal data, kept out of git
+server/history-imports/

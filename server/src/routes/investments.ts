@@ -58,7 +58,7 @@ const STABLE_NAV_TICKERS = new Set([
 // A ticker is pinned once we already hold a price for it. The "already hold"
 // part matters: a stable-NAV holding that has never been priced still needs one
 // real fetch to create its row, or it would never get a price at all.
-function isPinnedPrice(ticker: string, priceSource: string): boolean {
+export function isPinnedPrice(ticker: string, priceSource: string): boolean {
   return priceSource === "FIXED" || STABLE_NAV_TICKERS.has(ticker);
 }
 
@@ -84,7 +84,7 @@ function etDayStartMs(utcMs: number): number {
 // for "fill" that is rows actually inserted, duplicates having been skipped.
 type HistoryPoint = { date: Date; closePrice: number };
 
-async function writeTickerHistory(
+export async function writeTickerHistory(
   ticker: string,
   points: HistoryPoint[],
   opts: { isCrypto: boolean; mode: "fill" | "overwrite" },
@@ -177,7 +177,7 @@ function deriveSessionDays(
 //   Mon 3/23  6:30 PM → prices not yet settled → last finalized day = Fri 3/20
 //   Mon 3/23  9:00 PM → prices settled         → last finalized day = Mon 3/23
 //   Tue 3/24  3:30 AM → prices not yet settled → last finalized day = Mon 3/23
-function effectiveLastTradingDay(): Date {
+export function effectiveLastTradingDay(): Date {
   const now = new Date();
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
@@ -2683,44 +2683,69 @@ investmentRoutes.get("/growth/:accountId", async (req, res) => {
 
     // ── Self-directed account path ────────────────────────────────────────
 
-    // Load holdings with only dated lots (managed lots have null acquiredDate)
+    // Shares and cost basis held on a past day are rebuilt by rolling today's lots
+    // back through every later purchase, sale, and in-kind transfer. Counting
+    // "lots acquired by then + shares sold since" instead would treat shares that
+    // were bought *and* sold after that day as held on it: once fully sold, a
+    // lot is deleted and only its sale remains.
     const holdings = await prisma.investmentHolding.findMany({
       where: { accountId },
-      include: {
-        lots: {
-          where: { acquiredDate: { not: null } },
-          orderBy: { acquiredDate: "asc" },
-        },
-      },
+      include: { lots: { where: { acquiredDate: { not: null } } } },
     });
 
-    // Load all SALE activities for this account
-    const saleActivities = await prisma.investmentActivity.findMany({
-      where: { accountId, type: "SALE" },
-      orderBy: { date: "asc" },
-    });
+    const [activities, transferRows] = await Promise.all([
+      prisma.investmentActivity.findMany({
+        where: { accountId, type: { in: ["PURCHASE", "SALE"] }, shares: { not: null } },
+        orderBy: { date: "asc" },
+      }),
+      // Both sides of every transfer touching this account: the pair's earlier
+      // row is the source, which is how direction is told apart.
+      prisma.investmentActivity.findMany({
+        where: { type: "TRANSFER", shares: { not: null }, OR: [{ accountId }, { transferAccountId: accountId }] },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
+    const saleActivities = activities.filter((a) => a.type === "SALE");
 
-    // Group sales by ticker
-    type SaleRecord = { date: Date; shares: number; costBasis: number };
-    const salesByTicker = new Map<string, SaleRecord[]>();
-    for (const act of saleActivities) {
-      if (act.shares == null) continue;
-      if (!salesByTicker.has(act.ticker)) salesByTicker.set(act.ticker, []);
-      salesByTicker.get(act.ticker)!.push({
-        date: act.date,
-        shares: parseFloat(act.shares.toString()),
-        costBasis: act.costBasis ? parseFloat(act.costBasis.toString()) : 0,
+    type Change = { date: Date; shares: number; basis: number };
+    const changesByTicker = new Map<string, Change[]>();
+    const addChange = (ticker: string, c: Change) =>
+      (changesByTicker.get(ticker) ?? changesByTicker.set(ticker, []).get(ticker)!).push(c);
+    for (const a of activities) {
+      const shares = parseFloat(a.shares!.toString());
+      if (a.type === "PURCHASE") {
+        addChange(a.ticker, { date: a.date, shares, basis: parseFloat(a.amount.toString()) });
+      } else {
+        addChange(a.ticker, { date: a.date, shares: -shares, basis: -(a.costBasis ? parseFloat(a.costBasis.toString()) : 0) });
+      }
+    }
+    const transferPairs = new Map<string, typeof transferRows>();
+    for (const t of transferRows) {
+      const key = [t.date.toISOString(), t.ticker, t.shares!.toString(), [t.accountId, t.transferAccountId].sort().join("|")].join("/");
+      (transferPairs.get(key) ?? transferPairs.set(key, []).get(key)!).push(t);
+    }
+    for (const rows of transferPairs.values()) {
+      for (let i = 0; i + 1 < rows.length; i += 2) {
+        const [out, into] = [rows[i], rows[i + 1]];
+        const shares = parseFloat(out.shares!.toString());
+        const basis = out.costBasis ? parseFloat(out.costBasis.toString()) : 0;
+        if (out.accountId === accountId) addChange(out.ticker, { date: out.date, shares: -shares, basis: -basis });
+        if (into.accountId === accountId) addChange(into.ticker, { date: into.date, shares, basis });
+      }
+    }
+
+    // Today's position per ticker, from the remaining lots
+    const currentByTicker = new Map<string, { qty: number; basis: number }>();
+    for (const h of holdings) {
+      if (h.lots.length === 0) continue;
+      currentByTicker.set(h.ticker, {
+        qty: h.lots.reduce((s, l) => s + parseFloat(l.quantity.toString()), 0),
+        basis: h.lots.reduce((s, l) => s + parseFloat(l.quantity.toString()) * parseFloat(l.costPerShare.toString()), 0),
       });
     }
 
-    // All tickers to chart: those with remaining lots OR past sale activities
-    const holdingsWithLots = holdings.filter((h) => h.lots.length > 0);
-    const allTickers = [
-      ...new Set([
-        ...holdingsWithLots.map((h) => h.ticker),
-        ...salesByTicker.keys(),
-      ]),
-    ];
+    // All tickers to chart: those held now OR traded or moved here at some point
+    const allTickers = [...new Set([...currentByTicker.keys(), ...changesByTicker.keys()])];
 
     if (allTickers.length === 0) return res.json({ points: [] });
 
@@ -2730,31 +2755,30 @@ investmentRoutes.get("/growth/:accountId", async (req, res) => {
       if (h.coinGeckoId) coinGeckoIdByTickerGrowth.set(h.ticker, h.coinGeckoId);
     }
 
-    // A ticker with no lots left is here only for the window it was held, which
-    // ends at its final sale — the reconstructed quantity is zero after that, so
-    // no later price is ever read. Cap the fill there instead of topping these up
-    // to the present every time the chart is opened. Assigned puts leave a trail
-    // of these, and they would otherwise be refreshed forever.
-    const tickersWithLots = new Set(holdingsWithLots.map((h) => h.ticker));
+    // A ticker no longer held is here only for the window it was held, which
+    // ends at its last sale or transfer out — the reconstructed quantity is zero
+    // after that, so no later price is ever read. Cap the fill there instead of
+    // topping these up to the present every time the chart is opened. Assigned
+    // puts leave a trail of these, and they would otherwise be refreshed forever.
     const fillCeilings = new Map<string, Date>();
-    for (const [ticker, sales] of salesByTicker) {
-      if (tickersWithLots.has(ticker) || sales.length === 0) continue;
-      const lastSale = sales.reduce((a, b) => (a.date > b.date ? a : b)).date;
-      fillCeilings.set(ticker, new Date(etDayStartMs(lastSale.getTime())));
+    for (const [ticker, changes] of changesByTicker) {
+      if (currentByTicker.has(ticker)) continue;
+      const lastExit = changes.filter((c) => c.shares < 0).reduce<Date | null>((a, c) => (!a || c.date > a ? c.date : a), null);
+      if (lastExit) fillCeilings.set(ticker, new Date(etDayStartMs(lastExit.getTime())));
     }
 
     // Lazy gap-fill: bring price history current before computing
     await fillPriceGaps(allTickers, coinGeckoIdByTickerGrowth, fillCeilings);
 
-    // Earliest date: min of first lot acquisition and first sale date
-    const allLots = holdingsWithLots.flatMap((h) => h.lots);
-    const firstLotDate = allLots.length > 0
-      ? allLots.reduce((min, l) => (l.acquiredDate! < min ? l.acquiredDate! : min), allLots[0].acquiredDate!)
+    // Earliest date: the first recorded change, or the first remaining lot when
+    // a lot predates every record (e.g. one entered before activities existed)
+    const candidateDates = [
+      ...[...changesByTicker.values()].flat().map((c) => c.date),
+      ...holdings.flatMap((h) => h.lots.map((l) => l.acquiredDate!)),
+    ];
+    const earliestDate = candidateDates.length > 0
+      ? candidateDates.reduce((min, d) => (d < min ? d : min))
       : null;
-    const firstSaleDate = saleActivities.length > 0 ? saleActivities[0].date : null;
-    const earliestDate = firstLotDate && firstSaleDate
-      ? (firstLotDate < firstSaleDate ? firstLotDate : firstSaleDate)
-      : (firstLotDate ?? firstSaleDate);
 
     if (!earliestDate) return res.json({ points: [] });
 
@@ -2784,20 +2808,6 @@ investmentRoutes.get("/growth/:accountId", async (req, res) => {
     // row into TickerPriceHistory at the same time as TickerPrice, so the chart
     // and header are always reading from the same source of truth.
     const effectiveDate = effectiveLastTradingDay();
-
-    // Build per-ticker current lot data
-    type LotData = { acquiredDate: Date; quantity: number; costPerShare: number };
-    const lotsByTicker = new Map<string, LotData[]>();
-    for (const holding of holdingsWithLots) {
-      lotsByTicker.set(
-        holding.ticker,
-        holding.lots.map((l) => ({
-          acquiredDate: l.acquiredDate!,
-          quantity: parseFloat(l.quantity.toString()),
-          costPerShare: parseFloat(l.costPerShare.toString()),
-        }))
-      );
-    }
 
     // Union of all dates across all tickers, capped at the effective last trading
     // day so we never render data points for days whose prices haven't settled yet.
@@ -2840,29 +2850,30 @@ investmentRoutes.get("/growth/:accountId", async (req, res) => {
       events?: EventRecord[];
     }> = [];
 
+    // Activity dates are stored at various instants within their calendar day,
+    // so compare calendar days rather than instants.
+    const dayOfDate = (d: Date) => d.toISOString().slice(0, 10);
+
     for (const dateStr of sortedDates) {
       const asOf = new Date(dateStr);
+      const asOfDay = dayOfDate(asOf);
       let marketValue = 0;
       let totalCostBasis = 0;
       let hasPrice = false;
 
       for (const ticker of allTickers) {
-        // Current remaining lots acquired by this date
-        const lots = lotsByTicker.get(ticker) ?? [];
-        const activeLots = lots.filter((l) => l.acquiredDate <= asOf);
+        const current = currentByTicker.get(ticker) ?? { qty: 0, basis: 0 };
+        let qty = current.qty;
+        let basis = current.basis;
+        // Undo every change made after this day
+        for (const c of changesByTicker.get(ticker) ?? []) {
+          if (dayOfDate(c.date) > asOfDay) {
+            qty -= c.shares;
+            basis -= c.basis;
+          }
+        }
 
-        // Sales that happened strictly after this date — add those shares back
-        const sales = salesByTicker.get(ticker) ?? [];
-        const futureSales = sales.filter((s) => s.date > asOf);
-
-        const qty =
-          activeLots.reduce((s, l) => s + l.quantity, 0) +
-          futureSales.reduce((s, sale) => s + sale.shares, 0);
-        const basis =
-          activeLots.reduce((s, l) => s + l.quantity * l.costPerShare, 0) +
-          futureSales.reduce((s, sale) => s + sale.costBasis, 0);
-
-        if (qty <= 0) continue;
+        if (qty <= 0.000001) continue;
 
         const price = priceAsOf(ticker, asOf);
         if (price == null) continue;

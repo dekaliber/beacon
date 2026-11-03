@@ -13,6 +13,7 @@ import { useDemo } from"@/context/DemoContext";
 import { scaleInvestmentAccounts, scaleAllocationSummary } from"@/lib/demo";
 import type { InvestmentAccountSummary, AllocationSummary, AllocationItem, WithdrawalSummary, InvestmentSettings } from"@/types";
 import { BeaconLoader } from"@/components/BeaconLoader";
+import { PortfolioPerformanceCard } from"@/components/PortfolioPerformanceCard";
 import { SectionLabel, StatValue, DisplayStat, FieldLabel } from"@/components/Typography";
 
 // ── Allocation card ──────────────────────────────────────────────────────────
@@ -1353,6 +1354,9 @@ if (!displayAccounts) return <BeaconLoader />;
  </div>
  </Card>
  )}
+
+ {/* Performance over time */}
+ {displayAccounts.length > 0 && <PortfolioPerformanceCard />}
 
  {/* Withdrawal Rate */}
  {displayAccounts.length > 0 && (

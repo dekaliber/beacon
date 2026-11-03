@@ -1,4 +1,4 @@
-import type { InvestmentAccountSummary, InvestmentHolding, AllocationSummary, GrowthPoint, ManualInvestment } from "@/types";
+import type { InvestmentAccountSummary, InvestmentHolding, AllocationSummary, GrowthPoint, ManualInvestment, PerformanceData } from "@/types";
 
 export const DEMO_SCALE_KEY = "beacon_demo_scale";
 export const DEMO_MODE_KEY = "beacon_demo_mode";
@@ -67,6 +67,31 @@ export function scaleGrowthPoints(points: GrowthPoint[], f: number): GrowthPoint
       pricePerShare: e.pricePerShare != null ? e.pricePerShare * f : null,
     })),
   }));
+}
+
+export function scalePerformance(d: PerformanceData, f: number): PerformanceData {
+  return {
+    ...d,
+    baselineValue: d.baselineValue * f,
+    periods: d.periods.map((p) => ({
+      ...p,
+      startValue: p.startValue * f,
+      endValue: p.endValue * f,
+      deposits: p.deposits * f,
+      withdrawals: p.withdrawals * f,
+      unreconciled: p.unreconciled * f,
+      classes: p.classes.map((c) => ({
+        ...c,
+        startValue: c.startValue * f,
+        endValue: c.endValue * f,
+        marketChange: c.marketChange * f,
+        income: c.income * f,
+        holdings: c.holdings.map((h) => ({ ...h, marketChange: h.marketChange * f, income: h.income * f })),
+      })),
+      flows: p.flows.map((x) => ({ ...x, amount: x.amount * f })),
+      unreconciledByAccount: p.unreconciledByAccount.map((x) => ({ ...x, amount: x.amount * f })),
+    })),
+  };
 }
 
 export function scaleManuals(manuals: ManualInvestment[], f: number): ManualInvestment[] {

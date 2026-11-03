@@ -395,6 +395,54 @@ export interface GrowthEvent {
   netAmount: number;
 }
 
+// ── Portfolio performance (GET /investments/performance) ─────────────────────
+export type PerformanceCadence = "weekly" | "monthly";
+
+export interface PerformanceClassInfo {
+  key: string;
+  name: string;
+  color: string | null;
+}
+
+export interface PerformancePeriodClass {
+  key: string;
+  startValue: number;
+  endValue: number;
+  marketChange: number; // price change, net of trades
+  income: number;       // dividends and interest
+  holdings: Array<{ label: string; marketChange: number; income: number }>;
+}
+
+export interface PerformancePeriod {
+  start: string; // YYYY-MM-DD close the period starts from
+  end: string;   // YYYY-MM-DD close it ends on
+  partial: boolean;
+  startValue: number;
+  endValue: number;
+  classes: PerformancePeriodClass[];
+  deposits: number;
+  withdrawals: number; // positive
+  unreconciled: number;
+  flows: Array<{ date: string; account: string; amount: number; description: string }>;
+  unreconciledByAccount: Array<{ account: string; amount: number }>;
+}
+
+export interface PerformanceData {
+  cadence: PerformanceCadence;
+  baseline: string;
+  baselineValue: number;
+  asOf: string;
+  classes: PerformanceClassInfo[];
+  periods: PerformancePeriod[];
+  notes: {
+    estimatedPrices: string[];
+    inconsistentPositions: string[]; // "Account TICKER" whose records roll below zero shares
+    negativeCash: Array<{ account: string; date: string; amount: number }>; // lowest rolled cash below zero
+    managedDataThrough: Array<{ account: string; date: string | null }>;
+    cashObservations: Array<{ account: string; count: number; first: string | null }>;
+  };
+}
+
 export interface GrowthPoint {
   date: string;
   marketValue: number;
