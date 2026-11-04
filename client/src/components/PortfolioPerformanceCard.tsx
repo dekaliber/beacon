@@ -13,7 +13,7 @@ import {
   Tooltip as RechartsTooltip,
 } from "recharts";
 import { Card } from "@/components/Card";
-import { SectionLabel, StatValue } from "@/components/Typography";
+import { SectionLabel } from "@/components/Typography";
 import { InfoHint } from "@/components/Tooltip";
 import { useApi } from "@/hooks/useApi";
 import { getInvestmentPerformance } from "@/api";
@@ -207,7 +207,6 @@ function PerformanceBody({
       saveHidden(next);
       return next;
     });
-  const first = periods[0];
   const last = periods[periods.length - 1];
   const totalChange = last.endValue - data.baselineValue;
   const totals = periods.reduce(
@@ -241,9 +240,11 @@ function PerformanceBody({
 
   const rows = useMemo(() => {
     const label = (end: string) =>
-      cadence === "monthly" && end !== data.baseline
-        ? new Date(`${end}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" })
-        : fmtDay(end);
+      cadence === "weekly"
+        ? `${Number(end.slice(5, 7))}/${Number(end.slice(8, 10))}`
+        : end !== data.baseline
+          ? new Date(`${end}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" })
+          : fmtDay(end);
     return [
       { end: data.baseline, label: label(data.baseline), value: data.baselineValue, period: null as PerformancePeriod | null },
       ...periods.map((p) => ({
@@ -295,9 +296,8 @@ function PerformanceBody({
   return (
     <>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-4">
-        <StatValue as="p" className="font-bold">{money(last.endValue)}</StatValue>
         <span className={cn("text-sm font-medium", toneOf(totalChange))}>
-          {signed(totalChange)} since {fmtDay(first.start, true)}
+          {signed(totalChange)} YTD
         </span>
         <span className="tp-caption">
           Investment return <span className={cn("tabular-nums", toneOf(totals.market))}>{signed(totals.market)}</span>
@@ -430,6 +430,7 @@ function PerformanceBody({
               key={s.key}
               onClick={() => toggleHidden(s.key)}
               aria-pressed={!isHidden}
+              title={isHidden ? "Click to show" : "Click to hide"}
               className={cn("flex items-center gap-1.5 hover:text-foreground transition-opacity", isHidden && "opacity-40 line-through")}
             >
               {s.key === UNRECONCILED_KEY ? (
@@ -441,7 +442,6 @@ function PerformanceBody({
             </button>
           );
         })}
-        <span className="text-muted-foreground/60">Click to show or hide</span>
       </div>
 
       <PeriodBreakdown period={selected} cadence={cadence} series={series} />
