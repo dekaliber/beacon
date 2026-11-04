@@ -805,6 +805,7 @@ function splitLabel(name: string, maxChars: number): string[] {
 const WF_HEIGHT = 300;
 const WF_TOP = 28;    // room for the labels above the highest bar
 const WF_BOTTOM = 44; // room for two-line column names
+const WF_GUTTER = 56;  // left of the columns: the axis-start label
 
 /** Open → each driver → close. The value axis starts just below the lowest
  *  level reached, not at zero, so a 2% month isn't a sliver on two tall bars. */
@@ -841,9 +842,10 @@ function Waterfall({
   const y = (v: number) => WF_TOP + ((hi - v) / (hi - base || 1)) * plotH;
 
   const n = drivers.length + 2;
-  const colW = width / n;
+  const colW = Math.max(width - WF_GUTTER, 0) / n;
   const barW = Math.min(colW * 0.62, 56);
-  const cx = (i: number) => colW * (i + 0.5);
+  const colX = (i: number) => WF_GUTTER + colW * i;
+  const cx = (i: number) => colX(i) + colW / 2;
   const maxChars = Math.max(5, Math.floor((colW - 6) / 6));
   const closeName = (day: string) => `${cadence === "monthly" ? monthShort(day) : md(day)} close`;
 
@@ -881,7 +883,7 @@ function Waterfall({
             return (
               <rect
                 key={`band-${d.key}`}
-                x={colW * (k + 1) + 2}
+                x={colX(k + 1) + 2}
                 y={2}
                 width={colW - 4}
                 height={WF_HEIGHT - 4}
@@ -891,7 +893,19 @@ function Waterfall({
               />
             );
           })}
-          <line x1={0} x2={width} y1={y(base)} y2={y(base)} stroke="var(--color-chart-axis)" strokeWidth={1} />
+          {/* The axis doesn't start at zero, so say where it does, level with its line */}
+          <line x1={WF_GUTTER} x2={width} y1={y(base)} y2={y(base)} stroke="var(--color-chart-axis)" strokeWidth={1} />
+          <text
+            x={WF_GUTTER - 8}
+            y={y(base)}
+            textAnchor="end"
+            dominantBaseline="middle"
+            fontSize={11}
+            fontFamily="var(--font-mono)"
+            fill="var(--color-muted-foreground)"
+          >
+            {short(base)}
+          </text>
 
           {totalBar(0, p.startValue, "var(--color-ink-5)", "start")}
           {columnName(0, closeName(p.start))}
@@ -954,7 +968,7 @@ function Waterfall({
           {steps.map(({ d }, k) => (
             <rect
               key={`hit-${d.key}`}
-              x={colW * (k + 1)}
+              x={colX(k + 1)}
               y={0}
               width={colW}
               height={WF_HEIGHT}
@@ -967,11 +981,6 @@ function Waterfall({
           ))}
         </svg>
       )}
-      <p className="tp-caption mt-1">
-        Axis starts at {short(base)}
-        {drivers.some((d) => d.key === OTHER_KEY) &&
-          ` · changes under ${MINOR_SHARE * 100}% of the ${cadence === "monthly" ? "month" : "week"}'s total movement grouped into Other`}
-      </p>
     </div>
   );
 }
