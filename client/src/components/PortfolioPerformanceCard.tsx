@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, ChevronLeft, ChevronRight, Info } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight, Info, Pencil } from "lucide-react";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -17,11 +17,12 @@ import {
 import { Card } from "@/components/Card";
 import { DisplayStat, SectionLabel } from "@/components/Typography";
 import { InfoHint } from "@/components/Tooltip";
+import { MonthEndBalancesModal } from "@/components/MonthEndBalancesModal";
 import { useApi } from "@/hooks/useApi";
 import { getInvestmentPerformance } from "@/api";
 import { useDemo } from "@/context/DemoContext";
 import { scalePerformance } from "@/lib/demo";
-import { cn } from "@/lib/utils";
+import { cn, localToday } from "@/lib/utils";
 import type { PerformanceCadence, PerformanceData, PerformancePeriod } from "@/types";
 
 // ── Portfolio performance ─────────────────────────────────────────────────────
@@ -230,7 +231,7 @@ function Swatch({ driver, size = "h-2.5 w-2.5" }: { driver: Driver; size?: strin
 export function PortfolioPerformanceCard() {
   const [cadence, setCadence] = useState<PerformanceCadence>("monthly");
   const [selectedEnd, setSelectedEnd] = useState<string | null>(null);
-  const { data: raw, loading } = useApi(() => getInvestmentPerformance(cadence), [cadence]);
+  const { data: raw, loading, refetch } = useApi(() => getInvestmentPerformance(cadence), [cadence]);
   const { isDemoMode, demoFactor } = useDemo();
   const data = useMemo(
     () => (raw && isDemoMode ? scalePerformance(raw, demoFactor) : raw),
@@ -277,6 +278,7 @@ export function PortfolioPerformanceCard() {
           // The latest full period by default; a just-started one is mostly empty.
           selectedEnd={selectedEnd ?? [...data.periods].reverse().find((p) => !p.partial)?.end ?? data.periods[data.periods.length - 1].end}
           onSelect={setSelectedEnd}
+          onBalancesSaved={refetch}
         />
       )}
     </Card>
@@ -301,10 +303,12 @@ function PerformanceBody({
   data,
   selectedEnd,
   onSelect,
+  onBalancesSaved,
 }: {
   data: PerformanceData;
   selectedEnd: string;
   onSelect: (end: string) => void;
+  onBalancesSaved: () => void;
 }) {
   const { periods, cadence } = data;
   const monthly = cadence === "monthly";
@@ -590,7 +594,7 @@ function PerformanceBody({
         </ComposedChart>
       </ResponsiveContainer>
 
-      <PeriodDetail period={selected} drivers={selectedRow.drivers} cadence={cadence} />
+      <PeriodDetail period={selected} drivers={selectedRow.drivers} cadence={cadence} onBalancesSaved={onBalancesSaved} />
       <DataNotes data={data} />
     </>
   );
@@ -682,11 +686,20 @@ function PeriodDetail({
   period: p,
   drivers,
   cadence,
+  onBalancesSaved,
 }: {
   period: PerformancePeriod;
   drivers: Driver[];
   cadence: PerformanceCadence;
+  onBalancesSaved: () => void;
 }) {
+  const { isDemoMode } = useDemo();
+  const [editingBalances, setEditingBalances] = useState(false);
+  // Month-end balances are edited for finished months only: the open month's
+  // are set on the account pages. Demo mode scales every value shown, so there's
+  // nothing real to edit.
+  const balancesEditable = cadence === "monthly" && !isDemoMode && p.end.slice(0, 7) < localToday().slice(0, 7);
+
   // The pick belongs to one period; a new period opens on its largest driver.
   const [pick, setPick] = useState<{ end: string; key: string } | null>(null);
   const largest = [...drivers]
@@ -704,21 +717,21 @@ function PeriodDetail({
 
   return (
     <div className="mt-6 border-t border-border pt-5">
-      <div className="flex items-baseline justify-between gap-4 mb-4">
-        <div className="flex items-baseline gap-2">
-          <h4 className="tp-row-label">{periodTitle(p, cadence)}</h4>
-          <span className="tp-caption">{fmtDay(p.start)} close → {fmtDay(p.end)} close</span>
-        </div>
-        <div className="flex items-baseline gap-2 text-sm">
-          <span className="tabular-nums text-muted-foreground">{money(p.startValue)} → {money(p.endValue)}</span>
-          <span className={cn("font-semibold tabular-nums", toneOf(change))}>
-            {signed(change)}{changePct != null && ` (${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%)`}
-          </span>
-        </div>
-      </div>
-
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-2 min-w-0">
+          {/* Heading over the waterfall, its totals flush with the chart's right edge */}
+          <div className="flex min-h-7 items-center justify-between gap-4 mb-4">
+            <div className="flex items-baseline gap-2 min-w-0">
+              <h4 className="tp-row-label">{periodTitle(p, cadence)}</h4>
+              <span className="tp-caption">{fmtDay(p.start)} close → {fmtDay(p.end)} close</span>
+            </div>
+            <div className="flex shrink-0 items-baseline gap-2 text-sm">
+              <span className="tabular-nums text-muted-foreground">{money(p.startValue)} → {money(p.endValue)}</span>
+              <span className={cn("font-semibold tabular-nums", toneOf(change))}>
+                {signed(change)}{changePct != null && ` (${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%)`}
+              </span>
+            </div>
+          </div>
           <Waterfall
             period={p}
             drivers={drivers}
@@ -728,6 +741,17 @@ function PeriodDetail({
           />
         </div>
         <div className="col-span-1 min-w-0 border-l border-border pl-6">
+          <div className="flex min-h-7 items-center justify-end mb-4">
+            {balancesEditable && (
+              <button
+                onClick={() => setEditingBalances(true)}
+                className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-muted"
+              >
+                <Pencil className="h-3 w-3" />
+                Edit manual balances
+              </button>
+            )}
+          </div>
           {driver ? (
             <DriverDetail
               driver={driver}
@@ -741,6 +765,14 @@ function PeriodDetail({
           )}
         </div>
       </div>
+      {balancesEditable && (
+        <MonthEndBalancesModal
+          open={editingBalances}
+          month={p.end}
+          onClose={() => setEditingBalances(false)}
+          onSaved={onBalancesSaved}
+        />
+      )}
     </div>
   );
 }

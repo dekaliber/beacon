@@ -16,6 +16,7 @@ import type {
   GrowthPoint,
   PerformanceCadence,
   PerformanceData,
+  MonthEndBalances,
   Income,
   Instrument,
   InvestmentAccountSummary,
@@ -415,6 +416,21 @@ export const executeTransfer = (data: TransferRequest) =>
 
 export const getInvestmentPerformance = (cadence: PerformanceCadence) =>
   api.get<PerformanceData>(`/investments/performance?cadence=${cadence}&today=${localToday()}`);
+
+export const getMonthEndBalances = () =>
+  api.get<MonthEndBalances>(`/investments/month-end-balances?today=${localToday()}`);
+
+export const setMonthEndCash = (accountId: string, date: string, balance: number) =>
+  api.put<void>("/investments/month-end-balances/cash", { accountId, date, balance, today: localToday() });
+
+export const deleteMonthEndCash = (accountId: string, date: string) =>
+  api.delete("/investments/month-end-balances/cash", { accountId, date, today: localToday() });
+
+export const setMonthEndManual = (seriesId: string, date: string, marketValue: number) =>
+  api.put<void>("/investments/month-end-balances/manual", { seriesId, date, marketValue, today: localToday() });
+
+export const deleteMonthEndManual = (seriesId: string, date: string) =>
+  api.delete("/investments/month-end-balances/manual", { seriesId, date, today: localToday() });
 
 export const getInvestmentGrowth = (accountId: string) =>
   api.get<{ points: GrowthPoint[] }>(`/investments/growth/${accountId}`);

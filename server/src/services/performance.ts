@@ -75,6 +75,21 @@ function periodEnds(cadence: Cadence, lastDay: Day): { baseline: Day; ends: Day[
   return { baseline, ends };
 }
 
+/** Last day valued: the latest settled session, or `today` if earlier. */
+function lastValuedDay(today: Day): Day {
+  const settled = dayOf(effectiveLastTradingDay());
+  return settled < today ? settled : today;
+}
+
+/** Month-end closes that can be edited: the baseline close and each finished
+ *  month's last session. The month `today` falls in is still open, so its
+ *  values belong on the account pages, not here. */
+export function editableMonthEnds(today: Day): Day[] {
+  const { baseline, ends } = periodEnds("monthly", lastValuedDay(today));
+  const open = today.slice(0, 7);
+  return [baseline, ...ends].filter((d) => d.slice(0, 7) < open);
+}
+
 // ── Response shape ──────────────────────────────────────────────────────────────
 
 export type ClassInfo = { key: string; name: string; color: string | null };
@@ -102,6 +117,21 @@ export type PerformancePeriod = {
   unreconciledByAccount: Array<{ account: string; amount: number }>;
 };
 
+/** One month-end value: what's recorded on that close, if anything, and what
+ *  the records work out to without it (what deleting it would fall back to).
+ *  `calculated` is null where there's nothing to value (a removed investment). */
+export type MonthEndCell = { recorded: number | null; source: string | null; calculated: number | null };
+
+export type MonthEndBalances = {
+  months: Day[];
+  accounts: Array<{
+    id: string;
+    name: string;
+    cash: MonthEndCell[]; // aligned with months
+    manual: Array<{ id: string; name: string; removedOn: Day | null; cells: MonthEndCell[] }>;
+  }>;
+};
+
 export type PerformanceResult = {
   cadence: Cadence;
   baseline: Day;
@@ -116,6 +146,7 @@ export type PerformanceResult = {
     managedDataThrough: Array<{ account: string; date: Day | null }>;
     cashObservations: Array<{ account: string; count: number; first: Day | null }>;
   };
+  balances?: MonthEndBalances; // only when asked for
 };
 
 // ── Engine ──────────────────────────────────────────────────────────────────────
@@ -124,9 +155,9 @@ export async function computePerformance(
   userId: string,
   cadence: Cadence,
   today: Day,
+  opts: { balances?: boolean } = {},
 ): Promise<PerformanceResult> {
-  const settled = dayOf(effectiveLastTradingDay());
-  const lastDay = settled < today ? settled : today;
+  const lastDay = lastValuedDay(today);
   const { baseline, ends } = periodEnds(cadence, lastDay);
   const valuationDays = [baseline, ...ends];
 
@@ -564,9 +595,9 @@ export async function computePerformance(
   // the events since; before the first observation, rolled back from it. An
   // observation that disagrees with where the events led is what surfaces as
   // unreconciled.
-  const cashAt = (accountId: string, day: Day): number => {
-    const obs = cashObsByAccount.get(accountId)!;
-    const deltas = cashDeltas.get(accountId) ?? [];
+  type CashObs = { day: Day; balance: number; statement: boolean };
+  const rollCash = (obs: CashObs[], deltas: Array<{ day: Day; amount: number }>, day: Day): number => {
+    if (obs.length === 0) return 0;
     let anchor = obs[0];
     for (const o of obs) {
       if (o.day <= day) anchor = o;
@@ -580,6 +611,8 @@ export async function computePerformance(
     }
     return cash;
   };
+  const cashAt = (accountId: string, day: Day): number =>
+    rollCash(cashObsByAccount.get(accountId)!, cashDeltas.get(accountId) ?? [], day);
 
   // Income with no ticker: an account holding only manual investments (Fundrise)
   // earns on those; anything else (interest) is a return on cash.
@@ -760,7 +793,60 @@ export async function computePerformance(
     prev = cur;
   }
 
+  // ── Month-end balances, for editing ─────────────────────────────────────────
+  let balances: MonthEndBalances | undefined;
+  if (opts.balances) {
+    const months = editableMonthEnds(today);
+    const cashRow = new Map(cashRows.map((r) => [`${r.accountId}|${dayOf(r.date)}`, r]));
+    const seriesId = (v: { manualInvestmentId: string | null; accountId: string; name: string }) =>
+      v.manualInvestmentId ?? `detached:${v.accountId}:${v.name}`;
+    const valuationRow = new Map(valuations.map((v) => [`${seriesId(v)}|${dayOf(v.date)}`, v]));
+
+    balances = {
+      months,
+      accounts: accounts
+        .map((a) => {
+          const obs = cashObsByAccount.get(a.id)!;
+          const deltas = cashDeltas.get(a.id) ?? [];
+          const cash = months.map((d): MonthEndCell => {
+            const row = cashRow.get(`${a.id}|${d}`);
+            // Statement terms (settled cash), like the values typed in: undo the
+            // T+1 add-back that puts observations on a trade-date footing.
+            const settle = d > baseline ? tradeCashOn.get(`${a.id}|${d}`) ?? 0 : 0;
+            const without = rollCash(obs.filter((o) => o.day !== d || !row), deltas, d) - settle;
+            return {
+              recorded: row ? num(row.balance) : null,
+              source: row?.source ?? null,
+              calculated: round2(without),
+            };
+          });
+          const manual = [...manualSeries.entries()]
+            .filter(([, ms]) => ms.accountId === a.id)
+            .map(([id, ms]) => {
+              const removedOn = ms.obs.find((o) => o.removed)?.day ?? null;
+              const cells = months.map((d): MonthEndCell => {
+                const row = valuationRow.get(`${id}|${d}`);
+                if (removedOn && d >= removedOn) return { recorded: null, source: row?.source ?? null, calculated: null };
+                const rest = { ...ms, obs: ms.obs.filter((o) => o.day !== d || !row) };
+                return {
+                  recorded: row ? num(row.marketValue) : null,
+                  source: row?.source ?? null,
+                  calculated: rest.obs.length ? round2(manualAt(rest, d).value) : null,
+                };
+              });
+              return { id, name: ms.label, removedOn, cells };
+            })
+            .sort((x, y) => x.name.localeCompare(y.name));
+          return { id: a.id, name: a.name, cash, manual };
+        })
+        // Leave out accounts with nothing ever recorded or held here
+        .filter((a) => a.manual.length > 0 || a.cash.some((c) => c.recorded != null || Math.abs(c.calculated ?? 0) >= 0.005))
+        .sort((x, y) => x.name.localeCompare(y.name)),
+    };
+  }
+
   return {
+    balances,
     cadence,
     baseline,
     baselineValue: round2(baselineValue),

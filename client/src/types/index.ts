@@ -443,6 +443,25 @@ export interface PerformanceData {
   };
 }
 
+/** One month-end value: what's recorded on that close, if anything, and what
+ *  the records work out to without it. `calculated` is null where there's
+ *  nothing to value (an investment removed by then). */
+export interface MonthEndCell {
+  recorded: number | null;
+  source: string | null;
+  calculated: number | null;
+}
+
+export interface MonthEndBalances {
+  months: string[]; // YYYY-MM-DD closes of finished months, oldest first
+  accounts: Array<{
+    id: string;
+    name: string;
+    cash: MonthEndCell[]; // aligned with months
+    manual: Array<{ id: string; name: string; removedOn: string | null; cells: MonthEndCell[] }>;
+  }>;
+}
+
 export interface GrowthPoint {
   date: string;
   marketValue: number;
