@@ -73,7 +73,13 @@ function useBodyScrollLock(active: boolean) {
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export function MobileSecurities() {
-  const { data: instruments, refetch } = useApi(() => getInstruments(), []);
+  const { data: allInstruments, refetch } = useApi(() => getInstruments({ includeInactive: true }), []);
+
+  // Active = still held somewhere; inactive = fully sold/removed everywhere
+  const { instruments, inactiveInstruments } = useMemo(() => ({
+    instruments: allInstruments?.filter((i) => i.isActive) ?? null,
+    inactiveInstruments: allInstruments?.filter((i) => !i.isActive) ?? [],
+  }), [allInstruments]);
   const { data: assetClasses } = useApi(() => getFlatAssetClasses(), []);
 
   const [editInstrument, setEditInstrument] = useState<Instrument | null>(null);
@@ -262,6 +268,20 @@ export function MobileSecurities() {
               title="No securities yet"
               description="Securities are created automatically when you add holdings to your investment accounts."
             />
+          </div>
+        )}
+
+        {inactiveInstruments.length > 0 && (
+          <div className="space-y-2">
+            <div>
+              <h2 className="font-semibold">No Longer Held</h2>
+              <p className="tp-caption mt-0.5">
+                Fully sold or removed from every account. Settings are kept if you buy them back.
+              </p>
+            </div>
+            <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+              {inactiveInstruments.map((inst) => renderRow(inst))}
+            </div>
           </div>
         )}
       </div>

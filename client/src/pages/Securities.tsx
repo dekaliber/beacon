@@ -56,7 +56,13 @@ const WEIGHT_COLUMNS = [
 
 export function SecuritiesPage() {
  const navigate = useNavigate();
- const { data: instruments, refetch } = useApi(() => getInstruments(), []);
+ const { data: allInstruments, refetch } = useApi(() => getInstruments({ includeInactive: true }), []);
+
+ // Active = still held somewhere; inactive = fully sold/removed everywhere
+ const { instruments, inactiveInstruments } = useMemo(() => ({
+ instruments: allInstruments?.filter((i) => i.isActive) ?? null,
+ inactiveInstruments: allInstruments?.filter((i) => !i.isActive) ?? [],
+ }), [allInstruments]);
  const { data: assetClasses } = useApi(() => getFlatAssetClasses(), []);
 
  const [editModal, setEditModal] = useState<{ open: boolean; instrument: Instrument | null }>({
@@ -164,12 +170,13 @@ export function SecuritiesPage() {
  {/* Accounts */}
  <td className="py-2 px-2 align-middle">
  <div className="flex flex-wrap gap-1">
+ {uniqueAccounts.length === 0 && <span className="text-13 text-muted-foreground/50">—</span>}
  {uniqueAccounts.map((acct) => {
  const aliasTickers = instrument.holdings
  .filter((h) => h.account.id === acct.id && h.ticker !== instrument.primaryTicker)
  .map((h) => h.ticker);
  const label = aliasTickers.length > 0
- ?`${acct.name} (${aliasTickers.join(",")})`
+ ?`${acct.name} (${aliasTickers.join(", ")})`
  : acct.name;
  return (
  <span
@@ -312,6 +319,42 @@ export function SecuritiesPage() {
  />
  )}
  </Card>
+
+ {inactiveInstruments.length > 0 && (
+ <div className="space-y-2">
+ <div>
+ <h3 className="font-semibold">No Longer Held</h3>
+ <p className="tp-caption mt-0.5">
+ Securities you've fully sold or removed from every account. Their settings are kept and apply again if you buy them back.
+ </p>
+ </div>
+ <Card>
+ <div className="overflow-x-auto">
+ <table style={{ tableLayout:"fixed", width:"100%", minWidth:"700px" }}>
+ <colgroup>
+ <col style={{ width:"80px" }} />
+ <col />
+ <col style={{ width:"200px" }} />
+ <col style={{ width:"280px" }} />
+ <col style={{ width:"36px" }} />
+ </colgroup>
+ <thead>
+ <tr className="border-b border-border">
+ <ColumnHeader className="py-2 pl-4 pr-2 text-left">Symbol</ColumnHeader>
+ <ColumnHeader className="py-2 px-2 text-left">Name</ColumnHeader>
+ <ColumnHeader className="py-2 px-2 text-left">Accounts</ColumnHeader>
+ <ColumnHeader className="py-2 px-2 text-left">Classification</ColumnHeader>
+ <th className="py-2 pr-3" />
+ </tr>
+ </thead>
+ <tbody className="divide-y divide-border">
+ {inactiveInstruments.map((instrument) => renderRow(instrument))}
+ </tbody>
+ </table>
+ </div>
+ </Card>
+ </div>
+ )}
 
  <EditModal
  open={editModal.open}

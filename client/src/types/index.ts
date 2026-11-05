@@ -639,6 +639,7 @@ export interface Instrument {
   primaryTicker: string;
   name: string | null;
   isManual: boolean;
+  isActive: boolean;
   isCollectible: boolean;
   tickers: InstrumentTicker[];
   weights: InstrumentWeight[];

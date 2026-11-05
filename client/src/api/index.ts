@@ -552,7 +552,8 @@ export const deleteAssetClassTarget = (id: string) =>
   api.delete(`/asset-classes/${id}/target`);
 
 // Instruments (Securities)
-export const getInstruments = () => api.get<Instrument[]>("/instruments");
+export const getInstruments = (opts?: { includeInactive?: boolean }) =>
+  api.get<Instrument[]>(opts?.includeInactive ? "/instruments?includeInactive=true" : "/instruments");
 export const getInstrument = (id: string) => api.get<Instrument>(`/instruments/${id}`);
 export const createInstrument = (data: { primaryTicker: string; name?: string | null }) =>
   api.post<Instrument>("/instruments", data);

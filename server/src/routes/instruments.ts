@@ -166,14 +166,17 @@ export async function reactivateMislinkedInstruments() {
 // ── GET /api/instruments ───────────────────────────────────────────────────
 // Returns all instruments. Lazily backfills any holdings that pre-date this
 // feature so the list is always complete without a separate migration step.
+// `?includeInactive=true` also returns instruments no longer held anywhere
+// (each row carries `isActive` so the client can split them out).
 
-instrumentRoutes.get("/", async (_req, res) => {
+instrumentRoutes.get("/", async (req, res) => {
   try {
     await backfillUnlinkedHoldings();
     await backfillUnlinkedManualInvestments();
     await reactivateMislinkedInstruments();
+    const includeInactive = req.query.includeInactive === "true";
     const instruments = await prisma.instrument.findMany({
-      where: { isActive: true },
+      where: includeInactive ? {} : { isActive: true },
       include: instrumentInclude,
       orderBy: { primaryTicker: "asc" },
     });
