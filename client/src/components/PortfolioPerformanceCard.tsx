@@ -1090,7 +1090,7 @@ function DriverDetail({
             </InfoHint>
           )}
         </div>
-        <span className={cn("shrink-0 text-sm font-semibold tabular-nums", toneOf(d.amount))}>{signed(d.amount)}</span>
+        <span className={cn("shrink-0 tp-numeric", toneOf(d.amount))}>{signed(d.amount)}</span>
       </div>
       <p className="tp-caption mt-0.5">{subtitle}</p>
 
@@ -1104,12 +1104,12 @@ function DriverDetail({
                 <span className="flex items-center gap-2 min-w-0">
                   {r.driver && <Swatch driver={r.driver} />}
                   <span className="min-w-0">
-                    <span className="block truncate text-sm">{r.label}</span>
+                    <span className="block truncate text-13">{r.label}</span>
                     {r.sub && <span className="block truncate text-xs text-muted-foreground">{r.sub}</span>}
                   </span>
                 </span>
                 <span className="flex items-center gap-1 shrink-0">
-                  <span className={cn("text-sm tabular-nums", toneOf(r.amount))}>{signed(r.amount)}</span>
+                  <span className={cn("tp-numeric", toneOf(r.amount))}>{signed(r.amount)}</span>
                   {r.driver && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
                 </span>
               </>
