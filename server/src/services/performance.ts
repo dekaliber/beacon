@@ -3,6 +3,7 @@ import { isTradingDay } from "../lib/marketHolidays.js";
 import { effectiveLastTradingDay, isPinnedPrice, writeTickerHistory } from "../routes/investments.js";
 import { fetchYahooHistory } from "./yahoo.js";
 import { getMarketChart } from "./coingecko.js";
+import { PERFORMANCE_HISTORY_START } from "../lib/performanceWindow.js";
 
 // ── Portfolio performance attribution ───────────────────────────────────────────
 // Rebuilds every investment account at week-end or month-end closes and explains
@@ -27,7 +28,7 @@ import { getMarketChart } from "./coingecko.js";
 export type Cadence = "weekly" | "monthly";
 
 /** History starts at the last close of 2025. */
-const HISTORY_START = "2026-01-01";
+const HISTORY_START = PERFORMANCE_HISTORY_START;
 const UNTRACKED = "untracked";
 const CASH_FALLBACK = "cash";
 const EPS = 1e-6;

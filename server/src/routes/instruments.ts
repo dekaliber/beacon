@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../db/client.js";
+import { fetchYahooMeta } from "../services/yahoo.js";
+import { PERFORMANCE_HISTORY_START } from "../lib/performanceWindow.js";
 
 export const instrumentRoutes = Router();
 
@@ -141,6 +143,56 @@ async function backfillUnlinkedManualInvestments() {
   }
 }
 
+// ── Backfill helper (closed QFX positions) ─────────────────────────────────
+// The QFX sync only creates holdings for positions still open at import time, so
+// a ticker fully sold before an account's first import never gets a holding or an
+// instrument. The performance history still values it from the QFX trades (as
+// Untracked, having no weights). Create an inactive instrument for each such
+// ticker held at any point since the performance history start, so it shows
+// under "No Longer Held" and can be classified. Older closed tickers are skipped:
+// they don't affect any valued period. A later buy-back reuses the instrument
+// (resolveInstrumentId upserts on primaryTicker and reactivates it).
+
+async function backfillClosedQfxInstruments() {
+  const orphans = await prisma.$queryRaw<Array<{ ticker: string }>>`
+    SELECT DISTINCT q.ticker FROM qfx_transactions q
+    WHERE NOT EXISTS (SELECT 1 FROM instruments i WHERE i."primaryTicker" = q.ticker)
+      AND NOT EXISTS (SELECT 1 FROM instrument_tickers t WHERE t.ticker = q.ticker)
+  `;
+  if (orphans.length === 0) return;
+
+  const start = new Date(`${PERFORMANCE_HISTORY_START}T00:00:00Z`);
+  const txns = await prisma.qfxTransaction.findMany({
+    where: { ticker: { in: orphans.map((o) => o.ticker) } },
+    select: { accountId: true, ticker: true, type: true, date: true, shares: true },
+  });
+
+  // Per account: shares open going into the window, and whether any buy landed in it
+  const opening = new Map<string, number>();
+  const heldInWindow = new Set<string>();
+  for (const t of txns) {
+    if (t.date >= start) {
+      if (t.type !== "SELL") heldInWindow.add(t.ticker);
+      continue;
+    }
+    const key = `${t.accountId}|${t.ticker}`;
+    const delta = parseFloat(t.shares.toString()) * (t.type === "SELL" ? -1 : 1);
+    opening.set(key, (opening.get(key) ?? 0) + delta);
+  }
+  for (const [key, shares] of opening) {
+    if (shares > 0.000001) heldInWindow.add(key.slice(key.indexOf("|") + 1));
+  }
+
+  for (const ticker of heldInWindow) {
+    const { name } = await fetchYahooMeta(ticker);
+    await prisma.instrument.upsert({
+      where: { primaryTicker: ticker },
+      update: {},
+      create: { primaryTicker: ticker, name, isActive: false },
+    });
+  }
+}
+
 // ── Self-heal helper ───────────────────────────────────────────────────────
 // Reactivates any instrument that is marked inactive but still has live holdings
 // or manual investments. This repairs records left in a bad state by an earlier
@@ -173,6 +225,7 @@ instrumentRoutes.get("/", async (req, res) => {
   try {
     await backfillUnlinkedHoldings();
     await backfillUnlinkedManualInvestments();
+    await backfillClosedQfxInstruments();
     await reactivateMislinkedInstruments();
     const includeInactive = req.query.includeInactive === "true";
     const instruments = await prisma.instrument.findMany({
