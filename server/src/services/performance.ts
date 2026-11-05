@@ -520,9 +520,9 @@ export async function computePerformance(
       const toBank = a.incomes.find((i) => i.accountId && !accountName.has(i.accountId));
       const income = a.incomes[0];
       if (toBank) {
-        flowEvents.push({ day, accountId: a.accountId, amount: -num(toBank.amount), description: `${a.ticker} dividend to bank` });
+        flowEvents.push({ day, accountId: a.accountId, amount: -num(toBank.amount), description: `${a.ticker} dividend transferred to bank` });
       } else if (income && paidOut(income.isCashReceived)) {
-        flowEvents.push({ day, accountId: a.accountId, amount: -num(a.amount), description: `${a.ticker} dividend paid out` });
+        flowEvents.push({ day, accountId: a.accountId, amount: -num(a.amount), description: `${a.ticker} dividend transferred to bank` });
       }
     }
   }
@@ -538,7 +538,7 @@ export async function computePerformance(
     const ticker = tickers.has(source) ? source : null;
     incomeEvents.push({ day: dayOf(i.date), accountId: i.accountId, amount: num(i.amount), ticker, label: i.source ?? "Income" });
     if (paidOut(i.isCashReceived)) {
-      flowEvents.push({ day: dayOf(i.date), accountId: i.accountId, amount: -num(i.amount), description: `${i.source ?? "Income"} paid out` });
+      flowEvents.push({ day: dayOf(i.date), accountId: i.accountId, amount: -num(i.amount), description: `${i.source ?? "Income"} transferred to bank` });
     }
   }
   for (const t of transfers) {
