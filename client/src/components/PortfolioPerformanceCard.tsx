@@ -15,7 +15,7 @@ import {
   Tooltip as RechartsTooltip,
 } from "recharts";
 import { Card } from "@/components/Card";
-import { DisplayStat, SectionLabel } from "@/components/Typography";
+import { SectionLabel } from "@/components/Typography";
 import { InfoHint } from "@/components/Tooltip";
 import { MonthEndBalancesModal } from "@/components/MonthEndBalancesModal";
 import { useApi } from "@/hooks/useApi";
@@ -266,9 +266,10 @@ export function PortfolioPerformanceCard() {
     </div>
   );
 
+  // Header sits outside the cards, like Asset Allocation's
   return (
-    <Card className="p-6">
-      <div className="flex items-center justify-between mb-1">
+    <div className="space-y-2">
+      <div className="flex items-center justify-between py-1">
         <div className="flex items-center gap-2">
           <BarChart3 className="h-4 w-4 text-muted-foreground" />
           <SectionLabel as="span">Performance</SectionLabel>
@@ -276,9 +277,13 @@ export function PortfolioPerformanceCard() {
         {cadenceButtons}
       </div>
       {!data || data.cadence !== cadence ? (
-        <p className="tp-caption py-16 text-center">{loading ? "Rebuilding history…" : "No history yet."}</p>
+        <Card className="p-6">
+          <p className="tp-caption py-16 text-center">{loading ? "Rebuilding history…" : "No history yet."}</p>
+        </Card>
       ) : data.periods.length === 0 ? (
-        <p className="tp-caption py-16 text-center">No history yet.</p>
+        <Card className="p-6">
+          <p className="tp-caption py-16 text-center">No history yet.</p>
+        </Card>
       ) : (
         <PerformanceBody
           data={data}
@@ -288,7 +293,7 @@ export function PortfolioPerformanceCard() {
           onBalancesSaved={refetch}
         />
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -465,146 +470,151 @@ function PerformanceBody({
   };
 
   return (
-    <>
-      {/* Year-to-date figures, set like the Withdrawal Rate card's KPIs */}
-      <div className="grid grid-cols-4 gap-x-4 mt-3 mb-5">
+    <div className="space-y-4">
+      {/* Year-to-date figures, one card each like the Options page's stat row */}
+      <div className="grid grid-cols-4 gap-4">
         {[
-          { label: "change YTD", value: totalChange },
-          { label: "investment return YTD, net of fees", value: totals.market },
-          { label: "deposits/withdrawals YTD", value: totals.flows },
-          { label: "unreconciled cash YTD", value: totals.unreconciled },
+          { label: "Total Change", caption: "YTD", value: totalChange },
+          { label: "Investment Return", caption: "YTD, net of fees", value: totals.market },
+          { label: "Deposits/Withdrawals", caption: "YTD", value: totals.flows },
+          { label: "Unreconciled Cash", caption: "YTD", value: totals.unreconciled },
         ].map((s) => (
-          <div key={s.label}>
-            <DisplayStat as="p" className={cn("tp-kpi-l", toneOf(s.value))}>{signed(s.value)}</DisplayStat>
-            <p className="tp-fineprint mt-0.5">{s.label}</p>
-          </div>
+          <Card key={s.label} className="p-6">
+            <SectionLabel as="span">{s.label}</SectionLabel>
+            <div className="mt-1 min-w-0">
+              <p className={cn("tp-stat truncate", toneOf(s.value))}>{signed(s.value)}</p>
+              <p className="tp-caption mt-0.5 truncate">{s.caption}</p>
+            </div>
+          </Card>
         ))}
       </div>
 
-      {/* Top: total value at each close. z-10 keeps its tooltip above the bars.
-          The x-axis is a band axis like the bars' below, so each point sits at the
-          center of its period's column instead of the line running edge to edge. */}
-      <div className="relative z-10">
-        <p className="tp-caption pl-16 mb-1">Total value</p>
-        <ResponsiveContainer width="100%" height={150}>
-          {/* Bottom room so the lowest tick's label fits; Recharts drops a label that would spill out */}
+      <Card className="p-6">
+        {/* Top: total value at each close. z-10 keeps its tooltip above the bars.
+            The x-axis is a band axis like the bars' below, so each point sits at the
+            center of its period's column instead of the line running edge to edge. */}
+        <div className="relative z-10">
+          <p className="tp-caption pl-16 mb-1">Total value</p>
+          <ResponsiveContainer width="100%" height={150}>
+            {/* Bottom room so the lowest tick's label fits; Recharts drops a label that would spill out */}
+            <ComposedChart
+              data={rows}
+              margin={{ ...margin, bottom: 8 }}
+              syncId="portfolio-performance"
+              onClick={handleClick}
+              onMouseMove={handleMove}
+              onMouseLeave={handleLeave}
+            >
+              <defs>
+                <linearGradient id="perf-value-wash" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--color-chart-1)" stopOpacity={0.12} />
+                  <stop offset="95%" stopColor="var(--color-chart-1)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="var(--color-chart-grid)" vertical={false} horizontalCoordinatesGenerator={gridAt(valueAxis.ticks)} />
+              <XAxis dataKey="end" hide scale="band" />
+              <YAxis
+                {...yAxisProps}
+                domain={[valueAxis.ticks[0], valueAxis.ticks[valueAxis.ticks.length - 1]]}
+                ticks={valueAxis.ticks}
+                tickFormatter={(v: number) => axisMoney(v, valueAxis.step)}
+                interval={0}
+                allowDataOverflow
+              />
+              <ReferenceLine x={selected.end} stroke="var(--color-chart-cursor)" strokeWidth={1} />
+              {hoverEnd && hoverEnd !== selected.end && (
+                <ReferenceLine x={hoverEnd} stroke="var(--color-chart-cursor)" strokeWidth={1} />
+              )}
+              <RechartsTooltip content={<ValueTooltip />} cursor={false} />
+              <Area
+                type="linear"
+                dataKey="value"
+                stroke="var(--color-chart-1)"
+                strokeWidth={2}
+                fill="url(#perf-value-wash)"
+                dot={false}
+                activeDot={{ r: 4, fill: "var(--color-chart-1)", stroke: "var(--color-background)", strokeWidth: 2 }}
+                isAnimationActive={false}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Middle: each period's gross gains and losses as light columns, with the
+            net between them as a solid bar on its own (hidden) axis so it overlays
+            the same column. Click a column to break it down below. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-16 mt-4 mb-1">
+          <p className="tp-caption">Change each {monthly ? "month" : "week"}</p>
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-up-soft" />All gains
+          </span>
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm bg-down-soft" />All losses
+          </span>
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="inline-flex h-2.5 w-2.5 overflow-hidden rounded-sm">
+              <span className="w-1/2 bg-up" />
+              <span className="w-1/2 bg-down" />
+            </span>
+            Net change
+          </span>
+        </div>
+        <ResponsiveContainer width="100%" height={monthly ? 250 : 200}>
           <ComposedChart
             data={rows}
-            margin={{ ...margin, bottom: 8 }}
+            margin={margin}
             syncId="portfolio-performance"
+            stackOffset="sign"
             onClick={handleClick}
             onMouseMove={handleMove}
             onMouseLeave={handleLeave}
+            style={{ cursor: "pointer" }}
           >
-            <defs>
-              <linearGradient id="perf-value-wash" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--color-chart-1)" stopOpacity={0.12} />
-                <stop offset="95%" stopColor="var(--color-chart-1)" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid stroke="var(--color-chart-grid)" vertical={false} horizontalCoordinatesGenerator={gridAt(valueAxis.ticks)} />
-            <XAxis dataKey="end" hide scale="band" />
+            <CartesianGrid stroke="var(--color-chart-grid)" vertical={false} horizontalCoordinatesGenerator={gridAt(grossAxis.ticks)} />
+            {monthly ? (
+              <XAxis dataKey="end" tick={monthTick} axisLine={false} tickLine={false} interval={0} height={34} />
+            ) : (
+              <XAxis
+                dataKey="end"
+                tickFormatter={(end: string) => rowByEnd.get(end)?.label ?? ""}
+                tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
+                axisLine={false}
+                tickLine={false}
+                interval="preserveStartEnd"
+                minTickGap={16}
+              />
+            )}
+            <XAxis xAxisId="net" dataKey="end" hide />
             <YAxis
               {...yAxisProps}
-              domain={[valueAxis.ticks[0], valueAxis.ticks[valueAxis.ticks.length - 1]]}
-              ticks={valueAxis.ticks}
-              tickFormatter={(v: number) => axisMoney(v, valueAxis.step)}
+              domain={[grossAxis.ticks[0], grossAxis.ticks[grossAxis.ticks.length - 1]]}
+              ticks={grossAxis.ticks}
+              tickFormatter={(v: number) => axisMoney(v, grossAxis.step)}
               interval={0}
               allowDataOverflow
             />
-            <ReferenceLine x={selected.end} stroke="var(--color-chart-cursor)" strokeWidth={1} />
-            {hoverEnd && hoverEnd !== selected.end && (
-              <ReferenceLine x={hoverEnd} stroke="var(--color-chart-cursor)" strokeWidth={1} />
+            <ReferenceArea x1={selected.end} x2={selected.end} fill="var(--color-primary)" fillOpacity={0.07} strokeWidth={0} />
+            {hoverEnd && hoverEnd !== data.baseline && hoverEnd !== selected.end && (
+              <ReferenceArea x1={hoverEnd} x2={hoverEnd} fill="var(--color-muted)" fillOpacity={1} strokeWidth={0} />
             )}
-            <RechartsTooltip content={<ValueTooltip />} cursor={false} />
-            <Area
-              type="linear"
-              dataKey="value"
-              stroke="var(--color-chart-1)"
-              strokeWidth={2}
-              fill="url(#perf-value-wash)"
-              dot={false}
-              activeDot={{ r: 4, fill: "var(--color-chart-1)", stroke: "var(--color-background)", strokeWidth: 2 }}
-              isAnimationActive={false}
-            />
+            <ReferenceLine y={0} stroke="var(--color-chart-axis)" strokeWidth={1} />
+            <RechartsTooltip content={<GrossTooltip cadence={cadence} />} cursor={false} />
+            <Bar dataKey="gains" stackId="gross" fill="var(--color-up-soft)" maxBarSize={44} radius={2} isAnimationActive={false}>
+              {monthly && <LabelList dataKey="end" content={gainLabel} />}
+            </Bar>
+            <Bar dataKey="losses" stackId="gross" fill="var(--color-down-soft)" maxBarSize={44} radius={2} isAnimationActive={false}>
+              {monthly && <LabelList dataKey="end" content={lossLabel} />}
+            </Bar>
+            <Bar dataKey="net" xAxisId="net" maxBarSize={monthly ? 12 : 6} isAnimationActive={false}>
+              {rows.map((r) => <Cell key={r.end} fill={fillOf(r.net ?? 0)} />)}
+            </Bar>
           </ComposedChart>
         </ResponsiveContainer>
-      </div>
 
-      {/* Middle: each period's gross gains and losses as light columns, with the
-          net between them as a solid bar on its own (hidden) axis so it overlays
-          the same column. Click a column to break it down below. */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-16 mt-4 mb-1">
-        <p className="tp-caption">Change each {monthly ? "month" : "week"}</p>
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-up-soft" />All gains
-        </span>
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-down-soft" />All losses
-        </span>
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="inline-flex h-2.5 w-2.5 overflow-hidden rounded-sm">
-            <span className="w-1/2 bg-up" />
-            <span className="w-1/2 bg-down" />
-          </span>
-          Net change
-        </span>
-      </div>
-      <ResponsiveContainer width="100%" height={monthly ? 250 : 200}>
-        <ComposedChart
-          data={rows}
-          margin={margin}
-          syncId="portfolio-performance"
-          stackOffset="sign"
-          onClick={handleClick}
-          onMouseMove={handleMove}
-          onMouseLeave={handleLeave}
-          style={{ cursor: "pointer" }}
-        >
-          <CartesianGrid stroke="var(--color-chart-grid)" vertical={false} horizontalCoordinatesGenerator={gridAt(grossAxis.ticks)} />
-          {monthly ? (
-            <XAxis dataKey="end" tick={monthTick} axisLine={false} tickLine={false} interval={0} height={34} />
-          ) : (
-            <XAxis
-              dataKey="end"
-              tickFormatter={(end: string) => rowByEnd.get(end)?.label ?? ""}
-              tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
-              axisLine={false}
-              tickLine={false}
-              interval="preserveStartEnd"
-              minTickGap={16}
-            />
-          )}
-          <XAxis xAxisId="net" dataKey="end" hide />
-          <YAxis
-            {...yAxisProps}
-            domain={[grossAxis.ticks[0], grossAxis.ticks[grossAxis.ticks.length - 1]]}
-            ticks={grossAxis.ticks}
-            tickFormatter={(v: number) => axisMoney(v, grossAxis.step)}
-            interval={0}
-            allowDataOverflow
-          />
-          <ReferenceArea x1={selected.end} x2={selected.end} fill="var(--color-primary)" fillOpacity={0.07} strokeWidth={0} />
-          {hoverEnd && hoverEnd !== data.baseline && hoverEnd !== selected.end && (
-            <ReferenceArea x1={hoverEnd} x2={hoverEnd} fill="var(--color-muted)" fillOpacity={1} strokeWidth={0} />
-          )}
-          <ReferenceLine y={0} stroke="var(--color-chart-axis)" strokeWidth={1} />
-          <RechartsTooltip content={<GrossTooltip cadence={cadence} />} cursor={false} />
-          <Bar dataKey="gains" stackId="gross" fill="var(--color-up-soft)" maxBarSize={44} radius={2} isAnimationActive={false}>
-            {monthly && <LabelList dataKey="end" content={gainLabel} />}
-          </Bar>
-          <Bar dataKey="losses" stackId="gross" fill="var(--color-down-soft)" maxBarSize={44} radius={2} isAnimationActive={false}>
-            {monthly && <LabelList dataKey="end" content={lossLabel} />}
-          </Bar>
-          <Bar dataKey="net" xAxisId="net" maxBarSize={monthly ? 12 : 6} isAnimationActive={false}>
-            {rows.map((r) => <Cell key={r.end} fill={fillOf(r.net ?? 0)} />)}
-          </Bar>
-        </ComposedChart>
-      </ResponsiveContainer>
-
-      <PeriodDetail period={selected} drivers={selectedRow.drivers} cadence={cadence} onBalancesSaved={onBalancesSaved} />
-      <DataNotes data={data} />
-    </>
+        <PeriodDetail period={selected} drivers={selectedRow.drivers} cadence={cadence} onBalancesSaved={onBalancesSaved} />
+        <DataNotes data={data} />
+      </Card>
+    </div>
   );
 }
 
