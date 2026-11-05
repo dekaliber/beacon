@@ -1355,9 +1355,6 @@ if (!displayAccounts) return <BeaconLoader />;
  </Card>
  )}
 
- {/* Performance over time */}
- {displayAccounts.length > 0 && <PortfolioPerformanceCard />}
-
  {/* Withdrawal Rate */}
  {displayAccounts.length > 0 && (
  <WithdrawalRateCard
@@ -1403,6 +1400,9 @@ if (!displayAccounts) return <BeaconLoader />;
  )}
  </div>
  )}
+
+ {/* Performance over time */}
+ {displayAccounts.length > 0 && <PortfolioPerformanceCard />}
 
  {/* Empty state */}
  {displayAccounts.length === 0 && (
