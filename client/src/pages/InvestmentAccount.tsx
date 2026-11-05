@@ -335,7 +335,7 @@ function TickerSearch({
  <span>
  {resolving
  ?`Looking up ${emptyQuery.toUpperCase()}…`
- :`Add"${emptyQuery.toUpperCase()}" as a ticker`}
+ :`Add "${emptyQuery.toUpperCase()}" as a ticker`}
  </span>
  </button>
  )}

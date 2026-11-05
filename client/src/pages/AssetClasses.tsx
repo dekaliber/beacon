@@ -382,7 +382,7 @@ function AssetClassModal({ open, onClose, onSave, onDelete, editing, isChild }: 
  }
  };
 
- const title = editing ?`Edit"${editing.name}"` : isChild ?"Add Sub-Class" :"Add Asset Class";
+ const title = editing ?`Edit "${editing.name}"` : isChild ?"Add Sub-Class" :"Add Asset Class";
 
  const derivedVal = editing && isDerived(editing) ? effectiveTarget(editing) : undefined;
  const showDerivedTarget = editing !== null && derivedVal !== undefined;
