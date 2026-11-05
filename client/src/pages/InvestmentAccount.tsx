@@ -69,6 +69,9 @@ import {
  getInvestmentGrowth,
  importQfx,
  importQfxDividends,
+ importQfxFees,
+ addInvestmentFee,
+ deleteInvestmentFee,
  getQfxLastDate,
  updateSaleActivity,
  getPendingDividends,
@@ -4056,6 +4059,100 @@ function PendingSaleModal({ pendingSale, accounts, onClose, onSaved }: PendingSa
 
 // ── Activity Tab ──────────────────────────────────────────────────────────────
 
+// ── Fees ──────────────────────────────────────────────────────────────────────
+
+/** A fee's note without the "QFX:{fitId} · " import tag. */
+function feeNote(notes: string | null): string {
+ return (notes ??"").replace(/^QFX:\S+( · )?/,"") ||"Fee";
+}
+
+function AddFeeModal({ accountId, onClose, onSaved }: { accountId: string; onClose: () => void; onSaved: () => void }) {
+ const [date, setDate] = useState(localToday());
+ const [amount, setAmount] = useState("");
+ const [notes, setNotes] = useState("");
+ const [saving, setSaving] = useState(false);
+ const [error, setError] = useState<string | null>(null);
+
+ async function handleSave() {
+ const value = parseAmount(amount);
+ if (!date || !Number.isFinite(value) || value <= 0) {
+ setError("Enter a date and an amount above $0.");
+ return;
+ }
+ setSaving(true);
+ setError(null);
+ try {
+ await addInvestmentFee(accountId, { date, amount: Math.round(value * 100) / 100, notes: notes.trim() || undefined });
+ onSaved();
+ } catch (e) {
+ setError(e instanceof Error ? e.message :"Failed to add fee");
+ setSaving(false);
+ }
+ }
+
+ return (
+ <Modal open onClose={saving ? () => {} : onClose} title="Add fee">
+ <p className="tp-caption mb-4">
+ An advisory or account fee taken from this account's cash. It counts against the investment return, not as spending or a withdrawal.
+ </p>
+ <div className="flex gap-3 items-start mb-3">
+ <div className="flex-1 min-w-0">
+ <label className="block text-xs font-medium mb-1">Date charged</label>
+ <DatePicker value={date} onChange={setDate} max={localToday()} className="w-full" />
+ </div>
+ <div className="flex-1 min-w-0">
+ <label className="block text-xs font-medium mb-1">Amount</label>
+ <DollarInput value={amount} onChange={setAmount} />
+ </div>
+ </div>
+ <div className="mb-4">
+ <label className="block text-xs font-medium mb-1">Note</label>
+ <input
+ type="text"
+ value={notes}
+ onChange={(e) => setNotes(e.target.value)}
+ placeholder="Advisory fee"
+ maxLength={200}
+ className="w-full rounded border border-border px-3 py-1.5 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+ />
+ </div>
+ {error && <p className="text-down text-xs mb-3">{error}</p>}
+ <div className="flex justify-end gap-2">
+ <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
+ <Button onClick={handleSave} disabled={saving}>{saving ?"Saving…" :"Add fee"}</Button>
+ </div>
+ </Modal>
+ );
+}
+
+function DeleteFeeModal({ fee, onClose, onDeleted }: { fee: InvestmentActivity; onClose: () => void; onDeleted: () => void }) {
+ const [deleting, setDeleting] = useState(false);
+ const [error, setError] = useState<string | null>(null);
+ async function handleDelete() {
+ setDeleting(true);
+ setError(null);
+ try {
+ await deleteInvestmentFee(fee.id);
+ onDeleted();
+ } catch (e) {
+ setError(e instanceof Error ? e.message :"Failed to delete fee");
+ setDeleting(false);
+ }
+ }
+ return (
+ <Modal open onClose={deleting ? () => {} : onClose} title="Delete fee?" className="max-w-sm">
+ <p className="text-sm mb-4">
+ {feeNote(fee.notes)} of {formatCurrency(fee.amount)} on {formatDate(fee.date)}. Re-importing the QFX file that contains it would add it back.
+ </p>
+ {error && <p className="text-down text-xs mb-3">{error}</p>}
+ <div className="flex justify-end gap-2">
+ <Button variant="secondary" onClick={onClose} disabled={deleting}>Cancel</Button>
+ <Button variant="destructive" onClick={handleDelete} disabled={deleting}>{deleting ?"Deleting…" :"Delete"}</Button>
+ </div>
+ </Modal>
+ );
+}
+
 function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged }: { accountId: string; accounts: Account[]; onHoldingsChanged?: () => void; onAccountChanged?: () => void }) {
  const { data: activities, loading: activitiesLoading, refetch: refetchActivities } = useApi(
  () => getInvestmentActivity(accountId),
@@ -4078,6 +4175,8 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
 
  const [editingActivity, setEditingActivity] = useState<InvestmentActivity | null>(null);
  const [editingDividendActivityId, setEditingDividendActivityId] = useState<string | null>(null);
+ const [addingFee, setAddingFee] = useState(false);
+ const [deletingFee, setDeletingFee] = useState<InvestmentActivity | null>(null);
  const [reviewingDividend, setReviewingDividend] = useState<PendingDividend | null>(null);
  const [reviewingBuy, setReviewingBuy] = useState<PendingBuy | null>(null);
  const [reviewingSale, setReviewingSale] = useState<PendingSale | null>(null);
@@ -4111,7 +4210,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
 
  // Unique sorted tickers present in the activity list
  const uniqueTickers = useMemo(
- () => [...new Set(activities?.map(a => a.ticker) ?? [])].sort(),
+ () => [...new Set(activities?.map(a => a.ticker).filter(Boolean) ?? [])].sort(),
  [activities]
  );
 
@@ -4158,7 +4257,23 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
  icon={LineChart}
  title="No activity yet"
  description="Purchases, sales, and dividends will appear here once recorded."
+ action={
+ <Button variant="secondary" size="sm" onClick={() => setAddingFee(true)}>
+ <Plus />
+ Add fee
+ </Button>
+ }
  />
+ {addingFee && (
+ <AddFeeModal
+ accountId={accountId}
+ onClose={() => setAddingFee(false)}
+ onSaved={() => {
+ setAddingFee(false);
+ refetchActivities();
+ }}
+ />
+ )}
  </Card>
  );
  }
@@ -4362,6 +4477,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
  <div className="px-4 pt-3 pb-3 border-b border-border space-y-3">
  <div className="flex items-center justify-between">
  <h3 className="tp-card-title">Activity</h3>
+ <div className="flex items-center gap-3">
  {hasActiveFilters && (
  <button
  onClick={clearFilters}
@@ -4370,6 +4486,11 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
  Clear filters
  </button>
  )}
+ <Button variant="secondary" size="sm" onClick={() => setAddingFee(true)}>
+ <Plus />
+ Add fee
+ </Button>
+ </div>
  </div>
 
  {/* Filters: Symbol left, Type right — side-by-side when space allows, stacked on small screens */}
@@ -4400,7 +4521,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
  {/* Type filter */}
  <div className="flex items-center gap-2 flex-wrap">
  <SectionLabel as="span" className="text-11 shrink-0 pr-1">Type</SectionLabel>
- {(["PURCHASE","SALE","DIVIDEND","TRANSFER"] as const).filter(t => presentTypes.has(t)).map((type) => {
+ {(["PURCHASE","SALE","DIVIDEND","TRANSFER","FEE"] as const).filter(t => presentTypes.has(t)).map((type) => {
  const active = selectedTypes.has(type);
  const colorClass = type ==="PURCHASE"
  ? active ?"bg-up-soft text-up-deep border-up-line" :"border-border text-muted-foreground hover:border-up-line hover:text-up-deep"
@@ -4408,8 +4529,10 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
  ? active ?"bg-blue-soft text-blue-deep border-blue-soft" :"border-border text-muted-foreground hover:border-blue-soft hover:text-blue-deep"
  : type ==="TRANSFER"
  ? active ?"bg-warn-soft text-warn-deep border-warn-line" :"border-border text-muted-foreground hover:border-warn-line hover:text-warn-deep"
+ : type ==="FEE"
+ ? active ?"bg-secondary text-foreground border-foreground/30" :"border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
  : active ?"bg-violet-soft text-violet-deep border-violet-soft" :"border-border text-muted-foreground hover:border-violet-soft hover:text-violet-deep";
- const label = type ==="PURCHASE" ?"Purchase" : type ==="SALE" ?"Sale" : type ==="TRANSFER" ?"Transfer" :"Dividend";
+ const label = type ==="PURCHASE" ?"Purchase" : type ==="SALE" ?"Sale" : type ==="TRANSFER" ?"Transfer" : type ==="FEE" ?"Fee" :"Dividend";
  return (
  <button
  key={type}
@@ -4456,6 +4579,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
  const isPurchase = a.type ==="PURCHASE";
  const isSale = a.type ==="SALE";
  const isTransfer = a.type ==="TRANSFER";
+ const isFee = a.type ==="FEE";
 
  const badgeClass = isSale
  ?"bg-blue-soft text-blue-deep"
@@ -4463,8 +4587,10 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
  ?"bg-up-soft text-up-deep"
  : isTransfer
  ?"bg-warn-soft text-warn-deep"
+ : isFee
+ ?"bg-secondary text-muted-foreground"
  :"bg-violet-soft text-violet-deep";
- const badgeLabel = isSale ?"Sale" : isPurchase ?"Purchase" : isTransfer ?"Transfer" :"Dividend";
+ const badgeLabel = isSale ?"Sale" : isPurchase ?"Purchase" : isTransfer ?"Transfer" : isFee ?"Fee" :"Dividend";
 
  return (
  <tr key={a.id} className="border-b border-border hover:bg-muted group">
@@ -4474,7 +4600,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
  {badgeLabel}
  </span>
  </td>
- <td className="py-3 px-2 font-mono font-bold">{a.ticker}</td>
+ <td className="py-3 px-2 font-mono font-bold">{a.ticker || <span className="font-normal text-muted-foreground">—</span>}</td>
  <td className="py-3 px-2 text-right tabular-nums font-mono">
  {a.shares != null
  ? a.shares.toLocaleString(undefined, { maximumFractionDigits: 8 })
@@ -4489,9 +4615,9 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
  <td className="py-3 px-2 text-right tabular-nums font-mono text-muted-foreground">
  {!isPurchase && fees > 0 ?`(${formatCurrency(fees)})` :"—"}
  </td>
- {/* Net proceeds — show for sales; show cost for purchases */}
+ {/* Net proceeds — show for sales; show cost for purchases; a fee is cash out */}
  <td className="py-3 px-2 text-right tp-numeric">
- {isPurchase ? formatCurrency(a.amount) : formatCurrency(net)}
+ {isPurchase ? formatCurrency(a.amount) : isFee ?`−${formatCurrency(a.amount)}` : formatCurrency(net)}
  </td>
  {/* Gain / loss — only for sales */}
  <td className={`py-3 px-2 text-right tp-numeric ${
@@ -4506,10 +4632,20 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
  :"—"}
  </td>
  <td className="py-3 px-2 text-muted-foreground truncate">
- {a.notes ??""}
+ {isFee ? feeNote(a.notes) : a.notes ??""}
  </td>
  <td className="py-3 pl-2 pr-4 text-right">
- {(isSale || (!isSale && !isPurchase && !isTransfer)) && (
+ {isFee && (
+ <Tooltip content="Delete fee">
+ <button
+ onClick={() => setDeletingFee(a)}
+ className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded text-muted-foreground/40 hover:text-down hover:bg-down-soft"
+ >
+ <Trash2 className="h-3.5 w-3.5" />
+ </button>
+ </Tooltip>
+ )}
+ {(isSale || (!isSale && !isPurchase && !isTransfer && !isFee)) && (
  <Tooltip content={isSale ?"Edit sale" :"Edit dividend"}>
  <button
  onClick={() => isSale
@@ -4530,6 +4666,28 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
  </table>
  </div>
  </Card>
+ )}
+
+ {addingFee && (
+ <AddFeeModal
+ accountId={accountId}
+ onClose={() => setAddingFee(false)}
+ onSaved={() => {
+ setAddingFee(false);
+ refetchActivities();
+ }}
+ />
+ )}
+
+ {deletingFee && (
+ <DeleteFeeModal
+ fee={deletingFee}
+ onClose={() => setDeletingFee(null)}
+ onDeleted={() => {
+ setDeletingFee(null);
+ refetchActivities();
+ }}
+ />
  )}
 
  {editingActivity && (
@@ -4810,6 +4968,8 @@ function RealizedGainSnapshotPanel({
 interface QfxParsedSummary {
  transactions: import("@/types").QfxTransactionInput[];
  dividends: import("@/types").QfxDividendInput[];
+ // Advisory fees (INVBANKTRAN FEE lines) taken from the account's cash
+ fees: import("@/types").QfxFeeInput[];
  cashBalance: number | null;
  // Statement date (DTASOF) the cash balance is as of
  cashBalanceAsOf: string | null;
@@ -4821,6 +4981,7 @@ interface QfxParsedSummary {
  splitCount: number;
  transferCount: number;
  dividendCount: number;
+ feeCount: number;
 }
 
 function parseQfxDate(dtStr: string): string {
@@ -5001,6 +5162,21 @@ function parseQfxFile(content: string): QfxParsedSummary {
  });
  }
 
+ // Extract fees: INVBANKTRAN lines of type FEE (Wealthfront's monthly advisory
+ // fee, charged a few days into the following month). Other bank lines, like the
+ // XFER that pays dividends out, aren't imported. A positive FEE would be a
+ // refund, which this doesn't record.
+ const fees: import("@/types").QfxFeeInput[] = [];
+ for (const el of Array.from(doc.querySelectorAll("INVBANKTRAN > STMTTRN"))) {
+ if (txt(el,"TRNTYPE") !=="FEE") continue;
+ const fitId = txt(el,"FITID");
+ const posted = txt(el,"DTPOSTED");
+ const trnAmt = parseFloat(txt(el,"TRNAMT"));
+ if (!fitId || !posted || isNaN(trnAmt) || trnAmt >= 0) continue;
+ const memo = [txt(el,"NAME"), txt(el,"MEMO")].filter(Boolean).join(" · ");
+ fees.push({ fitId, date: parseQfxDate(posted), amount: Math.abs(trnAmt), memo: memo || undefined });
+ }
+
  const tickers = [...new Set(transactions.map((t) => t.ticker))].sort();
 
  // Forward-accumulate net shares per ticker (what the growth chart will use)
@@ -5012,6 +5188,7 @@ function parseQfxFile(content: string): QfxParsedSummary {
  return {
  transactions,
  dividends,
+ fees,
  cashBalance,
  cashBalanceAsOf,
  tickers,
@@ -5022,6 +5199,7 @@ function parseQfxFile(content: string): QfxParsedSummary {
  splitCount,
  transferCount,
  dividendCount: dividends.length,
+ feeCount: fees.length,
  };
 }
 
@@ -5030,7 +5208,7 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
  const [parsed, setParsed] = useState<QfxParsedSummary | null>(null);
  const [parseError, setParseError] = useState<string | null>(null);
  const [importing, setImporting] = useState(false);
- const [result, setResult] = useState<{ imported: number; total: number; dividendsImported: number; dividendsSkipped: number } | null>(null);
+ const [result, setResult] = useState<{ imported: number; total: number; dividendsImported: number; dividendsSkipped: number; feesImported: number; feesSkipped: number } | null>(null);
  const [importDividends, setImportDividends] = useState(true);
  const [dividendStartDate, setDividendStartDate] = useState(`${new Date().getFullYear()}-01-01`);
  const { data: lastDateData, refetch: refetchLastDate } = useApi(() => getQfxLastDate(accountId), [accountId]);
@@ -5062,13 +5240,22 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
  if (!parsed) return;
  setImporting(true);
  try {
- const [txnRes, divRes] = await Promise.all([
+ const [txnRes, divRes, feeRes] = await Promise.all([
  importQfx(accountId, parsed.transactions, parsed.cashBalance, parsed.cashBalanceAsOf),
  filteredDividends.length > 0
  ? importQfxDividends(accountId, filteredDividends)
  : Promise.resolve({ imported: 0, skipped: 0 }),
+ parsed.fees.length > 0
+ ? importQfxFees(accountId, parsed.fees)
+ : Promise.resolve({ imported: 0, skipped: 0 }),
 ]);
- setResult({ ...txnRes, dividendsImported: divRes.imported, dividendsSkipped: divRes.skipped });
+ setResult({
+ ...txnRes,
+ dividendsImported: divRes.imported,
+ dividendsSkipped: divRes.skipped,
+ feesImported: feeRes.imported,
+ feesSkipped: feeRes.skipped,
+ });
  setParsed(null);
  refetchLastDate();
  onImported();
@@ -5136,6 +5323,7 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
  {importDividends ? filteredDividends.length : 0}/{parsed.dividendCount} dividend{parsed.dividendCount !== 1 ?"s" :""}
  </span>
  )}
+ {parsed.feeCount > 0 && <span>{parsed.feeCount} fee{parsed.feeCount !== 1 ?"s" :""}</span>}
  {parsed.cashBalance != null && <span>Cash balance: {formatCurrency(parsed.cashBalance)}</span>}
  </div>
  {/* Per-ticker net share table */}
@@ -5207,9 +5395,11 @@ function QfxImportPanel({ accountId, onImported }: { accountId: string; onImport
  <span>
  {result.imported} new transaction{result.imported !== 1 ?"s" :""}
  {result.dividendsImported > 0 &&`, ${result.dividendsImported} dividend${result.dividendsImported !== 1 ?"s" :""}`}
+ {result.feesImported > 0 &&`, ${result.feesImported} fee${result.feesImported !== 1 ?"s" :""}`}
  {" "}imported
  {(result.total - result.imported) > 0 &&` · ${result.total - result.imported} transaction${result.total - result.imported !== 1 ?"s" :""} already existed`}
  {result.dividendsSkipped > 0 &&` · ${result.dividendsSkipped} dividend${result.dividendsSkipped !== 1 ?"s" :""} already existed`}
+ {result.feesSkipped > 0 &&` · ${result.feesSkipped} fee${result.feesSkipped !== 1 ?"s" :""} already existed`}
  </span>
  </div>
  <Button

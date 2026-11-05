@@ -43,6 +43,7 @@ import type {
   MonthlySpendingResponse,
   QfxTransactionInput,
   QfxDividendInput,
+  QfxFeeInput,
   OrphanedOffset,
   PendingBuy,
   PendingSale,
@@ -452,6 +453,14 @@ export const importQfxDividends = (
   `/investments/qfx-dividends/${accountId}`,
   { dividends },
 );
+
+export const importQfxFees = (accountId: string, fees: QfxFeeInput[]) =>
+  api.post<{ imported: number; skipped: number }>(`/investments/fees/${accountId}/qfx`, { fees });
+
+export const addInvestmentFee = (accountId: string, data: { date: string; amount: number; notes?: string }) =>
+  api.post<{ id: string }>(`/investments/fees/${accountId}`, data);
+
+export const deleteInvestmentFee = (activityId: string) => api.delete(`/investments/fees/${activityId}`);
 
 export const getQfxLastDate = (accountId: string) =>
   api.get<{ lastDate: string | null }>(`/investments/qfx-last-date/${accountId}`);

@@ -116,7 +116,9 @@ export interface Expense {
 export type IncomeSubtype = "REGULAR" | "DIVIDEND" | "CAPITAL_GAIN" | "RETURN_OF_CAPITAL";
 export type TaxClassification = "QUALIFIED" | "ORDINARY" | "TAX_EXEMPT" | "RETURN_OF_CAPITAL" | "CAPITAL_GAIN";
 export type PendingDividendStatus = "PENDING" | "CONFIRMED" | "DISMISSED";
-export type InvestmentActivityType = "DIVIDEND" | "SALE" | "PURCHASE" | "TRANSFER";
+// FEE: an advisory or account fee taken from the account's cash (amount positive,
+// ticker ""). Imported from QFX fee lines or added by hand.
+export type InvestmentActivityType = "DIVIDEND" | "SALE" | "PURCHASE" | "TRANSFER" | "FEE";
 
 export interface InvestmentActivity {
   id: string;
@@ -424,6 +426,8 @@ export interface PerformancePeriod {
   withdrawals: number; // positive
   unreconciled: number;
   flows: Array<{ date: string; account: string; amount: number; description: string }>;
+  fees: number; // positive
+  feeItems: Array<{ date: string; account: string; amount: number; description: string }>; // amount positive
   unreconciledByAccount: Array<{ account: string; amount: number }>;
 }
 
@@ -480,6 +484,14 @@ export interface QfxTransactionInput {
   shares: number;
   pricePerShare: number;
   total: number;
+}
+
+/** An INVBANKTRAN FEE line from a QFX file. */
+export interface QfxFeeInput {
+  fitId: string;
+  date: string; // YYYY-MM-DD (DTPOSTED)
+  amount: number; // positive
+  memo?: string;
 }
 
 export interface QfxDividendInput {

@@ -80,6 +80,8 @@ export function scalePerformance(d: PerformanceData, f: number): PerformanceData
       deposits: p.deposits * f,
       withdrawals: p.withdrawals * f,
       unreconciled: p.unreconciled * f,
+      fees: p.fees * f,
+      feeItems: p.feeItems.map((x) => ({ ...x, amount: x.amount * f })),
       classes: p.classes.map((c) => ({
         ...c,
         startValue: c.startValue * f,

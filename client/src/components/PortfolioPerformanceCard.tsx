@@ -60,6 +60,12 @@ const WITHDRAWALS_KEY = "__withdrawals";
 const FLOWS_COLOR = "var(--color-ink-2)";
 const UNRECONCILED_KEY = "__unreconciled";
 const UNRECONCILED_COLOR = "var(--color-ink-3)";
+// Advisory and account fees: a cost against the return, kept apart from the
+// asset classes (whose returns stay pure market numbers) and from the flows.
+const FEES_KEY = "__fees";
+// A muted brick: clear of the saved class colors, the slate flows, and the
+// grays Untracked, Unreconciled, and Other already use.
+const FEES_COLOR = "color-mix(in oklab, var(--color-down) 45%, var(--color-ink-3))";
 const OTHER_KEY = "__other";
 const OTHER_COLOR = "color-mix(in oklab, var(--color-ink-5) 70%, transparent)";
 const HATCH_ID = "perf-unreconciled-hatch";
@@ -187,6 +193,7 @@ function periodDrivers(p: PerformancePeriod, palette: Palette): Driver[] {
   }
   if (Math.round(p.deposits) !== 0) out.push({ key: DEPOSITS_KEY, name: "Deposits", color: FLOWS_COLOR, amount: p.deposits });
   if (Math.round(p.withdrawals) !== 0) out.push({ key: WITHDRAWALS_KEY, name: "Withdrawals", color: FLOWS_COLOR, amount: -p.withdrawals });
+  if (Math.round(p.fees) !== 0) out.push({ key: FEES_KEY, name: "Fees", color: FEES_COLOR, amount: -p.fees });
   if (Math.round(p.unreconciled) !== 0) {
     out.push({ key: UNRECONCILED_KEY, name: "Unreconciled cash", color: UNRECONCILED_COLOR, amount: p.unreconciled });
   }
@@ -316,7 +323,8 @@ function PerformanceBody({
   const totalChange = last.endValue - data.baselineValue;
   const totals = periods.reduce(
     (t, p) => ({
-      market: t.market + p.classes.reduce((s, c) => s + c.marketChange + c.income, 0),
+      // Net of fees: what the investments earned after the cost of managing them
+      market: t.market + p.classes.reduce((s, c) => s + c.marketChange + c.income, 0) - p.fees,
       flows: t.flows + p.deposits - p.withdrawals,
       unreconciled: t.unreconciled + p.unreconciled,
     }),
@@ -462,7 +470,7 @@ function PerformanceBody({
       <div className="grid grid-cols-4 gap-x-4 mt-3 mb-5">
         {[
           { label: "change YTD", value: totalChange },
-          { label: "investment return YTD", value: totals.market },
+          { label: "investment return YTD, net of fees", value: totals.market },
           { label: "deposits/withdrawals YTD", value: totals.flows },
           { label: "unreconciled cash YTD", value: totals.unreconciled },
         ].map((s) => (
@@ -1021,6 +1029,14 @@ function DriverDetail({
   } else if (d.key === DEPOSITS_KEY || d.key === WITHDRAWALS_KEY) {
     rows = flowRows(d.key === DEPOSITS_KEY ? 1 : -1);
     subtitle = `${rows.length} transfer${rows.length === 1 ? "" : "s"} ${d.key === DEPOSITS_KEY ? "in" : "out"}`;
+  } else if (d.key === FEES_KEY) {
+    rows = p.feeItems.map((f) => ({
+      key: `${f.date}${f.account}${f.amount}${f.description}`,
+      label: f.description,
+      sub: `${fmtDay(f.date)} · ${f.account}`,
+      amount: -f.amount,
+    }));
+    subtitle = `${rows.length} fee${rows.length === 1 ? "" : "s"} taken from account cash`;
   } else if (d.key === UNRECONCILED_KEY) {
     subtitle = "Recorded cash balances vs. what the records predict";
     rows = p.unreconciledByAccount

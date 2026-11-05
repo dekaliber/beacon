@@ -10,6 +10,7 @@ import { getMarketChart } from "./coingecko.js";
 //
 //   Δvalue = Σ market change (per asset class, dividends included)
 //          + deposits − withdrawals
+//          − fees (advisory/account fees taken from cash)
 //          + unreconciled cash
 //
 // Buys and sells are internal: a holding's market change is its change in value
@@ -114,6 +115,8 @@ export type PerformancePeriod = {
   withdrawals: number; // positive number
   unreconciled: number;
   flows: Array<{ date: Day; account: string; amount: number; description: string }>;
+  fees: number; // positive number
+  feeItems: Array<{ date: Day; account: string; amount: number; description: string }>; // amount positive
   unreconciledByAccount: Array<{ account: string; amount: number }>;
 };
 
@@ -183,10 +186,10 @@ export async function computePerformance(
       },
     }),
     prisma.investmentActivity.findMany({
-      where: { accountId: { in: accountIds }, type: { in: ["SALE", "PURCHASE", "DIVIDEND", "TRANSFER"] } },
+      where: { accountId: { in: accountIds }, type: { in: ["SALE", "PURCHASE", "DIVIDEND", "TRANSFER", "FEE"] } },
       select: {
         id: true, accountId: true, ticker: true, type: true, date: true, createdAt: true,
-        shares: true, amount: true, fees: true, transferAccountId: true,
+        shares: true, amount: true, fees: true, transferAccountId: true, notes: true,
         incomes: { select: { accountId: true, amount: true, isCashReceived: true } },
       },
     }),
@@ -481,6 +484,14 @@ export async function computePerformance(
   const incomeEvents: IncomeEvt[] = [];
   type FlowEvt = { day: Day; accountId: string; amount: number; description: string };
   const flowEvents: FlowEvt[] = []; // + deposit, − withdrawal
+  // Fees leave the account's cash but stay out of the flows: they're a cost
+  // against the return, not money moved in or out.
+  const feeEvents: FlowEvt[] = []; // amount positive
+  for (const a of activities) {
+    if (a.type !== "FEE") continue;
+    const note = (a.notes ?? "").replace(/^QFX:\S+( · )?/, "");
+    feeEvents.push({ day: dayOf(a.date), accountId: a.accountId, amount: num(a.amount), description: note || "Fee" });
+  }
 
   // Accounts whose dividends are paid out rather than kept (election CASH with a
   // payout account): cash income there leaves the portfolio the day it's paid,
@@ -552,6 +563,7 @@ export async function computePerformance(
   for (const [k, trades] of buysByPos) for (const t of trades) addDelta(k.slice(0, k.indexOf("|")), t.day, -t.cash);
   for (const e of incomeEvents) addDelta(e.accountId, e.day, e.amount);
   for (const f of flowEvents) addDelta(f.accountId, f.day, f.amount);
+  for (const f of feeEvents) addDelta(f.accountId, f.day, -f.amount);
   for (const s of manualSeries.values()) {
     for (let i = 1; i < s.obs.length; i++) {
       const [a, b] = [s.obs[i - 1], s.obs[i]];
@@ -750,6 +762,8 @@ export async function computePerformance(
 
     const flows = flowEvents.filter((f) => inPeriod(f.day, start, end));
     for (const f of flows) expect(f.accountId, f.amount);
+    const fees = feeEvents.filter((f) => inPeriod(f.day, start, end));
+    for (const f of fees) expect(f.accountId, -f.amount);
 
     const unreconciledByAccount: PerformancePeriod["unreconciledByAccount"] = [];
     let unreconciled = 0;
@@ -786,6 +800,10 @@ export async function computePerformance(
       withdrawals: round2(-sum(flows.filter((f) => f.amount < 0), (f) => f.amount)),
       unreconciled: round2(unreconciled),
       flows: flows
+        .sort((x, y) => x.day.localeCompare(y.day))
+        .map((f) => ({ date: f.day, account: accountName.get(f.accountId)!, amount: round2(f.amount), description: f.description })),
+      fees: round2(sum(fees, (f) => f.amount)),
+      feeItems: fees
         .sort((x, y) => x.day.localeCompare(y.day))
         .map((f) => ({ date: f.day, account: accountName.get(f.accountId)!, amount: round2(f.amount), description: f.description })),
       unreconciledByAccount,

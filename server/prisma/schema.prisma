@@ -76,6 +76,11 @@ enum InvestmentActivityType {
   SALE
   PURCHASE
   TRANSFER
+  // Advisory or account fee taken from the account's cash: a cost against the
+  // investment return, neither an expense nor a withdrawal. `amount` is the
+  // fee's size (positive); ticker is "" (no security). Imported from QFX
+  // INVBANKTRAN FEE lines (notes "QFX:{fitId}") or added by hand.
+  FEE
 }
 
 enum QfxTransactionType {

@@ -926,7 +926,10 @@ function ActivityDetailSheet({
     : isTransfer
     ? "bg-warn-soft text-warn-deep"
     : "bg-violet-soft text-violet-deep";
-  const badgeLabel = isSale ? "Sale" : isPurchase ? "Purchase" : isTransfer ? "Transfer" : "Dividend";
+  const isFee = a?.type === "FEE";
+  const badgeLabel = isSale ? "Sale" : isPurchase ? "Purchase" : isTransfer ? "Transfer" : isFee ? "Fee" : "Dividend";
+  // A QFX-imported fee's note carries its "QFX:{fitId} · " import tag
+  const notes = isFee ? (a?.notes ?? "").replace(/^QFX:\S+( · )?/, "") : a?.notes;
 
   return (
     <>
@@ -968,8 +971,8 @@ function ActivityDetailSheet({
               <Row label="Fees" value={`(${formatCurrency(fees)})`} muted />
             )}
             <Row
-              label={isPurchase ? "Total Cost" : "Net Proceeds"}
-              value={formatCurrency(isPurchase ? a.amount : net)}
+              label={isPurchase ? "Total Cost" : isFee ? "Taken from cash" : "Net Proceeds"}
+              value={isFee ? `−${formatCurrency(a.amount)}` : formatCurrency(isPurchase ? a.amount : net)}
               bold
             />
             {isSale && (
@@ -990,10 +993,10 @@ function ActivityDetailSheet({
                 </div>
               </div>
             )}
-            {a.notes && (
+            {notes && (
               <div className="pt-1">
                 <p className="tp-caption mb-0.5">Notes</p>
-                <p className="text-sm">{a.notes}</p>
+                <p className="text-sm">{notes}</p>
               </div>
             )}
             {(isSale || (!isPurchase && !isSale)) && (
@@ -1564,7 +1567,7 @@ export function MobileInvestmentAccount() {
 
   // Activity filter helpers — must be above early return to satisfy Rules of Hooks
   const uniqueTickers = useMemo(
-    () => [...new Set(activities?.map((a) => a.ticker) ?? [])].sort(),
+    () => [...new Set(activities?.map((a) => a.ticker).filter(Boolean) ?? [])].sort(),
     [activities],
   );
   const presentTypes = useMemo(() => new Set(activities?.map((a) => a.type) ?? []), [activities]);
@@ -1870,7 +1873,7 @@ export function MobileInvestmentAccount() {
               <div className="space-y-2">
                 {/* Type filter chips */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  {(["PURCHASE", "SALE", "DIVIDEND", "TRANSFER"] as const).filter((t) => presentTypes.has(t)).map((type) => {
+                  {(["PURCHASE", "SALE", "DIVIDEND", "TRANSFER", "FEE"] as const).filter((t) => presentTypes.has(t)).map((type) => {
                     const active = selectedTypes.has(type);
                     const cls = type === "PURCHASE"
                       ? active ? "bg-up-soft text-up-deep border-up-line" : "border-border text-muted-foreground"
@@ -1885,7 +1888,7 @@ export function MobileInvestmentAccount() {
                         onClick={() => toggleType(type)}
                         className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${cls}`}
                       >
-                        {type === "PURCHASE" ? "Purchase" : type === "SALE" ? "Sale" : type === "TRANSFER" ? "Transfer" : "Dividend"}
+                        {type === "PURCHASE" ? "Purchase" : type === "SALE" ? "Sale" : type === "TRANSFER" ? "Transfer" : type === "FEE" ? "Fee" : "Dividend"}
                       </button>
                     );
                   })}
@@ -1931,7 +1934,7 @@ export function MobileInvestmentAccount() {
                   : isTransfer
                   ? "bg-warn-soft text-warn-deep"
                   : "bg-violet-soft text-violet-deep";
-                const badgeLabel = isSale ? "Sale" : isPurchase ? "Purchase" : isTransfer ? "Transfer" : "Dividend";
+                const badgeLabel = isSale ? "Sale" : isPurchase ? "Purchase" : isTransfer ? "Transfer" : a.type === "FEE" ? "Fee" : "Dividend";
                 const gain = (a.shortTermGain ?? 0) + (a.longTermGain ?? 0);
 
                 return (
