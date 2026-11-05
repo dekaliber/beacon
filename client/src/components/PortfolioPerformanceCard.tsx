@@ -290,8 +290,8 @@ export function PortfolioPerformanceCard() {
       ) : (
         <PerformanceBody
           data={data}
-          // The latest full period by default; a just-started one is mostly empty.
-          selectedEnd={selectedEnd ?? [...data.periods].reverse().find((p) => !p.partial)?.end ?? data.periods[data.periods.length - 1].end}
+          // The latest period by default, even when it is still in progress.
+          selectedEnd={selectedEnd ?? data.periods[data.periods.length - 1].end}
           onSelect={setSelectedEnd}
           onBalancesSaved={refetch}
         />
