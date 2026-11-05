@@ -2857,12 +2857,16 @@ function EditSaleActivityModal({
 function ReviewDividendModal({
  dividend,
  categories,
+ dividendElection,
  onClose,
  onConfirmed,
  onDismissed,
 }: {
  dividend: PendingDividend;
  categories: Category[];
+ // The account's default election: picks which disposition the modal opens on.
+ // "Ask each time" (null) opens on cash, as before.
+ dividendElection: Account["dividendElection"];
  onClose: () => void;
  onConfirmed: (wasReinvest?: boolean) => void;
  onDismissed: () => void;
@@ -2894,7 +2898,7 @@ function ReviewDividendModal({
  const [notes, setNotes] = useState("");
 
  // ── Disposition ───────────────────────────────────────────────────────────
- const [disposition, setDisposition] = useState<"income" |"reinvest">("income");
+ const [disposition, setDisposition] = useState<"income" |"reinvest">(dividendElection ==="REINVEST" ?"reinvest" :"income");
 
  // ── Income-path fields ────────────────────────────────────────────────────
  const [paymentDate, setPaymentDate] = useState(defaultPayableDate);
@@ -4716,6 +4720,7 @@ function ActivityTab({ accountId, accounts, onHoldingsChanged, onAccountChanged 
  <ReviewDividendModal
  dividend={reviewingDividend}
  categories={allCategories ?? []}
+ dividendElection={accounts.find((a) => a.id === accountId)?.dividendElection ?? null}
  onClose={() => setReviewingDividend(null)}
  onConfirmed={(wasReinvest?: boolean) => {
  setReviewingDividend(null);

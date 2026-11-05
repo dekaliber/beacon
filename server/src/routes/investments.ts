@@ -2968,7 +2968,11 @@ investmentRoutes.get("/growth/:accountId", async (req, res) => {
 
 // ── POST /api/investments/qfx-dividends/:accountId ───────────────────────
 // Creates InvestmentActivity (DIVIDEND) + Income records from QFX INCOME
-// entries for a managed account. Uses a two-layer dedup strategy:
+// entries for a managed account. A dividend counts as cash received (and so as
+// withdrawn, on the Withdrawals page and in Performance) only when the account
+// is set to "Always pay as cash" at import time and the ticker is a holding;
+// otherwise (e.g. TIMXX, the cash sweep fund, or a reinvesting account) it
+// stays in the account. Uses a two-layer dedup strategy:
 //   1. FITID check: activity notes field stores "QFX:{fitId}" — prevents
 //      re-importing the same dividend from an overlapping QFX file.
 //   2. Date proximity check: skips any dividend where a DIVIDEND activity
@@ -3005,6 +3009,7 @@ investmentRoutes.post("/qfx-dividends/:accountId", async (req, res) => {
       select: { id: true, ticker: true },
     });
     const holdingByTicker = new Map(holdings.map((h) => [h.ticker, h.id]));
+    const paysAsCash = account.dividendElection === "CASH";
 
     let imported = 0;
     let skipped = 0;
@@ -3057,7 +3062,7 @@ investmentRoutes.post("/qfx-dividends/:accountId", async (req, res) => {
             date: paymentDate,
             source: div.ticker,
             subtype: "DIVIDEND",
-            isCashReceived: holdingId !== null,
+            isCashReceived: paysAsCash && holdingId !== null,
             activityId: activity.id,
             updatedAt: new Date(),
           },

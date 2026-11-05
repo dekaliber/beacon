@@ -168,7 +168,7 @@ export async function computePerformance(
   // the periods they held value.
   const accounts = await prisma.account.findMany({
     where: { userId, type: "INVESTMENT" },
-    select: { id: true, name: true, isManaged: true, cashBalance: true, dividendElection: true, defaultCashAccountId: true },
+    select: { id: true, name: true, isManaged: true, cashBalance: true },
   });
   const accountIds = accounts.map((a) => a.id);
   const accountName = new Map(accounts.map((a) => [a.id, a.name]));
@@ -493,16 +493,12 @@ export async function computePerformance(
     feeEvents.push({ day: dayOf(a.date), accountId: a.accountId, amount: num(a.amount), description: note || "Fee" });
   }
 
-  // Accounts whose dividends are paid out rather than kept (election CASH with a
-  // payout account): cash income there leaves the portfolio the day it's paid,
-  // as the Withdrawals page already counts it. Reinvested (isCashReceived=false)
-  // income stays.
-  const payoutAccount = new Map(
-    accounts
-      .filter((a) => a.dividendElection === "CASH" && a.defaultCashAccountId && !accountName.has(a.defaultCashAccountId))
-      .map((a) => [a.id, a.defaultCashAccountId!]),
-  );
-  const paidOut = (accountId: string, isCashReceived: boolean) => isCashReceived && payoutAccount.has(accountId);
+  // Income taken as cash (isCashReceived) leaves the portfolio the day it's paid;
+  // reinvested income (false) stays. The same per-record test the Withdrawals
+  // page uses, so the two agree on what was withdrawn. The account's dividend
+  // setting only picks a default when a dividend is recorded, so it isn't read
+  // here. Tax-advantaged accounts write no Income rows, so their dividends stay.
+  const paidOut = (isCashReceived: boolean) => isCashReceived;
 
   for (const a of activities) {
     const day = dayOf(a.date);
@@ -524,7 +520,7 @@ export async function computePerformance(
       const income = a.incomes[0];
       if (toBank) {
         flowEvents.push({ day, accountId: a.accountId, amount: -num(toBank.amount), description: `${a.ticker} dividend to bank` });
-      } else if (income && paidOut(a.accountId, income.isCashReceived)) {
+      } else if (income && paidOut(income.isCashReceived)) {
         flowEvents.push({ day, accountId: a.accountId, amount: -num(a.amount), description: `${a.ticker} dividend paid out` });
       }
     }
@@ -540,7 +536,7 @@ export async function computePerformance(
     const source = i.source?.trim().toUpperCase() ?? "";
     const ticker = tickers.has(source) ? source : null;
     incomeEvents.push({ day: dayOf(i.date), accountId: i.accountId, amount: num(i.amount), ticker, label: i.source ?? "Income" });
-    if (paidOut(i.accountId, i.isCashReceived)) {
+    if (paidOut(i.isCashReceived)) {
       flowEvents.push({ day: dayOf(i.date), accountId: i.accountId, amount: -num(i.amount), description: `${i.source ?? "Income"} paid out` });
     }
   }
