@@ -92,6 +92,9 @@ type Palette = Map<string, { name: string; color: string }>;
 const usd0 = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const money = (n: number) => usd0.format(Math.round(n) === 0 ? 0 : n);
 const signed = (n: number) => (Math.round(n) === 0 ? "$0" : `${n > 0 ? "+" : "−"}${usd0.format(Math.abs(n))}`);
+// To the cent, for the YTD figures that should tie out to statements and the Withdrawals page
+const usd2 = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const signedCents = (n: number) => (Math.abs(n) < 0.005 ? "$0.00" : `${n > 0 ? "+" : "−"}${usd2.format(Math.abs(n))}`);
 const toneOf = (n: number) => (Math.round(n) === 0 ? "text-muted-foreground" : n > 0 ? "text-up" : "text-down");
 const fillOf = (n: number) => (n >= 0 ? "var(--color-up)" : "var(--color-down)");
 
@@ -482,7 +485,7 @@ function PerformanceBody({
           <Card key={s.label} className="p-6">
             <SectionLabel as="span">{s.label}</SectionLabel>
             <div className="mt-1 min-w-0">
-              <p className={cn("tp-stat truncate", toneOf(s.value))}>{signed(s.value)}</p>
+              <p className={cn("tp-stat truncate", toneOf(s.value))}>{signedCents(s.value)}</p>
               <p className="tp-caption mt-0.5 truncate">{s.caption}</p>
             </div>
           </Card>
