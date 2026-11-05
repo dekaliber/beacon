@@ -212,8 +212,10 @@ withdrawalRoutes.get("/summary", async (req, res) => {
         ...(dividendId
           ? [{ categoryId: dividendId, isCashReceived: true, subtype: { not: "DIVIDEND" as const } }]
           : []),
-        // Interest
-        ...(interestId ? [{ categoryId: interestId }] : []),
+        // Interest earned inside an investment account (swept out with the cash).
+        // Interest on a bank account was never in the portfolio, so it isn't a
+        // withdrawal; it's left out of both the total and the ledger.
+        ...(interestId ? [{ categoryId: interestId, account: { type: "INVESTMENT" as const } }] : []),
         // Cap Gains Distribution
         ...(capGainsDivId ? [{ categoryId: capGainsDivId }] : []),
         // Sale proceeds to banking account. Exclude options-premium income, which is
@@ -315,7 +317,7 @@ withdrawalRoutes.get("/", async (req, res) => {
         ...(dividendId
           ? [{ categoryId: dividendId, isCashReceived: true, subtype: { not: "DIVIDEND" as const } }]
           : []),
-        ...(interestId ? [{ categoryId: interestId }] : []),
+        ...(interestId ? [{ categoryId: interestId, account: { type: "INVESTMENT" as const } }] : []), // investment-account interest only; see /summary
         ...(capGainsDivId ? [{ categoryId: capGainsDivId }] : []),
         // Sale proceeds to banking account (exclude options premium — see /summary above).
         { subtype: "CAPITAL_GAIN" as const, account: { type: { in: ["CHECKING", "SAVINGS"] } }, NOT: { OR: [{ optionsPositionId: { not: null } }, { category: { name: "Options Premium" } }] } },
