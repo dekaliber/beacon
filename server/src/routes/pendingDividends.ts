@@ -471,6 +471,18 @@ pendingDividendRoutes.patch("/:id", async (req, res) => {
 
   const newDate = paymentDate ? new Date(paymentDate) : undefined;
 
+  // A transfer that stays put can't end up before the new pay date.
+  if (newDate) {
+    const income = await prisma.income.findFirst({
+      where: { activityId: pending.activityId },
+      select: { accountId: true, date: true, depositAccountId: true, depositDate: true },
+    });
+    const follows = income?.depositDate?.getTime() === income?.date.getTime() && income?.depositAccountId === income?.accountId;
+    if (income?.depositDate && !follows && income.depositDate < newDate) {
+      return res.status(400).json({ error: "Transferred date can't be before the income date" });
+    }
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     const updatedPending = await tx.pendingDividend.update({
       where: { id },

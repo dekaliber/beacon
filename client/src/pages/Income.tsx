@@ -24,6 +24,8 @@ import type { Account, Category, Income } from"@/types";
 import { BeaconLoader } from"@/components/BeaconLoader";
 import { SectionLabel, ColumnHeader } from"@/components/Typography";
 import { ItemTypeahead } from"@/components/ItemTypeahead";
+import { ToastContainer, useToast } from"@/components/Toast";
+import { ApiError } from"@/api/client";
 import { useIncomeDepositFields, landingAccount, landingDate, depositedElsewhere } from"@/lib/incomeDeposit";
 import { CategoryTypeahead } from"@/components/CategoryTypeahead";
 
@@ -93,7 +95,7 @@ function CurrencyInput({ name, defaultValue, autoFocus, error, onValidChange }: 
 }
 
 // ── Inline editable cell ──
-function EditableCell({ value, onSave, type ="text", className ="" }: { value: string; onSave: (v: string) => void; type?:"text" |"date"; className?: string }) {
+function EditableCell({ value, onSave, type ="text", className ="", min }: { value: string; onSave: (v: string) => void; type?:"text" |"date"; className?: string; min?: string }) {
  const [editing, setEditing] = useState(false);
  const [editValue, setEditValue] = useState(value);
  const inputRef = useRef<HTMLInputElement>(null);
@@ -112,6 +114,7 @@ function EditableCell({ value, onSave, type ="text", className ="" }: { value: s
  confirmOnEnter
  hideIcon
  value={toDateInputValue(value)}
+ min={min}
  onChange={(v) => { if (v && v !== toDateInputValue(value)) onSave(v); }}
  onDismiss={() => setEditing(false)}
  className={className}
@@ -652,6 +655,8 @@ function getInitialIncomeData(): Income[] {
  params.endDate = endDate > todayStr ? todayStr : endDate;
  if (!applied.showOnlyReceived) params.showOnlyReceived ="false";
  if (applied.hasNotes) params.hasNotes ="true";
+ params.pending ="false";
+ params.today = todayStr;
  params.page ="1";
  return getApiCache<{ data: Income[] }>(`income-${JSON.stringify(params)}`)?.data ?? [];
  } catch {
@@ -702,11 +707,6 @@ export function IncomePage() {
  { label:"Last month", start: fmt(lastMonthStart), end: fmt(lastMonthEnd) },
 ];
  }, []);
- const tomorrowStr = useMemo(() => {
- const d = new Date();
- d.setDate(d.getDate() + 1);
- return`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
- }, []);
 
  const filterParams = useMemo(() => {
  const params: Record<string, string> = { limit:"50" };
@@ -731,6 +731,9 @@ export function IncomePage() {
  }
  if (!applied.showOnlyReceived) params.showOnlyReceived ="false";
  if (applied.hasNotes) params.hasNotes ="true";
+ // Pending income (future date or future transfer) lives in its own section
+ params.pending ="false";
+ params.today = todayStr;
  return params;
  }, [sort, applied, todayStr, appliedSearch]);
 
@@ -739,13 +742,16 @@ export function IncomePage() {
  page: currentPage.toString(),
  }), [filterParams, currentPage]);
 
- const upcomingParams = useMemo(() => ({
- startDate: tomorrowStr,
- sortBy:"date",
- sortOrder:"asc",
- limit:"100",
- ...(applied.hasNotes ? { hasNotes:"true" } : {}),
- }), [tomorrowStr, applied.hasNotes]);
+ // Pending: dated after today or transferred after today. Mirrors the applied
+ // filters and search so both sections answer the same question.
+ const upcomingParams = useMemo(() => {
+ const params: Record<string, string> = { pending:"true", today: todayStr, sortBy:"date", sortOrder:"asc", limit:"100" };
+ if (applied.accountIds.length > 0) params.accountIds = applied.accountIds.join(",");
+ if (applied.categoryIds.length > 0) params.categoryIds = applied.categoryIds.join(",");
+ if (appliedSearch.trim()) params.search = appliedSearch.trim();
+ if (applied.hasNotes) params.hasNotes ="true";
+ return params;
+ }, [todayStr, applied, appliedSearch]);
 
  const { data: incomeData, loading } = useApi(() => getIncome(queryParams), [queryParams],`income-${JSON.stringify(queryParams)}`);
  const { data: upcomingData, refetch: refetchUpcoming } = useApi(() => getIncome(upcomingParams), [upcomingParams],`income-upcoming-${JSON.stringify(upcomingParams)}`);
@@ -885,14 +891,19 @@ export function IncomePage() {
  refetchAll();
  };
 
+ const { toasts, addToast, dismissToast } = useToast();
  const handleInlineUpdate = useCallback(async (id: string, field: string, value: string | null) => {
  const data: Record<string, unknown> = {};
  if (field ==="date") data.date = value;
  else if (field ==="amount") data.amount = parseFloat(value as string);
  else data[field] = value;
+ try {
  await updateIncome(id, data);
+ } catch (err) {
+ addToast({ message: err instanceof ApiError ? err.message :"Failed to update income" });
+ }
  refetchAll();
- }, [refetchAll]);
+ }, [refetchAll, addToast]);
 
  const toggleSelect = useCallback((id: string) => {
  setSelectedIds((prev) => {
@@ -964,16 +975,7 @@ export function IncomePage() {
  anchorIdxRef.current = idx;
  }, [incomes, toggleSelect, selectedIds]);
 
- const upcomingIncomes = useMemo(() => {
- const all = upcomingData?.data ?? [];
- if (!appliedSearch.trim()) return all;
- const q = appliedSearch.toLowerCase();
- return all.filter((inc) =>
- (inc.category?.name ??"").toLowerCase().includes(q) ||
- (inc.source ??"").toLowerCase().includes(q) ||
- parseFloat(inc.amount).toFixed(2).includes(q)
- );
- }, [upcomingData, appliedSearch]);
+ const upcomingIncomes = useMemo(() => upcomingData?.data ?? [], [upcomingData]);
 
  const allUpcomingIncomeIds = useMemo(() => upcomingIncomes.map((i) => i.id), [upcomingIncomes]);
 
@@ -1453,6 +1455,7 @@ export function IncomePage() {
  .map((i) => ({ amount: i.amount, isJoint: i.account.isJoint }))}
  />
  )}
+ <ToastContainer toasts={toasts} onDismiss={dismissToast} />
  </div>
  );
 }
@@ -1484,7 +1487,7 @@ function DepositDateCell({ income, onSave }: {
  const sameDay = landedOn === toDateInputValue(income.date);
  return (
  <td className={`w-[120px] py-2 pr-3 ${sameDay ?"text-muted-foreground" :""}`}>
- <EditableCell value={landedOn} type="date" onSave={(v) => onSave(income.id,"depositDate", v)} />
+ <EditableCell value={landedOn} type="date" min={toDateInputValue(income.date)} onSave={(v) => onSave(income.id,"depositDate", v)} />
  </td>
  );
 }
@@ -1507,7 +1510,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
  const [showOptional, setShowOptional] = useState(false);
  const [taxClassification, setTaxClassification] = useState<string>("");
  const deposit = useIncomeDepositFields(open, income, accounts);
- const [errors, setErrors] = useState<{ amount?: string; accountId?: string; date?: string }>({});
+ const [errors, setErrors] = useState<{ amount?: string; accountId?: string; date?: string; depositDate?: string; save?: string }>({});
  const categoryTriggerRef = useRef<HTMLButtonElement>(null);
  const accountTriggerRef = useRef<HTMLButtonElement>(null);
  const submitBtnRef = useRef<HTMLButtonElement>(null);
@@ -1531,6 +1534,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
  if (!amount || amount <= 0) newErrors.amount ="Amount is required";
  if (!accountId) newErrors.accountId ="Account is required";
  if (!(form.get("date") as string)) newErrors.date ="Date is required";
+ if (deposit.depositDate && deposit.depositDate < deposit.date) newErrors.depositDate ="Can't be before the date";
  if (Object.keys(newErrors).length > 0) {
  setErrors(newErrors);
  return;
@@ -1539,6 +1543,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
  setSaving(true);
  setErrors({});
  const categoryId = form.get("categoryId") as string;
+ try {
  await onSave({
  amount,
  categoryId: categoryId || undefined,
@@ -1551,6 +1556,9 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
  // notes untouched; present but empty → null so clearing actually clears it.
  notes: form.has("notes") ? ((form.get("notes") as string) || null) : undefined,
  });
+ } catch (err) {
+ setErrors({ save: err instanceof ApiError ? err.message :"Failed to save income" });
+ }
  setSaving(false);
  };
 
@@ -1622,7 +1630,8 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
  <div className="grid grid-cols-2 gap-4">
  <div>
  <label className="block text-xs font-medium mb-1">Deposit Date</label>
- <DatePicker name="depositDate" value={deposit.depositDate} onChange={deposit.setDepositDate} className="w-full" />
+ <DatePicker name="depositDate" value={deposit.depositDate} min={deposit.date || undefined} onChange={(v) => { deposit.setDepositDate(v); setErrors((er) => ({ ...er, depositDate: undefined })); }} invalid={!!errors.depositDate} className="w-full" />
+ {errors.depositDate && <p className="mt-1 text-xs text-down">{errors.depositDate}</p>}
  </div>
  <div>
  <label className="block text-xs font-medium mb-1">Deposited To</label>
@@ -1681,6 +1690,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
  )}
  </div>
 
+ {errors.save && <p className="text-xs text-down">{errors.save}</p>}
  <div className="flex items-center justify-between pt-2">
  <div>
  {income && (

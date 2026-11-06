@@ -196,6 +196,7 @@ function MobileIncomeModal({
     const amount = parseAmount(fd.get("amount") as string);
     if (!fd.get("amount") || isNaN(amount) || amount <= 0) { setError("Amount is required"); return; }
     if (!fd.get("accountId")) { setError("Account is required"); return; }
+    if (deposit.depositDate && deposit.depositDate < deposit.date) { setError("Transferred date can't be before the date"); return; }
     setSaving(true);
     try {
       const data: Record<string, unknown> = {
@@ -339,6 +340,7 @@ function MobileIncomeModal({
                 <input
                   type="date"
                   value={deposit.depositDate}
+                  min={deposit.date || undefined}
                   onChange={(e) => deposit.setDepositDate(e.target.value)}
                   className="w-full appearance-none rounded-md border border-border px-3 py-2.5 pr-8 text-sm text-foreground focus:border-primary focus:outline-none"
                 />
@@ -949,7 +951,7 @@ export function MobileIncome() {
   const [loadingIncome, setLoadingIncome] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
-  const [, setAppliedSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const appliedSearchRef = useRef("");
   const [filterOpen, setFilterOpen] = useState(false);
   const [staged, setStaged] = useState<IncomeFilterState>(() => loadIncomeFilters());
@@ -958,11 +960,6 @@ export function MobileIncome() {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingMoreRef = useRef(false);
   const today = localToday();
-  const tomorrow = useMemo(() => {
-    const d = new Date(today.replace(/-/g, "/"));
-    d.setDate(d.getDate() + 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }, [today]);
 
   const dateRangePresets = useMemo(() => {
     const now = new Date();
@@ -983,13 +980,16 @@ export function MobileIncome() {
     ];
   }, []);
 
-  const upcomingParams = useMemo(() => ({
-    startDate: tomorrow,
-    sortBy: "date",
-    sortOrder: "asc",
-    limit: "100",
-    ...(applied.hasNotes ? { hasNotes: "true" } : {}),
-  }), [tomorrow, applied.hasNotes]);
+  // Pending: dated after today or transferred after today. Mirrors the applied
+  // filters and search so both sections answer the same question.
+  const upcomingParams = useMemo(() => {
+    const params: Record<string, string> = { pending: "true", today, sortBy: "date", sortOrder: "asc", limit: "100" };
+    if (applied.accountIds.length > 0) params.accountIds = applied.accountIds.join(",");
+    if (applied.categoryIds.length > 0) params.categoryIds = applied.categoryIds.join(",");
+    if (appliedSearch.trim()) params.search = appliedSearch.trim();
+    if (applied.hasNotes) params.hasNotes = "true";
+    return params;
+  }, [today, applied, appliedSearch]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1017,6 +1017,9 @@ export function MobileIncome() {
     }
     if (!f.showOnlyReceived) params.showOnlyReceived = "false";
     if (f.hasNotes) params.hasNotes = "true";
+    // Pending income (future date or future transfer) lives in its own section
+    params.pending = "false";
+    params.today = today;
     getIncome(params)
       .then((result) => {
         if (cancelled || !result) return;

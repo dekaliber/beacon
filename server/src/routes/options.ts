@@ -48,6 +48,9 @@ function optionsBaseSource(leg: {
   return `${leg.ticker.symbol} ${expStr} ${optionType} ${strikeStr} x${effectiveContracts(leg)}`;
 }
 
+/** YYYY-MM-DD (UTC date) of a close instant: the day its premium was earned. */
+const closeDayOf = (d: Date) => d.toISOString().slice(0, 10);
+
 // Apply the income / PendingBuy / PendingSale side-effects of closing (or
 // assigning) a position leg. Shared by the full-close PUT handler and the
 // partial-close split endpoint so both produce identical accounting records.
@@ -921,6 +924,19 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
   // transferDate belongs to the income row, not the position.
   const transferDate = typeof data.transferDate === "string" ? data.transferDate : null;
   delete data.transferDate;
+  if (transferDate) {
+    const current = await prisma.optionsPosition.findFirst({
+      where: { id: req.params.id, userId },
+      select: { closedAt: true, expirationDate: true },
+    });
+    if (!current) return res.status(404).json({ error: "Not found" });
+    const closedAt =
+      typeof data.closedAt === "string" ? new Date(data.closedAt) : data.closedAt === null ? null : current.closedAt;
+    const expiration = data.expirationDate instanceof Date ? data.expirationDate : current.expirationDate;
+    if (transferDate < closeDayOf(closedAt ?? expiration)) {
+      return res.status(400).json({ error: "Transfer date can't be before the close date" });
+    }
+  }
 
   if (Object.keys(data).length === 0) {
     return res.status(400).json({ error: "No valid fields provided" });
@@ -1039,6 +1055,12 @@ optionsRoutes.post("/positions/:id/partial-close", async (req, res) => {
     where: { id: req.params.id, userId, isActive: true, status: "OPEN", isDraft: false },
   });
   if (!original) return res.status(404).json({ error: "Position not found or already closed" });
+
+  // Expired legs close on their expiration date; the rest on closedAt (default now).
+  const closesOn = outcome === "EXPIRED_WORTHLESS" ? original.expirationDate : closedAt ? new Date(closedAt) : new Date();
+  if (transferDate && transferDate < closeDayOf(closesOn)) {
+    return res.status(400).json({ error: "Transfer date can't be before the close date" });
+  }
 
   if (n >= original.contracts) {
     return res.status(409).json({ error: "Use a full close when closing all contracts." });

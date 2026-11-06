@@ -1376,6 +1376,8 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  const [error, setError] = useState("");
 
  const isExpired = outcome ==="EXPIRED_WORTHLESS";
+ // Day the premium is earned: expiration for an expired leg, else the close (ET) date.
+ const closeDay = isExpired || !closedAt ? expirationDateStr : closedAt.split("T")[0];
  const isAssigned = outcome ==="ASSIGNED";
  const isRolled = outcome ==="ROLLED";
  // Rolling a chained leg only supports a full roll (backend still rejects a
@@ -1464,6 +1466,10 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  return;
  }
  const isPartial = showSplit && n < position.contracts;
+ if (!isRolled && bankingAccountId && transferDate && transferDate < closeDay) {
+ setError("Transfer date can't be before the close date.");
+ return;
+ }
 
  setSaving(true);
  setError("");
@@ -1718,7 +1724,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  <label className="block text-xs font-medium mb-1">
  Transfer Date <span className="text-muted-foreground font-normal">(when the premium reached that account)</span>
  </label>
- <DatePicker value={transferDate} onChange={setTransferDate} placeholder="Next business day" className="w-full" />
+ <DatePicker value={transferDate} min={closeDay} onChange={setTransferDate} placeholder="Next business day" className="w-full" />
  </div>
  )}
 
@@ -1930,6 +1936,8 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
  const bankingAccounts = (allAccounts ?? []).filter((a) => a.type ==="CHECKING" || a.type ==="SAVINGS");
 
  const isExpired = outcome ==="EXPIRED_WORTHLESS";
+ // Day the premium is earned: expiration for an expired leg, else the close (ET) date.
+ const closeDay = isExpired || !closedAt ? expirationDateStr : closedAt.split("T")[0];
  const isAssigned = outcome ==="ASSIGNED";
 
  // When switching to ASSIGNED, default closedAt to expiration date at 4pm ET
@@ -1958,6 +1966,10 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
 
  const handleSubmit = async (e: React.FormEvent) => {
  e.preventDefault();
+ if (!isRolled && bankingAccountId && transferDate && transferDate < closeDay) {
+ setError("Transfer date can't be before the close date.");
+ return;
+ }
  setSaving(true);
  setError("");
  try {
@@ -2140,7 +2152,7 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
  <label className="block text-xs font-medium mb-1">
  Transfer Date <span className="text-muted-foreground font-normal">(when the premium reached that account)</span>
  </label>
- <DatePicker value={transferDate} onChange={setTransferDate} placeholder="Next business day" className="w-full" />
+ <DatePicker value={transferDate} min={closeDay} onChange={setTransferDate} placeholder="Next business day" className="w-full" />
  </div>
  )}
 
