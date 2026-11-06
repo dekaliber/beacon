@@ -253,12 +253,18 @@ incomeRoutes.put("/:id", async (req, res) => {
   });
   if (!owned) return res.status(404).json({ error: "Income not found" });
 
-  // A deposit that matched its origin moves with it unless the caller sets it.
-  if (data.accountId && data.depositAccountId === undefined && owned.depositAccountId === owned.accountId) {
-    data.depositAccountId = data.accountId;
-  }
-  if (data.date && data.depositDate === undefined && owned.depositDate?.getTime() === owned.date.getTime()) {
-    data.depositDate = data.date;
+  // Origin and deposit are independent; one only follows the other when the
+  // income was deposited where and when it originated (account AND date the
+  // same) — a deposit that differs was set deliberately and stays put.
+  const landedInPlace = owned.depositAccountId == null || owned.depositAccountId === owned.accountId;
+  const landedSameDay = owned.depositDate == null || owned.depositDate.getTime() === owned.date.getTime();
+  if (landedInPlace && landedSameDay) {
+    if (data.accountId && data.depositAccountId === undefined && owned.depositAccountId != null) {
+      data.depositAccountId = data.accountId;
+    }
+    if (data.date && data.depositDate === undefined && owned.depositDate != null) {
+      data.depositDate = data.date;
+    }
   }
 
   const income = await prisma.income.update({
@@ -336,10 +342,10 @@ incomeRoutes.patch("/bulk", async (req, res) => {
     return res.status(400).json({ error: "No fields to update" });
   }
 
-  // Rows deposited on their income date keep the two in step; a separately set
-  // deposit date stays. Runs before `date` itself changes.
+  // Rows deposited where and when they originated keep the deposit date in step;
+  // any other deposit date was set deliberately and stays. Runs before `date` changes.
   if (date !== undefined) {
-    await prisma.$executeRaw`UPDATE incomes SET "depositDate" = ${date} WHERE id = ANY(${ownedIds}::text[]) AND "depositDate" = date`;
+    await prisma.$executeRaw`UPDATE incomes SET "depositDate" = ${date} WHERE id = ANY(${ownedIds}::text[]) AND "depositDate" = date AND "depositAccountId" = "accountId"`;
   }
 
   // For taxClassification updates, taxableAmount must be computed per-row since it depends on amount

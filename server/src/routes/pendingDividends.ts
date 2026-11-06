@@ -489,14 +489,18 @@ pendingDividendRoutes.patch("/:id", async (req, res) => {
     let updatedIncome = null;
     const income = await tx.income.findFirst({
       where: { activityId: pending.activityId! },
-      select: { id: true, taxClassification: true, date: true, depositDate: true },
+      select: { id: true, taxClassification: true, accountId: true, date: true, depositAccountId: true, depositDate: true },
     });
     if (income) {
       const incomeData: Record<string, unknown> = {};
       if (newDate) {
         incomeData.date = newDate;
-        // A deposit on the pay date moves with it; a separately set one stays.
-        if (income.depositDate && income.depositDate.getTime() === income.date.getTime()) {
+        // Only a deposit made where and when it was paid moves with it; one sent
+        // elsewhere (to a bank) or on another day is its own event and stays.
+        if (
+          income.depositDate && income.depositDate.getTime() === income.date.getTime() &&
+          income.depositAccountId === income.accountId
+        ) {
           incomeData.depositDate = newDate;
         }
       }

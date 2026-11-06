@@ -28,9 +28,10 @@ export function defaultDepositAccountId(account: Account | undefined, fallbackId
 }
 
 /**
- * Form state for an income's origin and deposit. The deposit account and date
- * follow the origin until the user sets them; editing a row whose deposit
- * already differs leaves it alone.
+ * Form state for an income's origin and deposit. The two are independent: the
+ * deposit only follows the origin while it is untouched on a new income, or,
+ * on an existing one, when it was deposited where AND when it originated. A
+ * deposit account or date that differs was set deliberately and stays put.
  */
 export function useIncomeDepositFields(open: boolean, income: Income | null, accounts: Account[]) {
   const [accountId, setAccountIdRaw] = useState("");
@@ -50,17 +51,22 @@ export function useIncomeDepositFields(open: boolean, income: Income | null, acc
     setDateRaw(earned);
     setDepositAccountIdRaw(landedIn);
     setDepositDateRaw(landedOn);
-    setAccountLinked(!income || landedIn === origin);
-    setDateLinked(landedOn === earned);
+    const inPlace = !income || (landedIn === origin && landedOn === earned);
+    setAccountLinked(inPlace);
+    setDateLinked(inPlace);
   }, [open, income]);
 
   const setAccountId = (id: string) => {
     setAccountIdRaw(id);
-    if (accountLinked) setDepositAccountIdRaw(defaultDepositAccountId(accounts.find((a) => a.id === id), id));
+    if (!accountLinked) return;
+    // New income lands in the account's cash destination by default; an existing
+    // one deposited in place stays in place.
+    setDepositAccountIdRaw(income ? id : defaultDepositAccountId(accounts.find((a) => a.id === id), id));
   };
   const setDate = (d: string) => {
     setDateRaw(d);
-    if (dateLinked) setDepositDateRaw(d);
+    // An existing row's deposit date only follows while it's still deposited in place.
+    if (dateLinked && (!income || (depositAccountId || accountId) === accountId)) setDepositDateRaw(d);
   };
   const setDepositAccountId = (id: string) => {
     setDepositAccountIdRaw(id);
@@ -68,7 +74,7 @@ export function useIncomeDepositFields(open: boolean, income: Income | null, acc
   };
   const setDepositDate = (d: string) => {
     setDepositDateRaw(d);
-    setDateLinked(d === date);
+    setDateLinked(false);
   };
 
   return {
