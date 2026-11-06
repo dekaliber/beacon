@@ -126,7 +126,8 @@ model Account {
   @@index([userId])
 
   expenses              Expense[]
-  incomes               Income[]
+  incomes               Income[]       @relation("IncomeAccount")
+  incomeDeposits        Income[]       @relation("IncomeDepositAccount")
   holdings              InvestmentHolding[]
   manualInvestments     ManualInvestment[]
   investmentActivities  InvestmentActivity[]
@@ -241,9 +242,18 @@ model Income {
   // string is display-only). Null for non-options income and orphan historical rows.
   optionsPositionId String?
 
+  // Where and when the cash actually landed. `accountId`/`date` say where the
+  // income originated and when it was earned (close date, pay date, sale date);
+  // these say where it was deposited and when — e.g. options premium closed in
+  // the brokerage and transferred to a bank days later. Null on rows written
+  // before these existed: read as "same as accountId/date" until backfilled.
+  depositAccountId String?
+  depositDate      DateTime?
+
   category         Category?          @relation(fields: [categoryId], references: [id])
   transactionGroup TransactionGroup?  @relation(fields: [transactionGroupId], references: [id])
-  account          Account            @relation(fields: [accountId], references: [id])
+  account          Account            @relation("IncomeAccount", fields: [accountId], references: [id])
+  depositAccount   Account?           @relation("IncomeDepositAccount", fields: [depositAccountId], references: [id], onDelete: SetNull)
   activity         InvestmentActivity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
   optionsPosition  OptionsPosition?   @relation("IncomeFromOptionsPosition", fields: [optionsPositionId], references: [id], onDelete: SetNull)
   tags             IncomeTag[]
@@ -253,6 +263,7 @@ model Income {
   @@index([categoryId])
   @@index([activityId])
   @@index([optionsPositionId])
+  @@index([depositAccountId])
   @@map("incomes")
 }
 

@@ -776,6 +776,9 @@ export interface OptionsPosition {
   assignedFromExpirationDate: string | null;
   investmentAccountId: string | null;
   bankingAccountId: string | null;
+  // The premium income row, when one was created: date = close date,
+  // depositDate = when it was transferred to the banking account.
+  incomeRecords?: Array<{ id: string; date: string; depositDate: string | null }>;
   splitGroupId: string | null;
   isDraft: boolean;
   isActive: boolean;
@@ -832,6 +835,9 @@ export type OptionsCloseInput = {
   stockPriceAtClose?: number | null;
   investmentAccountId?: string | null;
   bankingAccountId?: string | null;
+  // YYYY-MM-DD the premium was transferred to the banking account; omitted →
+  // the next business day after close for a new income row, unchanged otherwise.
+  transferDate?: string | null;
 };
 
 export type OptionsRollInput = {
@@ -858,6 +864,9 @@ export type OptionsPartialCloseInput = {
   stockPriceAtClose?: number | null;
   investmentAccountId?: string | null;
   bankingAccountId?: string | null;
+  // YYYY-MM-DD the premium was transferred to the banking account; omitted →
+  // the next business day after close for a new income row, unchanged otherwise.
+  transferDate?: string | null;
 };
 
 // Settings
@@ -972,6 +981,9 @@ export type OptionsCloseEditInput = {
   stockPriceAtClose?: number | null;
   investmentAccountId?: string | null;
   bankingAccountId?: string | null;
+  // YYYY-MM-DD the premium was transferred to the banking account; omitted →
+  // the next business day after close for a new income row, unchanged otherwise.
+  transferDate?: string | null;
 };
 
 export const editClosedPosition = (id: string, data: OptionsCloseEditInput) =>

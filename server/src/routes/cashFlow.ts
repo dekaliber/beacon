@@ -387,21 +387,26 @@ async function buildProjection(
     }
   }
 
-  // 3c. Income records credited to this account (excludes DIVIDEND subtype —
-  //     those are already projected from PendingDividend records in section 4)
+  // 3c. Income records deposited to this account, on the day they landed
+  //     (excludes DIVIDEND subtype — those are projected in section 4). Rows
+  //     from before the deposit fields existed landed in accountId on date.
+  const inWindow = { gte: settledThrough, lte: windowEnd };
   const incomeRecords = await prisma.income.findMany({
     where: {
-      accountId: account.id,
-      date: { gte: settledThrough, lte: windowEnd },
       isCashReceived: true,
       subtype: { not: "DIVIDEND" },
+      OR: [
+        { depositAccountId: account.id, depositDate: inWindow },
+        { depositAccountId: account.id, depositDate: null, date: inWindow },
+        { depositAccountId: null, accountId: account.id, date: inWindow },
+      ],
     },
-    select: { id: true, date: true, source: true, amount: true },
+    select: { id: true, date: true, depositDate: true, source: true, amount: true },
   });
   for (const inc of incomeRecords) {
     rawEvents.push({
       id: `inc-${inc.id}`,
-      date: toDateStr(inc.date),
+      date: toDateStr(inc.depositDate ?? inc.date),
       description: inc.source || "Income",
       amount: parseFloat(inc.amount.toString()),
       type: "INCOME",
@@ -426,7 +431,9 @@ async function buildProjection(
 
   for (const inv of investorRows) {
     const dividends = await prisma.pendingDividend.findMany({
-      include: { activity: { select: { date: true } } },
+      include: {
+        activity: { select: { date: true, incomes: { select: { depositAccountId: true, depositDate: true } } } },
+      },
       where: {
         accountId: inv.id,
         status: { in: ["PENDING", "CONFIRMED"] },
@@ -453,7 +460,11 @@ async function buildProjection(
         div.exDate.getUTCMonth(),
         div.exDate.getUTCDate() + 4,
       ));
-      const effectiveDate = div.activity?.date ?? div.paymentDate ?? fallback;
+      // A confirmed dividend records where its cash went; one sent elsewhere
+      // (the account's destination has changed since) doesn't land here.
+      const income = div.activity?.incomes[0];
+      if (income?.depositAccountId && income.depositAccountId !== account.id) continue;
+      const effectiveDate = income?.depositDate ?? div.activity?.date ?? div.paymentDate ?? fallback;
       rawEvents.push({
         id: `div-${div.id}`,
         date: toDateStr(effectiveDate),
@@ -465,6 +476,31 @@ async function buildProjection(
         relatedAccountName: inv.name,
       });
     }
+  }
+
+  // 4b. Confirmed dividends recorded as deposited here by an investment account
+  //     whose cash destination is now elsewhere (section 4 covers the rest).
+  const movedDividends = await prisma.income.findMany({
+    where: {
+      subtype: "DIVIDEND",
+      isCashReceived: true,
+      depositAccountId: account.id,
+      depositDate: inWindow,
+      accountId: { notIn: investorRows.map((r) => r.id) },
+    },
+    select: { id: true, depositDate: true, source: true, amount: true, account: { select: { id: true, name: true } } },
+  });
+  for (const inc of movedDividends) {
+    rawEvents.push({
+      id: `inc-${inc.id}`,
+      date: toDateStr(inc.depositDate!),
+      description: `${inc.source ?? "Dividend"} dividend`,
+      amount: parseFloat(inc.amount.toString()),
+      type: "DIVIDEND",
+      confidence: "KNOWN",
+      relatedAccountId: inc.account.id,
+      relatedAccountName: inc.account.name,
+    });
   }
 
   // 5. CC payments debited from this checking account (for linked CC cards)

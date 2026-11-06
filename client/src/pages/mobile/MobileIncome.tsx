@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { Plus, X, ChevronDown, ChevronRight, Check, ArrowUp, Trash2, Calendar, Search, Filter } from "lucide-react";
+import { Plus, X, ChevronDown, ChevronRight, Check, ArrowUp, ArrowRight, Trash2, Calendar, Search, Filter } from "lucide-react";
 import { BeaconLoader } from "@/components/BeaconLoader";
 import { useApi } from "@/hooks/useApi";
 import { getIncome, getAccounts, getFlatCategories, createIncome, updateIncome, deleteIncome } from "@/api";
@@ -7,6 +7,7 @@ import { formatCurrency, formatDate, localToday, cn, parseAmount } from "@/lib/u
 import type { Account, Category, Income } from "@/types";
 import { SectionLabel } from "@/components/Typography";
 import { NoteIndicator } from "@/components/NoteIndicator";
+import { useIncomeDepositFields, landingAccount, depositedElsewhere } from "@/lib/incomeDeposit";
 
 const INCOME_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "INVESTMENT"];
 
@@ -157,7 +158,7 @@ function MobileIncomeModal({
   const [error, setError] = useState<string | null>(null);
   const [taxClassification, setTaxClassification] = useState(income?.taxClassification ?? "");
   const [showMore, setShowMore] = useState(!!(income?.notes || income?.taxClassification));
-  const today = localToday();
+  const deposit = useIncomeDepositFields(open, income, accounts);
   const isEditing = income != null;
   const isActivityLinked = income?.activityId != null;
 
@@ -202,6 +203,7 @@ function MobileIncomeModal({
         source: (fd.get("source") as string) || undefined,
         date: fd.get("date") as string,
         accountId: fd.get("accountId") as string,
+        ...deposit.depositPayload(),
         categoryId: (fd.get("categoryId") as string) || undefined,
         taxClassification: taxClassification || null,
         // Textarea only renders while "more" is open: absent → leave notes
@@ -268,7 +270,8 @@ function MobileIncomeModal({
                 <input
                   name="date"
                   type="date"
-                  defaultValue={income?.date?.slice(0, 10) ?? today}
+                  value={deposit.date}
+                  onChange={(e) => deposit.setDate(e.target.value)}
                   className="w-full appearance-none rounded-md border border-border px-3 py-2.5 pr-8 text-sm text-foreground focus:border-primary focus:outline-none"
                 />
                 <Calendar className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -299,7 +302,8 @@ function MobileIncomeModal({
             <div className="relative">
               <select
                 name="accountId"
-                defaultValue={income?.accountId ?? ""}
+                value={deposit.accountId}
+                onChange={(e) => deposit.setAccountId(e.target.value)}
                 className="appearance-none w-full rounded-md border border-border py-2.5 pl-2 pr-6 text-sm text-foreground"
               >
                 <option value="" disabled>Select account…</option>
@@ -308,6 +312,38 @@ function MobileIncomeModal({
                 ))}
               </select>
               <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            </div>
+          </div>
+
+          {/* Where and when the cash landed: follows Date and Account until set */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">Deposited To</label>
+              <div className="relative">
+                <select
+                  value={deposit.depositAccountId}
+                  onChange={(e) => deposit.setDepositAccountId(e.target.value)}
+                  className="appearance-none w-full rounded-md border border-border py-2.5 pl-2 pr-6 text-sm text-foreground"
+                >
+                  <option value="">Same as account</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">Deposit Date</label>
+              <div className="relative">
+                <input
+                  type="date"
+                  value={deposit.depositDate}
+                  onChange={(e) => deposit.setDepositDate(e.target.value)}
+                  className="w-full appearance-none rounded-md border border-border px-3 py-2.5 pr-8 text-sm text-foreground focus:border-primary focus:outline-none"
+                />
+                <Calendar className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              </div>
             </div>
           </div>
 
@@ -463,7 +499,13 @@ function IncomeRow({
         </span>
       </div>
       <div className={`mt-0.5 flex items-center gap-1.5 text-sm ${notReceived ? "text-muted-foreground/70" : "text-muted-foreground"}`}>
-        <span>{formatDate(income.date)} · {income.account.name}</span>
+        <span className="truncate">{formatDate(income.date)} · {income.account.name}</span>
+        {depositedElsewhere(income) && (
+          <>
+            <ArrowRight className="h-3 w-3 shrink-0" aria-label="deposited to" />
+            <span className="truncate">{landingAccount(income).name}</span>
+          </>
+        )}
       </div>
     </div>
   );

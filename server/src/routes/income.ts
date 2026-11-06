@@ -10,6 +10,7 @@ const INCOME_ALLOWED_ACCOUNT_TYPES = ["CHECKING", "SAVINGS", "INVESTMENT"];
 
 const INCOME_INCLUDE = {
   account: true,
+  depositAccount: true,
   category: true,
   tags: { include: { tag: true } },
   transactionGroup: true,
@@ -59,6 +60,9 @@ const incomeSchema = z.object({
   date: z.string().transform((s) => parseLocalDate(s)),
   notes: z.string().nullable().optional(),
   accountId: z.string(),
+  // Where and when the cash landed; omitted on create → same as accountId/date.
+  depositAccountId: z.string().nullable().optional(),
+  depositDate: z.string().transform((s) => parseLocalDate(s)).nullable().optional(),
   tagIds: z.array(z.string()).optional(),
   transactionGroupId: z.string().nullable().optional(),
   taxClassification: z
@@ -66,6 +70,15 @@ const incomeSchema = z.object({
     .nullable()
     .optional(),
 });
+
+async function validateIncomeAccount(userId: string, accountId: string): Promise<string | null> {
+  const account = await prisma.account.findFirst({ where: { id: accountId, userId } });
+  if (!account) return "Account not found";
+  if (!INCOME_ALLOWED_ACCOUNT_TYPES.includes(account.type)) {
+    return `Account type '${account.type}' cannot receive income. Allowed types: Checking, Savings, Investment.`;
+  }
+  return null;
+}
 
 // List incomes with optional filtering and pagination
 incomeRoutes.get("/", async (req, res) => {
@@ -76,11 +89,13 @@ incomeRoutes.get("/", async (req, res) => {
 
   const where: Record<string, unknown> = { account: { userId } };
   if (req.query.showOnlyReceived !== "false") where.isCashReceived = true;
-  if (req.query.accountIds) {
-    const ids = (req.query.accountIds as string).split(",").filter(Boolean);
-    where.accountId = ids.length === 1 ? ids[0] : { in: ids };
-  } else if (req.query.accountId) {
-    where.accountId = req.query.accountId;
+  // An account filter matches income that originated in or was deposited to it.
+  const and: Record<string, unknown>[] = [];
+  const filterAccountIds = req.query.accountIds
+    ? (req.query.accountIds as string).split(",").filter(Boolean)
+    : req.query.accountId ? [req.query.accountId as string] : [];
+  if (filterAccountIds.length > 0) {
+    and.push({ OR: [{ accountId: { in: filterAccountIds } }, { depositAccountId: { in: filterAccountIds } }] });
   }
   if (req.query.categoryIds) {
     const ids = (req.query.categoryIds as string).split(",").filter(Boolean);
@@ -94,7 +109,8 @@ incomeRoutes.get("/", async (req, res) => {
   } else if (req.query.tagId) {
     where.tags = { some: { tagId: req.query.tagId } };
   }
-  if (req.query.hasNotes === "true") where.AND = [{ notes: { not: null } }, { NOT: { notes: "" } }];
+  if (req.query.hasNotes === "true") and.push({ notes: { not: null } }, { NOT: { notes: "" } });
+  if (and.length > 0) where.AND = and;
   if (req.query.search) {
     const searchStr = req.query.search as string;
     const asNumber = parseFloat(searchStr);
@@ -122,6 +138,11 @@ incomeRoutes.get("/", async (req, res) => {
     orderBy = [{ date: sortOrder }, { createdAt: "desc" }];
   } else if (sortBy === "account") {
     orderBy = [{ account: { name: sortOrder } }, { date: "desc" }];
+  } else if (sortBy === "depositAccount") {
+    // Null (not yet backfilled) deposit accounts sort as their origin would, approximately: last.
+    orderBy = [{ depositAccount: { name: sortOrder } }, { account: { name: sortOrder } }, { date: "desc" }];
+  } else if (sortBy === "depositDate") {
+    orderBy = [{ depositDate: { sort: sortOrder, nulls: "last" } }, { date: sortOrder }];
   } else if (sortBy === "category") {
     orderBy = [{ category: { name: sortOrder } }, { date: "desc" }];
   } else {
@@ -165,15 +186,14 @@ incomeRoutes.post("/", async (req, res) => {
   const parsed = incomeSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const { tagIds, taxClassification, ...data } = parsed.data;
+  const { tagIds, taxClassification, depositAccountId, depositDate, ...data } = parsed.data;
 
-  // Validate account type allows income
-  const account = await prisma.account.findFirst({ where: { id: data.accountId, userId } });
-  if (!account) return res.status(400).json({ error: "Account not found" });
-  if (!INCOME_ALLOWED_ACCOUNT_TYPES.includes(account.type)) {
-    return res.status(400).json({
-      error: `Account type '${account.type}' cannot receive income. Allowed types: Checking, Savings, Investment.`,
-    });
+  // Validate account types allow income
+  const accountError = await validateIncomeAccount(userId, data.accountId);
+  if (accountError) return res.status(400).json({ error: accountError });
+  if (depositAccountId && depositAccountId !== data.accountId) {
+    const depositError = await validateIncomeAccount(userId, depositAccountId);
+    if (depositError) return res.status(400).json({ error: depositError });
   }
 
   const taxableAmount = taxClassification === "RETURN_OF_CAPITAL" ? 0
@@ -183,6 +203,8 @@ incomeRoutes.post("/", async (req, res) => {
   const income = await prisma.income.create({
     data: {
       ...data,
+      depositAccountId: depositAccountId ?? data.accountId,
+      depositDate: depositDate ?? data.date,
       taxClassification: taxClassification ?? null,
       ...(taxableAmount !== undefined ? { taxableAmount } : {}),
       ...(tagIds?.length ? { tags: { create: tagIds.map((id) => ({ tagId: id })) } } : {}),
@@ -200,15 +222,11 @@ incomeRoutes.put("/:id", async (req, res) => {
 
   const { tagIds, taxClassification, ...data } = parsed.data;
 
-  // Validate account type if accountId is being changed
-  if (data.accountId) {
-    const account = await prisma.account.findFirst({ where: { id: data.accountId, userId } });
-    if (!account) return res.status(400).json({ error: "Account not found" });
-    if (!INCOME_ALLOWED_ACCOUNT_TYPES.includes(account.type)) {
-      return res.status(400).json({
-        error: `Account type '${account.type}' cannot receive income. Allowed types: Checking, Savings, Investment.`,
-      });
-    }
+  // Validate account types if they are being changed
+  for (const id of [data.accountId, data.depositAccountId]) {
+    if (!id) continue;
+    const accountError = await validateIncomeAccount(userId, id);
+    if (accountError) return res.status(400).json({ error: accountError });
   }
 
   // Recompute taxableAmount when taxClassification or amount changes
@@ -229,8 +247,19 @@ incomeRoutes.put("/:id", async (req, res) => {
     }
   }
 
-  const owned = await prisma.income.findFirst({ where: { id: req.params.id, account: { userId } }, select: { id: true } });
+  const owned = await prisma.income.findFirst({
+    where: { id: req.params.id, account: { userId } },
+    select: { id: true, accountId: true, date: true, depositAccountId: true, depositDate: true },
+  });
   if (!owned) return res.status(404).json({ error: "Income not found" });
+
+  // A deposit that matched its origin moves with it unless the caller sets it.
+  if (data.accountId && data.depositAccountId === undefined && owned.depositAccountId === owned.accountId) {
+    data.depositAccountId = data.accountId;
+  }
+  if (data.date && data.depositDate === undefined && owned.depositDate?.getTime() === owned.date.getTime()) {
+    data.depositDate = data.date;
+  }
 
   const income = await prisma.income.update({
     where: { id: req.params.id },
@@ -305,6 +334,12 @@ incomeRoutes.patch("/bulk", async (req, res) => {
 
   if (Object.keys(scalarUpdate).length === 0) {
     return res.status(400).json({ error: "No fields to update" });
+  }
+
+  // Rows deposited on their income date keep the two in step; a separately set
+  // deposit date stays. Runs before `date` itself changes.
+  if (date !== undefined) {
+    await prisma.$executeRaw`UPDATE incomes SET "depositDate" = ${date} WHERE id = ANY(${ownedIds}::text[]) AND "depositDate" = date`;
   }
 
   // For taxClassification updates, taxableAmount must be computed per-row since it depends on amount
@@ -382,7 +417,7 @@ incomeRoutes.post("/import", async (req, res) => {
           continue;
         }
       }
-      await prisma.income.create({ data: row });
+      await prisma.income.create({ data: { ...row, depositAccountId: row.accountId, depositDate: row.date } });
       imported++;
     } catch (err) {
       errors.push({ row: i + 1, message: err instanceof Error ? err.message : "Unknown error" });

@@ -6,6 +6,60 @@ import { dayOf, recordCashBalance } from "../lib/cashHistory.js";
 
 export const withdrawalRoutes = Router();
 
+// ── Income that left the portfolio ───────────────────────────────────────────
+// Income counts as withdrawn when its cash left the investment accounts. Rows
+// with a deposit account say so directly: it was deposited to a bank. Rows from
+// before the deposit fields existed fall back to the per-type tests below,
+// which read accountId as wherever the cash landed. Dated by when the cash
+// landed (depositDate), falling back to the income date.
+export function withdrawnIncomeWhere(
+  userId: string,
+  ids: { dividendId: string | null; interestId: string | null; capGainsDivId: string | null },
+  start: Date,
+  end: Date,
+) {
+  const { dividendId, interestId, capGainsDivId } = ids;
+  const toBank = { depositAccount: { type: { in: ["CHECKING", "SAVINGS"] as ("CHECKING" | "SAVINGS")[] } } };
+  const legacy = (cond: Record<string, unknown>) => ({ depositAccountId: null, ...cond });
+  const notOptionsPremium = { NOT: { OR: [{ optionsPositionId: { not: null } }, { category: { name: "Options Premium" } }] } };
+  return {
+    account: { isJoint: false, userId },
+    AND: [
+      { OR: [{ depositDate: { gte: start, lte: end } }, { depositDate: null, date: { gte: start, lte: end } }] },
+      {
+        OR: [
+          // Auto-confirmed dividends
+          { subtype: "DIVIDEND" as const, OR: [legacy({ isCashReceived: true }), toBank] },
+          // Manually logged dividends
+          ...(dividendId
+            ? [{ categoryId: dividendId, subtype: { not: "DIVIDEND" as const }, OR: [legacy({ isCashReceived: true }), toBank] }]
+            : []),
+          // Interest earned inside an investment account (swept out with the cash).
+          // Interest on a bank account was never in the portfolio, so it isn't a
+          // withdrawal; it's left out of both the total and the ledger.
+          ...(interestId
+            ? [{ categoryId: interestId, account: { type: "INVESTMENT" as const }, OR: [legacy({}), toBank] }]
+            : []),
+          // Cap Gains Distribution
+          ...(capGainsDivId ? [{ categoryId: capGainsDivId, OR: [legacy({}), toBank] }] : []),
+          // Sale proceeds to a banking account. Exclude options-premium income, which is
+          // also subtype CAPITAL_GAIN (short-term) and often lands in a cash account but
+          // is not a stock-sale withdrawal. Options premium is identified by a linked
+          // optionsPositionId OR the "Options Premium" category (the latter also covers
+          // historical rows with no leg link); real sale proceeds have neither.
+          {
+            subtype: "CAPITAL_GAIN" as const,
+            ...notOptionsPremium,
+            OR: [legacy({ account: { type: { in: ["CHECKING", "SAVINGS"] as ("CHECKING" | "SAVINGS")[] } } }), toBank],
+          },
+          // Return of capital
+          { subtype: "RETURN_OF_CAPITAL" as const, OR: [legacy({}), toBank] },
+        ],
+      },
+    ],
+  };
+}
+
 // ── Investment settings (singleton) ──────────────────────────────────────────
 
 async function getOrCreateInvestmentSettings(userId: string) {
@@ -201,39 +255,10 @@ withdrawalRoutes.get("/summary", async (req, res) => {
   const endOfYear = new Date(`${year}-12-31T23:59:59.999Z`);
 
   // Fetch qualifying income rows for the year
-  const incomeRows = await prisma.income.findMany({
-    where: {
-      date: { gte: startOfYear, lte: endOfYear },
-      account: { isJoint: false, userId },
-      OR: [
-        // Auto-confirmed dividends
-        { subtype: "DIVIDEND", isCashReceived: true },
-        // Manually logged dividends
-        ...(dividendId
-          ? [{ categoryId: dividendId, isCashReceived: true, subtype: { not: "DIVIDEND" as const } }]
-          : []),
-        // Interest earned inside an investment account (swept out with the cash).
-        // Interest on a bank account was never in the portfolio, so it isn't a
-        // withdrawal; it's left out of both the total and the ledger.
-        ...(interestId ? [{ categoryId: interestId, account: { type: "INVESTMENT" as const } }] : []),
-        // Cap Gains Distribution
-        ...(capGainsDivId ? [{ categoryId: capGainsDivId }] : []),
-        // Sale proceeds to banking account. Exclude options-premium income, which is
-        // also subtype CAPITAL_GAIN (short-term) and often lands in a cash account but
-        // is not a stock-sale withdrawal. Options premium is identified by a linked
-        // optionsPositionId OR the "Options Premium" category (the latter also covers
-        // historical rows with no leg link); real sale proceeds have neither.
-        {
-          subtype: "CAPITAL_GAIN" as const,
-          account: { type: { in: ["CHECKING", "SAVINGS"] } },
-          NOT: { OR: [{ optionsPositionId: { not: null } }, { category: { name: "Options Premium" } }] },
-        },
-        // Return of capital
-        { subtype: "RETURN_OF_CAPITAL" as const },
-      ],
-    },
-    select: { amount: true, date: true },
-  });
+  const incomeRows = (await prisma.income.findMany({
+    where: withdrawnIncomeWhere(userId, { dividendId, interestId, capGainsDivId }, startOfYear, endOfYear),
+    select: { amount: true, date: true, depositDate: true },
+  })).map((r) => ({ amount: r.amount, date: r.depositDate ?? r.date }));
 
   // INVESTMENT→BANKING confirmed transfers (positive — withdrawals)
   const outTransferRows = await prisma.transfer.findMany({
@@ -309,23 +334,10 @@ withdrawalRoutes.get("/", async (req, res) => {
 
   // Income rows
   const incomeRows = await prisma.income.findMany({
-    where: {
-      date: { gte: startOfYear, lte: endOfYear },
-      account: { isJoint: false, userId },
-      OR: [
-        { subtype: "DIVIDEND", isCashReceived: true },
-        ...(dividendId
-          ? [{ categoryId: dividendId, isCashReceived: true, subtype: { not: "DIVIDEND" as const } }]
-          : []),
-        ...(interestId ? [{ categoryId: interestId, account: { type: "INVESTMENT" as const } }] : []), // investment-account interest only; see /summary
-        ...(capGainsDivId ? [{ categoryId: capGainsDivId }] : []),
-        // Sale proceeds to banking account (exclude options premium — see /summary above).
-        { subtype: "CAPITAL_GAIN" as const, account: { type: { in: ["CHECKING", "SAVINGS"] } }, NOT: { OR: [{ optionsPositionId: { not: null } }, { category: { name: "Options Premium" } }] } },
-        { subtype: "RETURN_OF_CAPITAL" as const },
-      ],
-    },
+    where: withdrawnIncomeWhere(userId, { dividendId, interestId, capGainsDivId }, startOfYear, endOfYear),
     include: {
       account: { select: accountSelect },
+      depositAccount: { select: accountSelect },
       category: { select: { name: true } },
     },
     orderBy: { date: "desc" },
@@ -371,10 +383,11 @@ withdrawalRoutes.get("/", async (req, res) => {
 
     return {
       id: `income-${row.id}`,
-      date: row.date.toISOString(),
+      date: (row.depositDate ?? row.date).toISOString(),
       type,
       description: row.source ?? row.category?.name ?? "",
       account: row.account,
+      ...(row.depositAccount && row.depositAccount.id !== row.account.id ? { toAccount: row.depositAccount } : {}),
       amount: row.amount.toString(),
       isEditable: false,
       incomeId: row.id,

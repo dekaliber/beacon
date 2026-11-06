@@ -4,7 +4,7 @@ import { createPortal } from"react-dom";
 import { Link } from"react-router-dom";
 import {
  Plus, Pencil, TrendingUp, ChevronRight, Calculator,
- ArrowUpDown, ArrowUp, ArrowDown, Filter, Trash2, ChevronDown, Search,
+ ArrowUpDown, ArrowUp, ArrowDown, ArrowRight, Filter, Trash2, ChevronDown, Search,
  Upload, FileText, Check, CheckCircle2, AlertCircle,
 } from"lucide-react";
 import { BulkEditBar } from"@/components/BulkEditBar";
@@ -24,11 +24,12 @@ import type { Account, Category, Income } from"@/types";
 import { BeaconLoader } from"@/components/BeaconLoader";
 import { SectionLabel, ColumnHeader } from"@/components/Typography";
 import { ItemTypeahead } from"@/components/ItemTypeahead";
+import { useIncomeDepositFields, landingAccount, landingDate, depositedElsewhere } from"@/lib/incomeDeposit";
 import { CategoryTypeahead } from"@/components/CategoryTypeahead";
 
 const INCOME_ACCOUNT_TYPES = ["CHECKING","SAVINGS","INVESTMENT"];
 
-type SortField ="date" |"category" |"account" |"amount";
+type SortField ="date" |"category" |"account" |"depositDate" |"amount";
 type SortState = { field: SortField; order:"asc" |"desc" } | null;
 
 // ── Currency input ──
@@ -903,7 +904,7 @@ export function IncomePage() {
 
  const toggleSort = (field: SortField) => {
  setSort((prev) => {
- const defaultDesc = field ==="date" || field ==="amount";
+ const defaultDesc = field ==="date" || field ==="depositDate" || field ==="amount";
  const first = defaultDesc ?"desc" :"asc";
  const second = defaultDesc ?"asc" :"desc";
  if (!prev || prev.field !== field) return { field, order: first };
@@ -1187,7 +1188,8 @@ export function IncomePage() {
  <ColumnHeader className="pb-3 pr-3">Source</ColumnHeader>
  <ColumnHeader className="w-[130px] pb-3 pr-3">Category</ColumnHeader>
  <ColumnHeader className="w-[115px] pb-3 pr-3">Tax Status</ColumnHeader>
- <ColumnHeader className="w-[185px] pb-3 pr-3">Account</ColumnHeader>
+ <ColumnHeader className="w-[280px] pb-3 pr-3">Account</ColumnHeader>
+ <ColumnHeader className="w-[120px] whitespace-nowrap pb-3 pr-3">Transferred</ColumnHeader>
  <th className="w-[30px] pb-3"></th>
  <ColumnHeader className="w-[90px] pb-3 text-right">Amount</ColumnHeader>
  <th className="w-[42px] pb-3"></th>
@@ -1224,7 +1226,9 @@ export function IncomePage() {
  <td className="w-[115px] py-2 pr-3">
  <EditableTaxStatusCell value={income.taxClassification} onSave={(v) => handleInlineUpdate(income.id,"taxClassification", v)} />
  </td>
- <td className="w-[185px] py-2 pr-3">
+ <td className="w-[280px] py-2 pr-3">
+ <div className="flex min-w-0 items-center gap-1 overflow-hidden">
+ <div className="shrink-0">
  <EditableTypeaheadCell
  value={income.accountId}
  label={income.account.name}
@@ -1232,7 +1236,11 @@ export function IncomePage() {
  items={eligibleAccounts}
  onSave={(v) => handleInlineUpdate(income.id,"accountId", v)}
  />
+ </div>
+ <DepositedToLabel income={income} />
+ </div>
  </td>
+ <DepositDateCell income={income} onSave={handleInlineUpdate} />
  <td className="w-[30px] py-2 text-center">
  <span className="inline-flex h-5 w-5 items-center justify-center rounded text-10 font-bold text-white" style={{ backgroundColor: income.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
  {income.account.isJoint ?"J" :"P"}
@@ -1286,7 +1294,8 @@ export function IncomePage() {
  <ColumnHeader className="pb-3 pr-3">Source</ColumnHeader>
  <ColumnHeader className="w-[130px] cursor-pointer select-none pb-3 pr-3" onClick={() => toggleSort("category")}>Category <SortIcon field="category" /></ColumnHeader>
  <ColumnHeader className="w-[115px] pb-3 pr-3">Tax Status</ColumnHeader>
- <ColumnHeader className="w-[185px] cursor-pointer select-none pb-3 pr-3" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></ColumnHeader>
+ <ColumnHeader className="w-[280px] cursor-pointer select-none pb-3 pr-3" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></ColumnHeader>
+ <ColumnHeader className="w-[120px] cursor-pointer select-none whitespace-nowrap pb-3 pr-3" onClick={() => toggleSort("depositDate")}>Transferred <SortIcon field="depositDate" /></ColumnHeader>
  <th className="w-[30px] pb-3"></th>
  <ColumnHeader className="w-[90px] cursor-pointer select-none pb-3 text-right" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></ColumnHeader>
  <th className="w-[42px] pb-3"></th>
@@ -1332,7 +1341,9 @@ export function IncomePage() {
  <td className="w-[115px] py-2 pr-3">
  <EditableTaxStatusCell value={income.taxClassification} onSave={(v) => handleInlineUpdate(income.id,"taxClassification", v)} />
  </td>
- <td className={`w-[185px] py-2 pr-3 ${!income.isCashReceived ?"text-muted-foreground" :""}`}>
+ <td className={`w-[280px] py-2 pr-3 ${!income.isCashReceived ?"text-muted-foreground" :""}`}>
+ <div className="flex min-w-0 items-center gap-1 overflow-hidden">
+ <div className="shrink-0">
  <EditableTypeaheadCell
  value={income.accountId}
  label={income.account.name}
@@ -1340,7 +1351,11 @@ export function IncomePage() {
  items={eligibleAccounts}
  onSave={(v) => handleInlineUpdate(income.id,"accountId", v)}
  />
+ </div>
+ <DepositedToLabel income={income} />
+ </div>
  </td>
+ <DepositDateCell income={income} onSave={handleInlineUpdate} />
  <td className="w-[30px] py-2 text-center">
  <span className="inline-flex h-5 w-5 items-center justify-center rounded text-10 font-bold text-white" style={{ backgroundColor: income.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
  {income.account.isJoint ?"J" :"P"}
@@ -1442,6 +1457,38 @@ export function IncomePage() {
  );
 }
 
+// "→ Deposit account" after the origin account, only when the cash landed
+// somewhere else. Edited in the income modal.
+function DepositedToLabel({ income }: { income: Income }) {
+ if (!depositedElsewhere(income)) return null;
+ const name = landingAccount(income).name;
+ return (
+ // The tooltip's trigger wrapper is a flex item too; min-w-0 on it lets the name truncate.
+ <span className="flex min-w-0 [&>span]:min-w-0">
+ <Tooltip content={`Deposited to ${name}`}>
+ <span className="flex min-w-0 items-center gap-1 text-muted-foreground">
+ <ArrowRight className="h-3 w-3 shrink-0" />
+ <span className="truncate">{name}</span>
+ </span>
+ </Tooltip>
+ </span>
+ );
+}
+
+// Transferred (deposit date) cell: muted when the cash landed the day the income was earned.
+function DepositDateCell({ income, onSave }: {
+ income: Income;
+ onSave: (id: string, field: string, value: string | null) => void;
+}) {
+ const landedOn = landingDate(income);
+ const sameDay = landedOn === toDateInputValue(income.date);
+ return (
+ <td className={`w-[120px] py-2 pr-3 ${sameDay ?"text-muted-foreground" :""}`}>
+ <EditableCell value={landedOn} type="date" onSave={(v) => onSave(income.id,"depositDate", v)} />
+ </td>
+ );
+}
+
 // ── Modal ──
 interface IncomeModalProps {
  open: boolean;
@@ -1459,7 +1506,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
  const [confirmDelete, setConfirmDelete] = useState(false);
  const [showOptional, setShowOptional] = useState(false);
  const [taxClassification, setTaxClassification] = useState<string>("");
- const [dateVal, setDateVal] = useState("");
+ const deposit = useIncomeDepositFields(open, income, accounts);
  const [errors, setErrors] = useState<{ amount?: string; accountId?: string; date?: string }>({});
  const categoryTriggerRef = useRef<HTMLButtonElement>(null);
  const accountTriggerRef = useRef<HTMLButtonElement>(null);
@@ -1470,7 +1517,6 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
  setConfirmDelete(false);
  setTaxClassification(income?.taxClassification ??"");
  setShowOptional(!!(income?.notes || income?.taxClassification));
- setDateVal(toDateInputValue(income?.date));
  setErrors({});
  }
  }, [open, income]);
@@ -1499,6 +1545,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
  source: (form.get("source") as string) || undefined,
  date: form.get("date") as string,
  accountId,
+ ...deposit.depositPayload(),
  taxClassification: taxClassification || null,
  // Textarea only renders while the optional section is open: absent → leave
  // notes untouched; present but empty → null so clearing actually clears it.
@@ -1548,7 +1595,7 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
  <div className="grid grid-cols-2 gap-4">
  <div>
  <label className="block text-xs font-medium mb-1">Date</label>
- <DatePicker name="date" value={dateVal} onChange={(v) => { setDateVal(v); setErrors((er) => ({ ...er, date: undefined })); }} invalid={!!errors.date} className="w-full" />
+ <DatePicker name="date" value={deposit.date} onChange={(v) => { deposit.setDate(v); setErrors((er) => ({ ...er, date: undefined })); }} invalid={!!errors.date} className="w-full" />
  {errors.date && <p className="mt-1 text-xs text-down">{errors.date}</p>}
  {/* Relay: captures focus as it exits the date field and forwards to Account, but not on Shift+Tab backwards from Account */}
  <span tabIndex={0} className="sr-only" onFocus={(e) => { if (e.relatedTarget !== accountTriggerRef.current) accountTriggerRef.current?.focus(); }} />
@@ -1558,15 +1605,34 @@ function IncomeModal({ open, onClose, onSave, onDelete, income, accounts, catego
  <ItemTypeahead
  name="accountId"
  required
- defaultValue={income?.accountId ??""}
+ defaultValue={deposit.accountId}
  items={accounts}
  placeholder="Select account"
  triggerRef={accountTriggerRef}
  onTabFromSearch={() => categoryTriggerRef.current?.focus()}
  error={!!errors.accountId}
+ onChange={deposit.setAccountId}
  onSelect={() => setErrors((e) => ({ ...e, accountId: undefined }))}
  />
  {errors.accountId && <p className="mt-1 text-xs text-down">{errors.accountId}</p>}
+ </div>
+ </div>
+
+ {/* Where and when the cash landed: follows Date and Account until set */}
+ <div className="grid grid-cols-2 gap-4">
+ <div>
+ <label className="block text-xs font-medium mb-1">Deposit Date</label>
+ <DatePicker name="depositDate" value={deposit.depositDate} onChange={deposit.setDepositDate} className="w-full" />
+ </div>
+ <div>
+ <label className="block text-xs font-medium mb-1">Deposited To</label>
+ <ItemTypeahead
+ name="depositAccountId"
+ defaultValue={deposit.depositAccountId}
+ items={accounts}
+ placeholder="Same as account"
+ onChange={deposit.setDepositAccountId}
+ />
  </div>
  </div>
 

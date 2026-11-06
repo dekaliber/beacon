@@ -12,6 +12,7 @@ import { PERFORMANCE_HISTORY_START } from "../lib/performanceWindow.js";
 //   Δvalue = Σ market change (per asset class, dividends included)
 //          + deposits − withdrawals
 //          − fees (advisory/account fees taken from cash)
+//          + options premium held (earned in a brokerage, not yet transferred)
 //          + unreconciled cash
 //
 // Buys and sells are internal: a holding's market change is its change in value
@@ -119,6 +120,12 @@ export type PerformancePeriod = {
   fees: number; // positive number
   feeItems: Array<{ date: Day; account: string; amount: number; description: string }>; // amount positive
   unreconciledByAccount: Array<{ account: string; amount: number }>;
+  // Options premium is left out of the return and the flows: it is earned in the
+  // brokerage on the close date and transferred to a bank later. What was earned
+  // but not yet transferred at a close still sits in the brokerage's cash, so the
+  // period's change in that amount is its own step (premium earned − transferred).
+  optionsPremiumHeld: number;
+  optionsPremiumItems: Array<{ date: Day; account: string; amount: number; description: string }>; // + earned, − transferred
 };
 
 /** One month-end value: what's recorded on that close, if anything, and what
@@ -191,7 +198,7 @@ export async function computePerformance(
       select: {
         id: true, accountId: true, ticker: true, type: true, date: true, createdAt: true,
         shares: true, amount: true, fees: true, transferAccountId: true, notes: true,
-        incomes: { select: { accountId: true, amount: true, isCashReceived: true } },
+        incomes: { select: { accountId: true, amount: true, isCashReceived: true, depositAccountId: true, depositDate: true } },
       },
     }),
     prisma.qfxTransaction.findMany({
@@ -215,10 +222,15 @@ export async function computePerformance(
       },
     }),
     // Income booked straight to an investment account with no activity behind
-    // it: interest, money-market dividends, Fundrise distributions.
+    // it: interest, money-market dividends, Fundrise distributions, and options
+    // premium earned in a brokerage.
     prisma.income.findMany({
       where: { accountId: { in: accountIds }, activityId: null },
-      select: { accountId: true, amount: true, date: true, source: true, isCashReceived: true },
+      select: {
+        accountId: true, amount: true, date: true, source: true, isCashReceived: true,
+        depositAccountId: true, depositDate: true, optionsPositionId: true,
+        category: { select: { name: true } },
+      },
     }),
     prisma.transfer.findMany({
       where: {
@@ -494,12 +506,39 @@ export async function computePerformance(
     feeEvents.push({ day: dayOf(a.date), accountId: a.accountId, amount: num(a.amount), description: note || "Fee" });
   }
 
-  // Income taken as cash (isCashReceived) leaves the portfolio the day it's paid;
-  // reinvested income (false) stays. The same per-record test the Withdrawals
-  // page uses, so the two agree on what was withdrawn. The account's dividend
-  // setting only picks a default when a dividend is recorded, so it isn't read
-  // here. Tax-advantaged accounts write no Income rows, so their dividends stay.
-  const paidOut = (isCashReceived: boolean) => isCashReceived;
+  // Where income's cash went. Rows with a deposit account say so: it left the
+  // portfolio (a withdrawal on the deposit date) when that account is outside it,
+  // moved between accounts when it's another investment account, and stayed put
+  // otherwise. Rows from before the deposit fields existed fall back to the old
+  // per-record test, which the Withdrawals page shares: a bank in accountId sent
+  // it there; otherwise cash-received (isCashReceived) income left the portfolio
+  // the day it was paid, and reinvested income stayed. Tax-advantaged accounts
+  // write no Income rows, so their dividends stay.
+  type IncomeCash = {
+    accountId: string; amount: unknown; isCashReceived: boolean;
+    depositAccountId: string | null; depositDate: Date | null;
+  };
+  const internalMoves: Array<{ day: Day; from: string; to: string; amount: number }> = [];
+  const routeIncomeCash = (
+    i: IncomeCash, origin: string, day: Day, amount: number, label: string,
+  ) => {
+    if (i.depositAccountId != null) {
+      const depositDay = i.depositDate ? dayOf(i.depositDate) : day;
+      if (!accountName.has(i.depositAccountId)) {
+        flowEvents.push({ day: depositDay, accountId: origin, amount: -amount, description: `${label} transferred to bank` });
+      } else if (i.depositAccountId !== origin) {
+        internalMoves.push({ day: depositDay, from: origin, to: i.depositAccountId, amount });
+      }
+    } else if (!accountName.has(i.accountId)) {
+      flowEvents.push({ day, accountId: origin, amount: -amount, description: `${label} transferred to bank` });
+    } else if (i.isCashReceived) {
+      flowEvents.push({ day, accountId: origin, amount: -amount, description: `${label} transferred to bank` });
+    }
+  };
+  const isOptionsPremium = (i: { optionsPositionId: string | null; category: { name: string } | null }) =>
+    i.optionsPositionId != null || i.category?.name === "Options Premium";
+  type PremiumEvt = { day: Day; accountId: string; amount: number; description: string };
+  const premiumEvents: PremiumEvt[] = []; // + earned in the brokerage, − transferred out
 
   for (const a of activities) {
     const day = dayOf(a.date);
@@ -512,18 +551,16 @@ export async function computePerformance(
     } else if (a.type === "SALE" && !managedIds.has(a.accountId) && a.shares != null) {
       const net = num(a.amount) - num(a.fees);
       (sellsByPos.get(k) ?? sellsByPos.set(k, []).get(k)!).push({ day, shares: num(a.shares), cash: net });
-      // Proceeds sent to a bank leave the portfolio.
-      const toBank = a.incomes.find((i) => i.accountId && !accountName.has(i.accountId));
-      if (toBank) flowEvents.push({ day, accountId: a.accountId, amount: -num(toBank.amount), description: `${a.ticker} sale proceeds to bank` });
+      // Proceeds sent to a bank leave the portfolio; kept as settlement cash, they
+      // stay (a legacy row's isCashReceived doesn't mean "withdrawn" for a sale).
+      for (const i of a.incomes) {
+        if (i.depositAccountId == null && accountName.has(i.accountId)) continue;
+        routeIncomeCash({ ...i, isCashReceived: false }, a.accountId, day, num(i.amount), `${a.ticker} sale proceeds`);
+      }
     } else if (a.type === "DIVIDEND") {
       incomeEvents.push({ day, accountId: a.accountId, amount: num(a.amount), ticker: a.ticker, label: a.ticker });
-      const toBank = a.incomes.find((i) => i.accountId && !accountName.has(i.accountId));
       const income = a.incomes[0];
-      if (toBank) {
-        flowEvents.push({ day, accountId: a.accountId, amount: -num(toBank.amount), description: `${a.ticker} dividend transferred to bank` });
-      } else if (income && paidOut(income.isCashReceived)) {
-        flowEvents.push({ day, accountId: a.accountId, amount: -num(a.amount), description: `${a.ticker} dividend transferred to bank` });
-      }
+      if (income) routeIncomeCash(income, a.accountId, day, num(a.amount), `${a.ticker} dividend`);
     }
   }
   for (const q of qfx) {
@@ -534,12 +571,21 @@ export async function computePerformance(
   }
   for (const i of looseIncome) {
     if (!i.accountId) continue;
+    const day = dayOf(i.date);
+    const amount = num(i.amount);
+    // Options premium passes through the brokerage: it is in the cash from the
+    // close until it's transferred, but counts toward neither return nor flows.
+    // One kept in an investment account would never leave, so it's ordinary income.
+    if (isOptionsPremium(i) && i.depositAccountId != null && !accountName.has(i.depositAccountId)) {
+      const label = i.source ?? "Options premium";
+      premiumEvents.push({ day, accountId: i.accountId, amount, description: label });
+      premiumEvents.push({ day: dayOf(i.depositDate ?? i.date), accountId: i.accountId, amount: -amount, description: label });
+      continue;
+    }
     const source = i.source?.trim().toUpperCase() ?? "";
     const ticker = tickers.has(source) ? source : null;
-    incomeEvents.push({ day: dayOf(i.date), accountId: i.accountId, amount: num(i.amount), ticker, label: i.source ?? "Income" });
-    if (paidOut(i.isCashReceived)) {
-      flowEvents.push({ day: dayOf(i.date), accountId: i.accountId, amount: -num(i.amount), description: `${i.source ?? "Income"} transferred to bank` });
-    }
+    incomeEvents.push({ day, accountId: i.accountId, amount, ticker, label: i.source ?? "Income" });
+    routeIncomeCash(i, i.accountId, day, amount, i.source ?? "Income");
   }
   for (const t of transfers) {
     const day = dayOf(t.date);
@@ -561,6 +607,11 @@ export async function computePerformance(
   for (const e of incomeEvents) addDelta(e.accountId, e.day, e.amount);
   for (const f of flowEvents) addDelta(f.accountId, f.day, f.amount);
   for (const f of feeEvents) addDelta(f.accountId, f.day, -f.amount);
+  for (const m of internalMoves) {
+    addDelta(m.from, m.day, -m.amount);
+    addDelta(m.to, m.day, m.amount);
+  }
+  for (const e of premiumEvents) addDelta(e.accountId, e.day, e.amount);
   for (const s of manualSeries.values()) {
     for (let i = 1; i < s.obs.length; i++) {
       const [a, b] = [s.obs[i - 1], s.obs[i]];
@@ -761,6 +812,13 @@ export async function computePerformance(
     for (const f of flows) expect(f.accountId, f.amount);
     const fees = feeEvents.filter((f) => inPeriod(f.day, start, end));
     for (const f of fees) expect(f.accountId, -f.amount);
+    for (const m of internalMoves) {
+      if (!inPeriod(m.day, start, end)) continue;
+      expect(m.from, -m.amount);
+      expect(m.to, m.amount);
+    }
+    const premium = premiumEvents.filter((e) => inPeriod(e.day, start, end));
+    for (const e of premium) expect(e.accountId, e.amount);
 
     const unreconciledByAccount: PerformancePeriod["unreconciledByAccount"] = [];
     let unreconciled = 0;
@@ -804,6 +862,10 @@ export async function computePerformance(
         .sort((x, y) => x.day.localeCompare(y.day))
         .map((f) => ({ date: f.day, account: accountName.get(f.accountId)!, amount: round2(f.amount), description: f.description })),
       unreconciledByAccount,
+      optionsPremiumHeld: round2(sum(premium, (e) => e.amount)),
+      optionsPremiumItems: premium
+        .sort((x, y) => x.day.localeCompare(y.day))
+        .map((e) => ({ date: e.day, account: accountName.get(e.accountId)!, amount: round2(e.amount), description: e.description })),
     });
     prev = cur;
   }

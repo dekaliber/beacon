@@ -1338,6 +1338,8 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  const [stockPriceAtClose, setStockPriceAtClose] = useState("");
  const [investmentAccountId, setInvestmentAccountId] = useState(position.investmentAccountId ??"");
  const [bankingAccountId, setBankingAccountId] = useState(defaultBankingAccountId ??"");
+ // Blank → the server defaults the premium's transfer to the next business day.
+ const [transferDate, setTransferDate] = useState("");
 
  // Partial close (splitting) is allowed whenever a position has more than one
  // contract, including legs mid roll-chain — the split-off leg is reported as
@@ -1491,6 +1493,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  stockPriceAtClose: isAssigned && stockPriceAtClose ? parseAmount(stockPriceAtClose) : null,
  investmentAccountId: isAssigned ? (investmentAccountId || null) : undefined,
  bankingAccountId: bankingAccountId || null,
+ transferDate: transferDate || null,
  });
  } else {
  const statusMap: Record<OptionOutcome, Exclude<import("@/api").OptionStatus,"OPEN">> = {
@@ -1515,6 +1518,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  stockPriceAtClose: isAssigned && stockPriceAtClose ? parseAmount(stockPriceAtClose) : null,
  investmentAccountId: isAssigned ? (investmentAccountId || null) : undefined,
  bankingAccountId: bankingAccountId || null,
+ transferDate: transferDate || null,
  };
  await closeOptionsPosition(position.id, data);
  }
@@ -1706,6 +1710,15 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  </select>
  <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
  </div>
+ </div>
+ )}
+
+ {!isRolled && bankingAccountId && (
+ <div>
+ <label className="block text-xs font-medium mb-1">
+ Transfer Date <span className="text-muted-foreground font-normal">(when the premium reached that account)</span>
+ </label>
+ <DatePicker value={transferDate} onChange={setTransferDate} placeholder="Next business day" className="w-full" />
  </div>
  )}
 
@@ -1903,6 +1916,11 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
  );
  const [investmentAccountId, setInvestmentAccountId] = useState(position.investmentAccountId ??"");
  const [bankingAccountId, setBankingAccountId] = useState(position.bankingAccountId ??"");
+ // The premium income row's transfer date (legacy rows kept it in `date`).
+ const [transferDate, setTransferDate] = useState(() => {
+ const inc = position.incomeRecords?.[0];
+ return inc ? (inc.depositDate ?? inc.date).split("T")[0] :"";
+ });
  const [assignedPriceFetching, setAssignedPriceFetching] = useState(false);
  const [saving, setSaving] = useState(false);
  const [error, setError] = useState("");
@@ -1953,6 +1971,7 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
  stockPriceAtClose: isAssigned && stockPriceAtClose ? parseAmount(stockPriceAtClose) : null,
  investmentAccountId: isAssigned ? (investmentAccountId || null) : undefined,
  bankingAccountId: isRolled ? undefined : (bankingAccountId || null),
+ transferDate: isRolled ? undefined : (transferDate || null),
  });
  onSaved();
  } catch {
@@ -2113,6 +2132,15 @@ function EditCloseModal({ position, onClose, onSaved, onEditPositionDetails }: E
  </select>
  <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
  </div>
+ </div>
+ )}
+
+ {!isRolled && bankingAccountId && (
+ <div>
+ <label className="block text-xs font-medium mb-1">
+ Transfer Date <span className="text-muted-foreground font-normal">(when the premium reached that account)</span>
+ </label>
+ <DatePicker value={transferDate} onChange={setTransferDate} placeholder="Next business day" className="w-full" />
  </div>
  )}
 

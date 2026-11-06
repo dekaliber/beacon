@@ -5,6 +5,7 @@ import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { getUserId } from "../middleware/auth.js";
 import { nextBusinessDay } from "../lib/businessDays.js";
+import { parseLocalDate } from "../lib/localDate.js";
 import { fetchYahooClosingPrice } from "../services/yahoo.js";
 import { fetchUpcomingEarnings } from "../services/earnings.js";
 import { TRADIER_BASE, tradierHeaders, fetchUnderlyingPrices, fetchFilteredChain } from "../services/tradier.js";
@@ -54,6 +55,9 @@ async function applyCloseSideEffects(
   userId: string,
   updated: ClosedPositionWithRelations,
   bankingAccountId: string | null,
+  // YYYY-MM-DD the premium was transferred to the banking account. Omitted →
+  // keep an existing row's transfer date; a new row defaults to T+1.
+  transferDate?: string | null,
 ) {
   // When a PUT is assigned and has an investment account linked,
   // create a PendingBuy (if one doesn't already exist for this position).
@@ -223,13 +227,15 @@ async function applyCloseSideEffects(
       // may legitimately render identical strings — that's fine for the user.
       const source = optionsBaseSource(updated);
 
-      // Settlement date = T+1 business day after close (OCC equity option settlement rule).
-      // Fall back to expiration date for EXPIRED_WORTHLESS (no explicit closedAt).
-      // Skip weekends and US Federal Reserve bank holidays so the settlement date always
-      // lands on a valid banking day.
+      // The premium is earned in the brokerage on the close date (the expiration
+      // date for EXPIRED_WORTHLESS, which has no closedAt) and transferred to the
+      // banking account later. The transfer defaults to T+1 business day after
+      // close (weekends and Fed holidays skipped); the user can set the real date.
       const rawDate = updated.closedAt ?? updated.expirationDate;
       const closeDay = new Date(Date.UTC(rawDate.getUTCFullYear(), rawDate.getUTCMonth(), rawDate.getUTCDate()));
-      const incomeDate = nextBusinessDay(closeDay);
+      const closeDate = parseLocalDate(closeDay.toISOString().slice(0, 10));
+      const defaultTransferDate = parseLocalDate(nextBusinessDay(closeDay).toISOString().slice(0, 10));
+      const suppliedTransferDate = transferDate ? parseLocalDate(transferDate) : null;
 
       // Option premium is short-term capital gain/loss for a retail writer (IRS
       // Pub 550): writing an option that expires worthless, or closing/rolling a
@@ -263,9 +269,16 @@ async function applyCloseSideEffects(
       }
 
       if (existingIncome) {
-        // Re-sync the linked row. Keep its existing account unless the caller
-        // supplied a new bankingAccountId (accountId is non-nullable, so never
-        // overwrite it with null when editing position details).
+        // Re-sync the linked row. Keep its existing banking account and transfer
+        // date unless the caller supplied new ones (a position-details edit sends
+        // neither). A row written before the deposit fields existed has its bank
+        // in accountId and its transfer date in date; re-syncing moves those into
+        // the deposit fields, the same rule the backfill applies.
+        const legacy = existingIncome.depositAccountId == null;
+        const depositAccountId =
+          bankingAccountId ?? (legacy ? existingIncome.accountId : existingIncome.depositAccountId!);
+        const depositDate =
+          suppliedTransferDate ?? (legacy ? existingIncome.date : existingIncome.depositDate ?? existingIncome.date);
         await prisma.income.update({
           where: { id: existingIncome.id },
           data: {
@@ -273,7 +286,10 @@ async function applyCloseSideEffects(
             taxableAmount,
             subtype: "CAPITAL_GAIN",
             taxClassification: "CAPITAL_GAIN",
-            accountId: bankingAccountId ?? existingIncome.accountId,
+            accountId: updated.investmentAccountId ?? depositAccountId,
+            date: closeDate,
+            depositAccountId,
+            depositDate,
             source,
             optionsPositionId: updated.id,
           },
@@ -287,8 +303,11 @@ async function applyCloseSideEffects(
             amount: netAmount,
             categoryId: category.id,
             source,
-            date: incomeDate,
-            accountId: bankingAccountId,
+            // Earned in the brokerage; without one linked, it originates where it lands.
+            accountId: updated.investmentAccountId ?? bankingAccountId,
+            date: closeDate,
+            depositAccountId: bankingAccountId,
+            depositDate: suppliedTransferDate ?? defaultTransferDate,
             subtype: "CAPITAL_GAIN",
             taxClassification: "CAPITAL_GAIN",
             taxableAmount,
@@ -808,6 +827,8 @@ const positionCloseSchema = z.object({
   contractsAssigned: z.coerce.number().int().nonnegative().nullable().optional(),
   stockPriceAtClose: z.coerce.number().positive().nullable().optional(),
   bankingAccountId: z.string().nullable().optional(),
+  // Not a position field: the premium income row's transfer date (YYYY-MM-DD).
+  transferDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 });
 
 optionsRoutes.get("/positions", async (req, res) => {
@@ -823,6 +844,8 @@ optionsRoutes.get("/positions", async (req, res) => {
     include: {
       ticker: true,
       group: true,
+      // The premium income row's transfer date, for the edit modal.
+      incomeRecords: { select: { id: true, date: true, depositDate: true } },
     },
     // id breaks openedAt ties: without it Postgres returns tied rows in heap
     // order, which flips whenever one of them is written.
@@ -895,6 +918,9 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
   // and also use it below to create/update the Income record.
   const bankingAccountId = typeof data.bankingAccountId === "string" ? data.bankingAccountId : null;
   // Keep it in `data` so Prisma saves it; it is a valid position field.
+  // transferDate belongs to the income row, not the position.
+  const transferDate = typeof data.transferDate === "string" ? data.transferDate : null;
+  delete data.transferDate;
 
   if (Object.keys(data).length === 0) {
     return res.status(400).json({ error: "No valid fields provided" });
@@ -958,7 +984,7 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
   });
 
   if (updated) {
-    await applyCloseSideEffects(userId, updated, bankingAccountId);
+    await applyCloseSideEffects(userId, updated, bankingAccountId, transferDate);
   }
 
   res.json(updated);
@@ -990,6 +1016,7 @@ const partialCloseSchema = z.object({
   stockPriceAtClose: z.coerce.number().positive().nullable().optional(),
   investmentAccountId: z.string().nullable().optional(),
   bankingAccountId: z.string().nullable().optional(),
+  transferDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 });
 
 const OUTCOME_STATUS: Record<"EXPIRED_WORTHLESS" | "CLOSED_EARLY" | "ASSIGNED", "EXPIRED" | "CLOSED" | "ASSIGNED"> = {
@@ -1005,7 +1032,7 @@ optionsRoutes.post("/positions/:id/partial-close", async (req, res) => {
 
   const {
     contracts: n, outcome, closedAt, closePremiumPerShare, feesClose,
-    stockPriceAtClose, investmentAccountId, bankingAccountId,
+    stockPriceAtClose, investmentAccountId, bankingAccountId, transferDate,
   } = parsed.data;
 
   const original = await prisma.optionsPosition.findFirst({
@@ -1131,7 +1158,7 @@ optionsRoutes.post("/positions/:id/partial-close", async (req, res) => {
     });
   });
 
-  await applyCloseSideEffects(userId, newLeg, bankingAccountId ?? null);
+  await applyCloseSideEffects(userId, newLeg, bankingAccountId ?? null, transferDate ?? null);
 
   res.status(201).json(newLeg);
 });

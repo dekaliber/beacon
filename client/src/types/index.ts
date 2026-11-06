@@ -158,7 +158,12 @@ export interface Income {
   isCashReceived: boolean;
   activityId: string | null;
   optionsPositionId: string | null;
+  // Where and when the cash landed; null on rows from before these existed,
+  // which read as "same as accountId/date".
+  depositAccountId: string | null;
+  depositDate: string | null;
   account: Account;
+  depositAccount?: Account | null;
   tags: IncomeTag[];
   transactionGroup: TransactionGroup | null;
   activity?: InvestmentActivity | null;
@@ -429,6 +434,11 @@ export interface PerformancePeriod {
   fees: number; // positive
   feeItems: Array<{ date: string; account: string; amount: number; description: string }>; // amount positive
   unreconciledByAccount: Array<{ account: string; amount: number }>;
+  // Options premium is left out of the return and the flows. Earned in the
+  // brokerage on the close date, it sits in its cash until transferred to a
+  // bank; this is the period's change in that held amount.
+  optionsPremiumHeld: number;
+  optionsPremiumItems: Array<{ date: string; account: string; amount: number; description: string }>; // + earned, − transferred
 }
 
 export interface PerformanceData {

@@ -250,7 +250,10 @@ pendingSaleRoutes.post("/:id/confirm", async (req, res) => {
           taxableAmount: totalGain,
           source: holding.ticker,
           date: saleDate,
-          accountId: destinationAccountId,
+          // Proceeds originate in the called-away account and land in the destination.
+          accountId: pendingSale.accountId,
+          depositAccountId: destinationAccountId,
+          depositDate: saleDate,
           activityId: activity.id,
           notes: notes ?? null,
           updatedAt: new Date(),

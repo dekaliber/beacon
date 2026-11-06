@@ -66,6 +66,10 @@ const FEES_KEY = "__fees";
 // A muted brick: clear of the saved class colors, the slate flows, and the
 // grays Untracked, Unreconciled, and Other already use.
 const FEES_COLOR = "color-mix(in oklab, var(--color-down) 45%, var(--color-ink-3))";
+// Options premium earned in a brokerage but not yet transferred to a bank: kept
+// out of the return and the flows, so it gets its own neutral step.
+const PREMIUM_KEY = "__options_premium";
+const PREMIUM_COLOR = "color-mix(in oklab, var(--color-teal-deep) 45%, var(--color-ink-3))";
 const OTHER_KEY = "__other";
 const OTHER_COLOR = "color-mix(in oklab, var(--color-ink-5) 70%, transparent)";
 const HATCH_ID = "perf-unreconciled-hatch";
@@ -197,6 +201,9 @@ function periodDrivers(p: PerformancePeriod, palette: Palette): Driver[] {
   if (Math.round(p.deposits) !== 0) out.push({ key: DEPOSITS_KEY, name: "Deposits", color: FLOWS_COLOR, amount: p.deposits });
   if (Math.round(p.withdrawals) !== 0) out.push({ key: WITHDRAWALS_KEY, name: "Withdrawals", color: FLOWS_COLOR, amount: -p.withdrawals });
   if (Math.round(p.fees) !== 0) out.push({ key: FEES_KEY, name: "Fees", color: FEES_COLOR, amount: -p.fees });
+  if (Math.round(p.optionsPremiumHeld) !== 0) {
+    out.push({ key: PREMIUM_KEY, name: "Options premium not yet transferred", color: PREMIUM_COLOR, amount: p.optionsPremiumHeld });
+  }
   if (Math.round(p.unreconciled) !== 0) {
     out.push({ key: UNRECONCILED_KEY, name: "Unreconciled cash", color: UNRECONCILED_COLOR, amount: p.unreconciled });
   }
@@ -1050,6 +1057,14 @@ function DriverDetail({
       amount: -f.amount,
     }));
     subtitle = `${rows.length} fee${rows.length === 1 ? "" : "s"} taken from account cash`;
+  } else if (d.key === PREMIUM_KEY) {
+    subtitle = "Earned in the brokerage, held until transferred to a bank. Not counted as return or withdrawals.";
+    rows = p.optionsPremiumItems.map((x) => ({
+      key: `${x.date}${x.account}${x.amount}${x.description}`,
+      label: x.description,
+      sub: `${fmtDay(x.date)} · ${x.account} · ${x.amount > 0 ? "closed" : "transferred"}`,
+      amount: x.amount,
+    }));
   } else if (d.key === UNRECONCILED_KEY) {
     subtitle = "Recorded cash balances vs. what the records predict";
     rows = p.unreconciledByAccount

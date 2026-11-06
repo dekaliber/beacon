@@ -8,6 +8,7 @@ import { fetchYahooSettledClose, fetchYahooHistory, fetchYahooClosingPrice, fetc
 import { deactivateIfOrphaned, openHoldingWhere } from "./instruments.js";
 import { isTradingDay, etDateParts } from "../lib/marketHolidays.js";
 import { getUserId } from "../middleware/auth.js";
+import { defaultDepositAccountId } from "../lib/incomeDeposit.js";
 import { clientDayOr, recordCashBalance, recordManualValuation } from "../lib/cashHistory.js";
 
 export const investmentRoutes = Router();
@@ -3063,6 +3064,8 @@ investmentRoutes.post("/qfx-dividends/:accountId", async (req, res) => {
             source: div.ticker,
             subtype: "DIVIDEND",
             isCashReceived: paysAsCash && holdingId !== null,
+            depositAccountId: defaultDepositAccountId(account, paysAsCash && holdingId !== null),
+            depositDate: paymentDate,
             activityId: activity.id,
             updatedAt: new Date(),
           },
@@ -3850,7 +3853,10 @@ investmentRoutes.post("/sell", async (req, res) => {
             taxableAmount: totalGain,
             source: holding.ticker,
             date: body.saleDate,
-            accountId: body.destinationAccountId,
+            // Proceeds originate in the holding's account and land in the destination.
+            accountId: holding.accountId,
+            depositAccountId: body.destinationAccountId,
+            depositDate: body.saleDate,
             activityId: activity.id,
             notes: body.notes ?? null,
             updatedAt: new Date(),

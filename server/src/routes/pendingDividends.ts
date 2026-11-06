@@ -4,11 +4,13 @@ import { z } from "zod";
 import { getDividendScanResult, type DividendEvent } from "../services/tiingo.js";
 import { backfillUnlinkedHoldings, reactivateMislinkedInstruments } from "./instruments.js";
 import { getUserId } from "../middleware/auth.js";
+import { defaultDepositAccountId, DEPOSIT_DEFAULT_SELECT } from "../lib/incomeDeposit.js";
 
 export const pendingDividendRoutes = Router();
 
 const INCOME_INCLUDE = {
   account: true,
+  depositAccount: true,
   category: true,
   tags: { include: { tag: true } },
   transactionGroup: true,
@@ -487,11 +489,17 @@ pendingDividendRoutes.patch("/:id", async (req, res) => {
     let updatedIncome = null;
     const income = await tx.income.findFirst({
       where: { activityId: pending.activityId! },
-      select: { id: true, taxClassification: true },
+      select: { id: true, taxClassification: true, date: true, depositDate: true },
     });
     if (income) {
       const incomeData: Record<string, unknown> = {};
-      if (newDate) incomeData.date = newDate;
+      if (newDate) {
+        incomeData.date = newDate;
+        // A deposit on the pay date moves with it; a separately set one stays.
+        if (income.depositDate && income.depositDate.getTime() === income.date.getTime()) {
+          incomeData.depositDate = newDate;
+        }
+      }
       if (amount !== undefined) {
         incomeData.amount = amount;
         incomeData.taxableAmount = income.taxClassification === "RETURN_OF_CAPITAL" ? 0 : amount;
@@ -598,7 +606,7 @@ pendingDividendRoutes.post("/:id/confirm", async (req, res) => {
 
   const account = await prisma.account.findUnique({
     where: { id: pending.accountId },
-    select: { isTaxAdvantaged: true },
+    select: { isTaxAdvantaged: true, ...DEPOSIT_DEFAULT_SELECT },
   });
 
   const {
@@ -639,6 +647,9 @@ pendingDividendRoutes.post("/:id/confirm", async (req, res) => {
           source: source ?? pending.ticker,
           date: payableDate,
           accountId: pending.accountId,
+          // Cash dividends land in the account's cash destination on the pay date.
+          depositAccountId: account ? defaultDepositAccountId(account, true) : pending.accountId,
+          depositDate: payableDate,
           subtype: "DIVIDEND",
           taxClassification: taxClassification ?? null,
           taxableAmount: taxClassification === "RETURN_OF_CAPITAL" ? 0 : totalAmount,
@@ -705,7 +716,7 @@ pendingDividendRoutes.post("/:id/confirm-reinvest", async (req, res) => {
 
   const account = await prisma.account.findUnique({
     where: { id: pending.accountId },
-    select: { isTaxAdvantaged: true },
+    select: { isTaxAdvantaged: true, ...DEPOSIT_DEFAULT_SELECT },
   });
 
   const {
@@ -778,6 +789,9 @@ pendingDividendRoutes.post("/:id/confirm-reinvest", async (req, res) => {
           source: pending.ticker,
           date: exDateObj,
           accountId: pending.accountId,
+          // Reinvested: the cash never leaves the account.
+          depositAccountId: pending.accountId,
+          depositDate: exDateObj,
           subtype: "DIVIDEND",
           taxClassification: taxClassification ?? null,
           taxableAmount,
