@@ -9,3 +9,5 @@ dist/
 
 # Dated investment history files (statement backfill) — personal data, kept out of git
 server/history-imports/
+# Change logs written by backfill scripts' --apply — personal data
+server/backfill-*.json
