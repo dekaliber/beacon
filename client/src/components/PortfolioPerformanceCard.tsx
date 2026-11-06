@@ -202,7 +202,7 @@ function periodDrivers(p: PerformancePeriod, palette: Palette): Driver[] {
   if (Math.round(p.withdrawals) !== 0) out.push({ key: WITHDRAWALS_KEY, name: "Withdrawals", color: FLOWS_COLOR, amount: -p.withdrawals });
   if (Math.round(p.fees) !== 0) out.push({ key: FEES_KEY, name: "Fees", color: FEES_COLOR, amount: -p.fees });
   if (Math.round(p.optionsPremiumHeld) !== 0) {
-    out.push({ key: PREMIUM_KEY, name: "Options premium not yet transferred", color: PREMIUM_COLOR, amount: p.optionsPremiumHeld });
+    out.push({ key: PREMIUM_KEY, name: "Untransferred premiums", color: PREMIUM_COLOR, amount: p.optionsPremiumHeld });
   }
   if (Math.round(p.unreconciled) !== 0) {
     out.push({ key: UNRECONCILED_KEY, name: "Unreconciled cash", color: UNRECONCILED_COLOR, amount: p.unreconciled });
@@ -1058,13 +1058,19 @@ function DriverDetail({
     }));
     subtitle = `${rows.length} fee${rows.length === 1 ? "" : "s"} taken from account cash`;
   } else if (d.key === PREMIUM_KEY) {
-    subtitle = "Earned in the brokerage, held until transferred to a bank. Not counted as return or withdrawals.";
+    // Premium still in the brokerage at this close, less what already was at the
+    // last one (since transferred, or carried into the rows above): the rows sum
+    // to the step. Premium earned and transferred within the period nets to zero.
+    subtitle = `Options premium in the brokerage at the ${unit}'s close, not yet transferred to a bank. Not counted as return or withdrawals.`;
     rows = p.optionsPremiumItems.map((x) => ({
       key: `${x.date}${x.account}${x.amount}${x.description}`,
       label: x.description,
-      sub: `${fmtDay(x.date)} · ${x.account} · ${x.amount > 0 ? "closed" : "transferred"}`,
+      sub: `Closed ${fmtDay(x.date)} · transferred ${fmtDay(x.transferDate)} · ${x.account}`,
       amount: x.amount,
     }));
+    if (Math.round(p.optionsPremiumHeldAtStart) !== 0) {
+      rows.push({ key: "__held_at_start", label: `Untransferred at the start of the ${unit}`, amount: -p.optionsPremiumHeldAtStart });
+    }
   } else if (d.key === UNRECONCILED_KEY) {
     subtitle = "Recorded cash balances vs. what the records predict";
     rows = p.unreconciledByAccount

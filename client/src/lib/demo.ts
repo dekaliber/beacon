@@ -93,6 +93,7 @@ export function scalePerformance(d: PerformanceData, f: number): PerformanceData
       flows: p.flows.map((x) => ({ ...x, amount: x.amount * f })),
       unreconciledByAccount: p.unreconciledByAccount.map((x) => ({ ...x, amount: x.amount * f })),
       optionsPremiumHeld: p.optionsPremiumHeld * f,
+      optionsPremiumHeldAtStart: p.optionsPremiumHeldAtStart * f,
       optionsPremiumItems: p.optionsPremiumItems.map((x) => ({ ...x, amount: x.amount * f })),
     })),
   };

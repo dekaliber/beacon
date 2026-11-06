@@ -436,9 +436,11 @@ export interface PerformancePeriod {
   unreconciledByAccount: Array<{ account: string; amount: number }>;
   // Options premium is left out of the return and the flows. Earned in the
   // brokerage on the close date, it sits in its cash until transferred to a
-  // bank; this is the period's change in that held amount.
+  // bank; this is the period's change in that held amount (end − start).
   optionsPremiumHeld: number;
-  optionsPremiumItems: Array<{ date: string; account: string; amount: number; description: string }>; // + earned, − transferred
+  optionsPremiumHeldAtStart: number;
+  // Premium still untransferred at the period's end (amount positive).
+  optionsPremiumItems: Array<{ date: string; transferDate: string; account: string; amount: number; description: string }>;
 }
 
 export interface PerformanceData {

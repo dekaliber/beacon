@@ -123,9 +123,11 @@ export type PerformancePeriod = {
   // Options premium is left out of the return and the flows: it is earned in the
   // brokerage on the close date and transferred to a bank later. What was earned
   // but not yet transferred at a close still sits in the brokerage's cash, so the
-  // period's change in that amount is its own step (premium earned − transferred).
+  // period's change in that amount is its own step: held at the end − held at the start.
   optionsPremiumHeld: number;
-  optionsPremiumItems: Array<{ date: Day; account: string; amount: number; description: string }>; // + earned, − transferred
+  optionsPremiumHeldAtStart: number;
+  // Premium still untransferred at the period's end (amount positive).
+  optionsPremiumItems: Array<{ date: Day; transferDate: Day; account: string; amount: number; description: string }>;
 };
 
 /** One month-end value: what's recorded on that close, if anything, and what
@@ -537,8 +539,10 @@ export async function computePerformance(
   };
   const isOptionsPremium = (i: { optionsPositionId: string | null; category: { name: string } | null }) =>
     i.optionsPositionId != null || i.category?.name === "Options Premium";
-  type PremiumEvt = { day: Day; accountId: string; amount: number; description: string };
-  const premiumEvents: PremiumEvt[] = []; // + earned in the brokerage, − transferred out
+  // Each premium sits in its brokerage's cash from the close (earned) until it's transferred.
+  type PremiumHold = { earned: Day; transferred: Day; accountId: string; amount: number; description: string };
+  const premiumHolds: PremiumHold[] = [];
+  const heldAt = (d: Day) => premiumHolds.filter((h) => h.earned <= d && h.transferred > d);
 
   for (const a of activities) {
     const day = dayOf(a.date);
@@ -578,8 +582,7 @@ export async function computePerformance(
     // One kept in an investment account would never leave, so it's ordinary income.
     if (isOptionsPremium(i) && i.depositAccountId != null && !accountName.has(i.depositAccountId)) {
       const label = i.source ?? "Options premium";
-      premiumEvents.push({ day, accountId: i.accountId, amount, description: label });
-      premiumEvents.push({ day: dayOf(i.depositDate ?? i.date), accountId: i.accountId, amount: -amount, description: label });
+      premiumHolds.push({ earned: day, transferred: dayOf(i.depositDate ?? i.date), accountId: i.accountId, amount, description: label });
       continue;
     }
     const source = i.source?.trim().toUpperCase() ?? "";
@@ -611,7 +614,10 @@ export async function computePerformance(
     addDelta(m.from, m.day, -m.amount);
     addDelta(m.to, m.day, m.amount);
   }
-  for (const e of premiumEvents) addDelta(e.accountId, e.day, e.amount);
+  for (const h of premiumHolds) {
+    addDelta(h.accountId, h.earned, h.amount);
+    addDelta(h.accountId, h.transferred, -h.amount);
+  }
   for (const s of manualSeries.values()) {
     for (let i = 1; i < s.obs.length; i++) {
       const [a, b] = [s.obs[i - 1], s.obs[i]];
@@ -817,8 +823,12 @@ export async function computePerformance(
       expect(m.from, -m.amount);
       expect(m.to, m.amount);
     }
-    const premium = premiumEvents.filter((e) => inPeriod(e.day, start, end));
-    for (const e of premium) expect(e.accountId, e.amount);
+    for (const h of premiumHolds) {
+      if (inPeriod(h.earned, start, end)) expect(h.accountId, h.amount);
+      if (inPeriod(h.transferred, start, end)) expect(h.accountId, -h.amount);
+    }
+    const heldAtStart = sum(heldAt(start), (h) => h.amount);
+    const heldAtEnd = heldAt(end);
 
     const unreconciledByAccount: PerformancePeriod["unreconciledByAccount"] = [];
     let unreconciled = 0;
@@ -862,10 +872,14 @@ export async function computePerformance(
         .sort((x, y) => x.day.localeCompare(y.day))
         .map((f) => ({ date: f.day, account: accountName.get(f.accountId)!, amount: round2(f.amount), description: f.description })),
       unreconciledByAccount,
-      optionsPremiumHeld: round2(sum(premium, (e) => e.amount)),
-      optionsPremiumItems: premium
-        .sort((x, y) => x.day.localeCompare(y.day))
-        .map((e) => ({ date: e.day, account: accountName.get(e.accountId)!, amount: round2(e.amount), description: e.description })),
+      optionsPremiumHeld: round2(sum(heldAtEnd, (h) => h.amount) - heldAtStart),
+      optionsPremiumHeldAtStart: round2(heldAtStart),
+      optionsPremiumItems: heldAtEnd
+        .sort((x, y) => x.earned.localeCompare(y.earned))
+        .map((h) => ({
+          date: h.earned, transferDate: h.transferred, account: accountName.get(h.accountId)!,
+          amount: round2(h.amount), description: h.description,
+        })),
     });
     prev = cur;
   }
