@@ -1191,7 +1191,7 @@ export function IncomePage() {
  <ColumnHeader className="w-[130px] pb-3 pr-3">Category</ColumnHeader>
  <ColumnHeader className="w-[115px] pb-3 pr-3">Tax Status</ColumnHeader>
  <ColumnHeader className="w-[280px] pb-3 pr-3">Account</ColumnHeader>
- <ColumnHeader className="w-[120px] whitespace-nowrap pb-3 pr-3">Transferred</ColumnHeader>
+ <ColumnHeader className="w-[100px] whitespace-nowrap pb-3 pr-3">Transfer</ColumnHeader>
  <th className="w-[30px] pb-3"></th>
  <ColumnHeader className="w-[90px] pb-3 text-right">Amount</ColumnHeader>
  <th className="w-[42px] pb-3"></th>
@@ -1297,7 +1297,7 @@ export function IncomePage() {
  <ColumnHeader className="w-[130px] cursor-pointer select-none pb-3 pr-3" onClick={() => toggleSort("category")}>Category <SortIcon field="category" /></ColumnHeader>
  <ColumnHeader className="w-[115px] pb-3 pr-3">Tax Status</ColumnHeader>
  <ColumnHeader className="w-[280px] cursor-pointer select-none pb-3 pr-3" onClick={() => toggleSort("account")}>Account <SortIcon field="account" /></ColumnHeader>
- <ColumnHeader className="w-[120px] cursor-pointer select-none whitespace-nowrap pb-3 pr-3" onClick={() => toggleSort("depositDate")}>Transferred <SortIcon field="depositDate" /></ColumnHeader>
+ <ColumnHeader className="w-[100px] cursor-pointer select-none whitespace-nowrap pb-3 pr-3" onClick={() => toggleSort("depositDate")}>Transfer <SortIcon field="depositDate" /></ColumnHeader>
  <th className="w-[30px] pb-3"></th>
  <ColumnHeader className="w-[90px] cursor-pointer select-none pb-3 text-right" onClick={() => toggleSort("amount")}>Amount <SortIcon field="amount" /></ColumnHeader>
  <th className="w-[42px] pb-3"></th>
@@ -1486,7 +1486,7 @@ function DepositDateCell({ income, onSave }: {
  const landedOn = landingDate(income);
  const sameDay = landedOn === toDateInputValue(income.date);
  return (
- <td className={`w-[120px] py-2 pr-3 ${sameDay ?"text-muted-foreground" :""}`}>
+ <td className={`w-[100px] py-2 pr-3 ${sameDay ?"text-muted-foreground" :""}`}>
  <EditableCell value={landedOn} type="date" min={toDateInputValue(income.date)} onSave={(v) => onSave(income.id,"depositDate", v)} />
  </td>
  );
