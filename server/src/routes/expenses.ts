@@ -2,7 +2,7 @@ import { Router } from "express";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
-import { generateUpcomingExpenses, computeNextOccurrence } from "./recurrence.js";
+import { generateUpcomingExpenses, computeNextOccurrence, toExpenseDate, endOfScheduleDay } from "./recurrence.js";
 import { getUserId } from "../middleware/auth.js";
 import { parseLocalDate } from "../lib/localDate.js";
 
@@ -590,7 +590,7 @@ expenseRoutes.put("/:id", async (req, res) => {
         await prisma.expense.updateMany({
           where: {
             recurrenceRuleId: original.recurrenceRuleId,
-            date: { gt: today },
+            date: { gt: endOfScheduleDay(today) },
             id: { not: original.id },
           },
           data: ruleUpdate,
@@ -604,7 +604,7 @@ expenseRoutes.put("/:id", async (req, res) => {
         const futureExpenses = await prisma.expense.findMany({
           where: {
             recurrenceRuleId: original.recurrenceRuleId,
-            date: { gt: today },
+            date: { gt: endOfScheduleDay(today) },
             id: { not: original.id },
           },
           orderBy: { date: "asc" },
@@ -616,7 +616,7 @@ expenseRoutes.put("/:id", async (req, res) => {
           const nextDate = computeNextOccurrence(anchor, rule.frequency, rule.interval);
           await prisma.expense.update({
             where: { id: fe.id },
-            data: { date: nextDate },
+            data: { date: toExpenseDate(nextDate) },
           });
           anchor = nextDate;
         }
@@ -665,7 +665,7 @@ expenseRoutes.delete("/:id", async (req, res) => {
     await prisma.expense.deleteMany({
       where: {
         recurrenceRuleId: expense.recurrenceRuleId,
-        date: { gt: today },
+        date: { gt: endOfScheduleDay(today) },
         id: { not: expense.id },
       },
     });

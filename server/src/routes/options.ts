@@ -230,13 +230,13 @@ async function applyCloseSideEffects(
       // may legitimately render identical strings — that's fine for the user.
       const source = optionsBaseSource(updated);
 
-      // The premium is earned in the brokerage on the close date (the expiration
-      // date for EXPIRED_WORTHLESS, which has no closedAt) and transferred to the
-      // banking account later. The transfer defaults to T+1 business day after
-      // close (weekends and Fed holidays skipped); the user can set the real date.
-      const rawDate = updated.closedAt ?? updated.expirationDate;
-      const closeDay = new Date(Date.UTC(rawDate.getUTCFullYear(), rawDate.getUTCMonth(), rawDate.getUTCDate()));
-      const closeDate = parseLocalDate(closeDay.toISOString().slice(0, 10));
+      // The premium is earned in the brokerage at the close — its actual time, or
+      // 4 pm ET on the expiration date for EXPIRED_WORTHLESS (no closedAt) — and
+      // transferred to the banking account later. The transfer is a day (local
+      // midnight) defaulting to T+1 business day after the close (weekends and Fed
+      // holidays skipped); the user can set the real date.
+      const closeDate = updated.closedAt ?? updated.expirationDate;
+      const closeDay = new Date(Date.UTC(closeDate.getUTCFullYear(), closeDate.getUTCMonth(), closeDate.getUTCDate()));
       const defaultTransferDate = parseLocalDate(nextBusinessDay(closeDay).toISOString().slice(0, 10));
       const suppliedTransferDate = transferDate ? parseLocalDate(transferDate) : null;
 
@@ -280,8 +280,11 @@ async function applyCloseSideEffects(
         const legacy = existingIncome.depositAccountId == null;
         const depositAccountId =
           bankingAccountId ?? (legacy ? existingIncome.accountId : existingIncome.depositAccountId!);
+        // A legacy row's date is its transfer day; old writers stored some at UTC
+        // midnight, so carry the day over at local midnight.
+        const asTransferDay = (d: Date) => parseLocalDate(d.toISOString().slice(0, 10));
         const depositDate =
-          suppliedTransferDate ?? (legacy ? existingIncome.date : existingIncome.depositDate ?? existingIncome.date);
+          suppliedTransferDate ?? (legacy ? asTransferDay(existingIncome.date) : existingIncome.depositDate ?? asTransferDay(existingIncome.date));
         await prisma.income.update({
           where: { id: existingIncome.id },
           data: {

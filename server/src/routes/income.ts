@@ -3,6 +3,7 @@ import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { getUserId } from "../middleware/auth.js";
 import { parseLocalDate } from "../lib/localDate.js";
+import { incomeDay } from "../lib/incomeDeposit.js";
 
 export const incomeRoutes = Router();
 
@@ -212,7 +213,7 @@ incomeRoutes.post("/", async (req, res) => {
     : taxClassification != null ? data.amount
     : undefined;
 
-  if (depositDate && depositDate < data.date) return res.status(400).json({ error: TRANSFER_BEFORE_DATE });
+  if (depositDate && incomeDay(depositDate) < incomeDay(data.date)) return res.status(400).json({ error: TRANSFER_BEFORE_DATE });
 
   const income = await prisma.income.create({
     data: {
@@ -271,7 +272,7 @@ incomeRoutes.put("/:id", async (req, res) => {
   // income was deposited where and when it originated (account AND date the
   // same) — a deposit that differs was set deliberately and stays put.
   const landedInPlace = owned.depositAccountId == null || owned.depositAccountId === owned.accountId;
-  const landedSameDay = owned.depositDate == null || owned.depositDate.getTime() === owned.date.getTime();
+  const landedSameDay = owned.depositDate == null || incomeDay(owned.depositDate) === incomeDay(owned.date);
   if (landedInPlace && landedSameDay) {
     if (data.accountId && data.depositAccountId === undefined && owned.depositAccountId != null) {
       data.depositAccountId = data.accountId;
@@ -282,7 +283,7 @@ incomeRoutes.put("/:id", async (req, res) => {
   }
   const finalDate = data.date ?? owned.date;
   const finalDepositDate = data.depositDate !== undefined ? data.depositDate : owned.depositDate;
-  if (finalDepositDate && finalDepositDate < finalDate) return res.status(400).json({ error: TRANSFER_BEFORE_DATE });
+  if (finalDepositDate && incomeDay(finalDepositDate) < incomeDay(finalDate)) return res.status(400).json({ error: TRANSFER_BEFORE_DATE });
 
   const income = await prisma.income.update({
     where: { id: req.params.id },
@@ -365,12 +366,12 @@ incomeRoutes.patch("/bulk", async (req, res) => {
     // A deposit date that stays put must not end up before the new date.
     const kept = await prisma.$queryRaw<Array<{ n: bigint }>>`
       SELECT count(*)::bigint AS n FROM incomes
-      WHERE id = ANY(${ownedIds}::text[]) AND "depositDate" < ${date}
-        AND NOT ("depositDate" = date AND "depositAccountId" = "accountId")`;
+      WHERE id = ANY(${ownedIds}::text[]) AND "depositDate"::date < (${date}::timestamp)::date
+        AND NOT ("depositDate"::date = date::date AND "depositAccountId" = "accountId")`;
     if (Number(kept[0]?.n ?? 0) > 0) {
       return res.status(400).json({ error: `${TRANSFER_BEFORE_DATE}: ${kept[0].n} selected row(s) were transferred before ${date.toISOString().slice(0, 10)}` });
     }
-    await prisma.$executeRaw`UPDATE incomes SET "depositDate" = ${date} WHERE id = ANY(${ownedIds}::text[]) AND "depositDate" = date AND "depositAccountId" = "accountId"`;
+    await prisma.$executeRaw`UPDATE incomes SET "depositDate" = ${date} WHERE id = ANY(${ownedIds}::text[]) AND "depositDate"::date = date::date AND "depositAccountId" = "accountId"`;
   }
 
   // For taxClassification updates, taxableAmount must be computed per-row since it depends on amount

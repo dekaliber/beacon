@@ -8,6 +8,7 @@ import { fetchYahooSettledClose, fetchYahooHistory, fetchYahooClosingPrice, fetc
 import { deactivateIfOrphaned, openHoldingWhere } from "./instruments.js";
 import { isTradingDay, etDateParts } from "../lib/marketHolidays.js";
 import { getUserId } from "../middleware/auth.js";
+import { parseLocalDate } from "../lib/localDate.js";
 import { defaultDepositAccountId } from "../lib/incomeDeposit.js";
 import { clientDayOr, recordCashBalance, recordManualValuation } from "../lib/cashHistory.js";
 
@@ -3060,12 +3061,13 @@ investmentRoutes.post("/qfx-dividends/:accountId", async (req, res) => {
           data: {
             accountId,
             amount: div.total,
-            date: paymentDate,
+            // Income dates are stored at local (Pacific) midnight, like every other income.
+            date: parseLocalDate(div.date),
             source: div.ticker,
             subtype: "DIVIDEND",
             isCashReceived: paysAsCash && holdingId !== null,
             depositAccountId: defaultDepositAccountId(account, paysAsCash && holdingId !== null),
-            depositDate: paymentDate,
+            depositDate: parseLocalDate(div.date),
             activityId: activity.id,
             updatedAt: new Date(),
           },
@@ -3845,6 +3847,8 @@ investmentRoutes.post("/sell", async (req, res) => {
       // 4. Create Income record only for taxable accounts
       let income = null;
       if (!holding.account.isTaxAdvantaged) {
+        // saleDate parses "YYYY-MM-DD" to UTC midnight; the income uses that day's local midnight.
+        const saleIncomeDate = parseLocalDate(body.saleDate.toISOString().slice(0, 10));
         income = await tx.income.create({
           data: {
             amount: netProceeds,
@@ -3852,11 +3856,12 @@ investmentRoutes.post("/sell", async (req, res) => {
             taxClassification: "CAPITAL_GAIN",
             taxableAmount: totalGain,
             source: holding.ticker,
-            date: body.saleDate,
+            // Income dates are stored at local (Pacific) midnight, like every other income.
+            date: saleIncomeDate,
             // Proceeds originate in the holding's account and land in the destination.
             accountId: holding.accountId,
             depositAccountId: body.destinationAccountId,
-            depositDate: body.saleDate,
+            depositDate: saleIncomeDate,
             activityId: activity.id,
             notes: body.notes ?? null,
             updatedAt: new Date(),

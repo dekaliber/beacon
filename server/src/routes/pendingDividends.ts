@@ -5,6 +5,8 @@ import { getDividendScanResult, type DividendEvent } from "../services/tiingo.js
 import { backfillUnlinkedHoldings, reactivateMislinkedInstruments } from "./instruments.js";
 import { getUserId } from "../middleware/auth.js";
 import { defaultDepositAccountId, DEPOSIT_DEFAULT_SELECT } from "../lib/incomeDeposit.js";
+import { parseLocalDate } from "../lib/localDate.js";
+import { incomeDay } from "../lib/incomeDeposit.js";
 
 export const pendingDividendRoutes = Router();
 
@@ -470,6 +472,8 @@ pendingDividendRoutes.patch("/:id", async (req, res) => {
   }
 
   const newDate = paymentDate ? new Date(paymentDate) : undefined;
+  // Income dates are stored at local (Pacific) midnight, like every other income.
+  const newIncomeDate = paymentDate ? parseLocalDate(paymentDate) : undefined;
 
   // A transfer that stays put can't end up before the new pay date.
   if (newDate) {
@@ -477,8 +481,8 @@ pendingDividendRoutes.patch("/:id", async (req, res) => {
       where: { activityId: pending.activityId },
       select: { accountId: true, date: true, depositAccountId: true, depositDate: true },
     });
-    const follows = income?.depositDate?.getTime() === income?.date.getTime() && income?.depositAccountId === income?.accountId;
-    if (income?.depositDate && !follows && income.depositDate < newDate) {
+    const follows = income?.depositDate != null && incomeDay(income.depositDate) === incomeDay(income.date) && income.depositAccountId === income.accountId;
+    if (income?.depositDate && !follows && incomeDay(income.depositDate) < incomeDay(newIncomeDate!)) {
       return res.status(400).json({ error: "Transferred date can't be before the income date" });
     }
   }
@@ -505,15 +509,15 @@ pendingDividendRoutes.patch("/:id", async (req, res) => {
     });
     if (income) {
       const incomeData: Record<string, unknown> = {};
-      if (newDate) {
-        incomeData.date = newDate;
+      if (newIncomeDate) {
+        incomeData.date = newIncomeDate;
         // Only a deposit made where and when it was paid moves with it; one sent
         // elsewhere (to a bank) or on another day is its own event and stays.
         if (
-          income.depositDate && income.depositDate.getTime() === income.date.getTime() &&
+          income.depositDate && incomeDay(income.depositDate) === incomeDay(income.date) &&
           income.depositAccountId === income.accountId
         ) {
-          incomeData.depositDate = newDate;
+          incomeData.depositDate = newIncomeDate;
         }
       }
       if (amount !== undefined) {
@@ -637,6 +641,7 @@ pendingDividendRoutes.post("/:id/confirm", async (req, res) => {
   } = parsed.data;
 
   const payableDate = new Date(date);
+  const incomeDate = parseLocalDate(date);
 
   const result = await prisma.$transaction(async (tx) => {
     // 1. Create the InvestmentActivity
@@ -661,11 +666,11 @@ pendingDividendRoutes.post("/:id/confirm", async (req, res) => {
         data: {
           amount: totalAmount,
           source: source ?? pending.ticker,
-          date: payableDate,
+          date: incomeDate,
           accountId: pending.accountId,
           // Cash dividends land in the account's cash destination on the pay date.
           depositAccountId: account ? defaultDepositAccountId(account, true) : pending.accountId,
-          depositDate: payableDate,
+          depositDate: incomeDate,
           subtype: "DIVIDEND",
           taxClassification: taxClassification ?? null,
           taxableAmount: taxClassification === "RETURN_OF_CAPITAL" ? 0 : totalAmount,
@@ -803,11 +808,11 @@ pendingDividendRoutes.post("/:id/confirm-reinvest", async (req, res) => {
         data: {
           amount: totalAmount,
           source: pending.ticker,
-          date: exDateObj,
+          date: parseLocalDate(exDate),
           accountId: pending.accountId,
           // Reinvested: the cash never leaves the account.
           depositAccountId: pending.accountId,
-          depositDate: exDateObj,
+          depositDate: parseLocalDate(exDate),
           subtype: "DIVIDEND",
           taxClassification: taxClassification ?? null,
           taxableAmount,

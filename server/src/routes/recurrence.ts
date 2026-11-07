@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db/client.js";
 import { z } from "zod";
 import { getUserId } from "../middleware/auth.js";
+import { parseLocalDate } from "../lib/localDate.js";
 
 export const recurrenceRoutes = Router();
 
@@ -69,11 +70,42 @@ export function computeNextOccurrence(current: Date, frequency: string, interval
   }
 }
 
+// ── Rule schedule vs. expense dates ─────────────────────────────────────────────
+// A rule's schedule (startDate, nextOccurrence, endDate) is calendar days held at
+// UTC midnight and stepped with UTC arithmetic (computeNextOccurrence). Expense
+// rows store their date at local (Pacific) midnight like every other expense, so
+// each occurrence is converted when it is written. Duplicate protection is the
+// unique index on (recurrenceRuleId, date::date), a calendar-day key, so an
+// occurrence matches its row whichever convention the row was stored in.
+
+/** The expense date for a schedule occurrence: that calendar day at local midnight. */
+export const toExpenseDate = (occurrence: Date): Date => parseLocalDate(occurrence.toISOString().slice(0, 10));
+
+/** Last instant of a schedule day. "After day D" means after this, so a row stored
+ *  at local midnight on D (07:00/08:00Z) still counts as on D, not after it. */
+export const endOfScheduleDay = (day: Date): Date =>
+  new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), 23, 59, 59, 999));
+
+/**
+ * Generated rows were stored at UTC midnight before they used local midnight;
+ * move those to local midnight on the same calendar day. The calendar day is
+ * unchanged, so the unique index can't be violated. A no-op once applied.
+ */
+async function normalizeRecurringExpenseDates() {
+  const moved = await prisma.$executeRaw`
+    UPDATE expenses
+    SET date = ((date::date)::timestamp AT TIME ZONE 'America/Los_Angeles') AT TIME ZONE 'UTC'
+    WHERE "recurrenceRuleId" IS NOT NULL
+      AND date = date_trunc('day', date)`;
+  if (moved > 0) console.log(`Moved ${moved} recurring expense dates from UTC to local midnight`);
+}
+
 /**
  * Generate upcoming expenses from active recurrence rules through end of next month.
  * Idempotent: skips dates that already have a generated expense for the rule.
  */
 export async function generateUpcomingExpenses() {
+  await normalizeRecurringExpenseDates();
   const now = new Date();
   const endOfNextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 2, 0, 23, 59, 59));
 
@@ -127,7 +159,7 @@ export async function generateUpcomingExpenses() {
             amount: rule.amount,
             description: rule.description,
             vendor: rule.vendor,
-            date: current,
+            date: toExpenseDate(current),
             categoryId: rule.categoryId,
             accountId: rule.accountId,
             recurrenceRuleId: rule.id,
@@ -172,7 +204,7 @@ export async function generateUpcomingExpenses() {
             amount: rule.amount,
             description: rule.description,
             vendor: rule.vendor,
-            date: current,
+            date: toExpenseDate(current),
             categoryId: rule.categoryId,
             accountId: rule.accountId,
             recurrenceRuleId: rule.id,
@@ -437,7 +469,7 @@ recurrenceRoutes.put("/:id", async (req, res) => {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
     await prisma.expense.updateMany({
-      where: { recurrenceRuleId: rule.id, date: { gt: today } },
+      where: { recurrenceRuleId: rule.id, date: { gt: endOfScheduleDay(today) } },
       data: futurePatch,
     });
   }
@@ -448,7 +480,7 @@ recurrenceRoutes.put("/:id", async (req, res) => {
     await prisma.expense.deleteMany({
       where: {
         recurrenceRuleId: rule.id,
-        date: { gt: data.endDate as Date },
+        date: { gt: endOfScheduleDay(data.endDate as Date) },
       },
     });
   }
@@ -473,7 +505,7 @@ recurrenceRoutes.post("/:id/archive", async (req, res) => {
   });
 
   await prisma.expense.deleteMany({
-    where: { recurrenceRuleId: req.params.id, date: { gt: today } },
+    where: { recurrenceRuleId: req.params.id, date: { gt: endOfScheduleDay(today) } },
   });
 
   res.status(204).send();
@@ -494,7 +526,7 @@ recurrenceRoutes.delete("/:id", async (req, res) => {
 
   // 1. Remove future pending instances — they should not exist without an active rule.
   await prisma.expense.deleteMany({
-    where: { recurrenceRuleId: req.params.id, date: { gt: today } },
+    where: { recurrenceRuleId: req.params.id, date: { gt: endOfScheduleDay(today) } },
   });
 
   // 2. Detach past expenses — they represent real spending and must be preserved.

@@ -138,6 +138,9 @@ async function computeMetrics(
   const endOfMonth   = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0, 23, 59, 59, 999));
   const elapsed      = daysElapsedInYear(year, today);
   const totalDays    = daysInYear(year);
+  // `today` is the day at UTC midnight; expense rows sit at local (Pacific)
+  // midnight (07:00/08:00Z), so a row dated today is "≤ end of today".
+  const todayEnd     = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 23, 59, 59, 999));
 
   // ── 1. YTD completed months (display) ─────────────────────────────────────
   const completedRows = await prisma.expense.findMany({
@@ -162,8 +165,8 @@ async function computeMetrics(
     select: { amount: true, date: true },
   });
   // Split into already-occurred (≤ today) vs known-future (> today) for display.
-  const mtdActual = mtdRows.filter(e => e.date <= today).reduce((s, e) => s + Number(e.amount), 0);
-  const mtdFuture = mtdRows.filter(e => e.date > today).reduce((s, e) => s + Number(e.amount), 0);
+  const mtdActual = mtdRows.filter(e => e.date <= todayEnd).reduce((s, e) => s + Number(e.amount), 0);
+  const mtdFuture = mtdRows.filter(e => e.date > todayEnd).reduce((s, e) => s + Number(e.amount), 0);
   const mtdTotal  = mtdActual + mtdFuture;
 
   // ── 3. Normalization ───────────────────────────────────────────────────────
@@ -182,7 +185,7 @@ async function computeMetrics(
     prisma.expense.findMany({
       where: {
         recurrenceRuleId: { in: ruleIds },
-        date: { gte: startOfYear, lte: today },
+        date: { gte: startOfYear, lte: todayEnd },
         ...ignoredExpenseFilter(ignoredCategoryIds),
       },
       select: { recurrenceRuleId: true, amount: true, date: true },
@@ -191,7 +194,7 @@ async function computeMetrics(
     prisma.expense.findMany({
       where: {
         recurrenceRuleId: { in: ruleIds },
-        date: { gt: today, lte: endOfYear },
+        date: { gt: todayEnd, lte: endOfYear },
         ...ignoredExpenseFilter(ignoredCategoryIds),
       },
       select: { recurrenceRuleId: true, amount: true, date: true },
@@ -303,7 +306,7 @@ async function computeMetrics(
     where: {
       accountId: { in: accountIds },
       recurrenceRuleId: null,
-      date: { gte: startOfYear, lte: today },
+      date: { gte: startOfYear, lte: todayEnd },
       ...ignoredExpenseFilter(ignoredCategoryIds),
     },
     select: { amount: true },

@@ -9,6 +9,13 @@ import type { DividendElection } from "@prisma/client";
 
 type IncomeLike = { accountId: string; date: Date; depositAccountId: string | null; depositDate: Date | null };
 
+/**
+ * Calendar day (YYYY-MM-DD) of an income or transfer date. Income dates are
+ * days at local midnight, except options premium, which keeps its close time;
+ * compare by day, never by timestamp.
+ */
+export const incomeDay = (d: Date): string => d.toISOString().slice(0, 10);
+
 /** Account the cash landed in. */
 export const landingAccountId = (i: IncomeLike): string => i.depositAccountId ?? i.accountId;
 

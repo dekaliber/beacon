@@ -17,7 +17,8 @@
  *         deposit ← current account + date; accountId ← that brokerage. The close
  *         date isn't recorded, so date stays as it is.
  *      d. any other option not linked to a position: deposit ← current account + date
- *      Close date = position closedAt, or expirationDate for one that expired.
+ *      Close date = the position's actual close time (closedAt), or its expiration
+ *      (4 pm ET) for one that expired — kept as a time, like the app now writes it.
  *   2. Sale proceeds (linked SALE activity):
  *         deposit ← current account + date; accountId ← the sale's account
  *   3. Dividends (linked DIVIDEND activity), and
@@ -27,6 +28,12 @@
  *         dividends as cash and has one), else the account itself; reinvested →
  *         the account itself. depositDate ← date.
  *   5. Everything else (income into a bank account): deposit ← current account + date.
+ *   6. Rows that already have a deposit account (converted by an edit, or written
+ *      since): options premium's date ← its actual close time; any other date or
+ *      transfer date stored at UTC midnight moves to local midnight. Nothing else.
+ *
+ * Dates stored at UTC midnight (00:00Z) move to the same calendar day at local
+ * (Pacific) midnight, the convention income writers use; other times are kept.
  *
  * Dry-run by default: prints per-rule counts, samples, and warnings. Pass --apply
  * to write; it also saves a JSON log of every change (old and new values).
@@ -50,7 +57,7 @@ const UNLINKED_OPTIONS = { ticker: "PYPL", through: "2026-04-30", brokerage: "Va
 
 const prisma = new PrismaClient();
 
-type Rule = "1a" | "1b" | "1c" | "1d" | "2" | "3" | "4" | "5";
+type Rule = "1a" | "1b" | "1c" | "1d" | "2" | "3" | "4" | "5" | "6";
 const RULE_LABEL: Record<Rule, string> = {
   "1a": "Options premium → brokerage origin, close date",
   "1b": "Options premium, no brokerage on position → close date only",
@@ -60,6 +67,7 @@ const RULE_LABEL: Record<Rule, string> = {
   "3": "Dividends → deposit by account's dividend setting",
   "4": "Other income in an investment account → deposit by account's dividend setting",
   "5": "Bank-account income → deposit = current",
+  "6": "Already has a deposit account → premium to its close time; UTC-midnight dates to local midnight",
 };
 
 type Change = {
@@ -67,7 +75,7 @@ type Change = {
   rule: Rule;
   source: string | null;
   amount: string;
-  before: { accountId: string; date: string };
+  before: { accountId: string; date: string; depositDate?: string | null };
   after: { accountId: string; date: string; depositAccountId: string; depositDate: string };
 };
 
@@ -104,23 +112,29 @@ async function main() {
   for (const r of rows) {
     let rule: Rule;
     let accountId = r.accountId;
-    let date = r.date;
+    // Dividend and options writers stored UTC midnight (00:00Z) where every other
+    // income uses local (Pacific) midnight; move those to the same day's local
+    // midnight. Other times are kept (e.g. 4 pm ET on called-away sales).
+    const isUtcMidnight = r.date.getUTCHours() === 0 && r.date.getUTCMinutes() === 0 && r.date.getUTCSeconds() === 0 && r.date.getUTCMilliseconds() === 0;
+    const sameDay = isUtcMidnight ? parseLocalDate(day(r.date)) : r.date;
+    let date = sameDay;
     let depositAccountId = r.accountId;
-    const depositDate = r.date;
+    const depositDate = sameDay;
 
     const isOptions = r.optionsPositionId != null || r.category?.name === "Options Premium";
     if (isOptions) {
       const pos = r.optionsPosition;
       if (pos) {
-        const closed = pos.closedAt ?? pos.expirationDate;
-        date = parseLocalDate(day(closed));
+        // Earned at the actual close time (4 pm ET on expiration for an expired leg).
+        date = pos.closedAt ?? pos.expirationDate;
         if (pos.investmentAccountId) {
           rule = "1a";
           accountId = pos.investmentAccountId;
         } else {
           rule = "1b";
         }
-        const lag = daysBetween(date, depositDate);
+        // In whole days: the close keeps its time, the transfer is a day.
+        const lag = daysBetween(new Date(day(date)), new Date(day(depositDate)));
         if (lag < 0 || lag > LAG_WARN_DAYS) {
           warnings.push(`${r.id} ${r.source ?? ""}: transferred ${day(depositDate)} is ${lag} days from close ${day(date)}`);
         }
@@ -167,13 +181,45 @@ async function main() {
     });
   }
 
+  // Rule 6: rows already converted keep everything but a UTC-midnight date.
+  const utcMidnight = (d: Date) =>
+    d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0 && d.getUTCMilliseconds() === 0;
+  const converted = await prisma.income.findMany({
+    where: { depositAccountId: { not: null } },
+    select: {
+      id: true, accountId: true, date: true, depositAccountId: true, depositDate: true, source: true, amount: true,
+      optionsPosition: { select: { closedAt: true, expirationDate: true } },
+    },
+  });
+  for (const r of converted) {
+    const landed = r.depositDate ?? r.date;
+    // Options premium is earned at its actual close time.
+    const closeTime = r.optionsPosition ? (r.optionsPosition.closedAt ?? r.optionsPosition.expirationDate) : null;
+    const newDate = closeTime ?? (utcMidnight(r.date) ? parseLocalDate(day(r.date)) : r.date);
+    const newLanded = utcMidnight(landed) ? parseLocalDate(day(landed)) : landed;
+    if (newDate.getTime() === r.date.getTime() && newLanded.getTime() === landed.getTime()) continue;
+    changes.push({
+      id: r.id,
+      rule: "6",
+      source: r.source,
+      amount: r.amount.toString(),
+      before: { accountId: r.accountId, date: r.date.toISOString(), depositDate: r.depositDate?.toISOString() ?? null },
+      after: {
+        accountId: r.accountId,
+        date: newDate.toISOString(),
+        depositAccountId: r.depositAccountId!,
+        depositDate: newLanded.toISOString(),
+      },
+    });
+  }
+
   // ── Report ────────────────────────────────────────────────────────────────
-  console.log(`${APPLY ? "APPLY" : "DRY RUN"} — ${rows.length} income rows without a deposit account\n`);
+  console.log(`${APPLY ? "APPLY" : "DRY RUN"} — ${rows.length} income rows without a deposit account, ${changes.length - rows.length} converted rows to re-time\n`);
   for (const rule of Object.keys(RULE_LABEL) as Rule[]) {
     const mine = changes.filter((c) => c.rule === rule);
     if (mine.length === 0) continue;
     const moved = mine.filter((c) => c.after.accountId !== c.before.accountId).length;
-    const redated = mine.filter((c) => c.after.date !== c.before.date).length;
+    const redated = mine.filter((c) => c.after.date !== c.before.date || (c.before.depositDate != null && c.after.depositDate !== c.before.depositDate)).length;
     const elsewhere = mine.filter((c) => c.after.depositAccountId !== c.after.accountId).length;
     console.log(`Rule ${rule}: ${RULE_LABEL[rule]}`);
     console.log(`  ${mine.length} rows · origin changed ${moved} · date changed ${redated} · deposited elsewhere ${elsewhere}`);
@@ -214,8 +260,10 @@ async function main() {
     await prisma.$transaction(
       batch.map((c) =>
         prisma.income.updateMany({
-          // Re-check the guard so a row filled since the read is left alone.
-          where: { id: c.id, depositAccountId: null },
+          // Re-check the guard so a row changed since the read is left alone.
+          where: c.rule === "6"
+            ? { id: c.id, date: new Date(c.before.date) }
+            : { id: c.id, depositAccountId: null },
           data: {
             accountId: c.after.accountId,
             date: new Date(c.after.date),
