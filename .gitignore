@@ -11,3 +11,5 @@ dist/
 server/history-imports/
 # Change logs written by backfill scripts' --apply — personal data
 server/backfill-*.json
+# Database backups (pg_dump) — personal data
+*.dump
