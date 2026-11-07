@@ -515,7 +515,7 @@ function WithdrawalRow({
  {/* Account */}
  <td className="py-2.5 px-2 text-13">
  <span className={isIncome ?"text-muted-foreground" :""}>
- {event.type ==="transfer" && event.toAccount ? (
+ {event.toAccount ? (
  <span className="flex items-center gap-1 whitespace-nowrap">
  <span className="truncate max-w-[160px]">{event.account.name}</span>
  <ArrowUpRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" />

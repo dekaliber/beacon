@@ -316,7 +316,7 @@ function MonthDetailSheet({
 
                   {/* Account */}
                   <div className="flex items-center gap-1 tp-caption">
-                    {event.type === "transfer" && event.toAccount ? (
+                    {event.toAccount ? (
                       <>
                         <span className="truncate">{event.account.name}</span>
                         <ArrowUpRight className="h-3 w-3 flex-shrink-0" />
