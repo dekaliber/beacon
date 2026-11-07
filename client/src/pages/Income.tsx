@@ -1357,7 +1357,7 @@ export function IncomePage() {
  <DepositedToLabel income={income} />
  </div>
  </td>
- <DepositDateCell income={income} onSave={handleInlineUpdate} />
+ <DepositDateCell income={income} onSave={handleInlineUpdate} muted={!income.isCashReceived} />
  <td className="w-[30px] py-2 text-center">
  <span className="inline-flex h-5 w-5 items-center justify-center rounded text-10 font-bold text-white" style={{ backgroundColor: income.account.isJoint ? JOINT_COLOR : PERSONAL_COLOR }}>
  {income.account.isJoint ?"J" :"P"}
@@ -1478,16 +1478,19 @@ function DepositedToLabel({ income }: { income: Income }) {
  );
 }
 
-// Transferred (deposit date) cell: muted when the cash landed the day the income was earned.
-function DepositDateCell({ income, onSave }: {
+// Transfer (deposit date) cell, styled like the Date cell beside it. Blank when
+// the cash stayed in the account it was earned in — nothing was transferred, so
+// there's no date to show or edit (the income modal still has the field).
+function DepositDateCell({ income, onSave, muted = false }: {
  income: Income;
  onSave: (id: string, field: string, value: string | null) => void;
+ muted?: boolean;
 }) {
- const landedOn = landingDate(income);
- const sameDay = landedOn === toDateInputValue(income.date);
  return (
- <td className={`w-[100px] py-2 pr-3 ${sameDay ?"text-muted-foreground" :""}`}>
- <EditableCell value={landedOn} type="date" min={toDateInputValue(income.date)} onSave={(v) => onSave(income.id,"depositDate", v)} />
+ <td className={`w-[100px] py-2 pr-3 ${muted ?"text-muted-foreground" :""}`}>
+ {depositedElsewhere(income) && (
+ <EditableCell value={landingDate(income)} type="date" min={toDateInputValue(income.date)} onSave={(v) => onSave(income.id,"depositDate", v)} />
+ )}
  </td>
  );
 }
