@@ -993,6 +993,24 @@ optionsRoutes.put("/positions/:id", async (req, res) => {
         data: { closedAt: newOpenedAt },
       });
     }
+    // The assigned-lot link is a chain-level fact: every leg of a roll chain is
+    // written against the same lot (premium attribution and called-away matching
+    // read it per chain). An edit on any leg re-points the whole chain.
+    const lotLink: Record<string, unknown> = {};
+    if ("assignedFromStrikePrice" in data) lotLink.assignedFromStrikePrice = data.assignedFromStrikePrice;
+    if ("assignedFromExpirationDate" in data) lotLink.assignedFromExpirationDate = data.assignedFromExpirationDate;
+    if (r.count > 0 && Object.keys(lotLink).length > 0) {
+      const leg = await tx.optionsPosition.findUnique({
+        where: { id: req.params.id },
+        select: { groupId: true },
+      });
+      if (leg?.groupId) {
+        await tx.optionsPosition.updateMany({
+          where: { groupId: leg.groupId, userId, id: { not: req.params.id } },
+          data: lotLink,
+        });
+      }
+    }
     return r;
   });
   if (result.count === 0) return res.status(404).json({ error: "Not found" });

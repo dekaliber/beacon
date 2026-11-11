@@ -89,6 +89,8 @@ async function attributePremiumForUser(userId: string) {
         assignedFromStrikePrice: { not: null },
         assignedFromExpirationDate: { not: null },
       },
+      // Chain legs in roll order, so the chain's lot is read off a known leg.
+      orderBy: [{ sequenceInGroup: "asc" }, { openedAt: "asc" }],
       select: {
         ...premiumSelect,
         id: true,
@@ -215,12 +217,15 @@ async function attributePremiumForUser(userId: string) {
 
   for (const legs of chains.values()) {
     if (legs.some((leg) => leg.status === "OPEN")) continue;
-    const first = legs[0];
+    // The final leg is the one that gets assigned, so its lot is the one the
+    // called-away sale was drawn from. (Lot edits propagate chain-wide, but a
+    // chain split before that fix can still disagree — trust the last leg.)
+    const last = legs[legs.length - 1];
     const batchBlocks = blocksByBatch.get(batchKey(
-      first.ticker.symbol,
-      Number(first.assignedFromStrikePrice),
-      first.assignedFromExpirationDate!.toISOString().slice(0, 10),
-      first.investmentAccountId!
+      last.ticker.symbol,
+      Number(last.assignedFromStrikePrice),
+      last.assignedFromExpirationDate!.toISOString().slice(0, 10),
+      last.investmentAccountId!
     )) ?? [];
     const chainPremium = legs.reduce((sum, leg) => sum + legNetPremium(leg), 0);
 
