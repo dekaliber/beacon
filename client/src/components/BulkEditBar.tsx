@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { Fragment, useState, useRef, useEffect, useMemo } from "react";
 import { X, Link2, Unlink, Star, Check, Trash2, Copy } from "lucide-react";
 import { bulkUpdateExpenses, bulkDeleteExpenses } from "@/api";
 import type { Category, Tag } from "@/types";
@@ -9,6 +9,21 @@ import { DatePicker } from "@/components/DatePicker";
 //   "group"   → create a new group OR add ungrouped expenses to an existing group
 //   "ungroup" → remove selected expenses from their respective groups
 export type GroupAction = "group" | "ungroup";
+
+/** A date column the bar can bulk-set via the shared DatePicker. */
+export interface BulkDateField {
+  /** Patch key sent to the bulk-update API (e.g. "date", "depositDate") */
+  key: string;
+  label: string;
+  /** YYYY-MM-DD — earliest date the picker allows */
+  min?: string;
+  /** When true, the button is shown but disabled */
+  disabled?: boolean;
+  /** Tooltip shown on the disabled button */
+  disabledTitle?: string;
+}
+
+const DEFAULT_DATE_FIELDS: BulkDateField[] = [{ key: "date", label: "Edit Date" }];
 
 interface BulkEditBarProps {
   ids: string[];
@@ -28,8 +43,10 @@ interface BulkEditBarProps {
   /** Tooltip shown on the disabled Duplicate button */
   duplicateDisabledTitle?: string;
   onCreateTag?: (name: string) => Promise<Tag>;
-  /** Label for the free-text edit button (default: "Edit Description") */
-  textFieldLabel?: string;
+  /** Date fields offered as bulk edits, in order (default: just "Edit Date") */
+  dateFields?: BulkDateField[];
+  /** Label for the free-text edit button (default: "Edit Description"); null hides it */
+  textFieldLabel?: string | null;
   /** Patch key for the free-text field (default: "description") */
   textFieldKey?: string;
   /** Override the bulk-update API call (default: bulkUpdateExpenses) */
@@ -50,7 +67,7 @@ interface BulkEditBarProps {
   selectedTransactions?: { amount: string; isJoint: boolean }[];
 }
 
-type ActivePopover = "date" | "description" | "category" | "taxStatus" | "tags" | null;
+type ActivePopover = `date:${string}` | "description" | "category" | "taxStatus" | "tags" | null;
 
 const TAX_STATUS_OPTIONS: { value: string; label: string; className: string }[] = [
   { value: "", label: "Not specified (clear)", className: "" },
@@ -76,6 +93,7 @@ export function BulkEditBar({
   duplicateDisabled = false,
   duplicateDisabledTitle,
   onCreateTag,
+  dateFields = DEFAULT_DATE_FIELDS,
   textFieldLabel = "Edit Description",
   textFieldKey = "description",
   onApply,
@@ -116,7 +134,7 @@ export function BulkEditBar({
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       const target = e.target as Node;
-      // The Edit Date calendar is portalled to <body>, outside the bar
+      // The date-field calendar is portalled to <body>, outside the bar
       if (target instanceof Element && target.closest("[data-datepicker-panel]")) return;
       if (barRef.current && !barRef.current.contains(target)) {
         setActive(null);
@@ -331,38 +349,53 @@ export function BulkEditBar({
 
       <span className={sepCls} />
 
-      {/* Edit Date — sets every selected transaction to the chosen date */}
-      <div className="relative">
-        <button type="button" onClick={() => openPopover("date")} className={btnCls("date")}>
-          Edit Date
-        </button>
-        {active === "date" && (
-          <div className={popoverCls}>
-            <div
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && dateValue && !loading) {
-                  handleApply({ date: dateValue });
-                }
-              }}
-            >
-              <DatePicker value={dateValue} onChange={setDateValue} autoFocus autoOpen />
+      {/* Date fields — each sets every selected transaction to the chosen date */}
+      {dateFields.map((f) => {
+        const popover: ActivePopover = `date:${f.key}`;
+        return (
+          <Fragment key={f.key}>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => { if (!f.disabled) openPopover(popover); }}
+                disabled={f.disabled}
+                className={f.disabled ? "inline-flex items-center gap-[6px] px-[14px] py-[10px] whitespace-nowrap opacity-40 cursor-not-allowed" : btnCls(popover)}
+                title={f.disabled ? f.disabledTitle : undefined}
+              >
+                {f.label}
+              </button>
+              {active === popover && (
+                <div className={popoverCls}>
+                  <div
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && dateValue && !loading) {
+                        handleApply({ [f.key]: dateValue });
+                      }
+                    }}
+                  >
+                    <DatePicker value={dateValue} onChange={setDateValue} min={f.min} autoFocus autoOpen />
+                  </div>
+                  {error && <p className="mt-1 text-xs text-down">{error}</p>}
+                  <button
+                    type="button"
+                    disabled={!dateValue || loading}
+                    onClick={() => handleApply({ [f.key]: dateValue })}
+                    className={applyBtnCls}
+                  >
+                    {applyLabel}
+                  </button>
+                </div>
+              )}
             </div>
-            {error && <p className="mt-1 text-xs text-down">{error}</p>}
-            <button
-              type="button"
-              disabled={!dateValue || loading}
-              onClick={() => handleApply({ date: dateValue })}
-              className={applyBtnCls}
-            >
-              {applyLabel}
-            </button>
-          </div>
-        )}
-      </div>
 
-      <span className={sepCls} />
+            <span className={sepCls} />
+          </Fragment>
+        );
+      })}
 
       {/* Edit text field (Description / Source / etc.) */}
+      {textFieldLabel && (
+      <>
       <div className="relative">
         <button type="button" onClick={() => openPopover("description")} className={btnCls("description")}>
           {textFieldLabel}
@@ -397,6 +430,8 @@ export function BulkEditBar({
       </div>
 
       <span className={sepCls} />
+      </>
+      )}
 
       {/* Edit Category */}
       <div className="relative">

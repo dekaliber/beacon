@@ -977,6 +977,11 @@ export function IncomePage() {
 
  const upcomingIncomes = useMemo(() => upcomingData?.data ?? [], [upcomingData]);
 
+ const selectedIncomes = useMemo(
+ () => [...allIncomes, ...upcomingIncomes].filter((i) => selectedIds.has(i.id)),
+ [allIncomes, upcomingIncomes, selectedIds],
+ );
+
  const allUpcomingIncomeIds = useMemo(() => upcomingIncomes.map((i) => i.id), [upcomingIncomes]);
 
  const handleDuplicate = useCallback(async () => {
@@ -1438,8 +1443,18 @@ export function IncomePage() {
  <BulkEditBar
  ids={[...selectedIds]}
  categories={categories}
- textFieldLabel="Edit Source"
- textFieldKey="source"
+ dateFields={[
+ { key:"date", label:"Edit Date" },
+ {
+ key:"depositDate",
+ label:"Edit Transfer",
+ // Can't land before the latest-earned selected row
+ min: selectedIncomes.reduce((m, i) => { const d = toDateInputValue(i.date); return d > m ? d : m; },""),
+ disabled: selectedIncomes.some((i) => !depositedElsewhere(i)),
+ disabledTitle:"Deselect transactions that weren't transferred to another account to edit the transfer date",
+ },
+ ]}
+ textFieldLabel={null}
  onApply={(patch) => bulkUpdateIncome([...selectedIds], patch)}
  onBulkDelete={() => bulkDeleteIncome([...selectedIds])}
  onClear={() => setSelectedIds(new Set())}

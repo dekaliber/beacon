@@ -323,16 +323,20 @@ incomeRoutes.delete("/:id", async (req, res) => {
   res.status(204).send();
 });
 
-// Bulk edit income (source, category, taxClassification)
+// Bulk edit income (date, transfer date, source, category, taxClassification)
 const bulkEditIncomeSchema = z.object({
   ids: z.array(z.string()).min(1),
   date: z.string().transform((s) => parseLocalDate(s)).optional(),
+  // Transfer date; only for rows deposited to a different account than they originated in
+  depositDate: z.string().transform((s) => parseLocalDate(s)).optional(),
   source: z.string().min(1).optional(),
   categoryId: z.string().nullable().optional(),
   taxClassification: z
     .enum(["QUALIFIED", "ORDINARY", "TAX_EXEMPT", "RETURN_OF_CAPITAL", "CAPITAL_GAIN"])
     .nullable()
     .optional(),
+}).refine((d) => d.date === undefined || d.depositDate === undefined, {
+  message: "Edit the date and the transfer date separately",
 });
 
 incomeRoutes.patch("/bulk", async (req, res) => {
@@ -340,7 +344,7 @@ incomeRoutes.patch("/bulk", async (req, res) => {
   const parsed = bulkEditIncomeSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const { ids, date, source, categoryId, taxClassification } = parsed.data;
+  const { ids, date, depositDate, source, categoryId, taxClassification } = parsed.data;
 
   // Resolve only IDs owned by this user
   const owned = await prisma.income.findMany({
@@ -352,6 +356,7 @@ incomeRoutes.patch("/bulk", async (req, res) => {
 
   const scalarUpdate: Record<string, unknown> = {};
   if (date !== undefined) scalarUpdate.date = date;
+  if (depositDate !== undefined) scalarUpdate.depositDate = depositDate;
   if (source !== undefined) scalarUpdate.source = source;
   if (categoryId !== undefined) scalarUpdate.categoryId = categoryId;
   if (taxClassification !== undefined) scalarUpdate.taxClassification = taxClassification;
@@ -374,6 +379,22 @@ incomeRoutes.patch("/bulk", async (req, res) => {
     await prisma.$executeRaw`UPDATE incomes SET "depositDate" = ${date} WHERE id = ANY(${ownedIds}::text[]) AND "depositDate"::date = date::date AND "depositAccountId" = "accountId"`;
   }
 
+  if (depositDate !== undefined) {
+    // In-place rows have no transfer to date; setting one would unlink it from `date`
+    const inPlace = await prisma.$queryRaw<Array<{ n: bigint }>>`
+      SELECT count(*)::bigint AS n FROM incomes
+      WHERE id = ANY(${ownedIds}::text[]) AND ("depositAccountId" IS NULL OR "depositAccountId" = "accountId")`;
+    if (Number(inPlace[0]?.n ?? 0) > 0) {
+      return res.status(400).json({ error: `${inPlace[0].n} selected row(s) weren't transferred to another account` });
+    }
+    const early = await prisma.$queryRaw<Array<{ n: bigint }>>`
+      SELECT count(*)::bigint AS n FROM incomes
+      WHERE id = ANY(${ownedIds}::text[]) AND date::date > (${depositDate}::timestamp)::date`;
+    if (Number(early[0]?.n ?? 0) > 0) {
+      return res.status(400).json({ error: `${TRANSFER_BEFORE_DATE}: ${early[0].n} selected row(s) are dated after ${depositDate.toISOString().slice(0, 10)}` });
+    }
+  }
+
   // For taxClassification updates, taxableAmount must be computed per-row since it depends on amount
   if (taxClassification !== undefined && taxClassification !== null) {
     // RETURN_OF_CAPITAL → taxableAmount = 0; all others → taxableAmount = amount
@@ -390,9 +411,10 @@ incomeRoutes.patch("/bulk", async (req, res) => {
         ownedIds
       );
     }
-    // Apply any other scalar updates (date, source, categoryId) separately
+    // Apply any other scalar updates (date, depositDate, source, categoryId) separately
     const otherUpdate: Record<string, unknown> = {};
     if (date !== undefined) otherUpdate.date = date;
+    if (depositDate !== undefined) otherUpdate.depositDate = depositDate;
     if (source !== undefined) otherUpdate.source = source;
     if (categoryId !== undefined) otherUpdate.categoryId = categoryId;
     if (Object.keys(otherUpdate).length > 0) {
