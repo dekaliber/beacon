@@ -82,6 +82,7 @@ import {
  XAxis,
  YAxis,
  CartesianGrid,
+ ReferenceLine,
  Tooltip as RechartsTooltip,
 } from"recharts";
 
@@ -4753,6 +4754,32 @@ const padDomain = (min: number, max: number): [number, number] => {
  return [lo < 0 ? lo - pad : 0, hi > 0 ? hi + pad : 0];
 };
 
+// Like padDomain, but snaps the domain outward to a round step and returns the
+// matching ticks, so every gridline lands on a whole value ($1k, $2k, …) instead
+// of wherever the padding put the domain edges. The step is the smallest
+// 1/2/5×10ⁿ — never under $1k unless the whole range is — that fits the range
+// in ≤ maxIntervals; zero is always a tick. Rounding outward is the headroom.
+const snapDomain = (min: number, max: number, maxIntervals = 7): { domain: [number, number]; ticks: number[] } => {
+ const lo = Math.min(0, min);
+ const hi = Math.max(0, max);
+ if (hi - lo === 0) return { domain: [0, 1000], ticks: [0, 1000] };
+ const floorStep = hi - lo >= 1000 ? 1000 : 0;
+ const mag = 10 ** Math.floor(Math.log10((hi - lo) / maxIntervals));
+ let step = mag * 100;
+ for (const m of [1, 2, 5, 10, 20, 50]) {
+ const s = m * mag;
+ if (s >= floorStep && Math.ceil(hi / s) - Math.floor(lo / s) <= maxIntervals) {
+ step = s;
+ break;
+ }
+ }
+ const start = Math.floor(lo / step);
+ const end = Math.ceil(hi / step);
+ const ticks: number[] = [];
+ for (let i = start; i <= end; i++) ticks.push(i * step);
+ return { domain: [start * step, end * step], ticks };
+};
+
 // Prev/next pager for the sliding chart windows. offset counts periods back
 // from the most recent window, so "older" increments and "newer" decrements.
 // Renders nothing when the whole series already fits in one window.
@@ -5098,14 +5125,14 @@ function PerformanceCharts({
 
  // Fixed y-axis domains, computed across the whole series rather than the
  // visible window, so panning shifts the x-axis without rescaling y.
- const barDomain = useMemo(() => {
+ const barScale = useMemo(() => {
  let lo = 0;
  let hi = 0;
  for (const d of allBarData) {
  hi = Math.max(hi, d.barCSP + d.barCC + d.barPendCSP + d.barPendCC, d.target ?? 0);
  lo = Math.min(lo, d.barNeg);
  }
- return padDomain(lo, hi);
+ return snapDomain(lo, hi);
  }, [allBarData]);
 
  const cumDomain = useMemo(() => {
@@ -5132,8 +5159,11 @@ function PerformanceCharts({
 
  if (closedPositions.length === 0) return null;
 
- const dollarTick = (v: number) =>
- v >= 1000 ?`$${(v / 1000).toFixed(1)}k` :`$${v.toFixed(0)}`;
+ // Sign ahead of the dollar sign ("-$1.0k", not "$-1000").
+ const dollarTick = (v: number) => {
+ const a = Math.abs(v);
+ return`${v < 0 ?"-" :""}$${a >= 1000 ?`${(a / 1000).toFixed(1)}k` : a.toFixed(0)}`;
+ };
 
  return (
  <div className="grid grid-cols-2 gap-4">
@@ -5190,8 +5220,12 @@ function PerformanceCharts({
  tickLine={false}
  tickFormatter={dollarTick}
  width={36}
- domain={barDomain}
+ domain={barScale.domain}
+ ticks={barScale.ticks}
+ interval={0}
  />
+ {/* Solid zero baseline — gridline color, so loss weeks read as below it */}
+ <ReferenceLine y={0} stroke="var(--color-border)" strokeWidth={1} />
  <RechartsTooltip
  cursor={{ fill:"var(--color-muted)" }}
  content={({ active, payload, label }) => {
@@ -5257,7 +5291,8 @@ function PerformanceCharts({
  if (!height || height < MIN_SEG_PX) return <g />;
  const isTop = !segVisible(barCC, height, barCSP) && !segVisible(barPendCSP, height, barCSP) && !segVisible(barPendCC, height, barCSP);
  const r = 3;
- return <path d={barPath(x, y, width, height, isTop ? r : 0, isTop ? r : 0, r, r)} fill="var(--color-violet)" />;
+ // Bottom of every positive stack sits square on the zero baseline.
+ return <path d={barPath(x, y, width, height, isTop ? r : 0, isTop ? r : 0, 0, 0)} fill="var(--color-violet)" />;
  }}
  />
  {/* CC realized — solid blue, above CSP */}
@@ -5267,12 +5302,11 @@ function PerformanceCharts({
  maxBarSize={32}
  isAnimationActive={barAnimate}
  shape={(props: BarShapeProps) => {
- const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props;
+ const { x, y, width, height, barCC, barPendCSP, barPendCC } = props;
  if (!height || height < MIN_SEG_PX) return <g />;
  const isTop = !segVisible(barPendCSP, height, barCC) && !segVisible(barPendCC, height, barCC);
- const isBottom = !segVisible(barCSP, height, barCC);
  const r = 3;
- return <path d={barPath(x, y, width, height, isTop ? r : 0, isTop ? r : 0, isBottom ? r : 0, isBottom ? r : 0)} fill="var(--color-blue)" />;
+ return <path d={barPath(x, y, width, height, isTop ? r : 0, isTop ? r : 0, 0, 0)} fill="var(--color-blue)" />;
  }}
  />
  {/* CSP pending — striped violet, above CC realized */}
@@ -5282,12 +5316,11 @@ function PerformanceCharts({
  maxBarSize={32}
  isAnimationActive={barAnimate}
  shape={(props: BarShapeProps) => {
- const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props;
+ const { x, y, width, height, barPendCSP, barPendCC } = props;
  if (!height || height < MIN_SEG_PX || !width || width <= 0) return <g />;
  const isTop = !segVisible(barPendCC, height, barPendCSP);
- const isBottom = !segVisible(barCSP, height, barPendCSP) && !segVisible(barCC, height, barPendCSP);
  const r = 3;
- const d = barPath(x, y, width, height, isTop ? r : 0, isTop ? r : 0, isBottom ? r : 0, isBottom ? r : 0);
+ const d = barPath(x, y, width, height, isTop ? r : 0, isTop ? r : 0, 0, 0);
  const clipId =`pending-csp-${Math.round(x * 10)}`;
  const lines: React.ReactElement[] = [];
  for (let offset = -height; offset < width + height; offset += 5) {
@@ -5316,11 +5349,10 @@ function PerformanceCharts({
  maxBarSize={32}
  isAnimationActive={barAnimate}
  shape={(props: BarShapeProps) => {
- const { x, y, width, height, barCSP, barCC, barPendCSP, barPendCC } = props;
+ const { x, y, width, height } = props;
  if (!height || height < MIN_SEG_PX || !width || width <= 0) return <g />;
- const isBottom = !segVisible(barCSP, height, barPendCC) && !segVisible(barCC, height, barPendCC) && !segVisible(barPendCSP, height, barPendCC);
  const r = 3;
- const d = barPath(x, y, width, height, r, r, isBottom ? r : 0, isBottom ? r : 0);
+ const d = barPath(x, y, width, height, r, r, 0, 0);
  const clipId =`pending-cc-${Math.round(x * 10)}`;
  const lines: React.ReactElement[] = [];
  for (let offset = -height; offset < width + height; offset += 5) {
@@ -5349,10 +5381,15 @@ function PerformanceCharts({
  maxBarSize={32}
  isAnimationActive={barAnimate}
  shape={(props: BarShapeProps) => {
- const { x, y, width, height } = props;
- if (!height || height < MIN_SEG_PX) return <g />;
+ // Recharts hands a below-zero bar a negative height with y on the zero
+ // line; flip it to a top-left origin so barPath draws downward from 0.
+ const { x, width } = props;
+ const h = Math.abs(props.height ?? 0);
+ if (h < MIN_SEG_PX) return <g />;
+ const y = props.height < 0 ? props.y + props.height : props.y;
  const r = 3;
- return <path d={barPath(x, y, width, height, 0, 0, r, r)} fill="var(--color-down)" />;
+ // Square top on the zero baseline; rounded only at the far (bottom) end.
+ return <path d={barPath(x, y, width, h, 0, 0, r, r)} fill="var(--color-down)" />;
  }}
  />
  {/* Per-period target, stepping at basis adjustments, edge to edge (see
