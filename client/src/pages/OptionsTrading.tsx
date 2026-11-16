@@ -15,6 +15,11 @@ import {
  updateOptionsPosition,
  closeOptionsPosition,
  rollOptionsPosition,
+ confirmImportedOpen,
+ confirmImportedRoll,
+ confirmImportedDrafts,
+ stageRobinhoodImport,
+ getLatestImportedFill,
  partialCloseOptionsPosition,
  editClosedPosition,
  deleteOptionsPosition,
@@ -48,6 +53,7 @@ import {
  type RealizedDisposition,
  type OptionsPositionInput,
  type OptionsCloseInput,
+ type RobinhoodStageResult,
  type OptionOutcome,
  type ScreenerResult,
  type ScreenerParams,
@@ -62,7 +68,7 @@ import { AssignedSharesCard, cappedUnrealizedPnl, type SellCoveredCallSeed } fro
 import { Button } from"@/components/Button";
 import { Modal } from"@/components/Modal";
 import { DatePicker } from"@/components/DatePicker";
-import { Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, EyeOff, CornerDownRight, AlertTriangle, Share2, Copy } from"lucide-react";
+import { Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Settings, Link, Pencil, Trash2, CircleCheck, Upload, FileText, AlertCircle, Check, CheckCircle2, PlayCircle, RefreshCw, Search, X, ScanSearch, BookmarkPlus, BookmarkCheck, Info, EyeOff, CornerDownRight, AlertTriangle, Share2, Repeat, Copy } from"lucide-react";
 import { createPortal } from"react-dom";
 import { cn, parseAmount, localToday } from"@/lib/utils";
 import { impliedDelta } from"@/lib/blackScholes";
@@ -244,7 +250,40 @@ function normalizePosition(p: OptionsPosition): OptionsPosition {
  currentDelta: p.currentDelta != null ? Number(p.currentDelta) : null,
  excludeFromLivePnl: p.excludeFromLivePnl ?? false,
  isDraft: p.isDraft ?? false,
+ ivAtOpen: p.ivAtOpen != null ? Number(p.ivAtOpen) : null,
+ stagedBuybackPerShare: p.stagedBuybackPerShare != null ? Number(p.stagedBuybackPerShare) : null,
+ stagedFeesClose: p.stagedFeesClose != null ? Number(p.stagedFeesClose) : null,
  };
+}
+
+// An imported (broker) draft, and whether it stages a roll.
+const isImportedDraft = (p: OptionsPosition) => p.isDraft && !!p.externalId;
+const isImportedRollDraft = (p: OptionsPosition) => isImportedDraft(p) && p.importFlags?.kind ==="roll";
+// Clean enough for bulk confirm — mirrors the server's bulkBlocker.
+const isCleanImportedDraft = (p: OptionsPosition) =>
+ isImportedDraft(p) &&
+ !p.importFlags?.possibleDuplicateOfId &&
+ !(p.importFlags?.lotChoices?.length && p.assignedFromStrikePrice == null) &&
+ !(isImportedRollDraft(p) && !p.stagedRollFromId);
+
+// The second line under an imported draft: the roll's closing leg, then any review flags.
+function importNotesFor(p: OptionsPosition): Array<{ text: string; tone?:"warn" }> {
+ const f = p.importFlags;
+ if (!f) return [];
+ const notes: Array<{ text: string; tone?:"warn" }> = [];
+ if (f.kind ==="roll") {
+ const type = p.optionType ==="CALL" ?"C" :"P";
+ const from = f.closeLeg ?`$${fmtUSD(f.closeLeg.strike)} ${type} ${fmtDate(f.closeLeg.expiration)}` :"the prior leg";
+ notes.push({ text:`Rolls from ${from}` });
+ if (p.stagedBuybackPerShare != null) notes.push({ text:`buyback $${fmtUSD(p.stagedBuybackPerShare)}` });
+ const net = f.netCreditPerShare ?? (p.stagedBuybackPerShare != null ? p.premiumPerShare - p.stagedBuybackPerShare : null);
+ if (net != null) notes.push({ text:`net ${net >= 0 ?"+" :"−"}$${fmtUSD(Math.abs(net))}` });
+ if (!p.stagedRollFromId) notes.push({ text:`Needs a match: ${f.needsMatch ??"pick the position being rolled"}`, tone:"warn" });
+ }
+ if (f.possibleDuplicateOfId) notes.push({ text:"Possible duplicate of a position you entered by hand", tone:"warn" });
+ if (f.lotChoices?.length && p.assignedFromStrikePrice == null) notes.push({ text:"Pick a lot when confirming", tone:"warn" });
+ if (f.uncovered) notes.push({ text:"Uncovered?", tone:"warn" });
+ return notes;
 }
 
 // ── Calculations ───────────────────────────────────────────────────────────────
@@ -596,6 +635,8 @@ function PositionModal({ tickers, editing, prefill, defaultInvestmentAccountId, 
  return getDefaultOpenedAt();
  });
  const [isDraft, setIsDraft] = useState(editing?.isDraft ?? false);
+ // An imported draft already has its broker fill time, so the field stays live.
+ const importedDraft = !!editing && isImportedDraft(editing);
  const [contracts, setContracts] = useState(editing?.contracts?.toString() ??"");
  const [premiumPerShare, setPremiumPerShare] = useState(editing?.premiumPerShare?.toString() ??"");
  const [feesOpen, setFeesOpen] = useState(editing?.feesOpen?.toString() ??"");
@@ -833,7 +874,8 @@ function PositionModal({ tickers, editing, prefill, defaultInvestmentAccountId, 
  side:"SELL",
  strikePrice: parseAmount(strikePrice),
  expirationDate,
- openedAt: etToUtc(openedAt),
+ // An untouched time keeps the stored instant (and its seconds).
+ openedAt: editing && openedAt === utcToEtInput(editing.openedAt) ? editing.openedAt : etToUtc(openedAt),
  contracts: parseInt(contracts, 10),
  premiumPerShare: parseAmount(premiumPerShare),
  feesOpen: feesOpen ? parseAmount(feesOpen) : null,
@@ -1086,9 +1128,9 @@ function PositionModal({ tickers, editing, prefill, defaultInvestmentAccountId, 
  <label className="block text-xs font-medium mb-1">Date & Time Opened <span className="text-muted-foreground font-normal">(ET)</span></label>
  <input
  type="datetime-local"
- required={!isDraft}
- disabled={isDraft}
- value={isDraft ?"" : openedAt}
+ required={!isDraft || importedDraft}
+ disabled={isDraft && !importedDraft}
+ value={isDraft && !importedDraft ?"" : openedAt}
  onChange={(e) => { setOpenedAt(e.target.value); setPriceAtOpenStatus("idle"); }}
  onBlur={() => {
  if ((!editing || editing.isDraft) && !isDraft) {
@@ -1097,7 +1139,7 @@ function PositionModal({ tickers, editing, prefill, defaultInvestmentAccountId, 
  }}
  className={cn(
 "w-full rounded-md border border-border px-3 py-2",
- isDraft
+ isDraft && !importedDraft
  ?"bg-muted text-muted-foreground cursor-not-allowed"
  :"focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
  )}
@@ -1321,20 +1363,34 @@ interface CloseModalProps {
  onClose: () => void;
  onSaved: () => void;
  defaultBankingAccountId?: string | null;
+ // Confirming an imported roll draft: `position` is the live leg being rolled,
+ // `draft` the imported new leg. The form opens in roll mode, pre-filled with
+ // Robinhood's fill, and submitting promotes the draft into the new leg.
+ stagedRoll?: {
+ draft: OptionsPosition;
+ candidates: OptionsPosition[];
+ onChangeMatch: (id: string) => void;
+ };
 }
+
+const positionLabel = (p: OptionsPosition) =>
+`$${fmtUSD(p.strikePrice)} ${p.optionType ==="CALL" ?"C" :"P"} ${fmtDate(p.expirationDate)} · ${p.contracts} ct · opened ${fmtDateTimeShort(p.openedAt)}`;
 
 function addOneWeek(dateIso: string): string {
  return nextWeekExpiration(dateIso.split("T")[0]);
 }
 
-function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountId }: CloseModalProps) {
+function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountId, stagedRoll }: CloseModalProps) {
  const expirationDateStr = position.expirationDate.split("T")[0]; // YYYY-MM-DD
  const defaultAssignedClosedAt = expirationDateStr +"T16:00"; // 4pm ET market close
+ const draft = stagedRoll?.draft ?? null;
 
- const [outcome, setOutcome] = useState<OptionOutcome>("EXPIRED_WORTHLESS");
- const [closedAt, setClosedAt] = useState(getDefaultOpenedAt());
- const [closePremiumPerShare, setClosePremiumPerShare] = useState("");
- const [feesClose, setFeesClose] = useState("");
+ const [outcome, setOutcome] = useState<OptionOutcome>(draft ?"ROLLED" :"EXPIRED_WORTHLESS");
+ // An imported roll closes at its fill time; both legs filled together.
+ const [closedAt, setClosedAt] = useState(() => draft ? utcToEtInput(draft.openedAt) : getDefaultOpenedAt());
+ const initialClosedAt = useRef(closedAt);
+ const [closePremiumPerShare, setClosePremiumPerShare] = useState(draft?.stagedBuybackPerShare?.toString() ??"");
+ const [feesClose, setFeesClose] = useState(draft?.stagedFeesClose?.toString() ??"");
  const [contractsAssigned, setContractsAssigned] = useState("");
  const [stockPriceAtClose, setStockPriceAtClose] = useState("");
  const [investmentAccountId, setInvestmentAccountId] = useState(position.investmentAccountId ??"");
@@ -1348,18 +1404,18 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  // Partial *rolling* an already-chained leg is still unsupported (see the roll
  // route), so that combination stays gated below once isRolled is known.
  const isChained = position.groupId != null;
- const [contractsToClose, setContractsToClose] = useState(position.contracts.toString());
+ const [contractsToClose, setContractsToClose] = useState((draft ? Math.min(draft.contracts, position.contracts) : position.contracts).toString());
 
  const { data: investmentAccounts } = useApi(() => getInvestmentAccounts(), []);
  const { data: allAccounts } = useApi(() => getAccounts(), []);
  const bankingAccounts = (allAccounts ?? []).filter((a) => a.type ==="CHECKING" || a.type ==="SAVINGS");
 
  // Roll-specific: new position fields
- const [newPremiumPerShare, setNewPremiumPerShare] = useState("");
- const [newStrikePrice, setNewStrikePrice] = useState(position.strikePrice.toFixed(2));
- const [newExpirationDate, setNewExpirationDate] = useState(() => addOneWeek(position.expirationDate));
- const [newStockPriceAtOpen, setNewStockPriceAtOpen] = useState("");
- const [newFeesOpen, setNewFeesOpen] = useState("");
+ const [newPremiumPerShare, setNewPremiumPerShare] = useState(draft ? draft.premiumPerShare.toString() :"");
+ const [newStrikePrice, setNewStrikePrice] = useState((draft ?? position).strikePrice.toFixed(2));
+ const [newExpirationDate, setNewExpirationDate] = useState(() => draft ? draft.expirationDate.split("T")[0] : addOneWeek(position.expirationDate));
+ const [newStockPriceAtOpen, setNewStockPriceAtOpen] = useState(draft?.stockPriceAtOpen?.toString() ??"");
+ const [newFeesOpen, setNewFeesOpen] = useState(draft?.feesOpen?.toString() ??"");
  const [priceAtOpenStatus, setPriceAtOpenStatus] = useState<"idle" |"fetching" |"success" |"error">("idle");
  const [priceAtOpenLabel, setPriceAtOpenLabel] = useState("");
  // The new leg opens at the roll's close instant.
@@ -1370,7 +1426,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  openedAtEt: closedAt,
  premium: newPremiumPerShare,
  stockPrice: newStockPriceAtOpen,
- });
+ }, draft ? { delta: draft.deltaAtOpen, capturedAt: draft.deltaAtOpenCapturedAt } : undefined);
  const [assignedPriceFetching, setAssignedPriceFetching] = useState(false);
 
  const [saving, setSaving] = useState(false);
@@ -1403,6 +1459,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  // For a CALL: ITM when price > strike. For a PUT: ITM when price < strike.
  // The existing isAssigned effects cascade from this and fill in the other fields.
  useEffect(() => {
+ if (draft) return; // an imported roll is always a roll
  // Option expiry is treated as 4 pm ET = 20:00 UTC on the expiration date.
  const expiryUtc = new Date(expirationDateStr +"T20:00:00.000Z");
  if (Date.now() <= expiryUtc.getTime()) return; // not yet expired
@@ -1443,6 +1500,8 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  // Auto-fetch stock price when closedAt changes and outcome is ROLLED
  useEffect(() => {
  if (!isRolled || !closedAt) return;
+ // Keep the export's stock price until the roll time is edited.
+ if (draft && draft.stockPriceAtOpen != null && closedAt === initialClosedAt.current) return;
  let cancelled = false;
  setPriceAtOpenStatus("fetching");
  getStockPriceAtOpen(position.ticker.symbol, closedAt)
@@ -1476,8 +1535,9 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  setError("");
  try {
  if (isRolled) {
- await rollOptionsPosition(position.id, {
- closedAt: closedAt ? etToUtc(closedAt) : null,
+ const rollPayload = {
+ // Unedited imported time keeps Robinhood's seconds.
+ closedAt: draft && closedAt === initialClosedAt.current ? draft.openedAt : closedAt ? etToUtc(closedAt) : null,
  closePremiumPerShare: closePremiumPerShare ? parseAmount(closePremiumPerShare) : null,
  feesClose: feesClose ? parseAmount(feesClose) : null,
  newPremiumPerShare: parseAmount(newPremiumPerShare),
@@ -1488,7 +1548,9 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  newDeltaAtOpenCapturedAt: newDeltaAtOpen.value ? newDeltaAtOpen.capturedAt : null,
  newFeesOpen: newFeesOpen ? parseAmount(newFeesOpen) : null,
  ...(isPartial ? { contracts: n } : {}),
- });
+ };
+ if (draft) await confirmImportedRoll(draft.id, { ...rollPayload, rollFromId: position.id });
+ else await rollOptionsPosition(position.id, rollPayload);
  } else if (isPartial) {
  // Partial close → split N contracts off into a new closed leg.
  await partialCloseOptionsPosition(position.id, {
@@ -1530,8 +1592,8 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  await closeOptionsPosition(position.id, data);
  }
  onSaved();
- } catch {
- setError("Failed to close position.");
+ } catch (err) {
+ setError(draft && err instanceof Error ? err.message :"Failed to close position.");
  } finally {
  setSaving(false);
  }
@@ -1548,10 +1610,40 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  const dollarInputClass ="w-full rounded-md border border-border pl-7 pr-3 py-2 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
  return (
- <Modal open onClose={onClose} title={`Close: ${position.ticker.symbol} $${position.strikePrice} ${position.optionType}`}>
+ <Modal open onClose={onClose} title={draft ?`Confirm roll: ${position.ticker.symbol} $${position.strikePrice} ${position.optionType}` :`Close: ${position.ticker.symbol} $${position.strikePrice} ${position.optionType}`}>
  <form onSubmit={handleSubmit} noValidate className="space-y-4">
- {/* Outcome selector */}
+ {stagedRoll && draft && (() => {
+ const net = newPremiumPerShare && closePremiumPerShare ? parseAmount(newPremiumPerShare) - parseAmount(closePremiumPerShare) : null;
+ return (
+ <>
+ <div className="flex items-start gap-2 rounded-md bg-blue-soft px-3 py-2.5 text-xs text-blue-deep">
+ <Info className="h-3.5 w-3.5 shrink-0 mt-px" />
+ <span>
+ Imported from Robinhood. Confirming closes the position below as rolled and opens the new leg
+ {net != null && <> for a net {net >= 0 ?"credit" :"debit"} of <span className="font-medium">${fmtUSD(Math.abs(net))}</span>/share</>}.
+ </span>
+ </div>
  <div>
+ <label className="block text-xs font-medium mb-1">Position Being Rolled</label>
+ <div className="relative">
+ <select
+ value={position.id}
+ onChange={(e) => stagedRoll.onChangeMatch(e.target.value)}
+ className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-foreground"
+ >
+ {stagedRoll.candidates.map((c) => (
+ <option key={c.id} value={c.id}>{positionLabel(c)}</option>
+ ))}
+ </select>
+ <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+ </div>
+ </div>
+ </>
+ );
+ })()}
+
+ {/* Outcome selector */}
+ {!draft && <div>
  <label className="block text-xs font-medium mb-1">Outcome</label>
  <div className="grid grid-cols-2 rounded-md border border-border overflow-hidden text-13 font-medium">
  {outcomeOptions.map((o, i) => (
@@ -1572,7 +1664,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  </button>
  ))}
  </div>
- </div>
+ </div>}
 
  {/* Contracts to close — splitting. Hidden for single-contract positions,
  and for rolling a chained leg (partial rolls of an already-rolled
@@ -1881,7 +1973,7 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  <div className="flex justify-end gap-2 pt-2">
  <Button variant="secondary" onClick={onClose}>Cancel</Button>
  <Button type="submit" disabled={saving}>
- {saving ?"Saving…" : isRolled ?"Roll Position" :"Close Position"}
+ {saving ?"Saving…" : draft ?"Confirm Roll" : isRolled ?"Roll Position" :"Close Position"}
  </Button>
  </div>
  </form>
@@ -2474,6 +2566,77 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
  );
 }
 
+// ── Confirm Imported Roll ───────────────────────────────────────────────────────
+// Opens the Roll form for an imported roll draft. When the import couldn't tell
+// which live position the roll closes, pick it first.
+
+function RollDraftConfirmModal({ draft, openPositions, draftPositions, onClose, onSaved }: {
+ draft: OptionsPosition;
+ openPositions: OptionsPosition[];
+ draftPositions: OptionsPosition[];
+ onClose: () => void;
+ onSaved: () => void;
+}) {
+ const candidates = openPositions.filter((p) => p.ticker.symbol === draft.ticker.symbol && p.optionType === draft.optionType);
+ const [fromId, setFromId] = useState(draft.stagedRollFromId ??"");
+ const from = candidates.find((c) => c.id === fromId) ?? null;
+ // The staged leg may itself be an imported draft awaiting confirmation.
+ const fromDraft = !from && draft.stagedRollFromId ? draftPositions.find((d) => d.id === draft.stagedRollFromId) ?? null : null;
+
+ if (from) {
+ return (
+ <ClosePositionModal
+ key={from.id}
+ position={from}
+ stagedRoll={{ draft, candidates, onChangeMatch: setFromId }}
+ onClose={onClose}
+ onSaved={onSaved}
+ />
+ );
+ }
+
+ const type = draft.optionType ==="CALL" ?"CALL" :"PUT";
+ return (
+ <Modal open onClose={onClose} title={`Confirm roll: ${draft.ticker.symbol} $${draft.strikePrice} ${type}`}>
+ <div className="space-y-4">
+ <div className="flex items-start gap-2 rounded-md bg-blue-soft px-3 py-2.5 text-xs text-blue-deep">
+ <Info className="h-3.5 w-3.5 shrink-0 mt-px" />
+ <span>
+ {fromDraft
+ ?`The position this roll closes (${positionLabel(fromDraft)}) is still an imported draft. Confirm it first.`
+ : draft.importFlags?.needsMatch ??"Pick the position this roll closes."}
+ </span>
+ </div>
+ {!fromDraft && (
+ candidates.length > 0 ? (
+ <div>
+ <label className="block text-xs font-medium mb-1">Position Being Rolled</label>
+ <div className="relative">
+ <select
+ value=""
+ onChange={(e) => setFromId(e.target.value)}
+ className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-foreground"
+ >
+ <option value="" disabled>Choose a position…</option>
+ {candidates.map((c) => (
+ <option key={c.id} value={c.id}>{positionLabel(c)}</option>
+ ))}
+ </select>
+ <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+ </div>
+ </div>
+ ) : (
+ <p className="text-muted-foreground">No open {draft.ticker.symbol} {type === "CALL" ?"calls" :"puts"} to roll. Delete this draft if the roll was already recorded.</p>
+ )
+ )}
+ <div className="flex justify-end pt-2">
+ <Button variant="secondary" onClick={onClose}>Cancel</Button>
+ </div>
+ </div>
+ </Modal>
+ );
+}
+
 // ── Confirm Draft Modal ────────────────────────────────────────────────────────
 
 interface ConfirmDraftModalProps {
@@ -2483,7 +2646,17 @@ interface ConfirmDraftModalProps {
 }
 
 function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProps) {
- const [confirmedAt, setConfirmedAt] = useState(getDefaultOpenedAt);
+ // An imported draft confirms with Robinhood's fill, not "now" and live quotes.
+ const imported = isImportedDraft(position);
+ const flags = position.importFlags ?? null;
+ const isCall = position.optionType ==="CALL";
+ const fillAtEt = utcToEtInput(position.openedAt);
+ const [confirmedAt, setConfirmedAt] = useState(() => imported ? fillAtEt : getDefaultOpenedAt());
+ const lotChoices = imported && position.assignedFromStrikePrice == null ? flags?.lotChoices ?? [] : [];
+ const lotKey = (l: { strikePrice: number; expirationDate: string }) =>`${l.strikePrice}|${l.expirationDate}`;
+ const [selectedLot, setSelectedLot] = useState("");
+ const chosenLot = lotChoices.find((l) => lotKey(l) === selectedLot) ?? null;
+ const [shareCostBasis, setShareCostBasis] = useState(position.shareCostBasis?.toString() ??"");
  const [contracts, setContracts] = useState(position.contracts.toString());
  const [premiumPerShare, setPremiumPerShare] = useState(position.premiumPerShare.toString());
  const [stockPriceAtOpen, setStockPriceAtOpen] = useState(position.stockPriceAtOpen?.toString() ??"");
@@ -2493,7 +2666,7 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
  const [error, setError] = useState("");
 
  useEffect(() => {
- if (position.stockPriceAtOpen != null) return;
+ if (imported || position.stockPriceAtOpen != null) return;
  let cancelled = false;
  setPriceFetching(true);
  getUnderlyingQuote(position.ticker.symbol)
@@ -2510,7 +2683,8 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
  try {
  // Re-derive delta from the confirmed fill; the draft's delta is the
  // screener's chain greek from whenever the draft was created.
- const openedAtUtc = etToUtc(confirmedAt);
+ // An unedited imported time keeps Robinhood's seconds.
+ const openedAtUtc = imported && confirmedAt === fillAtEt ? position.openedAt : etToUtc(confirmedAt);
  const implied = stockPriceAtOpen
  ? impliedDelta({
  optionType: position.optionType,
@@ -2521,6 +2695,30 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
  stockPrice: parseAmount(stockPriceAtOpen),
  })
  : null;
+ if (imported) {
+ // Keep the export's delta unless the inputs it was derived from changed.
+ const unchanged =
+ openedAtUtc === position.openedAt &&
+ parseAmount(premiumPerShare) === position.premiumPerShare &&
+ (stockPriceAtOpen ? parseAmount(stockPriceAtOpen) : null) === position.stockPriceAtOpen;
+ const deltaPart = unchanged || !implied
+ ? {}
+ : { deltaAtOpen: Number(implied.delta.toFixed(4)), deltaAtOpenCapturedAt: openedAtUtc };
+ await confirmImportedOpen(position.id, {
+ openedAt: openedAtUtc,
+ ...deltaPart,
+ contracts: parseInt(contracts, 10),
+ premiumPerShare: parseAmount(premiumPerShare),
+ feesOpen: feesOpen ? parseAmount(feesOpen) : null,
+ stockPriceAtOpen: stockPriceAtOpen ? parseAmount(stockPriceAtOpen) : null,
+ ...(isCall && position.assignedFromStrikePrice == null
+ ? { shareCostBasis: chosenLot ? chosenLot.weightedCostPerShare : shareCostBasis ? parseAmount(shareCostBasis) : null }
+ : {}),
+ ...(chosenLot ? { assignedFromStrikePrice: chosenLot.strikePrice, assignedFromExpirationDate: chosenLot.expirationDate } : {}),
+ });
+ onSaved();
+ return;
+ }
  await updateOptionsPosition(position.id, {
  isDraft: false,
  openedAt: openedAtUtc,
@@ -2531,8 +2729,8 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
  stockPriceAtOpen: stockPriceAtOpen ? parseAmount(stockPriceAtOpen) : null,
  });
  onSaved();
- } catch {
- setError("Failed to confirm position.");
+ } catch (err) {
+ setError(imported && err instanceof Error ? err.message :"Failed to confirm position.");
  } finally {
  setSaving(false);
  }
@@ -2544,7 +2742,28 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
  return (
  <Modal open onClose={onClose} title={`Confirm: ${position.ticker.symbol} $${position.strikePrice} ${position.optionType}`}>
  <form onSubmit={handleSubmit} noValidate className="space-y-4">
+ {imported ? (
+ <div className="space-y-2">
+ <div className="flex items-start gap-2 rounded-md bg-blue-soft px-3 py-2.5 text-xs text-blue-deep">
+ <Info className="h-3.5 w-3.5 shrink-0 mt-px" />
+ <span>Imported from Robinhood. Fields hold the fill as exported — edit anything that's off.</span>
+ </div>
+ {flags?.possibleDuplicateOfId && (
+ <div className="flex items-start gap-2 rounded-md bg-warn-soft px-3 py-2.5 text-xs text-warn-deep">
+ <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
+ <span>A position you entered by hand has the same terms and was opened the same day. If it's this trade, delete this draft instead.</span>
+ </div>
+ )}
+ {flags?.uncovered && (
+ <div className="flex items-start gap-2 rounded-md bg-warn-soft px-3 py-2.5 text-xs text-warn-deep">
+ <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
+ <span>The account doesn't appear to hold enough {position.ticker.symbol} shares to cover this call.</span>
+ </div>
+ )}
+ </div>
+ ) : (
  <p className="text-muted-foreground">Confirm the details for this position. All fields are pre-filled with defaults — edit as needed.</p>
+ )}
 
  <div>
  <label className="block text-xs font-medium mb-1">Date & Time Opened <span className="text-muted-foreground font-normal">(ET)</span></label>
@@ -2581,7 +2800,7 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
  <label className="block text-xs font-medium mb-1">
  Stock Price at Open{" "}
  <span className="text-muted-foreground font-normal">
- {priceFetching ?"(fetching…)" :"(from Tradier)"}
+ {imported ?"(from export)" : priceFetching ?"(fetching…)" :"(from Tradier)"}
  </span>
  </label>
  <div className="relative">
@@ -2607,6 +2826,50 @@ function ConfirmDraftModal({ position, onClose, onSaved }: ConfirmDraftModalProp
  </div>
  </div>
 
+ {imported && isCall && position.assignedFromStrikePrice != null && (
+ <p className="tp-caption">Linked to the ${fmtUSD(position.assignedFromStrikePrice)} assignment lot{position.shareCostBasis != null ?` · cost basis $${fmtUSD(position.shareCostBasis)}/share` :""}.</p>
+ )}
+ {imported && isCall && position.assignedFromStrikePrice == null && (
+ <>
+ {lotChoices.length > 0 && (
+ <div>
+ <label className="block text-xs font-medium mb-1">Assigned Lot</label>
+ <div className="relative">
+ <select
+ value={selectedLot}
+ onChange={(e) => setSelectedLot(e.target.value)}
+ className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-foreground"
+ >
+ <option value="">None — shares bought outright</option>
+ {lotChoices.map((l) => (
+ <option key={lotKey(l)} value={lotKey(l)}>
+ ${fmtUSD(l.strikePrice)} put assigned {fmtDate(l.expirationDate)} · {l.contractsRemaining} ct free{l.weightedCostPerShare != null ?` · $${fmtUSD(l.weightedCostPerShare)}/sh` :""}
+ </option>
+ ))}
+ </select>
+ <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
+ </div>
+ </div>
+ )}
+ {!chosenLot && (
+ <div>
+ <label className="block text-xs font-medium mb-1">Cost Basis / Share <span className="text-muted-foreground font-normal">(optional)</span></label>
+ <div className="relative">
+ <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+ <input
+ type="text" inputMode="decimal"
+ value={shareCostBasis} onChange={(e) => setShareCostBasis(e.target.value)}
+ className={dollarInputClass}
+ />
+ </div>
+ {flags?.robinhoodAvgCost != null && (
+ <p className="mt-1 tp-caption">Robinhood's average cost: ${fmtUSD(flags.robinhoodAvgCost)}</p>
+ )}
+ </div>
+ )}
+ </>
+ )}
+
  {error && <p className="text-down">{error}</p>}
 
  <div className="flex justify-end gap-2 pt-2">
@@ -2630,6 +2893,8 @@ interface OpenPositionsTableProps {
  onClose: (p: OptionsPosition) => void;
  onConfirm: (p: OptionsPosition) => void;
  onPositionUpdated: () => void;
+ // Bulk-confirm imported drafts; resolves to a one-line summary.
+ onBulkConfirm?: (ids: string[]) => Promise<string>;
  extraTickers?: string[];
  onPricesUpdated?: (prices: Map<string, number>) => void;
  seedLivePrices?: Map<string, number>;
@@ -2649,7 +2914,7 @@ type ColGroupKey = (typeof COL_GROUPS)[number]["key"];
 // if opened; open positions total what one is actually carrying.
 type SelectionKind = "open" | "draft";
 
-function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, chainMaxCapitalAtRiskMap, onEdit, onClose, onConfirm, onPositionUpdated, extraTickers, onPricesUpdated, seedLivePrices, tabBarEl }: OpenPositionsTableProps) {
+function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirstOpenedMap, chainMaxCapitalAtRiskMap, onEdit, onClose, onConfirm, onPositionUpdated, onBulkConfirm, extraTickers, onPricesUpdated, seedLivePrices, tabBarEl }: OpenPositionsTableProps) {
  // Set only on the public share page: prices come from the owner's last
  // refresh (never localStorage or a live quote) and nothing here can write.
  const shared = useSharedOptions();
@@ -2657,6 +2922,14 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
  const [openColGroups, setOpenColGroups] = useState<Set<ColGroupKey>>(new Set(["live"]));
  const [draftsOpen, setDraftsOpen] = useState(true);
+ const [bulkConfirming, setBulkConfirming] = useState(false);
+ const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+ // Live positions an imported roll draft will close when confirmed.
+ const pendingRollByFromId = useMemo(() => {
+ const m = new Map<string, OptionsPosition>();
+ for (const d of draftPositions) if (d.stagedRollFromId) m.set(d.stagedRollFromId, d);
+ return m;
+ }, [draftPositions]);
  // Click-to-select rows, summed in the floating totals bar. Cleared whenever the
  // visible row set changes so the totals always describe what's on screen.
  // Drafts and open positions total different columns, so a selection holds one
@@ -3030,15 +3303,21 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  const renderRow = (p: OptionsPosition, isGrouped = false, isDraftRow = false) => {
  const rowKind: SelectionKind = isDraftRow ?"draft" :"open";
  const isSelected = selectedKind === rowKind && selectedIds.has(p.id);
- // For draft rows, substitute page-load time so duration/ann-return calculations are meaningful
- const calcP = isDraftRow ? { ...p, openedAt: PAGE_LOAD_TIME } : p;
+ // For draft rows, substitute page-load time so duration/ann-return calculations
+ // are meaningful. An imported draft already carries its broker fill time.
+ const isImported = isDraftRow && !!p.externalId;
+ const calcP = isDraftRow && !isImported ? { ...p, openedAt: PAGE_LOAD_TIME } : p;
  const c = calcPosition(calcP);
  const isExpired = c.daysLeft < 0;
  const priorPnl = p.groupId ? (chainPnlMap.get(p.groupId) ?? 0) : 0;
  const hasChain = p.groupId != null && priorPnl !== 0;
- const tdClass = hasChain ?"px-2 pt-2 pb-1 text-13 font-mono tabular-nums whitespace-nowrap" :"px-2 py-2 text-13 font-mono tabular-nums whitespace-nowrap";
- const tdNum = hasChain ?"px-2 pt-2 pb-1 tp-numeric whitespace-nowrap" :"px-2 py-2 tp-numeric whitespace-nowrap";
- const tdTextClass = hasChain ?"px-2 pt-2 pb-1 text-13 whitespace-nowrap" :"px-2 py-2 text-13 whitespace-nowrap";
+ const importNotes = isImported ? importNotesFor(p) : [];
+ const pendingRollDraft = !isDraftRow ? pendingRollByFromId.get(p.id) ?? null : null;
+ // A second line under the row: the roll chain's net, or an imported draft's notes.
+ const hasSub = hasChain || importNotes.length > 0;
+ const tdClass = hasSub ?"px-2 pt-2 pb-1 text-13 font-mono tabular-nums whitespace-nowrap" :"px-2 py-2 text-13 font-mono tabular-nums whitespace-nowrap";
+ const tdNum = hasSub ?"px-2 pt-2 pb-1 tp-numeric whitespace-nowrap" :"px-2 py-2 tp-numeric whitespace-nowrap";
+ const tdTextClass = hasSub ?"px-2 pt-2 pb-1 text-13 whitespace-nowrap" :"px-2 py-2 text-13 whitespace-nowrap";
  const chainNet = hasChain ? priorPnl + c.totalPremiumNet : null;
 
  // Live section
@@ -3146,7 +3425,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  // scrolling side's collapsed border does — see --color-row-down-edge.
  const bEdge = isItm ?"border-b border-b-row-down-edge" :"border-b border-b-border";
  const stickyTd = (_leftPx: number, extra?: string, textOnly = false) =>
- cn(textOnly ? tdTextClass : tdClass,"sticky z-[2]", !hasChain && bEdge, stickyHover, stickyBg, extra);
+ cn(textOnly ? tdTextClass : tdClass,"sticky z-[2]", !hasSub && bEdge, stickyHover, stickyBg, extra);
 
  // Row tint classes shared by the primary row and its roll sub-row, so a
  // rolled position highlights as a single unit.
@@ -3165,13 +3444,18 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  onClick={(e) => onRowClick(e, p.id, rowKind, isDraftRow ? visibleDraftIds : visibleOpenIds)}
  // Shift-click would otherwise drag a text selection across the range.
  onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
- className={cn("group", hasChain ?"" :"border-b border-border", rowTint, isDraftRow &&"italic", isDraftRow && !isSelected &&"opacity-60")}
+ className={cn("group", hasSub ?"" :"border-b border-border", rowTint, isDraftRow &&"italic", isDraftRow && !isSelected &&"opacity-60")}
  >
  {/* ── Group 1: Position (always visible, frozen) ── */}
  <td style={{ left: 0 }} className={stickyTd(0, isGrouped ?"pl-8 pr-2" :"pl-4 pr-2", true)}>
  <div className="flex items-center gap-1.5">
  <span className="font-bold font-mono">{p.ticker.symbol}</span>
  {p.group && <Link className="h-3 w-3 text-muted-foreground shrink-0" />}
+ {pendingRollDraft && (
+ <Tooltip content={`Roll pending: an imported roll to the $${fmtUSD(pendingRollDraft.strikePrice)} ${fmtDate(pendingRollDraft.expirationDate)} is waiting in Draft Positions`}>
+ <Repeat className="h-3 w-3 text-warn shrink-0" />
+ </Tooltip>
+ )}
  </div>
  </td>
  <td style={{ left: 80 }} className={stickyTd(80, undefined, true)}>
@@ -3201,8 +3485,15 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  <>
  <td className={cn(tdClass,"border-l border-border/50")}>{p.contracts}</td>
  <td className={tdClass}>${fmtUSD(p.premiumPerShare)}</td>
- <td className={tdClass} title={isDraftRow ? undefined : fmtDateTimeFull(p.openedAt)}>
- {isDraftRow ? <span className="text-muted-foreground italic text-xs">Draft</span> : fmtDateTimeShort(p.openedAt)}
+ <td className={tdClass} title={isDraftRow && !isImported ? undefined : fmtDateTimeFull(p.openedAt)}>
+ {isDraftRow && !isImported ? (
+ <span className="text-muted-foreground italic text-xs">Draft</span>
+ ) : isImported ? (
+ <span className="inline-flex items-center gap-1.5">
+ {fmtDateTimeShort(p.openedAt)}
+ <span className="not-italic rounded-full bg-blue-soft px-1.5 py-px font-sans text-10 font-medium text-blue-deep">Imported</span>
+ </span>
+ ) : fmtDateTimeShort(p.openedAt)}
  </td>
  <td className={tdClass}>{fmt(p.stockPriceAtOpen, 2,"$")}</td>
  <td className={tdClass} title={p.deltaAtOpenCapturedAt != null ?`Captured ${new Date(p.deltaAtOpenCapturedAt).toLocaleString("en-US", { timeZone:"America/New_York", month:"numeric", day:"numeric", year:"2-digit", hour:"numeric", minute:"2-digit" })} ET` : undefined}>
@@ -3516,7 +3807,24 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  </tr>
  ) : null;
 
- return <React.Fragment key={p.id}>{primaryRow}{chainRow}</React.Fragment>;
+ // Imported draft notes: the roll's closing leg and any review flags.
+ const importRow = !hasChain && importNotes.length > 0 ? (
+ <tr key={`${p.id}-import`} className={cn("group border-b border-border", rowTint,"cursor-default italic", !isSelected &&"opacity-60")}>
+ <td style={{ left: 0 }} className={cn(ctd,"sticky z-[2] not-italic", bEdge, stickyHover, stickyBg, isGrouped ?"pl-8 pr-2" :"pl-4 pr-2","font-medium text-muted-foreground/60 uppercase tracking-[1px] font-mono text-10")}>
+ {isImportedRollDraft(p) ?"roll" :"import"}
+ </td>
+ <td colSpan={totalCols - 1} className={cn(ctd,"font-sans")}>
+ {importNotes.map((n, i) => (
+ <span key={i} className={cn(n.tone ==="warn" &&"text-warn")}>
+ {i > 0 && <span className="mx-1.5 text-muted-foreground">·</span>}
+ {n.text}
+ </span>
+ ))}
+ </td>
+ </tr>
+ ) : null;
+
+ return <React.Fragment key={p.id}>{primaryRow}{chainRow}{importRow}</React.Fragment>;
  };
 
  // Summary stats for the footer modules
@@ -3724,7 +4032,36 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  </div>
  </td>
  <td colSpan={totalCols - 4} className="py-1.5 pr-4 text-right">
+ {(() => {
+ // Bulk confirm: the selected imported drafts, else every clean one.
+ const selectedImported = selectedKind ==="draft" ? sortedDrafts.filter((p) => selectedIds.has(p.id) && isImportedDraft(p)) : [];
+ const clean = sortedDrafts.filter(isCleanImportedDraft);
+ const target = selectedImported.length > 0 ? selectedImported : clean;
+ const label = selectedImported.length > 0 ?`Confirm ${target.length} selected` :`Confirm ${target.length} imported`;
+ return (
+ <span className="inline-flex items-center gap-3">
+ {bulkMessage && <span className="tp-caption font-normal">{bulkMessage}</span>}
+ {!readOnly && onBulkConfirm && target.length > 0 && (
+ <button
+ type="button"
+ disabled={bulkConfirming}
+ onClick={async (e) => {
+ e.stopPropagation();
+ setBulkConfirming(true);
+ try { setBulkMessage(await onBulkConfirm(target.map((p) => p.id))); clearSelection(); }
+ catch (err) { setBulkMessage(err instanceof Error ? err.message :"Confirm failed"); }
+ finally { setBulkConfirming(false); }
+ }}
+ className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 disabled:opacity-50 transition-colors"
+ >
+ <PlayCircle className="h-3 w-3" />
+ {bulkConfirming ?"Confirming…" : label}
+ </button>
+ )}
  <span className="tp-caption font-normal">Not included in totals · click <PlayCircle className="inline h-3 w-3 mb-0.5" /> to confirm &amp; open</span>
+ </span>
+ );
+ })()}
  </td>
  </tr>
  )}
@@ -7358,6 +7695,7 @@ export function OptionsTrading() {
  const [closeModal, setCloseModal] = useState<OptionsPosition | null>(null);
  const [editCloseModal, setEditCloseModal] = useState<OptionsPosition | null>(null);
  const [confirmDraftModal, setConfirmDraftModal] = useState<OptionsPosition | null>(null);
+ const [rollDraftModal, setRollDraftModal] = useState<OptionsPosition | null>(null);
  const [settingsModal, setSettingsModal] = useState(false);
  const [importModalOpen, setImportModalOpen] = useState(false);
 
@@ -7549,7 +7887,7 @@ export function OptionsTrading() {
  useEffect(() => {
  const handleKeyDown = (e: KeyboardEvent) => {
  if (readOnly) return;
- if (positionModal || closeModal || editCloseModal || confirmDraftModal || settingsModal || importModalOpen || shareModal) return;
+ if (positionModal || closeModal || editCloseModal || confirmDraftModal || rollDraftModal || settingsModal || importModalOpen || shareModal) return;
  const target = e.target as HTMLElement;
  if (["INPUT","TEXTAREA","SELECT"].includes(target.tagName) || target.isContentEditable) return;
  if (e.key ==="a" || e.key ==="A") {
@@ -7561,7 +7899,7 @@ export function OptionsTrading() {
  };
  document.addEventListener("keydown", handleKeyDown);
  return () => document.removeEventListener("keydown", handleKeyDown);
- }, [readOnly, positionModal, closeModal, editCloseModal, confirmDraftModal, settingsModal, importModalOpen, shareModal]);
+ }, [readOnly, positionModal, closeModal, editCloseModal, confirmDraftModal, rollDraftModal, settingsModal, importModalOpen, shareModal]);
 
  const tabClass = (active: boolean) =>
  cn(
@@ -7671,9 +8009,19 @@ export function OptionsTrading() {
  chainPnlMap={chainPnlMap}
  chainFirstOpenedMap={chainFirstOpenedMap}
  chainMaxCapitalAtRiskMap={chainMaxCapitalAtRiskMap}
- onEdit={(p) => setPositionModal(p)}
+ // An imported roll draft edits and confirms through the Roll form.
+ onEdit={(p) => isImportedRollDraft(p) ? setRollDraftModal(p) : setPositionModal(p)}
  onClose={(p) => setCloseModal(p)}
- onConfirm={(p) => setConfirmDraftModal(p)}
+ onConfirm={(p) => isImportedRollDraft(p) ? setRollDraftModal(p) : setConfirmDraftModal(p)}
+ onBulkConfirm={async (ids) => {
+ const { results } = await confirmImportedDrafts(ids);
+ refetchPositions(); refetchGroups(); refetchTickers();
+ const done = results.filter((r) => r.ok).length;
+ const left = results.filter((r) => !r.ok);
+ return left.length === 0
+ ?`${done} confirmed`
+ :`${done} confirmed · ${left.length} left for review (${[...new Set(left.map((r) => r.reason))].join(",")})`;
+ }}
  onPositionUpdated={refetchPositions}
  extraTickers={activeLotTickers}
  onPricesUpdated={handlePricesUpdated}
@@ -7764,7 +8112,17 @@ export function OptionsTrading() {
  <ConfirmDraftModal
  position={confirmDraftModal}
  onClose={() => setConfirmDraftModal(null)}
- onSaved={() => { setConfirmDraftModal(null); refetchPositions(); }}
+ onSaved={() => { setConfirmDraftModal(null); refetchPositions(); refetchTickers(); }}
+ />
+ )}
+
+ {!readOnly && rollDraftModal && (
+ <RollDraftConfirmModal
+ draft={rollDraftModal}
+ openPositions={openPositions}
+ draftPositions={draftPositions}
+ onClose={() => setRollDraftModal(null)}
+ onSaved={() => { setRollDraftModal(null); refetchPositions(); refetchGroups(); }}
  />
  )}
 
@@ -7873,6 +8231,7 @@ function ImportOptionsModal({ onClose, onComplete }: {
  onClose: () => void;
  onComplete: () => void;
 }) {
+ const [mode, setMode] = useState<"robinhood" |"csv">("robinhood");
  const [step, setStep] = useState<"upload" |"preview" |"result">("upload");
  const [rows, setRows] = useState<ParsedOptionsRow[]>([]);
  const [showErrorsOnly, setShowErrorsOnly] = useState(false);
@@ -8006,8 +8365,18 @@ function ImportOptionsModal({ onClose, onComplete }: {
  setImporting(false);
  };
 
+ if (mode ==="robinhood") {
+ return (
+ <Modal open onClose={onClose} title="Import Options" className="max-w-3xl">
+ <ImportModeToggle mode={mode} onChange={setMode} />
+ <RobinhoodImportPanel onClose={onClose} onComplete={onComplete} />
+ </Modal>
+ );
+ }
+
  return (
  <Modal open onClose={onClose} title="Import Options">
+ {step ==="upload" && <ImportModeToggle mode={mode} onChange={setMode} />}
  {step ==="upload" && (
  <div className="space-y-4">
  <p className="text-muted-foreground">
@@ -8168,5 +8537,243 @@ function ImportOptionsModal({ onClose, onComplete }: {
  </div>
  )}
  </Modal>
+ );
+}
+
+// ── Robinhood import ───────────────────────────────────────────────────────────
+
+function ImportModeToggle({ mode, onChange }: { mode:"robinhood" |"csv"; onChange: (m:"robinhood" |"csv") => void }) {
+ const options = [
+ { value:"robinhood" as const, label:"Robinhood export (JSON)" },
+ { value:"csv" as const, label:"CSV" },
+];
+ return (
+ <div className="mb-4 flex rounded-md border border-border overflow-hidden text-13 font-medium">
+ {options.map((o, i) => (
+ <button
+ key={o.value}
+ type="button"
+ onClick={() => onChange(o.value)}
+ className={cn(
+"flex-1 py-2 px-3 transition-colors",
+ i > 0 &&"border-l border-border",
+ mode === o.value ?"bg-primary text-primary-foreground" :"bg-background text-foreground hover:bg-muted"
+ )}
+ >
+ {o.label}
+ </button>
+ ))}
+ </div>
+ );
+}
+
+// Upload a Robinhood options export (built by Claude from the Robinhood
+// connector). The dry run previews what each fill becomes; Import creates the
+// drafts, which are reviewed and confirmed in Draft Positions.
+function RobinhoodImportPanel({ onClose, onComplete }: { onClose: () => void; onComplete: () => void }) {
+ const { data: latest } = useApi(getLatestImportedFill, []);
+ const [file, setFile] = useState<unknown>(null);
+ const [pasted, setPasted] = useState("");
+ const [preview, setPreview] = useState<RobinhoodStageResult | null>(null);
+ const [result, setResult] = useState<RobinhoodStageResult | null>(null);
+ const [busy, setBusy] = useState(false);
+ const [error, setError] = useState("");
+ const [copied, setCopied] = useState(false);
+ const fileRef = useRef<HTMLInputElement>(null);
+
+ const load = async (text: string) => {
+ setError("");
+ let json: unknown;
+ try { json = JSON.parse(text); } catch { setError("That isn't valid JSON."); return; }
+ setBusy(true);
+ try {
+ setPreview(await stageRobinhoodImport(json, true));
+ setFile(json);
+ } catch (e) {
+ setError(e instanceof Error ? e.message :"The file was rejected.");
+ } finally {
+ setBusy(false);
+ }
+ };
+
+ const handleImport = async () => {
+ setBusy(true);
+ setError("");
+ try {
+ setResult(await stageRobinhoodImport(file, false));
+ } catch (e) {
+ setError(e instanceof Error ? e.message :"Import failed.");
+ } finally {
+ setBusy(false);
+ }
+ };
+
+ const latestFill = latest?.latestFill ?? null;
+ const copyLatest = async () => {
+ if (!latestFill) return;
+ try { await navigator.clipboard.writeText(latestFill); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard blocked */ }
+ };
+
+ if (result) {
+ const c = result.counts;
+ return (
+ <div className="space-y-4">
+ <div className="flex items-center gap-3 rounded-md border border-border bg-muted p-4">
+ <CheckCircle2 className="h-6 w-6 text-up shrink-0" />
+ <div>
+ <p className="font-medium">{c.created} draft{c.created !== 1 ?"s" :""} created</p>
+ <p className="tp-caption mt-0.5">
+ Review and confirm them in Draft Positions.
+ {c.alreadyImported > 0 &&` ${c.alreadyImported} already imported.`}
+ {c.invalid > 0 &&` ${c.invalid} invalid.`}
+ {c.skipped > 0 &&` ${c.skipped} skipped.`}
+ </p>
+ </div>
+ </div>
+ <div className="flex justify-end pt-2">
+ <Button type="button" onClick={onComplete}>Done</Button>
+ </div>
+ </div>
+ );
+ }
+
+ if (preview) {
+ const c = preview.counts;
+ const statusOf = (r: RobinhoodStageResult["rows"][number]) => {
+ if (r.status ==="already_imported") return { text:"Already imported", cls:"text-muted-foreground" };
+ if (r.status ==="invalid") return { text: r.errors[0] ??"Invalid", cls:"text-down" };
+ if (r.flags.needsMatch) return { text:"Needs a match", cls:"text-warn" };
+ if (r.flags.possibleDuplicateOfId) return { text:"Possible duplicate", cls:"text-warn" };
+ return { text:"New", cls:"text-up" };
+ };
+ const notesOf = (r: RobinhoodStageResult["rows"][number]) => [
+ r.kind ==="roll" && r.flags.closeLeg ?`from $${fmtUSD(r.flags.closeLeg.strike)} ${fmtDate(r.flags.closeLeg.expiration)}` : null,
+ r.kind ==="roll" && r.flags.netCreditPerShare != null ?`net ${r.flags.netCreditPerShare >= 0 ?"+" :"−"}$${fmtUSD(Math.abs(r.flags.netCreditPerShare))}` : null,
+ r.lotLinked ?"lot linked" : null,
+ r.flags.lotChoices?.length ?"lot to pick" : null,
+ r.flags.uncovered ?"uncovered?" : null,
+ ].filter(Boolean).join(" · ");
+ return (
+ <div className="space-y-4">
+ <p className="font-medium">
+ {c.created} new{c.alreadyImported > 0 &&` · ${c.alreadyImported} already imported`}{c.invalid > 0 &&` · ${c.invalid} invalid`}{c.skipped > 0 &&` · ${c.skipped} skipped`}
+ </p>
+ {!preview.account.matched && (
+ <div className="flex items-start gap-2 rounded-md bg-warn-soft px-3 py-2.5 text-xs text-warn-deep">
+ <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
+ <span>No investment account is named "{preview.account.name}". Drafts will have no account, and covered calls won't be matched to lots.</span>
+ </div>
+ )}
+ <div className="max-h-[45vh] overflow-auto rounded-md border border-border bg-white">
+ <table className="w-full text-xs">
+ <thead className="sticky top-0 bg-muted">
+ <tr className="border-b border-border text-left text-muted-foreground">
+ <ColumnHeader className="px-2 py-1.5">Kind</ColumnHeader>
+ <ColumnHeader className="px-2 py-1.5">Ticker</ColumnHeader>
+ <ColumnHeader className="px-2 py-1.5">Type</ColumnHeader>
+ <ColumnHeader className="px-2 py-1.5 text-right">Strike</ColumnHeader>
+ <ColumnHeader className="px-2 py-1.5">Exp</ColumnHeader>
+ <ColumnHeader className="px-2 py-1.5">Filled (ET)</ColumnHeader>
+ <ColumnHeader className="px-2 py-1.5 text-right">Qty</ColumnHeader>
+ <ColumnHeader className="px-2 py-1.5 text-right">Premium</ColumnHeader>
+ <ColumnHeader className="px-2 py-1.5">Status</ColumnHeader>
+ <ColumnHeader className="px-2 py-1.5">Notes</ColumnHeader>
+ </tr>
+ </thead>
+ <tbody>
+ {preview.rows.map((r) => {
+ const st = statusOf(r);
+ return (
+ <tr key={r.externalId} className="border-b border-border last:border-b-0">
+ <td className="px-2 py-1.5 capitalize">{r.kind}</td>
+ <td className="px-2 py-1.5 font-bold font-mono">{r.ticker}</td>
+ <td className="px-2 py-1.5">{r.optionType ==="CALL" ?"CC" :"CSP"}</td>
+ <td className="px-2 py-1.5 text-right tabular-nums">${fmtUSD(r.strike)}</td>
+ <td className="px-2 py-1.5 tabular-nums">{fmtDate(r.expiration)}</td>
+ <td className="px-2 py-1.5 tabular-nums whitespace-nowrap">{fmtDateTimeFull(r.openedAt)}</td>
+ <td className="px-2 py-1.5 text-right tabular-nums">{r.contracts}</td>
+ <td className="px-2 py-1.5 text-right tabular-nums">${fmtUSD(r.premiumPerShare)}</td>
+ <td className={cn("px-2 py-1.5 whitespace-nowrap", st.cls)} title={r.errors.join("; ") || undefined}>{st.text}</td>
+ <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{notesOf(r)}</td>
+ </tr>
+ );
+ })}
+ </tbody>
+ </table>
+ </div>
+ {preview.skipped.length > 0 && (
+ <div className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground space-y-0.5">
+ <p className="font-medium text-foreground">Skipped by the export</p>
+ {preview.skipped.map((sk, i) => (
+ <div key={i}>{sk.summary ?? sk.robinhoodOrderId}{sk.reason ?` — ${sk.reason}` :""}</div>
+ ))}
+ </div>
+ )}
+ {error && <p className="text-down">{error}</p>}
+ <div className="flex items-center justify-between pt-2">
+ <Button type="button" variant="secondary" onClick={() => { setPreview(null); setFile(null); setError(""); }}>Back</Button>
+ <div className="flex gap-2">
+ <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+ <Button type="button" disabled={c.created === 0 || busy} onClick={handleImport}>
+ {busy ?"Importing…" :`Create ${c.created} Draft${c.created !== 1 ?"s" :""}`}
+ </Button>
+ </div>
+ </div>
+ </div>
+ );
+ }
+
+ return (
+ <div className="space-y-4">
+ <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+ <div>
+ <p className="text-xs font-medium">Latest imported fill</p>
+ <p className="tp-caption">{latestFill ? fmtDateTimeFull(latestFill) :"Nothing imported yet"}</p>
+ </div>
+ {latestFill && (
+ <Button type="button" variant="secondary" size="sm" onClick={copyLatest}>
+ {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+ {copied ?"Copied" :"Copy"}
+ </Button>
+ )}
+ </div>
+ <p className="text-muted-foreground">
+ Ask Claude to export your Robinhood option trades since that time, then upload or paste the file. Nothing is written until you confirm the preview, and every fill lands as a draft for review.
+ </p>
+ <div>
+ <input
+ ref={fileRef}
+ type="file"
+ accept=".json,application/json"
+ className="hidden"
+ onChange={(e) => {
+ const f = e.target.files?.[0];
+ if (!f) return;
+ f.text().then(load);
+ e.target.value ="";
+ }}
+ />
+ <Button type="button" variant="secondary" onClick={() => fileRef.current?.click()} className="w-full justify-center" disabled={busy}>
+ <FileText className="h-4 w-4" /> Choose File
+ </Button>
+ </div>
+ <div>
+ <label className="block text-xs font-medium mb-1">Or paste JSON</label>
+ <textarea
+ value={pasted}
+ onChange={(e) => setPasted(e.target.value)}
+ rows={5}
+ placeholder='{"schemaVersion": 1, …}'
+ className="w-full rounded-md border border-border px-3 py-2 font-mono text-xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+ />
+ </div>
+ {error && <p className="text-down">{error}</p>}
+ <div className="flex justify-end gap-2 pt-2">
+ <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+ <Button type="button" disabled={!pasted.trim() || busy} onClick={() => load(pasted)}>
+ {busy ?"Checking…" :"Preview"}
+ </Button>
+ </div>
+ </div>
  );
 }

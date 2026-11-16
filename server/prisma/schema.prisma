@@ -1160,6 +1160,29 @@ model OptionsPosition {
   // Draft positions (planned/limit orders not yet executed)
   isDraft   Boolean  @default(false)
 
+  // ── Broker import (Robinhood JSON export) ──
+  // An imported position lands as a draft (isDraft) carrying the broker's fill
+  // time in openedAt; confirming it makes it live. externalId is the dedupe key
+  // and stays on the row for its whole life — including after a soft delete, so
+  // a dismissed draft isn't recreated by re-uploading the same file.
+  externalSource String?  // "robinhood"
+  externalId     String?  @unique
+  rhOrderId      String?
+  rhLegId        String?
+  rhOptionId     String?  // Robinhood contract id; a later roll finds its position by this
+  importBatchId  String?
+  ivAtOpen       Decimal? @db.Decimal(10, 6)
+  derivedAtOpen  Boolean  @default(false) // stockPriceAtOpen / deltaAtOpen came from the export's derivation, not typed
+  // Review flags computed at import: { possibleDuplicateOfId?, needsMatch?, matchCandidateIds?,
+  // uncovered?, lotChoices?, robinhoodAvgCost?, notes? }. Display-only.
+  importFlags    Json?
+  // Staged roll (imported roll drafts only): the live position this draft will
+  // close when confirmed, and the closing leg's prices. Cleared on confirm, when
+  // the link becomes the roll chain (groupId + sequenceInGroup).
+  stagedRollFromId      String?
+  stagedBuybackPerShare Decimal? @db.Decimal(12, 4)
+  stagedFeesClose       Decimal? @db.Decimal(12, 2)
+
   // Soft delete
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -1186,7 +1209,23 @@ model OptionsPosition {
   @@index([userId, status])
   @@index([tickerId])
   @@index([userId, splitGroupId])
+  @@index([userId, rhOptionId])
   @@map("options_positions")
+}
+
+// One uploaded broker export. Keeps the raw file so a mapping bug can be fixed
+// and the batch replayed.
+model OptionsImportBatch {
+  id          String   @id @default(cuid())
+  userId      String
+  source      String   // "robinhood"
+  generatedAt DateTime? // the file's own generatedAt
+  counts      Json     // { created, alreadyImported, possibleDuplicate, needsMatch, invalid, skipped }
+  rawFile     Json
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("options_import_batches")
 }
 
 // Append-only ledger: one row per sale of a CSP-originated lot (covered-call

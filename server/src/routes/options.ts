@@ -9,6 +9,11 @@ import { parseLocalDate } from "../lib/localDate.js";
 import { fetchYahooClosingPrice } from "../services/yahoo.js";
 import { fetchUpcomingEarnings } from "../services/earnings.js";
 import { TRADIER_BASE, tradierHeaders, fetchUnderlyingPrices, fetchFilteredChain } from "../services/tradier.js";
+import { rollPosition, RollError, type RollInput } from "../lib/optionsRoll.js";
+import {
+  stageImport, latestImportedFill, confirmImportedOpen, confirmImportedRoll, confirmImportedDrafts,
+  ImportFileError, ConfirmError,
+} from "../lib/robinhoodImport/index.js";
 
 export const optionsRoutes = Router();
 
@@ -1231,173 +1236,38 @@ optionsRoutes.post("/positions/:id/roll", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   const existing = await prisma.optionsPosition.findFirst({
-    where: { id: req.params.id, userId, isActive: true, status: "OPEN" },
+    where: { id: req.params.id, userId, isActive: true, status: "OPEN", isDraft: false },
   });
   if (!existing) return res.status(404).json({ error: "Position not found or already closed" });
 
-  const {
-    closedAt, closePremiumPerShare, feesClose,
-    newPremiumPerShare, newStrikePrice, newExpirationDate, newStockPriceAtOpen, newFeesOpen,
-    newDeltaAtOpen, newDeltaAtOpenCapturedAt,
-    contracts: rollContracts,
-  } = parsed.data;
-
-  const isPartial = rollContracts != null && rollContracts < existing.contracts;
-  if (rollContracts != null && rollContracts > existing.contracts) {
-    return res.status(409).json({ error: "Cannot roll more contracts than the position holds." });
+  try {
+    const result = await prisma.$transaction((tx) =>
+      rollPosition(tx, userId, existing, rollInputFrom(parsed.data))
+    );
+    res.status(201).json(result);
+  } catch (e) {
+    if (e instanceof RollError) return res.status(e.status).json({ error: e.message });
+    throw e;
   }
-  // A partial roll splits the position; like partial-close, that is incompatible
-  // with a position that is already part of a roll chain (breaks chain stats).
-  if (isPartial && existing.groupId) {
-    return res.status(409).json({ error: "Cannot partially roll a position that is already part of a roll chain." });
-  }
-
-  const closeAt = closedAt ? new Date(closedAt) : new Date();
-  const openAt = closedAt ? new Date(closedAt) : new Date();
-  const newExpiry = new Date(newExpirationDate + "T20:00:00.000Z");
-  const newDeltaCapturedAt =
-    newDeltaAtOpen != null && newDeltaAtOpenCapturedAt ? new Date(newDeltaAtOpenCapturedAt) : null;
-
-  const result = await prisma.$transaction(async (tx) => {
-    if (isPartial) {
-      const n = rollContracts!;
-      // Fresh roll chain for the rolled-off slice. The original stays OPEN with the
-      // remaining contracts and is NOT placed in the chain, so it can still be
-      // partially closed/rolled later.
-      const group = await tx.optionsPositionGroup.create({ data: { userId } });
-      const splitGroupId = existing.splitGroupId ?? `split_${existing.id}`;
-
-      // Reduce the original; stamp split group so the UI can relate the slices.
-      await tx.optionsPosition.update({
-        where: { id: existing.id },
-        data: { contracts: existing.contracts - n, splitGroupId },
-      });
-
-      // Spin off the rolled-closed leg (seq 1). All open fees stay on the original.
-      const closed = await tx.optionsPosition.create({
-        data: {
-          userId,
-          tickerId: existing.tickerId,
-          groupId: group.id,
-          sequenceInGroup: 1,
-          splitGroupId,
-          optionType: existing.optionType,
-          side: existing.side,
-          strikePrice: existing.strikePrice,
-          expirationDate: existing.expirationDate,
-          openedAt: existing.openedAt,
-          contracts: n,
-          premiumPerShare: existing.premiumPerShare,
-          feesOpen: null,
-          shareCostBasis: existing.shareCostBasis,
-          stockPriceAtOpen: existing.stockPriceAtOpen,
-          assignedFromStrikePrice: existing.assignedFromStrikePrice,
-          assignedFromExpirationDate: existing.assignedFromExpirationDate,
-          investmentAccountId: existing.investmentAccountId,
-          status: "CLOSED",
-          outcome: "ROLLED",
-          closedAt: closeAt,
-          closePremiumPerShare: closePremiumPerShare ?? null,
-          feesClose: feesClose ?? null,
-        },
-        include: { ticker: true, group: true },
-      });
-
-      // Open the replacement leg (seq 2) for the same N contracts.
-      const opened = await tx.optionsPosition.create({
-        data: {
-          userId,
-          tickerId: existing.tickerId,
-          groupId: group.id,
-          sequenceInGroup: 2,
-          optionType: existing.optionType,
-          side: existing.side,
-          strikePrice: newStrikePrice,
-          expirationDate: newExpiry,
-          openedAt: openAt,
-          contracts: n,
-          premiumPerShare: newPremiumPerShare,
-          feesOpen: newFeesOpen ?? null,
-          stockPriceAtOpen: newStockPriceAtOpen ?? null,
-          deltaAtOpen: newDeltaAtOpen ?? null,
-          deltaAtOpenCapturedAt: newDeltaCapturedAt,
-          shareCostBasis: existing.shareCostBasis,
-          assignedFromStrikePrice: existing.assignedFromStrikePrice,
-          assignedFromExpirationDate: existing.assignedFromExpirationDate,
-          investmentAccountId: existing.investmentAccountId,
-        },
-        include: { ticker: true, group: true },
-      });
-
-      return { closed, opened };
-    }
-
-    // ── Full roll (legacy behavior) ──────────────────────────────────────────
-    // Determine group: reuse existing or create a new one
-    let groupId = existing.groupId;
-    if (!groupId) {
-      const group = await tx.optionsPositionGroup.create({
-        data: { userId },
-      });
-      groupId = group.id;
-      // Assign the original position to the group as sequence 1
-      await tx.optionsPosition.update({
-        where: { id: existing.id },
-        data: { groupId, sequenceInGroup: 1 },
-      });
-    }
-
-    // Find next sequence number
-    const maxSeq = await tx.optionsPosition.aggregate({
-      where: { groupId, isActive: true },
-      _max: { sequenceInGroup: true },
-    });
-    const nextSeq = (maxSeq._max.sequenceInGroup ?? 1) + 1;
-
-    // Close the existing position
-    const closed = await tx.optionsPosition.update({
-      where: { id: existing.id },
-      data: {
-        status: "CLOSED",
-        outcome: "ROLLED",
-        closedAt: closeAt,
-        closePremiumPerShare: closePremiumPerShare ?? null,
-        feesClose: feesClose ?? null,
-      },
-      include: { ticker: true, group: true },
-    });
-
-    // Open the new position
-    const opened = await tx.optionsPosition.create({
-      data: {
-        userId,
-        tickerId: existing.tickerId,
-        groupId,
-        sequenceInGroup: nextSeq,
-        optionType: existing.optionType,
-        side: existing.side,
-        strikePrice: newStrikePrice,
-        expirationDate: newExpiry,
-        openedAt: openAt,
-        contracts: existing.contracts,
-        premiumPerShare: newPremiumPerShare,
-        feesOpen: newFeesOpen ?? null,
-        stockPriceAtOpen: newStockPriceAtOpen ?? null,
-        deltaAtOpen: newDeltaAtOpen ?? null,
-        deltaAtOpenCapturedAt: newDeltaCapturedAt,
-        shareCostBasis: existing.shareCostBasis,
-        assignedFromStrikePrice: existing.assignedFromStrikePrice,
-        assignedFromExpirationDate: existing.assignedFromExpirationDate,
-        investmentAccountId: existing.investmentAccountId,
-      },
-      include: { ticker: true, group: true },
-    });
-
-    return { closed, opened };
-  });
-
-  res.status(201).json(result);
 });
+
+// Roll form payload → the shared roll function's input. "Now" when no time is given.
+function rollInputFrom(d: z.infer<typeof rollSchema>): RollInput {
+  return {
+    closedAt: d.closedAt ? new Date(d.closedAt) : new Date(),
+    closePremiumPerShare: d.closePremiumPerShare ?? null,
+    feesClose: d.feesClose ?? null,
+    newPremiumPerShare: d.newPremiumPerShare,
+    newStrikePrice: d.newStrikePrice,
+    newExpirationDate: d.newExpirationDate,
+    newStockPriceAtOpen: d.newStockPriceAtOpen ?? null,
+    newDeltaAtOpen: d.newDeltaAtOpen ?? null,
+    newDeltaAtOpenCapturedAt:
+      d.newDeltaAtOpen != null && d.newDeltaAtOpenCapturedAt ? new Date(d.newDeltaAtOpenCapturedAt) : null,
+    newFeesOpen: d.newFeesOpen ?? null,
+    contracts: d.contracts ?? null,
+  };
+}
 
 optionsRoutes.delete("/positions/:id", async (req, res) => {
   const userId = getUserId(req);
@@ -1949,6 +1819,65 @@ optionsRoutes.post("/positions/import", async (req, res) => {
   }
 
   res.json({ imported, errors });
+});
+
+// ── Robinhood import ──────────────────────────────────────────────────────────
+// The upload stages each new fill as an imported draft; review and confirm
+// happen in the Draft Positions section. Logic lives in lib/robinhoodImport.
+
+optionsRoutes.get("/import/robinhood/latest-fill", async (req, res) => {
+  res.json({ latestFill: await latestImportedFill(getUserId(req)) });
+});
+
+optionsRoutes.post("/import/robinhood", async (req, res) => {
+  const userId = getUserId(req);
+  const dryRun = req.body?.dryRun === true;
+  try {
+    res.json(await stageImport(userId, req.body?.file, { dryRun }));
+  } catch (e) {
+    if (e instanceof ImportFileError) return res.status(400).json({ error: e.message });
+    throw e;
+  }
+});
+
+const confirmOpenSchema = z.object({
+  openedAt: z.string().optional(),
+  contracts: z.coerce.number().int().positive().optional(),
+  premiumPerShare: z.coerce.number().positive().optional(),
+  stockPriceAtOpen: z.coerce.number().positive().nullable().optional(),
+  deltaAtOpen: z.coerce.number().nullable().optional(),
+  deltaAtOpenCapturedAt: z.string().nullable().optional(),
+  feesOpen: z.coerce.number().nonnegative().nullable().optional(),
+  shareCostBasis: z.coerce.number().positive().nullable().optional(),
+  assignedFromStrikePrice: z.coerce.number().positive().nullable().optional(),
+  assignedFromExpirationDate: z.string().nullable().optional(),
+});
+
+optionsRoutes.post("/positions/:id/confirm-import", async (req, res) => {
+  const userId = getUserId(req);
+  try {
+    if (typeof req.body?.rollFromId === "string") {
+      const parsed = rollSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+      const result = await confirmImportedRoll(userId, req.params.id, {
+        ...rollInputFrom(parsed.data),
+        rollFromId: req.body.rollFromId,
+      });
+      return res.json(result);
+    }
+    const parsed = confirmOpenSchema.safeParse(req.body ?? {});
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    res.json(await confirmImportedOpen(userId, req.params.id, parsed.data));
+  } catch (e) {
+    if (e instanceof ConfirmError) return res.status(e.status).json({ error: e.message });
+    throw e;
+  }
+});
+
+optionsRoutes.post("/positions/confirm-imports", async (req, res) => {
+  const parsed = z.object({ ids: z.array(z.string()).min(1) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  res.json({ results: await confirmImportedDrafts(getUserId(req), parsed.data.ids) });
 });
 
 // ── Read-only share link ──────────────────────────────────────────────────────

@@ -7,7 +7,8 @@
     "dev": "CHOKIDAR_USEPOLLING=true tsx watch --watch-path=src src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "@clerk/express": "^2.1.3",

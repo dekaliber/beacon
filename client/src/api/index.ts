@@ -781,11 +781,36 @@ export interface OptionsPosition {
   incomeRecords?: Array<{ id: string; date: string; depositDate: string | null }>;
   splitGroupId: string | null;
   isDraft: boolean;
+  // Broker import (Robinhood). An imported draft carries the fill time in openedAt.
+  externalSource?: string | null;
+  externalId?: string | null;
+  rhOrderId?: string | null;
+  rhOptionId?: string | null;
+  ivAtOpen?: number | null;
+  derivedAtOpen?: boolean;
+  importFlags?: ImportFlags | null;
+  // Imported roll drafts: the live position this draft closes on confirm + the closing leg's prices.
+  stagedRollFromId?: string | null;
+  stagedBuybackPerShare?: number | null;
+  stagedFeesClose?: number | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
   ticker: OptionsTicker;
   group: OptionsPositionGroup | null;
+}
+
+// Review flags the Robinhood import computed for a draft (display only).
+export interface ImportFlags {
+  kind: "open" | "roll";
+  possibleDuplicateOfId?: string;
+  needsMatch?: string;
+  matchCandidateIds?: string[];
+  uncovered?: boolean;
+  lotChoices?: Array<{ strikePrice: number; expirationDate: string; contractsRemaining: number; weightedCostPerShare: number | null }>;
+  robinhoodAvgCost?: number;
+  netCreditPerShare?: number;
+  closeLeg?: { strike: number; expiration: string; optionId: string };
 }
 
 export interface OptionsPositionGroup {
@@ -991,6 +1016,60 @@ export const editClosedPosition = (id: string, data: OptionsCloseEditInput) =>
 
 export const deleteOptionsPosition = (id: string) =>
   api.delete(`/options/positions/${id}`);
+
+// ── Robinhood import ──────────────────────────────────────────────────────────
+
+export interface RobinhoodStageResult {
+  dryRun: boolean;
+  batchId: string | null;
+  account: { name: string; matched: boolean };
+  counts: { created: number; alreadyImported: number; possibleDuplicate: number; needsMatch: number; invalid: number; skipped: number };
+  rows: Array<{
+    externalId: string;
+    kind: "open" | "roll";
+    ticker: string;
+    optionType: OptionType;
+    strike: number;
+    expiration: string;
+    openedAt: string;
+    contracts: number;
+    premiumPerShare: number;
+    status: "new" | "already_imported" | "invalid";
+    errors: string[];
+    flags: ImportFlags;
+    lotLinked: boolean;
+    positionId: string | null;
+  }>;
+  skipped: Array<{ robinhoodOrderId?: string; reason: string; summary?: string }>;
+}
+
+export const stageRobinhoodImport = (file: unknown, dryRun = false) =>
+  api.post<RobinhoodStageResult>("/options/import/robinhood", { file, dryRun });
+
+export const getLatestImportedFill = () =>
+  api.get<{ latestFill: string | null }>("/options/import/robinhood/latest-fill");
+
+export type ConfirmImportedOpenInput = {
+  openedAt?: string;
+  contracts?: number;
+  premiumPerShare?: number;
+  stockPriceAtOpen?: number | null;
+  deltaAtOpen?: number | null;
+  deltaAtOpenCapturedAt?: string | null;
+  feesOpen?: number | null;
+  shareCostBasis?: number | null;
+  assignedFromStrikePrice?: number | null;
+  assignedFromExpirationDate?: string | null;
+};
+
+export const confirmImportedOpen = (id: string, data: ConfirmImportedOpenInput) =>
+  api.post<OptionsPosition>(`/options/positions/${id}/confirm-import`, data);
+
+export const confirmImportedRoll = (id: string, data: OptionsRollInput & { rollFromId: string }) =>
+  api.post<{ closed: OptionsPosition; opened: OptionsPosition }>(`/options/positions/${id}/confirm-import`, data);
+
+export const confirmImportedDrafts = (ids: string[]) =>
+  api.post<{ results: Array<{ id: string; ok: boolean; reason?: string }> }>("/options/positions/confirm-imports", { ids });
 
 export const importOptionsPositions = (positions: Record<string, unknown>[]) =>
   api.post<{ imported: number; errors: Array<{ row: number; message: string }> }>(
