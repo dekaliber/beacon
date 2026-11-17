@@ -3221,10 +3221,48 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  useEffect(() => {
  if (readOnly || !positionIdsKey) return;
  const tickers = [...new Set([...positions, ...draftPositions].map((p) => p.ticker.symbol))];
- if (lastFetchedAt != null && optionsPricesAreFresh(lastFetchedAt) && livePrices.size > 0 && tickers.every(isTickerPriceFresh)) return;
+ if (lastFetchedAt != null && optionsPricesAreFresh(lastFetchedAt) && livePrices.size > 0 && tickers.every(isTickerPriceFresh)) {
+ // Prices are already current, but a position added since that refresh
+ // (an after-hours entry or import) has no quote yet. Fetch just those.
+ fetchMissingQuotes();
+ return;
+ }
  fetchAllQuotes();
  // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [positionIdsKey]);
+
+ // Quotes only for open positions that have never been priced, plus any
+ // ticker with no stock price. Skips the full refresh's per-position loop.
+ const fetchMissingQuotes = async () => {
+ if (refreshInFlight.current) return;
+ const unpriced = [...positions, ...draftPositions].filter(
+ (p) => p.status ==="OPEN" && p.currentPremiumPerShare == null && calcPosition(p).daysLeft >= 0,
+ );
+ const unpricedTickers = [...new Set([...positions, ...draftPositions].map((p) => p.ticker.symbol))].filter((t) => !livePrices.has(t));
+ if (unpriced.length === 0 && unpricedTickers.length === 0) return;
+ refreshInFlight.current = true;
+ try {
+ if (unpricedTickers.length > 0) {
+ try {
+ const results = await getUnderlyingQuotes(unpricedTickers);
+ const now = Date.now();
+ for (const [ticker, data] of Object.entries(results)) updateLivePrice(ticker, data.price, now);
+ const missing = unpricedTickers.filter((t) => !results[t]);
+ if (missing.length > 0) setStalePriceTickers((prev) => new Set([...prev, ...missing]));
+ } catch {
+ setStalePriceTickers((prev) => new Set([...prev, ...unpricedTickers]));
+ }
+ }
+ let anyUpdated = false;
+ for (let i = 0; i < unpriced.length; i++) {
+ if (await fetchQuoteForPosition(unpriced[i], { refetch: false })) anyUpdated = true;
+ if (i < unpriced.length - 1) await new Promise((r) => setTimeout(r, 150));
+ }
+ if (anyUpdated) onPositionUpdated();
+ } finally {
+ refreshInFlight.current = false;
+ }
+ };
 
  if (positions.length === 0 && draftPositions.length === 0) {
  return (
