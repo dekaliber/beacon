@@ -27,7 +27,16 @@ echo "Dumping production database from Neon..."
 pg_dump "$NEON_DATABASE_URL" --no-owner --no-acl -Fc -f "$DUMP_FILE"
 
 echo "Restoring to local database..."
-pg_restore --clean --if-exists --no-owner --no-acl -d "$LOCAL_DATABASE_URL" "$DUMP_FILE"
+# Neon stamps columns added by ALTER TABLE with a Neon-only attribute option
+# (`ALTER COLUMN … SET (pg_attver=N)`). Stock Postgres rejects it, and because
+# it rides inside the CREATE TABLE entry, the whole table fails to restore
+# after --clean already dropped it. Restore via SQL with that option stripped.
+pg_restore --clean --if-exists --no-owner --no-acl -f - "$DUMP_FILE" \
+  | sed -E \
+      -e '/^ALTER TABLE ONLY .* ALTER COLUMN .* SET \(pg_attver=[0-9]+\);$/d' \
+      -e 's/, *pg_attver=[0-9]+//' \
+      -e 's/pg_attver=[0-9]+, *//' \
+  | psql -q -X "$LOCAL_DATABASE_URL" >/dev/null
 
 # Replace prod Clerk userId with local Clerk userId if provided
 if [[ -n "${LOCAL_CLERK_USER_ID:-}" ]]; then
