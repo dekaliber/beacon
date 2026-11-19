@@ -8053,7 +8053,7 @@ export function OptionsTrading() {
  onConfirm={(p) => isImportedRollDraft(p) ? setRollDraftModal(p) : setConfirmDraftModal(p)}
  onBulkConfirm={async (ids) => {
  const { results } = await confirmImportedDrafts(ids);
- refetchPositions(); refetchGroups(); refetchTickers();
+ refetchAll(); refetchGroups();
  const done = results.filter((r) => r.ok).length;
  const left = results.filter((r) => !r.ok);
  return left.length === 0
@@ -8150,7 +8150,7 @@ export function OptionsTrading() {
  <ConfirmDraftModal
  position={confirmDraftModal}
  onClose={() => setConfirmDraftModal(null)}
- onSaved={() => { setConfirmDraftModal(null); refetchPositions(); refetchTickers(); }}
+ onSaved={() => { setConfirmDraftModal(null); refetchAll(); }}
  />
  )}
 
@@ -8160,7 +8160,7 @@ export function OptionsTrading() {
  openPositions={openPositions}
  draftPositions={draftPositions}
  onClose={() => setRollDraftModal(null)}
- onSaved={() => { setRollDraftModal(null); refetchPositions(); refetchGroups(); }}
+ onSaved={() => { setRollDraftModal(null); refetchAll(); refetchGroups(); }}
  />
  )}
 
@@ -8169,7 +8169,7 @@ export function OptionsTrading() {
  {!readOnly && importModalOpen && (
  <ImportOptionsModal
  onClose={() => setImportModalOpen(false)}
- onComplete={() => { setImportModalOpen(false); refetchPositions(); refetchTickers(); }}
+ onComplete={() => { setImportModalOpen(false); refetchAll(); }}
  />
  )}
  </div>
