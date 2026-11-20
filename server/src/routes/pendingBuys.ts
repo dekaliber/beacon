@@ -5,6 +5,7 @@ import { getUserId } from "../middleware/auth.js";
 import { recordCashBalance } from "../lib/cashHistory.js";
 import { fetchYahooMeta } from "../services/yahoo.js";
 import { getAssignedBatches } from "../lib/assignedBatches.js";
+import { refreshTickerPrice } from "./investments.js";
 
 export const pendingBuyRoutes = Router();
 
@@ -143,6 +144,8 @@ pendingBuyRoutes.post("/:id/confirm", async (req, res) => {
     return { pendingBuy: confirmed, lot, activity };
   });
 
+  // The ticker may last have been held months ago; its stored price is from then.
+  await refreshTickerPrice(pendingBuy.ticker);
   res.json(result);
 });
 

@@ -1119,7 +1119,10 @@ investmentRoutes.post("/holdings", async (req, res) => {
         where: { accountId: body.accountId, ticker: body.ticker, lots: { none: {} } },
         include: { lots: true },
       });
-      if (closed) return res.status(201).json({ ...closed, group: closed.assetClass ?? null });
+      if (closed) {
+        await refreshTickerPrice(body.ticker);
+        return res.status(201).json({ ...closed, group: closed.assetClass ?? null });
+      }
     }
 
     const holding = await prisma.investmentHolding.create({
@@ -1135,6 +1138,7 @@ investmentRoutes.post("/holdings", async (req, res) => {
       include: { lots: true },
     });
 
+    await refreshTickerPrice(body.ticker);
     res.status(201).json({ ...holding, group: holding.assetClass ?? null });
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: { message: err.errors[0]?.message } });
@@ -1275,6 +1279,7 @@ investmentRoutes.post("/lots", async (req, res) => {
       return newLot;
     });
 
+    await refreshTickerPrice(holding.ticker);
     res.status(201).json({
       ...lot,
       quantity: lot.quantity.toString(),
@@ -1787,6 +1792,81 @@ export interface PriceRefreshResult {
   tradingDay: boolean;
 }
 
+// The last settled close for one equity ticker, from whichever source it is
+// priced by. Shared by the full refresh and the single-ticker refresh below.
+async function fetchEquityClose(
+  ticker: string,
+  viaTiingo: boolean,
+): Promise<{ price: number | null; priceDate: Date | null; priceSource: string }> {
+  if (viaTiingo) {
+    // Tiingo-sourced ticker: use close (unadjusted), correct for MMFs.
+    // Scan window: just the last 7 days to get today's NAV efficiently.
+    const today = new Date().toISOString().slice(0, 10);
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const result = await getDividendScanResult(ticker, weekAgo, today);
+    if (result.latestClose != null && result.latestCloseDate != null) {
+      return {
+        price: result.latestClose,
+        priceDate: new Date(result.latestCloseDate + "T00:00:00Z"),
+        priceSource: "TIINGO",
+      };
+    }
+    return { price: null, priceDate: null, priceSource: "TIINGO" };
+  }
+  // Yahoo path: try first; if it fails and no existing row exists,
+  // the dividend scan will handle Tiingo promotion when it runs.
+  const priceData = await fetchYahooSettledClose(ticker, lastSettledSessionClose());
+  if (!priceData) {
+    console.warn(`[price-refresh] ${ticker}: no data returned from Yahoo Finance`);
+    return { price: null, priceDate: null, priceSource: "YAHOO" };
+  }
+  return { price: priceData.price, priceDate: priceData.priceDate, priceSource: "YAHOO" };
+}
+
+// Brings one ticker's current price (and its history up to the last session)
+// up to date the moment it becomes held. A ticker that was held before keeps
+// its TickerPrice row after the sale, and only open holdings are refreshed, so
+// without this a re-added position shows the price from when it was last held
+// until the next nightly run. A price already taken since the last cutoff is
+// current and is left alone. Never throws: the holding is saved either way.
+export async function refreshTickerPrice(ticker: string): Promise<void> {
+  try {
+    const existing = await prisma.tickerPrice.findUnique({ where: { ticker } });
+    if (existing && isPinnedPrice(existing.ticker, existing.priceSource)) return;
+    if (existing && !isTickerStale(existing.updatedAt, new Date())) return;
+
+    const crypto = await prisma.investmentHolding.findFirst({
+      where: { ticker, coinGeckoId: { not: null } },
+      select: { coinGeckoId: true },
+    });
+    const coinGeckoIdByTicker = new Map<string, string>();
+    if (crypto?.coinGeckoId) coinGeckoIdByTicker.set(ticker, crypto.coinGeckoId);
+
+    // Sessions missed while the ticker wasn't held, so the 1-day change and
+    // charts have history to work from. This runs first: the gap check keys off
+    // the latest history row, and the current-price write below adds today's,
+    // after which the months-old gap behind it would look filled.
+    await fillPriceGaps([ticker], coinGeckoIdByTicker);
+
+    if (crypto?.coinGeckoId) {
+      await refreshCryptoSnapshots([ticker], coinGeckoIdByTicker);
+    } else {
+      const { price, priceDate, priceSource } = await fetchEquityClose(
+        ticker,
+        existing?.priceSource === "TIINGO",
+      );
+      if (price != null && priceDate != null) {
+        await upsertTickerPrice(ticker, price, priceDate, priceSource);
+        console.log(
+          `[price-refresh] ${ticker}: $${price} (${priceDate.toISOString().slice(0, 10)}) [${priceSource}] on add`,
+        );
+      }
+    }
+  } catch (err) {
+    console.error(`[price-refresh] ${ticker}: refresh on add failed`, err);
+  }
+}
+
 export async function refreshAllPrices(
   opts: { source: string },
 ): Promise<PriceRefreshResult> {
@@ -1882,35 +1962,10 @@ export async function refreshAllPrices(
     // Crypto was handled by its snapshot above.
     if (fixedTickers.has(ticker) || cryptoTickers.has(ticker)) continue;
 
-    let price: number | null = null;
-    let priceDate: Date | null = null;
-    let priceSource: string;
-
-    if (tiingoTickers.has(ticker)) {
-      // Tiingo-sourced ticker: use close (unadjusted), correct for MMFs.
-      // Scan window: just the last 7 days to get today's NAV efficiently.
-      const today = new Date().toISOString().slice(0, 10);
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const result = await getDividendScanResult(ticker, weekAgo, today);
-      if (result.latestClose != null && result.latestCloseDate != null) {
-        price = result.latestClose;
-        priceDate = new Date(result.latestCloseDate + "T00:00:00Z");
-      }
-      priceSource = "TIINGO";
-    } else {
-      // Yahoo path: try first; if it fails and no existing row exists,
-      // the dividend scan will handle Tiingo promotion when it runs.
-      const priceData = await fetchYahooSettledClose(ticker, lastSettledSessionClose());
-      if (priceData) {
-        price = priceData.price;
-        priceDate = priceData.priceDate;
-      } else {
-        console.warn(`[price-refresh] ${ticker}: no data returned from Yahoo Finance`);
-      }
-      priceSource = "YAHOO";
-      // Small delay to be polite to Yahoo's servers
-      await new Promise((resolve) => setTimeout(resolve, 200));
-    }
+    const viaTiingo = tiingoTickers.has(ticker);
+    const { price, priceDate, priceSource } = await fetchEquityClose(ticker, viaTiingo);
+    // Small delay to be polite to Yahoo's servers
+    if (!viaTiingo) await new Promise((resolve) => setTimeout(resolve, 200));
 
     if (price != null && priceDate != null) {
       const dateStr = priceDate.toISOString().slice(0, 10);
@@ -2048,6 +2103,7 @@ investmentRoutes.post("/import", async (req, res) => {
             });
           }
         }
+        await refreshTickerPrice(symbol);
       } catch (e) {
         for (const { idx } of entries) {
           errors.push({
@@ -2472,6 +2528,7 @@ investmentRoutes.post("/qfx-import/:accountId", async (req, res) => {
         prisma.investmentLot.deleteMany({ where: { holdingId, acquiredDate: null } }),
         prisma.investmentLot.create({ data: { holdingId, quantity: netShares, costPerShare, acquiredDate: null } }),
       ]);
+      await refreshTickerPrice(ticker);
     }
 
     res.json({ imported: result.count, total: transactions.length });
