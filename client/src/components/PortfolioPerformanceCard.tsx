@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BarChart3, ChevronLeft, ChevronRight, Info, Pencil } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -6,6 +6,7 @@ import {
   Area,
   Bar,
   Cell,
+  Line,
   LabelList,
   XAxis,
   YAxis,
@@ -75,6 +76,10 @@ const OTHER_COLOR = "color-mix(in oklab, var(--color-ink-5) 70%, transparent)";
 const HATCH_ID = "perf-unreconciled-hatch";
 const STRIPES = "repeating-linear-gradient(45deg, var(--color-ink-3) 0 1.5px, var(--color-ink-5) 1.5px 4px)";
 
+// The S&P 500 TR comparison line: a dashed neutral, so it reads as a reference
+// beside the portfolio's own blue line rather than as a second holding.
+const BENCHMARK_COLOR = "var(--color-ink-3)";
+
 // Drivers below this share of a period's total movement (the sum of every
 // driver's size, up or down) fold into one "Other" step.
 const MINOR_SHARE = 0.03;
@@ -99,6 +104,10 @@ const signed = (n: number) => (Math.round(n) === 0 ? "$0" : `${n > 0 ? "+" : "�
 // To the cent, for the YTD figures that should tie out to statements and the Withdrawals page
 const usd2 = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const signedCents = (n: number) => (Math.abs(n) < 0.005 ? "$0.00" : `${n > 0 ? "+" : "−"}${usd2.format(Math.abs(n))}`);
+/** A fraction as a signed percent to two places: +1.99%, −0.42%, 0.00%. */
+const signedPct = (f: number) => (Math.abs(f) < 0.00005 ? "0.00%" : `${f > 0 ? "+" : "−"}${(Math.abs(f) * 100).toFixed(2)}%`);
+const pctTone = (f: number) => (Math.abs(f) < 0.00005 ? "text-muted-foreground" : f > 0 ? "text-up" : "text-down");
+const indexLevel = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const toneOf = (n: number) => (Math.round(n) === 0 ? "text-muted-foreground" : n > 0 ? "text-up" : "text-down");
 const fillOf = (n: number) => (n >= 0 ? "var(--color-up)" : "var(--color-down)");
 
@@ -311,6 +320,12 @@ type Row = {
   end: string;
   label: string;
   value: number;
+  /** The baseline value grown at the benchmark index's return since the baseline close. */
+  benchmark: number | null;
+  /** The benchmark index's own close, shown in the tooltip in place of the plotted dollar value. */
+  benchmarkClose: number | null;
+  /** The benchmark's change over this period, as a fraction. */
+  benchmarkPct: number | null;
   period: PerformancePeriod | null;
   gains: number | null;
   losses: number | null;
@@ -359,10 +374,24 @@ function PerformanceBody({
 
   const rows = useMemo<Row[]>(() => {
     const label = (end: string) => (!monthly ? md(end) : end !== data.baseline ? monthShort(end) : fmtDay(end));
+    // Pure index growth: the baseline value compounded by the index's own close
+    // to close changes, ignoring deposits and withdrawals.
+    const closes = data.benchmark?.closes ?? {};
+    const base = closes[data.baseline] ?? null;
+    const benchAt = (end: string) => {
+      const c = closes[end] ?? null;
+      return base != null && c != null ? data.baselineValue * (c / base) : null;
+    };
+    const benchPct = (start: string, end: string) => {
+      const a = closes[start] ?? null;
+      const b = closes[end] ?? null;
+      return a != null && b != null ? b / a - 1 : null;
+    };
     return [
       // The opening close: a point on the value line, an empty column below.
       {
-        end: data.baseline, label: label(data.baseline), value: data.baselineValue, period: null,
+        end: data.baseline, label: label(data.baseline), value: data.baselineValue,
+        benchmark: benchAt(data.baseline), benchmarkClose: closes[data.baseline] ?? null, benchmarkPct: null, period: null,
         gains: null, losses: null, net: null, topGain: null, topLoss: null, all: [], drivers: [],
       },
       ...periods.map((p): Row => {
@@ -373,6 +402,9 @@ function PerformanceBody({
           end: p.end,
           label: label(p.end),
           value: p.endValue,
+          benchmark: benchAt(p.end),
+          benchmarkClose: closes[p.end] ?? null,
+          benchmarkPct: benchPct(p.start, p.end),
           period: p,
           gains: ups.reduce((s, d) => s + d.amount, 0),
           losses: downs.reduce((s, d) => s + d.amount, 0),
@@ -384,10 +416,12 @@ function PerformanceBody({
         };
       }),
     ];
-  }, [periods, palette, monthly, data.baseline, data.baselineValue]);
+  }, [periods, palette, monthly, data.baseline, data.baselineValue, data.benchmark]);
   const rowByEnd = useMemo(() => new Map(rows.map((r) => [r.end, r])), [rows]);
 
-  const values = rows.map((r) => r.value);
+  const hasBenchmark = rows.some((r) => r.benchmark != null);
+  const benchmarkName = data.benchmark?.name ?? "S&P 500 TR";
+  const values = rows.flatMap((r) => (r.benchmark != null ? [r.value, r.benchmark] : [r.value]));
   const vMin = Math.min(...values);
   const vMax = Math.max(...values);
   const vPad = Math.max((vMax - vMin) * 0.08, vMax * 0.005);
@@ -431,6 +465,24 @@ function PerformanceBody({
     if (end !== hoverEnd) setHoverEnd(end);
   };
   const handleLeave = () => setHoverEnd(null);
+
+  // Both tooltips are placed here rather than by Recharts: the value chart's
+  // hover coordinate sits at the column's left edge (so its tooltip covered the
+  // point), and each chart flipped on its own tooltip's width (so the two could
+  // land on opposite sides). Both now sit a fixed gap from the column's center,
+  // on one side, flipping left only when the wider of the two would overflow.
+  const [chartsRef, chartsWidth] = useWidth<HTMLDivElement>();
+  const [tipWidths, setTipWidths] = useState({ value: 0, gross: 0 });
+  const measureTip = (key: "value" | "gross") => (w: number) =>
+    setTipWidths((prev) => (Math.abs(prev[key] - w) < 1 ? prev : { ...prev, [key]: w }));
+  const hoverIndex = hoverEnd ? rows.findIndex((r) => r.end === hoverEnd) : -1;
+  const plotLeft = margin.left + yAxisProps.width;
+  const plotRight = chartsWidth - margin.right;
+  const band = rows.length ? (plotRight - plotLeft) / rows.length : 0;
+  const tipCenter = hoverIndex >= 0 && chartsWidth > 0 ? plotLeft + (hoverIndex + 0.5) * band : null;
+  const tipPlacement: TipPlacement =
+    tipCenter != null && tipCenter + TIP_GAP + Math.max(tipWidths.value, tipWidths.gross) > chartsWidth ? "left" : "right";
+  const tipPosition = tipCenter == null ? undefined : { x: tipPlacement === "right" ? tipCenter + TIP_GAP : tipCenter - TIP_GAP };
 
   // Driver names on the columns: the biggest gainer above, the biggest loser below.
   type LabelProps = { x?: number | string; y?: number | string; width?: number | string; height?: number | string; value?: unknown };
@@ -503,8 +555,18 @@ function PerformanceBody({
         {/* Top: total value at each close. z-10 keeps its tooltip above the bars.
             The x-axis is a band axis like the bars' below, so each point sits at the
             center of its period's column instead of the line running edge to edge. */}
-        <div className="relative z-10">
-          <p className="tp-caption pl-16 mb-1">Total value</p>
+        <div ref={chartsRef} className="relative z-10">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-16 mb-1">
+            <p className="tp-caption">Total value</p>
+            {hasBenchmark && (
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <svg width="14" height="4" aria-hidden className="shrink-0">
+                  <line x1="0" y1="2" x2="14" y2="2" stroke={BENCHMARK_COLOR} strokeWidth="1.5" strokeDasharray="4 2" />
+                </svg>
+                {benchmarkName}
+              </span>
+            )}
+          </div>
           <ResponsiveContainer width="100%" height={150}>
             {/* Bottom room so the lowest tick's label fits; Recharts drops a label that would spill out */}
             <ComposedChart
@@ -535,7 +597,12 @@ function PerformanceBody({
               {hoverEnd && hoverEnd !== selected.end && (
                 <ReferenceLine x={hoverEnd} stroke="var(--color-chart-cursor)" strokeWidth={1} />
               )}
-              <RechartsTooltip content={<ValueTooltip />} cursor={false} />
+              <RechartsTooltip
+              content={<ValueTooltip benchmarkName={benchmarkName} placement={tipPlacement} onWidth={measureTip("value")} />}
+              position={tipPosition}
+              allowEscapeViewBox={{ x: true, y: false }}
+              cursor={false}
+            />
               <Area
                 type="linear"
                 dataKey="value"
@@ -546,6 +613,19 @@ function PerformanceBody({
                 activeDot={{ r: 4, fill: "var(--color-chart-1)", stroke: "var(--color-background)", strokeWidth: 2 }}
                 isAnimationActive={false}
               />
+              {hasBenchmark && (
+                <Line
+                  type="linear"
+                  dataKey="benchmark"
+                  stroke={BENCHMARK_COLOR}
+                  strokeWidth={1.5}
+                  strokeDasharray="4 3"
+                  dot={false}
+                  activeDot={{ r: 3, fill: BENCHMARK_COLOR, stroke: "var(--color-background)", strokeWidth: 2 }}
+                  connectNulls
+                  isAnimationActive={false}
+                />
+              )}
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -608,7 +688,12 @@ function PerformanceBody({
               <ReferenceArea x1={hoverEnd} x2={hoverEnd} fill="var(--color-muted)" fillOpacity={1} strokeWidth={0} />
             )}
             <ReferenceLine y={0} stroke="var(--color-chart-axis)" strokeWidth={1} />
-            <RechartsTooltip content={<GrossTooltip cadence={cadence} />} cursor={false} />
+            <RechartsTooltip
+              content={<GrossTooltip cadence={cadence} placement={tipPlacement} onWidth={measureTip("gross")} />}
+              position={tipPosition}
+              allowEscapeViewBox={{ x: true, y: false }}
+              cursor={false}
+            />
             <Bar dataKey="gains" stackId="gross" fill="var(--color-up-soft)" maxBarSize={44} radius={2} isAnimationActive={false}>
               {monthly && <LabelList dataKey="end" content={gainLabel} />}
             </Bar>
@@ -630,12 +715,55 @@ function PerformanceBody({
 
 // ── Tooltips ──────────────────────────────────────────────────────────────────
 
-function ValueTooltip({ active, payload }: any) {
-  if (!active || !payload?.length) return null;
-  const row = payload[0].payload as { end: string; value: number; period: PerformancePeriod | null };
-  const change = row.period ? row.period.endValue - row.period.startValue : null;
+// Gap between a column's center and the near edge of its tooltip.
+const TIP_GAP = 12;
+type TipPlacement = "left" | "right";
+
+/** A chart tooltip's box. Placed left, it shifts by its own width so its right
+ *  edge sits at the given x; it reports its width so the side can be chosen
+ *  from the wider of the two tooltips. */
+function TipBox({
+  placement,
+  onWidth,
+  className,
+  children,
+}: {
+  placement: TipPlacement;
+  onWidth?: (w: number) => void;
+  className?: string;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !onWidth) return;
+    onWidth(el.offsetWidth);
+    const ro = new ResizeObserver(() => onWidth(el.offsetWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+    // onWidth is a fresh closure each render but always sets the same state
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
-    <div className="rounded-lg border border-border bg-background shadow-md px-3 py-2 text-xs space-y-1 min-w-[180px]">
+    <div
+      ref={ref}
+      className={cn("rounded-lg border border-border bg-background shadow-md px-3 py-2 text-xs", placement === "left" && "-translate-x-full", className)}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ValueTooltip({ active, payload, benchmarkName, placement, onWidth }: any) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0].payload as Row;
+  const change = row.period ? row.period.endValue - row.period.startValue : null;
+  // Relative to the period's opening value, deposits and withdrawals included,
+  // to set beside the index's own close-to-close change.
+  const changePct = row.period && row.period.startValue !== 0 ? change! / row.period.startValue : null;
+  const pct = row.benchmarkPct;
+  return (
+    <TipBox placement={placement} onWidth={onWidth} className="space-y-1 min-w-[180px]">
       <p className="font-semibold text-foreground">{fmtDay(row.end, true)} close</p>
       <div className="flex justify-between gap-4">
         <span className="text-muted-foreground">Total value</span>
@@ -647,7 +775,25 @@ function ValueTooltip({ active, payload }: any) {
           <span className={cn("tabular-nums", toneOf(change))}>{signed(change)}</span>
         </div>
       )}
-    </div>
+      {changePct != null && (
+        <div className="flex justify-between gap-4">
+          <span className="text-muted-foreground">% change</span>
+          <span className={cn("tabular-nums", pctTone(changePct))}>{signedPct(changePct)}</span>
+        </div>
+      )}
+      {row.benchmark != null && (
+        <div className="flex justify-between gap-4 pt-1 border-t border-border">
+          <span className="text-muted-foreground">{benchmarkName}</span>
+          <span className="font-medium tabular-nums">{row.benchmarkClose != null ? indexLevel.format(row.benchmarkClose) : "—"}</span>
+        </div>
+      )}
+      {row.benchmark != null && pct != null && (
+        <div className="flex justify-between gap-4">
+          <span className="text-muted-foreground">% change</span>
+          <span className={cn("tabular-nums", pctTone(pct))}>{signedPct(pct)}</span>
+        </div>
+      )}
+    </TipBox>
   );
 }
 
@@ -686,7 +832,7 @@ function TooltipSection({ title, drivers, total }: { title: string; drivers: Dri
 }
 
 /** Gains, then losses, each with its total, then the net between them. */
-function GrossTooltip({ active, payload, cadence }: any) {
+function GrossTooltip({ active, payload, cadence, placement, onWidth }: any) {
   if (!active || !payload?.length) return null;
   const row = payload[0].payload as Row;
   const p = row.period;
@@ -694,7 +840,7 @@ function GrossTooltip({ active, payload, cadence }: any) {
   const gains = side(row.all, 1);
   const losses = side(row.all, -1);
   return (
-    <div className="rounded-lg border border-border bg-background shadow-md px-3 py-2 text-xs min-w-[220px]">
+    <TipBox placement={placement} onWidth={onWidth} className="min-w-[220px]">
       <p className="mb-1.5 font-semibold text-foreground">{periodTitle(p, cadence)}</p>
       <div className="space-y-2.5">
         {gains.length > 0 && <TooltipSection title="Total gains" drivers={gains} total={row.gains ?? 0} />}
@@ -704,7 +850,7 @@ function GrossTooltip({ active, payload, cadence }: any) {
         <span>Net change</span>
         <span className={cn("tabular-nums", toneOf(row.net ?? 0))}>{signed(row.net ?? 0)}</span>
       </div>
-    </div>
+    </TipBox>
   );
 }
 

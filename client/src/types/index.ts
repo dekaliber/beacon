@@ -450,6 +450,8 @@ export interface PerformanceData {
   asOf: string;
   classes: PerformanceClassInfo[];
   periods: PerformancePeriod[];
+  /** Benchmark index close on or before the baseline and each period end; null when it couldn't be fetched. */
+  benchmark: { symbol: string; name: string; closes: Record<string, number | null> } | null;
   notes: {
     estimatedPrices: string[];
     inconsistentPositions: string[]; // "Account TICKER" whose records roll below zero shares

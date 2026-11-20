@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { getUserId } from "../middleware/auth.js";
 import { computePerformance } from "../services/performance.js";
+import { benchmarkClosesAt } from "../services/benchmark.js";
 
 export const investmentPerformanceRoutes = Router();
 
@@ -21,7 +22,13 @@ investmentPerformanceRoutes.get("/", async (req, res) => {
   }
   try {
     const result = await computePerformance(getUserId(req), parsed.data.cadence, parsed.data.today);
-    res.json(result);
+    // The S&P 500 TR close at the baseline and each period end, for the comparison
+    // line. A failed fetch leaves it null rather than failing the whole chart.
+    const benchmark = await benchmarkClosesAt([result.baseline, ...result.periods.map((p) => p.end)]).catch((err) => {
+      console.warn("[performance] benchmark fetch failed —", err);
+      return null;
+    });
+    res.json({ ...result, benchmark });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: { message: "Failed to compute performance" } });
