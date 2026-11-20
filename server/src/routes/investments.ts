@@ -853,19 +853,13 @@ investmentRoutes.get("/accounts", async (req, res) => {
       ? sessionDaysDesc.find((ms) => ms < asOfDay) ?? null
       : null;
 
-    // Previous close for a holding, or null when that session is missing from its
-    // history.
-    const prevCloseFor = (ticker: string, priceDate: Date): number | null => {
-      const closes = closesByTicker.get(ticker);
-      if (!closes) return null;
+    // The day a holding's 1-day change is measured against.
+    const baselineDayFor = (ticker: string, priceDate: Date): number | null =>
       // Crypto trades every calendar day, so it anchors on its own priceDate: the
       // 00:00 UTC snapshot it was priced at, which falls on the previous ET day.
-      const prevDay = cryptoTickers.has(ticker)
+      cryptoTickers.has(ticker)
         ? etDayMs(priceDate) - 24 * 60 * 60 * 1000
         : equityPrevDay;
-      if (prevDay == null) return null;
-      return closes.get(prevDay) ?? null;
-    };
 
     // Helper: given a market value and an instrument's weights, compute how much
     // of that value is classified as Cash vs. unclassified (no weights at all).
@@ -911,16 +905,23 @@ investmentRoutes.get("/accounts", async (req, res) => {
         totalCost += fields.totalCost;
         if (fields.totalGain != null) totalGain += fields.totalGain;
 
-        // Accumulate 1-day gain against the previous session's close. A holding
-        // with history but no usable baseline invalidates the account total; one
-        // with no history at all (opened today) simply has no 1-day change yet.
+        // Accumulate 1-day gain against the previous session's close. A missing
+        // baseline only invalidates the account total when the ticker has closes
+        // from before it — a genuine hole. A ticker whose history starts after the
+        // baseline (an IPO's first session, or a holding opened today) has no
+        // previous close anywhere to find, so it simply has no 1-day change yet.
         if (currentPrice != null && priceRecord != null && fields.totalQuantity > 0) {
-          const prevClose = prevCloseFor(holding.ticker, priceRecord.priceDate);
+          const closes = closesByTicker.get(holding.ticker);
+          const baselineDay = baselineDayFor(holding.ticker, priceRecord.priceDate);
+          const prevClose = closes && baselineDay != null ? closes.get(baselineDay) : undefined;
           if (prevClose != null) {
             const dayGain = (currentPrice - prevClose) * fields.totalQuantity;
             totalDayGain = (totalDayGain ?? 0) + dayGain;
             prevDayValue += prevClose * fields.totalQuantity;
-          } else if (closesByTicker.has(holding.ticker)) {
+          } else if (
+            closes &&
+            (baselineDay == null || [...closes.keys()].some((ms) => ms < baselineDay))
+          ) {
             dayGainComplete = false;
           }
         }
