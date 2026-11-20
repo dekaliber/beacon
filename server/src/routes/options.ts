@@ -1856,12 +1856,20 @@ const confirmOpenSchema = z.object({
 optionsRoutes.post("/positions/:id/confirm-import", async (req, res) => {
   const userId = getUserId(req);
   try {
-    if (typeof req.body?.rollFromId === "string") {
+    // A roll: one position (`rollFromId`) or contracts spread over several (`allocations`).
+    if (typeof req.body?.rollFromId === "string" || Array.isArray(req.body?.allocations)) {
       const parsed = rollSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+      const allocations = z
+        .array(z.object({ positionId: z.string().min(1), contracts: z.coerce.number().int().positive() }))
+        .min(1)
+        .optional()
+        .safeParse(req.body.allocations);
+      if (!allocations.success) return res.status(400).json({ error: allocations.error.flatten() });
       const result = await confirmImportedRoll(userId, req.params.id, {
         ...rollInputFrom(parsed.data),
-        rollFromId: req.body.rollFromId,
+        rollFromId: typeof req.body.rollFromId === "string" ? req.body.rollFromId : undefined,
+        allocations: allocations.data,
       });
       return res.json(result);
     }

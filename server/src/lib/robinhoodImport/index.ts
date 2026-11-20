@@ -3,7 +3,8 @@ import { prisma } from "../../db/client.js";
 import { getAssignedBatches } from "../assignedBatches.js";
 import { rollPosition, RollError, type RollInput } from "../optionsRoll.js";
 import { parseImportFile, type ImportFile } from "./schema.js";
-import { planImport, type ImportFlags, type ImportPlan, type ImportSnapshot, type PlannedRow } from "./plan.js";
+import { planImport, type ImportFlags, type ImportPlan, type ImportSnapshot, type PlannedRow, type RollAllocation } from "./plan.js";
+import { splitCents } from "./allocate.js";
 
 // Robinhood options import — the server module behind the import modal and, later,
 // a custom MCP connector. Nothing here knows about HTTP.
@@ -45,7 +46,7 @@ async function loadSnapshot(userId: string, file: ImportFile): Promise<ImportSna
     prisma.optionsPosition.findMany({
       where: { userId, isActive: true },
       select: {
-        id: true, externalId: true, rhOptionId: true, optionType: true, strikePrice: true,
+        id: true, externalId: true, externalSource: true, rhOptionId: true, optionType: true, strikePrice: true,
         expirationDate: true, contracts: true, openedAt: true, status: true, isDraft: true,
         investmentAccountId: true, ticker: { select: { symbol: true } },
       },
@@ -84,6 +85,7 @@ async function loadSnapshot(userId: string, file: ImportFile): Promise<ImportSna
     positions: positions.map((p) => ({
       id: p.id,
       externalId: p.externalId,
+      externalSource: p.externalSource,
       rhOptionId: p.rhOptionId,
       ticker: p.ticker.symbol.toUpperCase(),
       optionType: p.optionType,
@@ -156,8 +158,11 @@ export async function stageImport(userId: string, raw: unknown, opts: { dryRun?:
         let stagedRollFromId: string | null = null;
         if (row.roll?.from?.kind === "position") stagedRollFromId = row.roll.from.id;
         if (row.roll?.from?.kind === "file") stagedRollFromId = createdIds.get(row.roll.from.externalId) ?? null;
-        const rollFrom = stagedRollFromId
-          ? await tx.optionsPosition.findUnique({ where: { id: stagedRollFromId } })
+        // Spread over several positions: the draft previews the earliest one's
+        // basis and account; each new leg takes its own source's on confirm.
+        const previewFromId = stagedRollFromId ?? row.roll?.allocations?.[0]?.positionId ?? null;
+        const rollFrom = previewFromId
+          ? await tx.optionsPosition.findUnique({ where: { id: previewFromId } })
           : null;
 
         const created = await tx.optionsPosition.create({
@@ -261,7 +266,11 @@ export interface ConfirmOpenInput {
   assignedFromExpirationDate?: string | null; // YYYY-MM-DD
 }
 
-export type ConfirmRollInput = RollInput & { rollFromId: string };
+export type ConfirmRollInput = RollInput & {
+  // One position (legacy single match) or how many contracts to close on each.
+  rollFromId?: string;
+  allocations?: RollAllocation[];
+};
 
 const flagsOf = (p: OptionsPosition) => (p.importFlags ?? { kind: "open" }) as unknown as ImportFlags;
 
@@ -305,30 +314,83 @@ export async function confirmImportedOpen(userId: string, id: string, input: Con
   });
 }
 
-/** Confirm an imported roll: closes `rollFromId` and promotes the draft into the new leg. */
+/**
+ * Confirm an imported roll. Each source position is rolled for its allocated
+ * contracts into its own new leg (its own roll chain), all at the fill time.
+ * The earliest source's new leg is the draft itself, promoted in place; the
+ * others are new rows carrying the same broker ids. Close and open fees are
+ * split across the legs by contracts, in whole cents that sum to the total.
+ */
 export async function confirmImportedRoll(userId: string, id: string, input: ConfirmRollInput) {
   const draft = await loadDraft(userId, id);
   if (flagsOf(draft).kind !== "roll") throw new ConfirmError(400, "This draft is not a roll.");
 
-  const existing = await prisma.optionsPosition.findFirst({
-    where: { id: input.rollFromId, userId, isActive: true },
+  const requested: Array<{ positionId: string; contracts: number | null }> = input.allocations?.length
+    ? input.allocations
+    : input.rollFromId
+      ? [{ positionId: input.rollFromId, contracts: input.contracts ?? null }]
+      : [];
+  if (requested.length === 0) throw new ConfirmError(400, "Pick the position this roll closes.");
+  const ids = requested.map((a) => a.positionId);
+  if (new Set(ids).size !== ids.length) throw new ConfirmError(400, "A position is listed twice.");
+
+  const sources = await prisma.optionsPosition.findMany({ where: { id: { in: ids }, userId, isActive: true } });
+  const byId = new Map(sources.map((p) => [p.id, p]));
+  const legs = requested.map((a) => {
+    const existing = byId.get(a.positionId);
+    if (!existing) throw new ConfirmError(404, "The position being rolled was not found.");
+    if (existing.isDraft) throw new ConfirmError(409, "Confirm the position being rolled first; it is still a draft.");
+    if (existing.status !== "OPEN") throw new ConfirmError(409, "The position being rolled is no longer open.");
+    if (existing.tickerId !== draft.tickerId || existing.optionType !== draft.optionType) {
+      throw new ConfirmError(409, "The position being rolled is a different ticker or option type.");
+    }
+    const contracts = a.contracts ?? existing.contracts;
+    if (!Number.isInteger(contracts) || contracts < 1 || contracts > existing.contracts) {
+      throw new ConfirmError(409, `A position being rolled holds ${existing.contracts} contract${existing.contracts === 1 ? "" : "s"}; can't roll ${contracts}.`);
+    }
+    return { existing, contracts };
   });
-  if (!existing) throw new ConfirmError(404, "The position being rolled was not found.");
-  if (existing.isDraft) throw new ConfirmError(409, "Confirm the position being rolled first; it is still a draft.");
-  if (existing.status !== "OPEN") throw new ConfirmError(409, "The position being rolled is no longer open.");
-  if (existing.tickerId !== draft.tickerId || existing.optionType !== draft.optionType) {
-    throw new ConfirmError(409, "The position being rolled is a different ticker or option type.");
+  const total = legs.reduce((s, l) => s + l.contracts, 0);
+  if (total !== draft.contracts) {
+    throw new ConfirmError(409, `The roll is ${draft.contracts} contract${draft.contracts === 1 ? "" : "s"}; the positions picked add up to ${total}.`);
   }
+  legs.sort((a, b) => a.existing.openedAt.getTime() - b.existing.openedAt.getTime() || a.existing.id.localeCompare(b.existing.id));
+
+  const weights = legs.map((l) => l.contracts);
+  const feesClose = splitCents(input.feesClose, weights);
+  const feesOpen = splitCents(input.newFeesOpen, weights);
+  const sibling: Partial<Prisma.OptionsPositionUncheckedCreateInput> = {
+    externalSource: draft.externalSource,
+    rhOrderId: draft.rhOrderId,
+    rhLegId: draft.rhLegId,
+    rhOptionId: draft.rhOptionId,
+    importBatchId: draft.importBatchId,
+    ivAtOpen: draft.ivAtOpen,
+    derivedAtOpen: draft.derivedAtOpen,
+    notes: draft.notes,
+  };
 
   try {
     return await prisma.$transaction(async (tx) => {
-      const result = await rollPosition(tx, userId, existing, input, { intoDraftId: draft.id });
-      const { needsMatch: _n, matchCandidateIds: _m, ...flags } = flagsOf(draft);
+      const results = [];
+      for (let i = 0; i < legs.length; i++) {
+        const { existing, contracts } = legs[i];
+        results.push(
+          await rollPosition(
+            tx,
+            userId,
+            existing,
+            { ...input, contracts, feesClose: feesClose[i], newFeesOpen: feesOpen[i] },
+            i === 0 ? { intoDraftId: draft.id } : { newLegExtra: sibling },
+          ),
+        );
+      }
+      const { needsMatch: _n, matchCandidateIds: _m, rollAllocations: _a, ...flags } = flagsOf(draft);
       await tx.optionsPosition.update({
         where: { id: draft.id },
         data: { importFlags: flags as unknown as Prisma.InputJsonValue },
       });
-      return result;
+      return { ...results[0], legs: results };
     });
   } catch (e) {
     if (e instanceof RollError) throw new ConfirmError(e.status, e.message);
@@ -336,12 +398,20 @@ export async function confirmImportedRoll(userId: string, id: string, input: Con
   }
 }
 
+/** The staged allocation of a roll draft, or null when it still needs a match. */
+function stagedAllocations(d: OptionsPosition): RollAllocation[] | null {
+  const f = flagsOf(d);
+  if (f.rollAllocations?.length) return f.rollAllocations;
+  if (d.stagedRollFromId) return [{ positionId: d.stagedRollFromId, contracts: d.contracts }];
+  return null;
+}
+
 /** Why a draft can't go through bulk confirm, or null when it's clean. */
 export function bulkBlocker(draft: OptionsPosition): string | null {
   const f = flagsOf(draft);
   if (f.possibleDuplicateOfId) return "possible duplicate";
   if (f.lotChoices?.length && draft.assignedFromStrikePrice == null) return "lot to pick";
-  if (f.kind === "roll" && !draft.stagedRollFromId) return "needs a match";
+  if (f.kind === "roll" && !stagedAllocations(draft)) return "needs a match";
   return null;
 }
 
@@ -361,7 +431,7 @@ export async function confirmImportedDrafts(userId: string, ids: string[]) {
     try {
       if (flagsOf(d).kind === "roll") {
         await confirmImportedRoll(userId, d.id, {
-          rollFromId: d.stagedRollFromId!,
+          allocations: stagedAllocations(d)!,
           closedAt: d.openedAt,
           closePremiumPerShare: d.stagedBuybackPerShare != null ? Number(d.stagedBuybackPerShare) : null,
           feesClose: d.stagedFeesClose != null ? Number(d.stagedFeesClose) : null,
@@ -372,7 +442,6 @@ export async function confirmImportedDrafts(userId: string, ids: string[]) {
           newDeltaAtOpen: d.deltaAtOpen != null ? Number(d.deltaAtOpen) : null,
           newDeltaAtOpenCapturedAt: d.deltaAtOpenCapturedAt,
           newFeesOpen: d.feesOpen != null ? Number(d.feesOpen) : null,
-          contracts: d.contracts,
         });
       } else {
         await confirmImportedOpen(userId, d.id);

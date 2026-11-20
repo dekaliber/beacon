@@ -25,6 +25,9 @@ export interface RollOptions {
   // creating one, so its externalId and broker ids stay on the leg the broker
   // filled. The row is promoted out of draft and its staged fields are cleared.
   intoDraftId?: string;
+  // Extra columns for a freshly created new leg (e.g. the broker ids when one
+  // imported roll is spread over several positions). Ignored with intoDraftId.
+  newLegExtra?: Partial<Prisma.OptionsPositionUncheckedCreateInput>;
 }
 
 export class RollError extends Error {
@@ -72,7 +75,7 @@ export async function rollPosition(
           },
           include,
         })
-      : tx.optionsPosition.create({ data: { userId, ...data }, include });
+      : tx.optionsPosition.create({ data: { userId, ...opts.newLegExtra, ...data }, include });
 
   const newLegFields = {
     tickerId: existing.tickerId,

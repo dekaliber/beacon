@@ -4,6 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseImportFile, ImportFileError } from "./schema.js";
 import { planImport, type ImportSnapshot, type SnapshotPosition } from "./plan.js";
+import { splitCents } from "./allocate.js";
 
 const ACCOUNT = "acct_rh";
 
@@ -33,6 +34,7 @@ function pos(over: Partial<SnapshotPosition>): SnapshotPosition {
   return {
     id: "p1",
     externalId: null,
+    externalSource: null,
     rhOptionId: null,
     ticker: "CEG",
     optionType: "CALL",
@@ -307,4 +309,77 @@ test("validation: bad values make a row Invalid; a bad shape rejects the file", 
   assert.throws(() => parseImportFile({ schemaVersion: 2, account: "Robinhood", events: [] }), ImportFileError);
   assert.throws(() => file([nvdaOpen, nvdaOpen]), /Duplicate externalId/);
   assert.throws(() => parseImportFile("{not json"), /Not valid JSON/);
+});
+
+// ── A roll spread over several positions ─────────────────────────────────────
+
+const vcxPut = (id: string, contracts: number, openedAt: string, over: Partial<SnapshotPosition> = {}) =>
+  pos({ id, ticker: "VCX", optionType: "PUT", strike: 20, expiration: "2026-11-20", contracts, openedAtMs: Date.parse(openedAt), ...over });
+
+const vcxRoll = (contracts: number, id = "vcx1") => ({
+  ...roll(id, "VCX", "cash_secured_put", "2026-11-20T10:05:00-05:00", [20, "2026-11-20", 0.05], [20, "2026-11-28", 0.62], "vcx-20p-1120"),
+  contracts,
+});
+
+test("multi: a 5-contract roll maps onto four positions that add up to 5, oldest first", () => {
+  const positions = [
+    vcxPut("d", 1, "2026-11-19T09:41:27-05:00", { rhOptionId: "vcx-20p-1120" }),
+    vcxPut("a", 1, "2026-11-04T09:30:00-05:00"),
+    vcxPut("c", 2, "2026-11-09T14:13:00-05:00"),
+    vcxPut("b", 1, "2026-11-05T09:30:00-05:00"),
+  ];
+  const r = planImport(file([vcxRoll(5)]), snap({ positions })).rows[0];
+  assert.equal(r.flags.needsMatch, undefined);
+  assert.equal(r.roll?.from, null);
+  assert.deepEqual(r.roll?.allocations, [
+    { positionId: "a", contracts: 1 },
+    { positionId: "b", contracts: 1 },
+    { positionId: "c", contracts: 2 },
+    { positionId: "d", contracts: 1 },
+  ]);
+  assert.deepEqual(r.flags.rollAllocations, r.roll?.allocations);
+});
+
+test("multi: an option-id match that holds too few contracts is not taken", () => {
+  // Only the 1-contract position carries the Robinhood id; the others make up the rest.
+  const positions = [vcxPut("d", 1, "2026-11-19T09:41:27-05:00", { rhOptionId: "vcx-20p-1120" }), vcxPut("a", 1, "2026-11-04T09:30:00-05:00")];
+  const r = planImport(file([vcxRoll(2)]), snap({ positions })).rows[0];
+  assert.equal(r.roll?.allocations?.length, 2);
+
+  const short = planImport(file([vcxRoll(3)]), snap({ positions })).rows[0];
+  assert.equal(short.roll?.from, null);
+  assert.equal(short.roll?.allocations, null);
+  assert.match(short.flags.needsMatch ?? "", /hold 2 contracts; the roll is 3/);
+});
+
+test("multi: two rolls in one file don't claim the same contracts", () => {
+  const positions = [
+    vcxPut("a", 1, "2026-11-04T09:30:00-05:00"),
+    vcxPut("b", 1, "2026-11-05T09:30:00-05:00"),
+    vcxPut("c", 2, "2026-11-09T14:13:00-05:00"),
+    vcxPut("d", 1, "2026-11-19T09:41:27-05:00"),
+  ];
+  const second = { ...vcxRoll(3, "vcx2"), rolledAt: "2026-11-20T10:06:00-05:00" };
+  const [first, next] = planImport(file([vcxRoll(2), second]), snap({ positions })).rows;
+  assert.deepEqual(first.roll?.from, { kind: "position", id: "c" });
+  assert.deepEqual(next.roll?.allocations?.map((a) => a.positionId), ["a", "b", "d"]);
+});
+
+test("multi: one position big enough still wins as a single match", () => {
+  const positions = [vcxPut("big", 5, "2026-11-04T09:30:00-05:00"), vcxPut("small", 1, "2026-11-05T09:30:00-05:00")];
+  const r = planImport(file([vcxRoll(5)]), snap({ positions })).rows[0];
+  assert.deepEqual(r.roll?.from, { kind: "position", id: "big" });
+  assert.equal(r.roll?.allocations, null);
+});
+
+test("splitCents: proportional, whole cents, sums to the total", () => {
+  assert.deepEqual(splitCents(0.21, [1, 1, 2, 1]), [0.04, 0.04, 0.09, 0.04]);
+  assert.deepEqual(splitCents(0.1, [1, 1, 1]), [0.04, 0.03, 0.03]);
+  assert.deepEqual(splitCents(0.05, [1]), [0.05]);
+  assert.deepEqual(splitCents(null, [1, 2]), [null, null]);
+  assert.deepEqual(splitCents(0, [1, 2]), [0, 0]);
+  for (const [t, w] of [[1.37, [3, 1, 2]], [0.07, [2, 2, 1, 1, 1]], [12.34, [1, 4]]] as const) {
+    const parts = splitCents(t, [...w]) as number[];
+    assert.equal(Math.round(parts.reduce((s, x) => s + x, 0) * 100), Math.round(t * 100));
+  }
 });

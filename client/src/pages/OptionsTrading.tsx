@@ -17,6 +17,7 @@ import {
  rollOptionsPosition,
  confirmImportedOpen,
  confirmImportedRoll,
+ type RollAllocation,
  confirmImportedDrafts,
  stageRobinhoodImport,
  getLatestImportedFill,
@@ -259,12 +260,41 @@ function normalizePosition(p: OptionsPosition): OptionsPosition {
 // An imported (broker) draft, and whether it stages a roll.
 const isImportedDraft = (p: OptionsPosition) => p.isDraft && !!p.externalId;
 const isImportedRollDraft = (p: OptionsPosition) => isImportedDraft(p) && p.importFlags?.kind ==="roll";
+// The positions an imported roll draft will close, as the import staged them:
+// several when the roll's contracts were spread over separate positions.
+const stagedRollSources = (p: OptionsPosition): RollAllocation[] | null =>
+ p.importFlags?.rollAllocations?.length
+ ? p.importFlags.rollAllocations
+ : p.stagedRollFromId ? [{ positionId: p.stagedRollFromId, contracts: p.contracts }] : null;
+
 // Clean enough for bulk confirm — mirrors the server's bulkBlocker.
 const isCleanImportedDraft = (p: OptionsPosition) =>
  isImportedDraft(p) &&
  !p.importFlags?.possibleDuplicateOfId &&
  !(p.importFlags?.lotChoices?.length && p.assignedFromStrikePrice == null) &&
- !(isImportedRollDraft(p) && !p.stagedRollFromId);
+ !(isImportedRollDraft(p) && !stagedRollSources(p));
+
+// Split a dollar amount by contracts in whole cents that sum to the total
+// (leftover cents to the largest remainders). Mirrors the server's splitCents.
+function splitCents(total: number | null, weights: number[]): Array<number | null> {
+ if (total == null) return weights.map(() => null);
+ const sumW = weights.reduce((a, w) => a + w, 0);
+ if (sumW <= 0) return weights.map(() => 0);
+ const sign = total < 0 ? -1 : 1;
+ const cents = Math.round(Math.abs(total) * 100);
+ const exact = weights.map((w) => (cents * w) / sumW);
+ const floors = exact.map((x) => Math.floor(x + 1e-9));
+ let left = cents - floors.reduce((a, x) => a + x, 0);
+ const order = exact
+ .map((x, i) => ({ i, frac: x - floors[i], w: weights[i] }))
+ .sort((a, b) => b.frac - a.frac || b.w - a.w || a.i - b.i);
+ for (const o of order) {
+ if (left <= 0) break;
+ floors[o.i] += 1;
+ left -= 1;
+ }
+ return floors.map((c) => (sign * c) / 100);
+}
 
 // The second line under an imported draft: the roll's closing leg, then any review flags.
 function importNotesFor(p: OptionsPosition): Array<{ text: string; tone?:"warn" }> {
@@ -278,7 +308,9 @@ function importNotesFor(p: OptionsPosition): Array<{ text: string; tone?:"warn" 
  if (p.stagedBuybackPerShare != null) notes.push({ text:`buyback $${fmtUSD(p.stagedBuybackPerShare)}` });
  const net = f.netCreditPerShare ?? (p.stagedBuybackPerShare != null ? p.premiumPerShare - p.stagedBuybackPerShare : null);
  if (net != null) notes.push({ text:`net ${net >= 0 ?"+" :"−"}$${fmtUSD(Math.abs(net))}` });
- if (!p.stagedRollFromId) notes.push({ text:`Needs a match: ${f.needsMatch ??"pick the position being rolled"}`, tone:"warn" });
+ const sources = stagedRollSources(p);
+ if (!sources) notes.push({ text:`Needs a match: ${f.needsMatch ??"pick the position being rolled"}`, tone:"warn" });
+ else if (sources.length > 1) notes.push({ text:`across ${sources.length} positions` });
  }
  if (f.possibleDuplicateOfId) notes.push({ text:"Possible duplicate of a position you entered by hand", tone:"warn" });
  if (f.lotChoices?.length && p.assignedFromStrikePrice == null) notes.push({ text:"Pick a lot when confirming", tone:"warn" });
@@ -1369,7 +1401,9 @@ interface CloseModalProps {
  stagedRoll?: {
  draft: OptionsPosition;
  candidates: OptionsPosition[];
- onChangeMatch: (id: string) => void;
+ // Contracts to roll from each position; together they make up the draft.
+ allocations: RollAllocation[];
+ onChangeAllocations: (next: RollAllocation[]) => void;
  };
 }
 
@@ -1439,7 +1473,8 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  const isRolled = outcome ==="ROLLED";
  // Rolling a chained leg only supports a full roll (backend still rejects a
  // partial roll once groupId is set); every other outcome can split freely.
- const showSplit = position.contracts > 1 && !(isRolled && isChained);
+ // An imported roll sets its contracts per position in the picker instead.
+ const showSplit = position.contracts > 1 && !(isRolled && isChained) && !draft;
 
  // Upcoming earnings for the rolled-to expiration — the new leg carries the
  // same gap risk as a freshly opened position. Only fetched once ROLLED is
@@ -1549,7 +1584,16 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  newFeesOpen: newFeesOpen ? parseAmount(newFeesOpen) : null,
  ...(isPartial ? { contracts: n } : {}),
  };
- if (draft) await confirmImportedRoll(draft.id, { ...rollPayload, rollFromId: position.id });
+ if (draft) {
+ const allocations = stagedRoll!.allocations;
+ const picked = allocations.reduce((a, x) => a + x.contracts, 0);
+ if (allocations.length === 0 || picked !== draft.contracts) {
+ setError(`Pick positions that add up to ${draft.contracts} contract${draft.contracts === 1 ?"" :"s"} (${picked} picked).`);
+ setSaving(false);
+ return;
+ }
+ await confirmImportedRoll(draft.id, { ...rollPayload, allocations });
+ }
  else await rollOptionsPosition(position.id, rollPayload);
  } else if (isPartial) {
  // Partial close → split N contracts off into a new closed leg.
@@ -1619,25 +1663,20 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  <div className="flex items-start gap-2 rounded-md bg-blue-soft px-3 py-2.5 text-xs text-blue-deep">
  <Info className="h-3.5 w-3.5 shrink-0 mt-px" />
  <span>
- Imported from Robinhood. Confirming closes the position below as rolled and opens the new leg
+ Imported from Robinhood. Confirming closes the {stagedRoll.allocations.length > 1 ?"positions" :"position"} below as rolled and opens the new {stagedRoll.allocations.length > 1 ?"legs" :"leg"}
  {net != null && <> for a net {net >= 0 ?"credit" :"debit"} of <span className="font-medium">${fmtUSD(Math.abs(net))}</span>/share</>}.
  </span>
  </div>
- <div>
- <label className="block text-xs font-medium mb-1">Position Being Rolled</label>
- <div className="relative">
- <select
- value={position.id}
- onChange={(e) => stagedRoll.onChangeMatch(e.target.value)}
- className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-foreground"
- >
- {stagedRoll.candidates.map((c) => (
- <option key={c.id} value={c.id}>{positionLabel(c)}</option>
- ))}
- </select>
- <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
- </div>
- </div>
+ <RollAllocationPicker
+ total={draft.contracts}
+ candidates={stagedRoll.candidates}
+ allocations={stagedRoll.allocations}
+ onChange={stagedRoll.onChangeAllocations}
+ fees={{
+ close: feesClose ? parseAmount(feesClose) : null,
+ open: newFeesOpen ? parseAmount(newFeesOpen) : null,
+ }}
+ />
  </>
  );
  })()}
@@ -1847,7 +1886,14 @@ function ClosePositionModal({ position, onClose, onSaved, defaultBankingAccountI
  <div className="border-t border-border pt-4">
  <p className="font-semibold mb-3">New Position</p>
  <div className="rounded-md bg-muted px-3 py-2 text-muted-foreground mb-3 space-y-0.5">
- <div><span className="font-medium text-foreground">{position.ticker.symbol}</span> · {position.contracts} contract{position.contracts !== 1 ?"s" :""} · {position.optionType ==="CALL" ?"Covered Call" :"Cash-Secured Put"}</div>
+ {(() => {
+ // An imported roll opens the draft's contracts, one new leg per position picked.
+ const n = draft ? draft.contracts : position.contracts;
+ const legs = stagedRoll && stagedRoll.allocations.length > 1 ? stagedRoll.allocations.length : null;
+ return (
+ <div><span className="font-medium text-foreground">{position.ticker.symbol}</span> · {n} contract{n !== 1 ?"s" :""}{legs && <> across {legs} legs</>} · {position.optionType ==="CALL" ?"Covered Call" :"Cash-Secured Put"}</div>
+ );
+ })()}
  </div>
 
  <div className="space-y-4">
@@ -2566,9 +2612,115 @@ function SettingsModal({ current, capitalChanges, onClose, onSaved, onCapitalCha
  );
 }
 
+const byOpenedAt = (a: OptionsPosition, b: OptionsPosition) =>
+ new Date(a.openedAt).getTime() - new Date(b.openedAt).getTime() || a.id.localeCompare(b.id);
+
+// Starting allocation: what the import staged, when it still adds up. Otherwise
+// (an older import that matched a single too-small position, or no match) every
+// open position with the closing leg's terms, when they add up exactly.
+function initialRollAllocations(draft: OptionsPosition, candidates: OptionsPosition[]): RollAllocation[] {
+ const live = new Map(candidates.map((c) => [c.id, c]));
+ const staged = (stagedRollSources(draft) ?? [])
+ .filter((a) => live.has(a.positionId))
+ .map((a) => ({ positionId: a.positionId, contracts: Math.min(a.contracts, live.get(a.positionId)!.contracts) }));
+ const sum = (xs: RollAllocation[]) => xs.reduce((a, x) => a + x.contracts, 0);
+ if (staged.length > 0 && sum(staged) === draft.contracts) return staged;
+ const leg = draft.importFlags?.closeLeg;
+ if (leg) {
+ const same = candidates.filter(
+ (c) => Math.abs(Number(c.strikePrice) - leg.strike) < 0.005 && c.expirationDate.slice(0, 10) === leg.expiration,
+ );
+ const all = same.map((c) => ({ positionId: c.id, contracts: c.contracts }));
+ if (all.length > 0 && sum(all) === draft.contracts) return all;
+ }
+ return staged;
+}
+
+// Pick the open positions a roll closes and how many contracts from each.
+// Fees are split across them by contracts, the same way the server splits them.
+function RollAllocationPicker({ total, candidates, allocations, onChange, fees }: {
+ total: number;
+ candidates: OptionsPosition[];
+ allocations: RollAllocation[];
+ onChange: (next: RollAllocation[]) => void;
+ fees?: { close: number | null; open: number | null };
+}) {
+ const counts = new Map(allocations.map((a) => [a.positionId, a.contracts]));
+ const picked = allocations.reduce((a, x) => a + x.contracts, 0);
+ const ordered = [...candidates].sort(byOpenedAt);
+ // Keep the list in the same oldest-first order the server rolls them in.
+ const emit = (m: Map<string, number>) =>
+ onChange(ordered.filter((c) => m.has(c.id)).map((c) => ({ positionId: c.id, contracts: m.get(c.id)! })));
+ const toggle = (c: OptionsPosition) => {
+ const m = new Map(counts);
+ if (m.has(c.id)) m.delete(c.id);
+ else m.set(c.id, Math.max(1, Math.min(c.contracts, total - picked)));
+ emit(m);
+ };
+ const setCount = (c: OptionsPosition, raw: string) => {
+ const n = parseInt(raw, 10);
+ if (!Number.isInteger(n)) return;
+ emit(new Map(counts).set(c.id, Math.max(1, Math.min(c.contracts, n))));
+ };
+ const weights = allocations.map((a) => a.contracts);
+ const fmtSplit = (t: number | null) =>
+ splitCents(t, weights).map((x) => `$${fmtUSD(x ?? 0)}`).join(" · ");
+ const showFees = allocations.length > 1 && fees && (fees.close != null || fees.open != null);
+
+ return (
+ <div>
+ <div className="flex items-baseline justify-between mb-1">
+ <label className="block text-xs font-medium">Positions Being Rolled</label>
+ <span className={cn("text-xs", picked === total ?"text-muted-foreground" :"text-warn")}>
+ {picked} of {total} contract{total === 1 ?"" :"s"}
+ </span>
+ </div>
+ <div className="rounded-md border border-border divide-y divide-border max-h-56 overflow-y-auto">
+ {ordered.map((c) => {
+ const n = counts.get(c.id);
+ return (
+ <div key={c.id} className="flex items-center gap-2 px-3 py-2 text-13">
+ <input
+ type="checkbox"
+ checked={n != null}
+ onChange={() => toggle(c)}
+ className="h-3.5 w-3.5 shrink-0 accent-primary"
+ aria-label={positionLabel(c)}
+ />
+ <button type="button" onClick={() => toggle(c)} className="flex-1 min-w-0 truncate text-left">
+ {positionLabel(c)}
+ </button>
+ {n != null && c.contracts > 1 && (
+ <span className="flex items-center gap-1 shrink-0 text-xs text-muted-foreground">
+ <input
+ type="number"
+ min={1}
+ max={c.contracts}
+ value={n}
+ onChange={(e) => setCount(c, e.target.value)}
+ className="w-12 rounded-md border border-border px-1.5 py-0.5 text-right text-13 text-foreground [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+ />
+ of {c.contracts}
+ </span>
+ )}
+ </div>
+ );
+ })}
+ </div>
+ {showFees && (
+ <p className="mt-1 text-xs text-muted-foreground">
+ Fees split by contracts
+ {fees!.close != null && <> · close {fmtSplit(fees!.close)}</>}
+ {fees!.open != null && <> · open {fmtSplit(fees!.open)}</>}
+ </p>
+ )}
+ </div>
+ );
+}
+
 // ── Confirm Imported Roll ───────────────────────────────────────────────────────
-// Opens the Roll form for an imported roll draft. When the import couldn't tell
-// which live position the roll closes, pick it first.
+// Opens the Roll form for an imported roll draft, with the positions it closes
+// picked (one, or several when its contracts are spread over separate positions).
 
 function RollDraftConfirmModal({ draft, openPositions, draftPositions, onClose, onSaved }: {
  draft: OptionsPosition;
@@ -2577,18 +2729,26 @@ function RollDraftConfirmModal({ draft, openPositions, draftPositions, onClose, 
  onClose: () => void;
  onSaved: () => void;
 }) {
- const candidates = openPositions.filter((p) => p.ticker.symbol === draft.ticker.symbol && p.optionType === draft.optionType);
- const [fromId, setFromId] = useState(draft.stagedRollFromId ??"");
- const from = candidates.find((c) => c.id === fromId) ?? null;
- // The staged leg may itself be an imported draft awaiting confirmation.
- const fromDraft = !from && draft.stagedRollFromId ? draftPositions.find((d) => d.id === draft.stagedRollFromId) ?? null : null;
+ const candidates = useMemo(
+ () => openPositions.filter((p) => p.ticker.symbol === draft.ticker.symbol && p.optionType === draft.optionType).sort(byOpenedAt),
+ [openPositions, draft],
+ );
+ const [allocations, setAllocations] = useState<RollAllocation[]>(() => initialRollAllocations(draft, candidates));
+ // A staged source that is itself an imported draft awaiting confirmation.
+ const fromDraft = (stagedRollSources(draft) ?? [])
+ .map((a) => (candidates.some((c) => c.id === a.positionId) ? null : draftPositions.find((d) => d.id === a.positionId) ?? null))
+ .find((d) => d != null) ?? null;
+ // The form is anchored on the oldest picked position; it stays open if every
+ // box is unticked (submit then asks for a pick) rather than jumping back.
+ const primary = candidates.find((c) => allocations.some((a) => a.positionId === c.id)) ?? null;
+ const anchor = useRef<OptionsPosition | null>(null);
+ if (primary) anchor.current = primary;
 
- if (from) {
+ if (anchor.current && !fromDraft) {
  return (
  <ClosePositionModal
- key={from.id}
- position={from}
- stagedRoll={{ draft, candidates, onChangeMatch: setFromId }}
+ position={anchor.current}
+ stagedRoll={{ draft, candidates, allocations, onChangeAllocations: setAllocations }}
  onClose={onClose}
  onSaved={onSaved}
  />
@@ -2604,27 +2764,12 @@ function RollDraftConfirmModal({ draft, openPositions, draftPositions, onClose, 
  <span>
  {fromDraft
  ?`The position this roll closes (${positionLabel(fromDraft)}) is still an imported draft. Confirm it first.`
- : draft.importFlags?.needsMatch ??"Pick the position this roll closes."}
+ : draft.importFlags?.needsMatch ??"Pick the positions this roll closes."}
  </span>
  </div>
  {!fromDraft && (
  candidates.length > 0 ? (
- <div>
- <label className="block text-xs font-medium mb-1">Position Being Rolled</label>
- <div className="relative">
- <select
- value=""
- onChange={(e) => setFromId(e.target.value)}
- className="appearance-none w-full rounded-md border border-border pl-2 pr-6 py-2 text-foreground"
- >
- <option value="" disabled>Choose a position…</option>
- {candidates.map((c) => (
- <option key={c.id} value={c.id}>{positionLabel(c)}</option>
- ))}
- </select>
- <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 opacity-50" />
- </div>
- </div>
+ <RollAllocationPicker total={draft.contracts} candidates={candidates} allocations={allocations} onChange={setAllocations} />
  ) : (
  <p className="text-muted-foreground">No open {draft.ticker.symbol} {type === "CALL" ?"calls" :"puts"} to roll. Delete this draft if the roll was already recorded.</p>
  )
@@ -2927,7 +3072,7 @@ function OpenPositionsTable({ positions, draftPositions, chainPnlMap, chainFirst
  // Live positions an imported roll draft will close when confirmed.
  const pendingRollByFromId = useMemo(() => {
  const m = new Map<string, OptionsPosition>();
- for (const d of draftPositions) if (d.stagedRollFromId) m.set(d.stagedRollFromId, d);
+ for (const d of draftPositions) for (const a of stagedRollSources(d) ?? []) m.set(a.positionId, d);
  return m;
  }, [draftPositions]);
  // Click-to-select rows, summed in the floating totals bar. Cleared whenever the

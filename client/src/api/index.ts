@@ -811,6 +811,13 @@ export interface ImportFlags {
   robinhoodAvgCost?: number;
   netCreditPerShare?: number;
   closeLeg?: { strike: number; expiration: string; optionId: string };
+  // A roll spread over several positions: contracts it closes on each.
+  rollAllocations?: RollAllocation[];
+}
+
+export interface RollAllocation {
+  positionId: string;
+  contracts: number;
 }
 
 export interface OptionsPositionGroup {
@@ -1065,7 +1072,8 @@ export type ConfirmImportedOpenInput = {
 export const confirmImportedOpen = (id: string, data: ConfirmImportedOpenInput) =>
   api.post<OptionsPosition>(`/options/positions/${id}/confirm-import`, data);
 
-export const confirmImportedRoll = (id: string, data: OptionsRollInput & { rollFromId: string }) =>
+// `allocations`: how many contracts to roll from each position (one or several).
+export const confirmImportedRoll = (id: string, data: OptionsRollInput & { allocations: RollAllocation[] }) =>
   api.post<{ closed: OptionsPosition; opened: OptionsPosition }>(`/options/positions/${id}/confirm-import`, data);
 
 export const confirmImportedDrafts = (ids: string[]) =>

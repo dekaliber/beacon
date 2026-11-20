@@ -8,6 +8,9 @@ import type { ImportEvent, ImportFile } from "./schema.js";
 export interface SnapshotPosition {
   id: string;
   externalId: string | null;
+  // Set on anything the import wrote, including the extra legs of a roll spread
+  // over several positions (those carry no externalId of their own).
+  externalSource: string | null;
   rhOptionId: string | null;
   ticker: string;
   optionType: "CALL" | "PUT";
@@ -52,6 +55,14 @@ export interface ImportFlags {
   robinhoodAvgCost?: number;
   netCreditPerShare?: number;
   closeLeg?: { strike: number; expiration: string; optionId: string };
+  // A roll whose contracts are spread over several open positions: how many
+  // contracts it closes on each. Set instead of a single staged source.
+  rollAllocations?: RollAllocation[];
+}
+
+export interface RollAllocation {
+  positionId: string;
+  contracts: number;
 }
 
 export interface PlannedRow {
@@ -83,7 +94,9 @@ export interface PlannedRow {
   roll: {
     buybackPerShare: number;
     feesClose: number | null;
+    // One source (a position or an open in this file), or several positions.
     from: RollSource | null;
+    allocations: RollAllocation[] | null;
   } | null;
   flags: ImportFlags;
 }
@@ -127,6 +140,7 @@ export function planImport(file: ImportFile, snap: ImportSnapshot): ImportPlan {
   for (const [t, batches] of snap.lotBatches) lotRemaining.set(t, batches.map((b) => ({ ...b })));
   const plannedCallContracts = new Map<string, number>();
   const plannedOpenByOptionId = new Map<string, string>(); // rhOptionId → externalId (new opens in this file)
+  const claimed = new Map<string, number>(); // position id → contracts already rolled by earlier rows
 
   for (const row of rows) {
     if (row.status !== "new") continue;
@@ -135,6 +149,7 @@ export function planImport(file: ImportFile, snap: ImportSnapshot): ImportPlan {
     const dup = snap.positions.find(
       (p) =>
         p.externalId == null &&
+        p.externalSource == null &&
         p.ticker === row.ticker &&
         p.optionType === row.optionType &&
         sameStrike(p.strike, row.leg.strike) &&
@@ -148,7 +163,7 @@ export function planImport(file: ImportFile, snap: ImportSnapshot): ImportPlan {
       plannedOpenByOptionId.set(row.leg.rhOptionId, row.externalId);
       if (row.optionType === "CALL") planCoveredCall(row, snap, lotRemaining, plannedCallContracts);
     } else {
-      matchRoll(row, snap, plannedOpenByOptionId);
+      matchRoll(row, snap, plannedOpenByOptionId, claimed);
     }
   }
 
@@ -201,7 +216,7 @@ function toRow(e: ImportEvent, index: number, snap: ImportSnapshot): PlannedRow 
     if (!(e.close.strike > 0)) errors.push("close.strike must be > 0");
     if (!DATE_RE.test(e.close.expiration)) errors.push("close.expiration must be YYYY-MM-DD");
     if (!(e.close.buybackPerShare >= 0)) errors.push("close.buybackPerShare must be ≥ 0");
-    roll = { buybackPerShare: e.close.buybackPerShare, feesClose: e.close.fees ?? null, from: null };
+    roll = { buybackPerShare: e.close.buybackPerShare, feesClose: e.close.fees ?? null, from: null, allocations: null };
     flags.netCreditPerShare = round4(e.open.premiumPerShare - e.close.buybackPerShare);
     flags.closeLeg = { strike: e.close.strike, expiration: e.close.expiration, optionId: e.close.optionId };
   } else if (e.robinhoodAvgCost != null) {
@@ -265,23 +280,57 @@ function planCoveredCall(
   plannedCallContracts.set(row.ticker, planned + n);
 }
 
-function matchRoll(row: PlannedRow, snap: ImportSnapshot, plannedOpenByOptionId: Map<string, string>) {
+function matchRoll(
+  row: PlannedRow,
+  snap: ImportSnapshot,
+  plannedOpenByOptionId: Map<string, string>,
+  claimed: Map<string, number>,
+) {
   const close = row.flags.closeLeg!;
   const n = row.leg.contracts;
+  const avail = (p: SnapshotPosition) => p.contracts - (claimed.get(p.id) ?? 0);
+  const claim = (id: string, k: number) => claimed.set(id, (claimed.get(id) ?? 0) + k);
+  let ambiguousCount = 0;
 
-  // 1. Same Robinhood contract id: an open from this same file, else a stored position.
+  // 1. An open earlier in this same file.
   const fileOpen = plannedOpenByOptionId.get(close.optionId);
   if (fileOpen) {
     row.roll!.from = { kind: "file", externalId: fileOpen };
     return;
   }
-  const byOptionId = snap.positions.filter((p) => p.status === "OPEN" && p.rhOptionId === close.optionId);
-  if (byOptionId.length === 1) {
-    row.roll!.from = { kind: "position", id: byOptionId[0].id };
-    return;
-  }
 
-  // 2. Same terms on a live open position with enough contracts.
+  // Resolve one tier of candidates: one position that holds enough, or —
+  // when they add up to exactly the roll — all of them. Never guess between two.
+  const resolve = (cands: SnapshotPosition[]): "matched" | "ambiguous" | "none" => {
+    const open = cands.filter((p) => avail(p) > 0);
+    if (open.length === 0) return "none";
+    const total = open.reduce((s, p) => s + avail(p), 0);
+    if (open.length > 1 && total === n) {
+      const ordered = [...open].sort((a, b) => a.openedAtMs - b.openedAtMs || a.id.localeCompare(b.id));
+      row.roll!.allocations = ordered.map((p) => ({ positionId: p.id, contracts: avail(p) }));
+      row.flags.rollAllocations = row.roll!.allocations;
+      for (const p of ordered) claim(p.id, avail(p));
+      return "matched";
+    }
+    const fits = open.filter((p) => avail(p) >= n);
+    if (fits.length === 1) {
+      row.roll!.from = { kind: "position", id: fits[0].id };
+      claim(fits[0].id, n);
+      return "matched";
+    }
+    if (fits.length > 1) {
+      ambiguousCount = fits.length;
+      return "ambiguous";
+    }
+    return "none";
+  };
+
+  // 2. Positions carrying the closing contract's Robinhood id.
+  const byOptionId = snap.positions.filter((p) => p.status === "OPEN" && p.rhOptionId === close.optionId);
+  const idResult = resolve(byOptionId);
+  if (idResult === "matched") return;
+
+  // 3. Live open positions with the closing leg's terms.
   const live = snap.positions.filter(
     (p) => p.status === "OPEN" && !p.isDraft && p.ticker === row.ticker && p.optionType === row.optionType,
   );
@@ -289,19 +338,19 @@ function matchRoll(row: PlannedRow, snap: ImportSnapshot, plannedOpenByOptionId:
     (p) =>
       sameStrike(p.strike, close.strike) &&
       p.expiration === close.expiration &&
-      p.contracts >= n &&
       (snap.accountId == null || p.investmentAccountId == null || p.investmentAccountId === snap.accountId),
   );
-  if (byTerms.length === 1) {
-    row.roll!.from = { kind: "position", id: byTerms[0].id };
-    return;
-  }
+  const termsResult = idResult === "ambiguous" ? "ambiguous" : resolve(byTerms);
+  if (termsResult === "matched") return;
 
-  // 3. Never guess between candidates.
+  // 4. Leave it to review.
+  const held = byTerms.reduce((s, p) => s + Math.max(avail(p), 0), 0);
   row.flags.needsMatch =
-    byTerms.length > 1
-      ? `${byTerms.length} open positions match the closing leg`
-      : "No open position matches the closing leg";
+    termsResult === "ambiguous"
+      ? `${ambiguousCount} open positions match the closing leg`
+      : byTerms.length > 0
+        ? `Open positions with the closing leg's terms hold ${held} contract${held === 1 ? "" : "s"}; the roll is ${n}`
+        : "No open position matches the closing leg";
   row.flags.matchCandidateIds = live.map((p) => p.id);
 }
 
