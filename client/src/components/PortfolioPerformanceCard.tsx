@@ -485,6 +485,12 @@ function PerformanceBody({
   const tipPosition = tipCenter == null ? undefined : { x: tipPlacement === "right" ? tipCenter + TIP_GAP : tipCenter - TIP_GAP };
 
   // Driver names on the columns: the biggest gainer above, the biggest loser below.
+  // A name wider than its column wraps onto a second line. The column width is
+  // the band's, from the same plot geometry the tooltips are placed with.
+  const labelLines = (name: string) => {
+    const colW = chartsWidth > 0 && rows.length ? (chartsWidth - margin.right - margin.left - yAxisProps.width) / rows.length : 0;
+    return colW > 0 ? splitLabel(chartName(name), Math.max(5, Math.floor((colW - 6) / 6))) : [chartName(name)];
+  };
   type LabelProps = { x?: number | string; y?: number | string; width?: number | string; height?: number | string; value?: unknown };
   const geometry = (props: LabelProps) => {
     const x = Number(props.x), y = Number(props.y), w = Number(props.width), h = Number(props.height);
@@ -494,9 +500,12 @@ function PerformanceBody({
     const d = rowByEnd.get(String(props.value))?.topGain;
     if (!d) return null;
     const { cx, top } = geometry(props);
+    const lines = labelLines(d.name);
     return (
       <g style={{ pointerEvents: "none" }}>
-        <text x={cx} y={top - 16} textAnchor="middle" fontSize={10} fill="var(--color-muted-foreground)">{chartName(d.name)}</text>
+        {lines.map((line, k) => (
+          <text key={k} x={cx} y={top - 16 - (lines.length - 1 - k) * 12} textAnchor="middle" fontSize={10} fill="var(--color-muted-foreground)">{line}</text>
+        ))}
         <text x={cx} y={top - 4} textAnchor="middle" fontSize={11} fontWeight={500} fill="var(--color-up)">{signedShort(d.amount)}</text>
       </g>
     );
@@ -508,7 +517,9 @@ function PerformanceBody({
     return (
       <g style={{ pointerEvents: "none" }}>
         <text x={cx} y={bottom + 12} textAnchor="middle" fontSize={11} fontWeight={500} fill="var(--color-down)">{signedShort(d.amount)}</text>
-        <text x={cx} y={bottom + 24} textAnchor="middle" fontSize={10} fill="var(--color-muted-foreground)">{chartName(d.name)}</text>
+        {labelLines(d.name).map((line, k) => (
+          <text key={k} x={cx} y={bottom + 24 + k * 12} textAnchor="middle" fontSize={10} fill="var(--color-muted-foreground)">{line}</text>
+        ))}
       </g>
     );
   };
