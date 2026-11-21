@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { BarChart3, ChevronLeft, ChevronRight, Info, Pencil } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight, Info, Pencil, Settings2 } from "lucide-react";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -15,7 +15,9 @@ import {
   ReferenceLine,
   Tooltip as RechartsTooltip,
 } from "recharts";
+import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { Modal } from "@/components/Modal";
 import { SectionLabel } from "@/components/Typography";
 import { InfoHint } from "@/components/Tooltip";
 import { MonthEndBalancesModal } from "@/components/MonthEndBalancesModal";
@@ -79,6 +81,9 @@ const STRIPES = "repeating-linear-gradient(45deg, var(--color-ink-3) 0 1.5px, va
 // The S&P 500 TR comparison line: a dashed neutral, so it reads as a reference
 // beside the portfolio's own blue line rather than as a second holding.
 const BENCHMARK_COLOR = "var(--color-ink-3)";
+// The CPI line: orange, clear of the portfolio's blue and the S&P line's gray,
+// dotted rather than dashed so the two references stay apart in grayscale too.
+const INFLATION_COLOR = "var(--color-chart-8)";
 
 // Drivers below this share of a period's total movement (the sum of every
 // driver's size, up or down) fold into one "Other" step.
@@ -107,6 +112,8 @@ const signedCents = (n: number) => (Math.abs(n) < 0.005 ? "$0.00" : `${n > 0 ? "
 /** A fraction as a signed percent to two places: +1.99%, −0.42%, 0.00%. */
 const signedPct = (f: number) => (Math.abs(f) < 0.00005 ? "0.00%" : `${f > 0 ? "+" : "−"}${(Math.abs(f) * 100).toFixed(2)}%`);
 const pctTone = (f: number) => (Math.abs(f) < 0.00005 ? "text-muted-foreground" : f > 0 ? "text-up" : "text-down");
+// BLS publishes CPI to three decimals
+const cpiLevel = new Intl.NumberFormat("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 const indexLevel = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const toneOf = (n: number) => (Math.round(n) === 0 ? "text-muted-foreground" : n > 0 ? "text-up" : "text-down");
 const fillOf = (n: number) => (n >= 0 ? "var(--color-up)" : "var(--color-down)");
@@ -252,6 +259,117 @@ function Swatch({ driver, size = "h-2.5 w-2.5" }: { driver: Driver; size?: strin
   );
 }
 
+// ── Chart settings ────────────────────────────────────────────────────────────
+// Kept per browser, like the page's other view preferences. `cpiStart` is always
+// the real dollar amount, so demo mode's scaling never gets written back.
+
+type ChartSettings = { showSp500: boolean; showCpi: boolean; cpiStart: number | null };
+
+const CHART_SETTINGS_KEY = "performance-chart-settings";
+const DEFAULT_CHART_SETTINGS: ChartSettings = { showSp500: true, showCpi: true, cpiStart: null };
+
+function loadChartSettings(): ChartSettings {
+  try {
+    const v = JSON.parse(localStorage.getItem(CHART_SETTINGS_KEY) ?? "{}");
+    return {
+      showSp500: typeof v.showSp500 === "boolean" ? v.showSp500 : true,
+      showCpi: typeof v.showCpi === "boolean" ? v.showCpi : true,
+      cpiStart: typeof v.cpiStart === "number" && Number.isFinite(v.cpiStart) && v.cpiStart > 0 ? v.cpiStart : null,
+    };
+  } catch {
+    return DEFAULT_CHART_SETTINGS;
+  }
+}
+
+function SettingSwitch({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)} className="flex w-full items-center justify-between gap-4 text-left">
+      <span className="min-w-0">
+        <span className="block text-xs font-medium">{label}</span>
+        <span className="tp-caption mt-0.5 block">{hint}</span>
+      </span>
+      <span className={cn("relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors", checked ? "bg-primary" : "bg-border")}>
+        <span className={cn("pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform", checked ? "translate-x-4" : "translate-x-0")} />
+      </span>
+    </button>
+  );
+}
+
+const parseDollars = (text: string) => Number(text.replace(/[$,\s]/g, ""));
+
+/** Edits a staged copy, so nothing reaches the chart until Save. Mounted only
+ *  while open, so Cancel simply discards it. */
+function ChartSettingsModal({ settings, scale, baselineValue, baseline, onClose, onSave }: {
+  settings: ChartSettings;
+  scale: number;
+  baselineValue?: number;
+  baseline?: string;
+  onClose: () => void;
+  onSave: (next: ChartSettings) => void;
+}) {
+  const [showSp500, setShowSp500] = useState(settings.showSp500);
+  const [showCpi, setShowCpi] = useState(settings.showCpi);
+  const [cpiStart, setCpiStart] = useState(
+    settings.cpiStart == null ? "" : (settings.cpiStart * scale).toLocaleString("en-US", { maximumFractionDigits: 2 }),
+  );
+  const [error, setError] = useState("");
+  const baselineLabel = baseline ? fmtDay(baseline, true) : "opening";
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const blank = cpiStart.trim() === "";
+    const amount = parseDollars(cpiStart);
+    if (!blank && !(Number.isFinite(amount) && amount > 0)) {
+      setError("Enter a CPI starting value above $0, or leave it blank.");
+      return;
+    }
+    onSave({ showSp500, showCpi, cpiStart: blank ? null : amount / scale });
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Performance Settings">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
+        <SettingSwitch
+          label="S&P 500 TR line"
+          hint="Compares the Total value chart to the index with dividends reinvested."
+          checked={showSp500}
+          onChange={setShowSp500}
+        />
+        <SettingSwitch
+          label="CPI inflation line"
+          hint="Shows what the starting value needs to reach to keep pace with prices. Monthly view only."
+          checked={showCpi}
+          onChange={setShowCpi}
+        />
+        <div>
+          <label htmlFor="perf-cpi-start" className="block text-xs font-medium mb-1">CPI Starting Value</label>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+            <input
+              id="perf-cpi-start"
+              type="text"
+              inputMode="decimal"
+              value={cpiStart}
+              placeholder={baselineValue != null ? Math.round(baselineValue).toLocaleString("en-US") : undefined}
+              onChange={(e) => {
+                setCpiStart(e.target.value);
+                setError("");
+              }}
+              className="w-full rounded-md border border-border pl-7 pr-3 py-2 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <p className="tp-caption mt-1.5">Applied at the {baselineLabel} close. Leave blank to use your portfolio value from that close.</p>
+        </div>
+        {error && <p className="text-down">{error}</p>}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit">Save Settings</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 // ── Card ──────────────────────────────────────────────────────────────────────
 
 export function PortfolioPerformanceCard() {
@@ -263,6 +381,16 @@ export function PortfolioPerformanceCard() {
     () => (raw && isDemoMode ? scalePerformance(raw, demoFactor) : raw),
     [raw, isDemoMode, demoFactor],
   );
+  const scale = isDemoMode ? demoFactor : 1;
+  const [chartSettings, setChartSettings] = useState<ChartSettings>(loadChartSettings);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const saveChartSettings = (next: ChartSettings) => {
+    setChartSettings(next);
+    setSettingsOpen(false);
+    try {
+      localStorage.setItem(CHART_SETTINGS_KEY, JSON.stringify(next));
+    } catch { /* ignore unavailable localStorage */ }
+  };
 
   const cadenceButtons = (
     <div className="flex gap-1">
@@ -293,8 +421,28 @@ export function PortfolioPerformanceCard() {
           <BarChart3 className="h-4 w-4 text-muted-foreground" />
           <SectionLabel as="span">Performance</SectionLabel>
         </div>
-        {cadenceButtons}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+            Settings
+          </button>
+          {cadenceButtons}
+        </div>
       </div>
+      {settingsOpen && (
+        <ChartSettingsModal
+          settings={chartSettings}
+          scale={scale}
+          baselineValue={data?.baselineValue}
+          baseline={data?.baseline}
+          onClose={() => setSettingsOpen(false)}
+          onSave={saveChartSettings}
+        />
+      )}
       {!data || data.cadence !== cadence ? (
         <Card className="p-6">
           <p className="tp-caption py-16 text-center">{loading ? "Rebuilding history…" : "No history yet."}</p>
@@ -310,6 +458,9 @@ export function PortfolioPerformanceCard() {
           selectedEnd={selectedEnd ?? data.periods[data.periods.length - 1].end}
           onSelect={setSelectedEnd}
           onBalancesSaved={refetch}
+          showBenchmark={chartSettings.showSp500}
+          showInflation={chartSettings.showCpi}
+          inflationStart={chartSettings.cpiStart != null ? chartSettings.cpiStart * scale : null}
         />
       )}
     </div>
@@ -326,6 +477,12 @@ type Row = {
   benchmarkClose: number | null;
   /** The benchmark's change over this period, as a fraction. */
   benchmarkPct: number | null;
+  /** The baseline value grown at CPI inflation since the baseline month (monthly view only). */
+  inflation: number | null;
+  /** The month's CPI-U index level. */
+  cpi: number | null;
+  /** CPI's change from the previous period's month, as a fraction. */
+  inflationPct: number | null;
   period: PerformancePeriod | null;
   gains: number | null;
   losses: number | null;
@@ -341,11 +498,18 @@ function PerformanceBody({
   selectedEnd,
   onSelect,
   onBalancesSaved,
+  showBenchmark,
+  showInflation,
+  inflationStart,
 }: {
   data: PerformanceData;
   selectedEnd: string;
   onSelect: (end: string) => void;
   onBalancesSaved: () => void;
+  showBenchmark: boolean;
+  showInflation: boolean;
+  /** Dollars the CPI line starts from; null uses the baseline close. */
+  inflationStart: number | null;
 }) {
   const { periods, cadence } = data;
   const monthly = cadence === "monthly";
@@ -376,7 +540,8 @@ function PerformanceBody({
     const label = (end: string) => (!monthly ? md(end) : end !== data.baseline ? monthShort(end) : fmtDay(end));
     // Pure index growth: the baseline value compounded by the index's own close
     // to close changes, ignoring deposits and withdrawals.
-    const closes = data.benchmark?.closes ?? {};
+    // A line switched off has no values, so it also leaves the legend, tooltip and axis range.
+    const closes = showBenchmark ? data.benchmark?.closes ?? {} : {};
     const base = closes[data.baseline] ?? null;
     const benchAt = (end: string) => {
       const c = closes[end] ?? null;
@@ -387,11 +552,27 @@ function PerformanceBody({
       const b = closes[end] ?? null;
       return a != null && b != null ? b / a - 1 : null;
     };
+    // Inflation: the starting value (the baseline close unless set in the chart
+    // settings) carried forward at CPI's change since the baseline month. Null
+    // for months BLS hasn't published, so the line stops there.
+    const cpis = showInflation ? data.inflation?.values ?? {} : {};
+    const inflBase = inflationStart ?? data.baselineValue;
+    const cpiBase = cpis[data.baseline] ?? null;
+    const inflAt = (end: string) => {
+      const c = cpis[end] ?? null;
+      return cpiBase != null && c != null ? inflBase * (c / cpiBase) : null;
+    };
+    const inflPct = (start: string, end: string) => {
+      const a = cpis[start] ?? null;
+      const b = cpis[end] ?? null;
+      return a != null && b != null ? b / a - 1 : null;
+    };
     return [
       // The opening close: a point on the value line, an empty column below.
       {
         end: data.baseline, label: label(data.baseline), value: data.baselineValue,
-        benchmark: benchAt(data.baseline), benchmarkClose: closes[data.baseline] ?? null, benchmarkPct: null, period: null,
+        benchmark: benchAt(data.baseline), benchmarkClose: closes[data.baseline] ?? null, benchmarkPct: null,
+        inflation: inflAt(data.baseline), cpi: cpis[data.baseline] ?? null, inflationPct: null, period: null,
         gains: null, losses: null, net: null, topGain: null, topLoss: null, all: [], drivers: [],
       },
       ...periods.map((p): Row => {
@@ -405,6 +586,9 @@ function PerformanceBody({
           benchmark: benchAt(p.end),
           benchmarkClose: closes[p.end] ?? null,
           benchmarkPct: benchPct(p.start, p.end),
+          inflation: inflAt(p.end),
+          cpi: cpis[p.end] ?? null,
+          inflationPct: inflPct(p.start, p.end),
           period: p,
           gains: ups.reduce((s, d) => s + d.amount, 0),
           losses: downs.reduce((s, d) => s + d.amount, 0),
@@ -416,12 +600,14 @@ function PerformanceBody({
         };
       }),
     ];
-  }, [periods, palette, monthly, data.baseline, data.baselineValue, data.benchmark]);
+  }, [periods, palette, monthly, data.baseline, data.baselineValue, data.benchmark, data.inflation, showBenchmark, showInflation, inflationStart]);
   const rowByEnd = useMemo(() => new Map(rows.map((r) => [r.end, r])), [rows]);
 
   const hasBenchmark = rows.some((r) => r.benchmark != null);
   const benchmarkName = data.benchmark?.name ?? "S&P 500 TR";
-  const values = rows.flatMap((r) => (r.benchmark != null ? [r.value, r.benchmark] : [r.value]));
+  const hasInflation = rows.some((r) => r.inflation != null);
+  const inflationName = data.inflation?.name ?? "CPI-U";
+  const values = rows.flatMap((r) => [r.value, r.benchmark, r.inflation].filter((v): v is number => v != null));
   const vMin = Math.min(...values);
   const vMax = Math.max(...values);
   const vPad = Math.max((vMax - vMin) * 0.08, vMax * 0.005);
@@ -577,6 +763,14 @@ function PerformanceBody({
                 {benchmarkName}
               </span>
             )}
+            {hasInflation && (
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <svg width="14" height="4" aria-hidden className="shrink-0">
+                  <line x1="1" y1="2" x2="14" y2="2" stroke={INFLATION_COLOR} strokeWidth="1.5" strokeDasharray="1.5 2.5" strokeLinecap="round" />
+                </svg>
+                {inflationName} (inflation)
+              </span>
+            )}
           </div>
           <ResponsiveContainer width="100%" height={150}>
             {/* Bottom room so the lowest tick's label fits; Recharts drops a label that would spill out */}
@@ -609,7 +803,7 @@ function PerformanceBody({
                 <ReferenceLine x={hoverEnd} stroke="var(--color-chart-cursor)" strokeWidth={1} />
               )}
               <RechartsTooltip
-              content={<ValueTooltip benchmarkName={benchmarkName} placement={tipPlacement} onWidth={measureTip("value")} />}
+              content={<ValueTooltip benchmarkName={benchmarkName} inflationName={inflationName} placement={tipPlacement} onWidth={measureTip("value")} />}
               position={tipPosition}
               allowEscapeViewBox={{ x: true, y: false }}
               cursor={false}
@@ -634,6 +828,19 @@ function PerformanceBody({
                   dot={false}
                   activeDot={{ r: 3, fill: BENCHMARK_COLOR, stroke: "var(--color-background)", strokeWidth: 2 }}
                   connectNulls
+                  isAnimationActive={false}
+                />
+              )}
+              {hasInflation && (
+                <Line
+                  type="linear"
+                  dataKey="inflation"
+                  stroke={INFLATION_COLOR}
+                  strokeWidth={1.5}
+                  strokeDasharray="1.5 3"
+                  strokeLinecap="round"
+                  dot={false}
+                  activeDot={{ r: 3, fill: INFLATION_COLOR, stroke: "var(--color-background)", strokeWidth: 2 }}
                   isAnimationActive={false}
                 />
               )}
@@ -765,7 +972,7 @@ function TipBox({
   );
 }
 
-function ValueTooltip({ active, payload, benchmarkName, placement, onWidth }: any) {
+function ValueTooltip({ active, payload, benchmarkName, inflationName, placement, onWidth }: any) {
   if (!active || !payload?.length) return null;
   const row = payload[0].payload as Row;
   const change = row.period ? row.period.endValue - row.period.startValue : null;
@@ -802,6 +1009,19 @@ function ValueTooltip({ active, payload, benchmarkName, placement, onWidth }: an
         <div className="flex justify-between gap-4">
           <span className="text-muted-foreground">% change</span>
           <span className={cn("tabular-nums", pctTone(pct))}>{signedPct(pct)}</span>
+        </div>
+      )}
+      {row.cpi != null && (
+        <div className="flex justify-between gap-4 pt-1 border-t border-border">
+          <span className="text-muted-foreground">{inflationName}</span>
+          <span className="font-medium tabular-nums">{cpiLevel.format(row.cpi)}</span>
+        </div>
+      )}
+      {row.cpi != null && row.inflationPct != null && (
+        <div className="flex justify-between gap-4">
+          <span className="text-muted-foreground">% change</span>
+          {/* Neutral: rising prices aren't a gain, so up/down colors would mislead */}
+          <span className="tabular-nums text-foreground">{signedPct(row.inflationPct)}</span>
         </div>
       )}
     </TipBox>

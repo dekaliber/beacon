@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getUserId } from "../middleware/auth.js";
 import { computePerformance } from "../services/performance.js";
 import { benchmarkClosesAt } from "../services/benchmark.js";
+import { cpiAt } from "../services/cpi.js";
 
 export const investmentPerformanceRoutes = Router();
 
@@ -24,11 +25,21 @@ investmentPerformanceRoutes.get("/", async (req, res) => {
     const result = await computePerformance(getUserId(req), parsed.data.cadence, parsed.data.today);
     // The S&P 500 TR close at the baseline and each period end, for the comparison
     // line. A failed fetch leaves it null rather than failing the whole chart.
-    const benchmark = await benchmarkClosesAt([result.baseline, ...result.periods.map((p) => p.end)]).catch((err) => {
-      console.warn("[performance] benchmark fetch failed —", err);
-      return null;
-    });
-    res.json({ ...result, benchmark });
+    const days = [result.baseline, ...result.periods.map((p) => p.end)];
+    // CPI is monthly, so the inflation line is only drawn on the monthly view.
+    const [benchmark, inflation] = await Promise.all([
+      benchmarkClosesAt(days).catch((err) => {
+        console.warn("[performance] benchmark fetch failed —", err);
+        return null;
+      }),
+      result.cadence === "monthly"
+        ? cpiAt(days).catch((err) => {
+            console.warn("[performance] CPI fetch failed —", err);
+            return null;
+          })
+        : Promise.resolve(null),
+    ]);
+    res.json({ ...result, benchmark, inflation });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: { message: "Failed to compute performance" } });
